@@ -1,0 +1,61 @@
+version: "3.4"
+
+name: basic-framework-system
+
+services:
+  mysql:
+    container_name: basic-framework-mysql
+    image: mysql:8
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-basic_framework}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+    volumes:
+      - mysql:/var/lib/mysql/
+
+  redis:
+    container_name: basic-framework-redis
+    image: redis:6-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis:/data
+
+  server:
+    container_name: basic-framework-server
+    build:
+      context: ./basic-framework-server/
+    image: basic-framework-server
+    restart: unless-stopped
+    ports:
+      - "48080:48080"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      JAVA_OPTS:
+        ${JAVA_OPTS:-
+          -Xms512m
+          -Xmx512m
+          -Djava.security.egd=file:/dev/./urandom
+        }
+      ARGS:
+        --spring.datasource.dynamic.datasource.master.url=${MASTER_DATASOURCE_URL:-jdbc:mysql://basic-framework-mysql:3306/basic_framework?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true}
+        --spring.datasource.dynamic.datasource.master.username=${MASTER_DATASOURCE_USERNAME:-root}
+        --spring.datasource.dynamic.datasource.master.password=${MASTER_DATASOURCE_PASSWORD:?MASTER_DATASOURCE_PASSWORD is required}
+        --spring.datasource.dynamic.datasource.slave.url=${SLAVE_DATASOURCE_URL:-jdbc:mysql://basic-framework-mysql:3306/basic_framework?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true}
+        --spring.datasource.dynamic.datasource.slave.username=${SLAVE_DATASOURCE_USERNAME:-root}
+        --spring.datasource.dynamic.datasource.slave.password=${SLAVE_DATASOURCE_PASSWORD:?SLAVE_DATASOURCE_PASSWORD is required}
+        --spring.data.redis.host=${REDIS_HOST:-basic-framework-redis}
+    depends_on:
+      - mysql
+      - redis
+
+
+volumes:
+  mysql:
+    driver: local
+  redis:
+    driver: local

@@ -1,0 +1,7 @@
+# 镜像只需要静态构建产物和 Nginx 配置，避免把源码、依赖和本地环境文件发送给 Docker。
+*
+!Dockerfile
+!dist/
+!dist/**
+!docker/
+!docker/**

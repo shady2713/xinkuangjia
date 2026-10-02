@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-ele-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev:ele"],
+      "port": 5175
+    }
+  ]
+}

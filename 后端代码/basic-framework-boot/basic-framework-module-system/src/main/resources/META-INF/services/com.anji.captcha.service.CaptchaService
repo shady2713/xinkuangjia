@@ -1,0 +1,2 @@
+com.basicframework.module.system.framework.captcha.core.PictureWordCaptchaServiceImpl
+com.basicframework.module.system.framework.captcha.core.AdminDefaultBlockPuzzleCaptchaServiceImpl

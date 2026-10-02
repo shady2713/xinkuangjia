@@ -1,0 +1,50 @@
+{
+  "name": "@vben/web-ele",
+  "version": "5.6.0",
+  "license": "MIT",
+  "author": {
+    "name": "project-team",
+    "email": "dev@example.com"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vite build --mode production",
+    "build:prod": "vite build --mode production",
+    "build:analyze": "vite build --mode analyze",
+    "dev": "vite --mode development",
+    "preview": "vite preview",
+    "test:e2e": "cross-env NO_PROXY=127.0.0.1,localhost playwright test",
+    "typecheck": "vue-tsc --noEmit --skipLibCheck"
+  },
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "dependencies": {
+    "@form-create/element-ui": "catalog:",
+    "@vben/access": "workspace:*",
+    "@vben/common-ui": "workspace:*",
+    "@vben/constants": "workspace:*",
+    "@vben/hooks": "workspace:*",
+    "@vben/icons": "workspace:*",
+    "@vben/layouts": "workspace:*",
+    "@vben/locales": "workspace:*",
+    "@vben/plugins": "workspace:*",
+    "@vben/preferences": "workspace:*",
+    "@vben/request": "workspace:*",
+    "@vben/stores": "workspace:*",
+    "@vben/styles": "workspace:*",
+    "@vben/types": "workspace:*",
+    "@vben/utils": "workspace:*",
+    "@vueuse/core": "catalog:",
+    "cropperjs": "catalog:",
+    "dayjs": "catalog:",
+    "element-plus": "catalog:",
+    "pinia": "catalog:",
+    "vue": "catalog:",
+    "vue-dompurify-html": "catalog:",
+    "vue-router": "catalog:"
+  },
+  "devDependencies": {
+    "unplugin-element-plus": "catalog:"
+  }
+}

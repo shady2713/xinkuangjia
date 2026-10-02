@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>com.basicframework</groupId>
+        <artifactId>basic-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>basic-framework-module-infra</artifactId>
+    <packaging>jar</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>
+        infra 模块，主要提供两块能力：
+            1. 我们放基础设施的运维与管理，支撑上层的通用与核心业务。 例如说：定时任务的管理、服务器的信息等等
+            2. 研发工具，提升研发效率与质量。 例如说：代码生成器、接口文档等等
+    </description>
+
+    <dependencies>
+        <!-- Web 相关 -->
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- DB 相关 -->
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-spring-boot-starter-mybatis</artifactId>
+        </dependency>
+
+        <!-- Job 定时任务相关 -->
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-spring-boot-starter-job</artifactId>
+        </dependency>
+
+        <!-- Test 测试相关 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId> <!-- 提供 JUnit、AssertJ 等测试基础能力 -->
+            <scope>test</scope>
+        </dependency>
+        <!-- 工具类相关 -->
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-spring-boot-starter-excel</artifactId>
+        </dependency>
+
+        <!-- 三方云服务相关 -->
+        <!-- 文件客户端：解决阿里云、腾讯云、minio 等 S3 连接 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <!-- 本模块只创建同步 S3Client，不使用异步 Netty 客户端 -->
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId> <!-- 文件客户端：文件类型的识别 -->
+        </dependency>
+
+        <!-- ConfigConvert 直接使用 MapStruct API；处理器由根编译插件统一提供 -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+        </dependency>
+
+    </dependencies>
+
+</project>

@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm run *)",
+      "Bash(pnpm list *)",
+      "WebSearch",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_navigate",
+      "Bash(pnpm dev *)",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "Bash(ls \"C:\\\\Users\\\\admin\\\\.claude\\\\projects\\\\D------------2026\\\\memory\\\\\" 2>/dev/null || echo \"memory directory not initialized\")",
+      "Bash(ls 'C:\\\\Users\\\\admin\\\\.claude\\\\projects\\\\D------------2026\\\\memory\\\\' 2>/dev/null | head -30)",
+      "Bash(npm run *)",
+      "Bash(git diff *)",
+      "Bash(npx vue-tsc *)",
+      "Bash(netstat -ano)",
+      "Bash(git -C \"D:/公司项目/技术框架/2026/前端代码/basic-framework-admin\" log --oneline -10 -- \"apps/web-ele/src/views/infra/fileConfig/index.vue\")",
+      "Bash(pnpm exec *)"
+    ]
+  }
+}

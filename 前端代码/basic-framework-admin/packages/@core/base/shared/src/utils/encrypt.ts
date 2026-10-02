@@ -1,0 +1,332 @@
+import CryptoJS from 'crypto-js';
+
+import { logError } from './error';
+import { JSEncrypt } from 'jsencrypt';
+
+const AES_IV_SIZE_BYTES = 16;
+const AES_IV_SIZE_WORDS = AES_IV_SIZE_BYTES / 4;
+const AES_KEY_LENGTHS = new Set([16, 24, 32]);
+
+function assertAesKey(key: string, operation: string) {
+  if (!key) {
+    throw new Error(`AES ${operation}密钥不能为空`);
+  }
+  if (!AES_KEY_LENGTHS.has(key.length)) {
+    throw new Error(
+      `AES ${operation}密钥长度必须为 16、24 或 32 位，当前长度: ${key.length}`,
+    );
+  }
+}
+
+/**
+ * API 加解密工具类
+ * 支持 AES-CBC 和 RSA 加密算法
+ */
+
+/**
+ * AES-CBC 加密工具类
+ *
+ * 密文格式：Base64(16 字节随机 IV + AES-CBC 密文)
+ */
+export const AES = {
+  /**
+   * AES 加密
+   * @param data 要加密的数据
+   * @param key 加密密钥
+   * @returns 加密后的字符串
+   */
+  encrypt(data: string, key: string): string {
+    try {
+      assertAesKey(key, '加密');
+
+      const keyUtf8 = CryptoJS.enc.Utf8.parse(key);
+      const iv = CryptoJS.lib.WordArray.random(AES_IV_SIZE_BYTES);
+      const encrypted = CryptoJS.AES.encrypt(data, keyUtf8, {
+        iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7,
+      });
+      const payload = iv.clone().concat(encrypted.ciphertext);
+      return CryptoJS.enc.Base64.stringify(payload);
+    } catch (error) {
+      logError('AES encrypt failed', error);
+      throw error;
+    }
+  },
+
+  /**
+   * AES 解密
+   * @param encryptedData 加密的数据
+   * @param key 解密密钥
+   * @returns 解密后的字符串
+   */
+  decrypt(encryptedData: string, key: string): string {
+    try {
+      assertAesKey(key, '解密');
+      if (!encryptedData) {
+        throw new Error('AES 解密数据不能为空');
+      }
+
+      const payload = CryptoJS.enc.Base64.parse(encryptedData);
+      if (payload.sigBytes <= AES_IV_SIZE_BYTES) {
+        throw new Error('AES 解密数据格式不正确');
+      }
+
+      const iv = CryptoJS.lib.WordArray.create(
+        payload.words.slice(0, AES_IV_SIZE_WORDS),
+        AES_IV_SIZE_BYTES,
+      );
+      const ciphertext = CryptoJS.lib.WordArray.create(
+        payload.words.slice(AES_IV_SIZE_WORDS),
+        payload.sigBytes - AES_IV_SIZE_BYTES,
+      );
+      const keyUtf8 = CryptoJS.enc.Utf8.parse(key);
+      const decrypted = CryptoJS.AES.decrypt(
+        CryptoJS.lib.CipherParams.create({ ciphertext }),
+        keyUtf8,
+        {
+          iv,
+          mode: CryptoJS.mode.CBC,
+          padding: CryptoJS.pad.Pkcs7,
+        },
+      );
+      const result = decrypted.toString(CryptoJS.enc.Utf8);
+      if (!result) {
+        throw new Error('AES 解密结果为空，可能是密钥错误或数据损坏');
+      }
+      return result;
+    } catch (error) {
+      logError('AES decrypt failed', error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * aj-captcha 验证码专用 AES 工具。
+ *
+ * 后端 com.anji.captcha.util.AESUtil 使用的是 AES/ECB/PKCS5Padding，
+ * 这里单独保留同款算法，避免复用上面的 API AES-CBC 格式导致滑块坐标解密失败。
+ */
+export const AjCaptchaAES = {
+  /**
+   * 按 aj-captcha 后端约定加密验证码坐标或二次校验串。
+   *
+   * @param data 要加密的验证码数据
+   * @param key 后端下发的 16 位 secretKey
+   * @returns Base64(AES-ECB-PKCS7(ciphertext))
+   */
+  encrypt(data: string, key: string): string {
+    try {
+      assertAesKey(key, '验证码加密');
+
+      const encrypted = CryptoJS.AES.encrypt(data, CryptoJS.enc.Utf8.parse(key), {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7,
+      });
+      return CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
+    } catch (error) {
+      logError('AJ captcha AES encrypt failed', error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * MD5 加密
+ * @param data 要加密的数据
+ * @returns MD5 加密后的字符串
+ */
+export function md5(data: string): string {
+  return CryptoJS.MD5(data).toString();
+}
+
+/**
+ * RSA 加密工具类
+ */
+export const RSA = {
+  /**
+   * RSA 加密
+   * @param data 要加密的数据
+   * @param publicKey 公钥（必需）
+   * @returns 加密后的字符串
+   */
+  encrypt(data: string, publicKey: string): false | string {
+    try {
+      if (!publicKey) {
+        throw new Error('RSA 公钥不能为空');
+      }
+
+      const encryptor = new JSEncrypt();
+      encryptor.setPublicKey(publicKey);
+      const result = encryptor.encrypt(data);
+      if (result === false) {
+        throw new Error('RSA 加密失败，可能是公钥格式错误或数据过长');
+      }
+      return result;
+    } catch (error) {
+      logError('RSA encrypt failed', error);
+      throw error;
+    }
+  },
+
+  /**
+   * RSA 解密
+   * @param encryptedData 加密的数据
+   * @param privateKey 私钥（必需）
+   * @returns 解密后的字符串
+   */
+  decrypt(encryptedData: string, privateKey: string): false | string {
+    try {
+      if (!privateKey) {
+        throw new Error('RSA 私钥不能为空');
+      }
+      if (!encryptedData) {
+        throw new Error('RSA 解密数据不能为空');
+      }
+
+      const encryptor = new JSEncrypt();
+      encryptor.setPrivateKey(privateKey);
+      const result = encryptor.decrypt(encryptedData);
+      if (result === false) {
+        throw new Error('RSA 解密失败，可能是私钥错误或数据损坏');
+      }
+      return result;
+    } catch (error) {
+      logError('RSA decrypt failed', error);
+      throw error;
+    }
+  },
+};
+
+/**
+ * API 加解密配置接口
+ */
+export interface ApiEncryptConfig {
+  /** 加密算法 */
+  algorithm: 'AES' | 'RSA';
+  /** 是否启用加解密 */
+  enable: boolean;
+  /** 加密头名称 */
+  header: string;
+  /** 请求加密密钥（AES密钥或RSA公钥） */
+  requestKey: string;
+  /** 响应解密密钥（AES密钥或RSA私钥） */
+  responseKey: string;
+}
+
+/**
+ * API 加解密主类
+ */
+export class ApiEncrypt {
+  private config: ApiEncryptConfig;
+
+  constructor(config: ApiEncryptConfig) {
+    this.config = config;
+  }
+
+  /**
+   * 解密响应数据
+   * @param encryptedData 加密的响应数据
+   * @returns 解密后的数据
+   */
+  decryptResponse(encryptedData: string): any {
+    if (!this.config.enable) {
+      return encryptedData;
+    }
+
+    try {
+      let decryptedData: false | string = '';
+      if (this.config.algorithm.toUpperCase() === 'AES') {
+        if (!this.config.responseKey) {
+          throw new Error('AES 响应解密密钥未配置');
+        }
+        decryptedData = AES.decrypt(encryptedData, this.config.responseKey);
+      } else if (this.config.algorithm.toUpperCase() === 'RSA') {
+        if (!this.config.responseKey) {
+          throw new Error('RSA 私钥未配置');
+        }
+        decryptedData = RSA.decrypt(encryptedData, this.config.responseKey);
+        if (decryptedData === false) {
+          throw new Error('RSA 解密失败');
+        }
+      } else {
+        throw new Error(`不支持的解密算法: ${this.config.algorithm}`);
+      }
+
+      if (!decryptedData) {
+        throw new Error('解密结果为空');
+      }
+
+      // 尝试解析为 JSON，如果失败则返回原字符串
+      try {
+        return JSON.parse(decryptedData);
+      } catch {
+        return decryptedData;
+      }
+    } catch (error) {
+      logError('API response decrypt failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 加密请求数据
+   * @param data 要加密的数据
+   * @returns 加密后的数据
+   */
+  encryptRequest(data: any): string {
+    if (!this.config.enable) {
+      return data;
+    }
+
+    try {
+      const jsonData = typeof data === 'string' ? data : JSON.stringify(data);
+
+      if (this.config.algorithm.toUpperCase() === 'AES') {
+        if (!this.config.requestKey) {
+          throw new Error('AES 请求加密密钥未配置');
+        }
+        return AES.encrypt(jsonData, this.config.requestKey);
+      } else if (this.config.algorithm.toUpperCase() === 'RSA') {
+        if (!this.config.requestKey) {
+          throw new Error('RSA 公钥未配置');
+        }
+        const result = RSA.encrypt(jsonData, this.config.requestKey);
+        if (result === false) {
+          throw new Error('RSA 加密失败');
+        }
+        return result;
+      } else {
+        throw new Error(`不支持的加密算法: ${this.config.algorithm}`);
+      }
+    } catch (error) {
+      logError('API request encrypt failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取加密头名称
+   */
+  getEncryptHeader(): string {
+    return this.config.header;
+  }
+}
+
+/**
+ * 创建基于环境变量的 API 加解密实例
+ * @param env 环境变量对象
+ * @returns ApiEncrypt 实例
+ */
+export function createApiEncrypt(env: Record<string, any>): ApiEncrypt {
+  const config: ApiEncryptConfig = {
+    enable: env.VITE_APP_API_ENCRYPT_ENABLE === 'true',
+    header: env.VITE_APP_API_ENCRYPT_HEADER || 'X-Api-Encrypt',
+    algorithm: env.VITE_APP_API_ENCRYPT_ALGORITHM || 'AES',
+    requestKey: env.VITE_APP_API_ENCRYPT_REQUEST_KEY || '',
+    responseKey: env.VITE_APP_API_ENCRYPT_RESPONSE_KEY || '',
+  };
+
+  return new ApiEncrypt(config);
+}

@@ -1,0 +1,4 @@
+com.basicframework.framework.idempotent.config.BasicFrameworkIdempotentConfiguration
+com.basicframework.framework.lock4j.config.BasicFrameworkLock4jConfiguration
+com.basicframework.framework.ratelimiter.config.BasicFrameworkRateLimiterConfiguration
+com.basicframework.framework.signature.config.BasicFrameworkApiSignatureAutoConfiguration

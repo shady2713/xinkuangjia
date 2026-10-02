@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>basic-framework-core</artifactId>
+        <groupId>com.basicframework</groupId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>basic-framework-spring-boot-starter-biz-ip</artifactId>
+    <packaging>jar</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>IP 拓展，支持如下功能：
+        1. IP 功能：查询 IP 对应的城市信息
+            基于 ip2region 实现
+        2. 城市功能：查询城市编码对应的城市信息
+            基于 https://example.com/external/modood/Administrative-divisions-of-China 实现
+    </description>
+
+    <properties>
+        <!-- 当前实测行覆盖率约 26.60%，先固化真实基线，后续只能提升不能回退。 -->
+        <quality.coverage.minimum>0.26</quality.coverage.minimum>
+    </properties>
+    <url>https://example.com/basic-framework</url>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-common</artifactId>
+        </dependency>
+
+        <!-- IP地址检索 -->
+        <dependency>
+            <groupId>org.lionsoul</groupId>
+            <artifactId>ip2region</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
+
+        <!-- Area 父子关系序列化注解 -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <scope>provided</scope> <!-- 设置为 provided，只有工具类需要使用到 -->
+        </dependency>
+
+        <!-- 单元测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+</project>

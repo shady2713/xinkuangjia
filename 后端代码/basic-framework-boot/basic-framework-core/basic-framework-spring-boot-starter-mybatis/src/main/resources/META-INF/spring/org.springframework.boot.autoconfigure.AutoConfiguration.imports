@@ -1,0 +1,3 @@
+com.basicframework.framework.datasource.config.BasicFrameworkDataSourceAutoConfiguration
+com.basicframework.framework.mybatis.config.BasicFrameworkMybatisAutoConfiguration
+com.basicframework.framework.translate.config.BasicFrameworkTranslateAutoConfiguration

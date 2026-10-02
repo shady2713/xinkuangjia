@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="basic-framework Java 质量规则"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.github.io/schema/ruleset_2_0_0.xsd">
+    <description>
+        执行 Maven PMD 默认静态分析；Java 注释增量门禁统一由仓库 scripts 目录维护。
+    </description>
+
+    <rule ref="rulesets/java/maven-pmd-plugin-default.xml"/>
+</ruleset>

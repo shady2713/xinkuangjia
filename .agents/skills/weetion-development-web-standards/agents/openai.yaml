@@ -1,0 +1,7 @@
+interface:
+  display_name: "basic-framework Web 开发规范"
+  short_description: "统一框架管理前端开发、CRUD 生成、评审、完整中文注释与验证。"
+  default_prompt: "使用 $weetion-development-web-standards 确认目标前端与任务范围，按场景读取组件和注释资料，完成开发或评审及相关验证。"
+
+policy:
+  allow_implicit_invocation: true

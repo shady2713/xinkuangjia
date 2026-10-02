@@ -1,0 +1,28 @@
+# 本目录是新管理平台前端，以下仅忽略本地依赖、构建结果和工具缓存。
+node_modules/
+dist/
+build/
+.turbo/
+.cache/
+.vite/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+*.log
+*.out
+*.err
+*.pid
+*.tmp
+.playwright-mcp/
+
+# 本地环境覆盖文件只保留示例，避免提交个人配置。
+.env.local
+.env.*.local
+
+# IDE 和系统生成文件只保留在个人工作区。
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db

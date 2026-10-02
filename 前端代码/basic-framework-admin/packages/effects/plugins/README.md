@@ -1,0 +1,45 @@
+---
+description: "说明 @vben/plugins 的第三方库子路径，供应用按需接入图表、表格和动效时查阅。"
+kind: package-library
+---
+
+# @vben/plugins
+
+## 摘要
+
+该目录用于存放项目中集成的第三方库及其相关插件。每个插件都包含了可重用的逻辑、配置和组件，方便在项目中进行统一管理和调用。
+
+
+## 目录
+
+- [注意](#注意)
+- [已知限制与暂缓工作](#已知限制与暂缓工作)
+
+## 注意
+
+所有的第三方插件都必须以 `subpath` 形式引入，例：
+
+以 `echarts` 为例，引入方式如下：
+
+**package.json**
+
+```json
+"exports": {
+    "./echarts": {
+      "types": "./src/echarts/index.ts",
+      "default": "./src/echarts/index.ts"
+    }
+  }
+```
+
+**使用方式**
+
+```ts
+import { useEcharts } from '@vben/plugins/echarts';
+```
+
+这样做的好处是，应用可以自行选择是否使用插件，而不会因为插件的引入及副作用而导致打包体积增大，只引入需要的插件即可。
+
+## 已知限制与暂缓工作
+
+必须使用 [package.json](package.json) 声明的子路径入口，不能从包根路径导入所有插件。最终产物体积仍取决于应用引用和构建结果。

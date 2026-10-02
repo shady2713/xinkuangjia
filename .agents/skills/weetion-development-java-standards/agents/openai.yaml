@@ -1,0 +1,7 @@
+interface:
+  display_name: "basic-framework Java 开发规范"
+  short_description: "为框架 Java 设计、修改和评审提供项目约束与按需参考。"
+  default_prompt: "使用 $weetion-development-java-standards 核对当前任务的 Java 项目约束，只读取实际涉及的专项规范。"
+
+policy:
+  allow_implicit_invocation: true

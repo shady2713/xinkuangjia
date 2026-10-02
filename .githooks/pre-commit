@@ -1,0 +1,31 @@
+#!/bin/sh
+# 按暂存范围运行密钥、语言注释及文档检查，不格式化或自动暂存文件。
+# @author 李杰
+
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+runner="$repo_root/scripts/workflow/check_staged_quality.py"
+cd "$repo_root"
+
+if [ ! -f "$runner" ]; then
+  echo "提交前检查失败：缺少 scripts/workflow/check_staged_quality.py。" >&2
+  exit 2
+fi
+
+# 优先使用仓库质量环境；实际运行版本探测，避免 PATH 中的旧解释器或空壳命令。
+for candidate in "$repo_root/.venv/Scripts/python.exe" "$repo_root/.venv/bin/python" python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 &&
+     "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+    exec "$candidate" -X utf8 -B "$runner" --root "$repo_root"
+  fi
+done
+
+# Windows py 启动器必须保留独立的 -3 参数，不能把带空格的命令当成程序路径。
+if command -v py >/dev/null 2>&1 &&
+   py -3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1; then
+  exec py -3 -X utf8 -B "$runner" --root "$repo_root"
+fi
+
+echo "提交前检查失败：未找到 Python 3.10+，请准备仓库 .venv 质量环境。" >&2
+exit 2
