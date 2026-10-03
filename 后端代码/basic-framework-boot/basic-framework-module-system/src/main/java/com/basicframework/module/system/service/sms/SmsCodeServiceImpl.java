@@ -8,6 +8,8 @@ import com.basicframework.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeValidateReqDTO;
 import com.basicframework.module.system.dal.dataobject.sms.SmsCodeDO;
 import com.basicframework.module.system.dal.mysql.sms.SmsCodeMapper;
+import com.basicframework.module.system.dal.redis.sms.SmsVerificationRedisDAO;
+import com.basicframework.module.system.dal.redis.sms.SmsSendRedisDAO;
 import com.basicframework.module.system.enums.sms.SmsSceneEnum;
 import com.basicframework.module.system.framework.sms.config.SmsCodeProperties;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -42,6 +46,12 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     @Resource
     private SmsSendService smsSendService;
 
+    @Resource
+    private SmsVerificationRedisDAO smsVerificationRedisDAO;
+
+    @Resource
+    private SmsSendRedisDAO smsSendRedisDAO;
+
     /**
      * 发送短信验证码。
      *
@@ -59,29 +69,28 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     }
 
     /**
-     * 创建短信验证码。
+     * 在持久化和调用供应商前原子预约额度；并发请求不能重复占用同一个发送间隔。
      */
     private String createSmsCode(String mobile, Integer scene, String ip) {
-        // 校验是否可以发送验证码，不用筛选场景
+        if (ip == null || ip.isBlank()) {
+            throw exception(SMS_CODE_SEND_TOO_FAST);
+        }
+        // 不按场景筛选，同一手机切换登录与找回场景也共用发送预算。
         SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, null);
-        if (lastSmsCode != null) {
-            if (LocalDateTimeUtil.between(lastSmsCode.getCreateTime(), LocalDateTime.now()).toMillis()
-                    < smsCodeProperties.getSendFrequency().toMillis()) { // 发送过于频繁
-                throw exception(SMS_CODE_SEND_TOO_FAST);
-            }
-            if (LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now()) && // 必须是今天，才能计算超过当天的上限
-                    lastSmsCode.getTodayIndex() >= smsCodeProperties.getSendMaximumQuantityPerDay()) { // 超过当天发送的上限。
-                throw exception(SMS_CODE_EXCEED_SEND_MAXIMUM_QUANTITY_PER_DAY);
-            }
-            // 当前仅按手机号做发送频控，IP 维度限流后续如有明确需求再单独补充。
+        long dailyIndex = smsSendRedisDAO.reserve(mobile, ip, smsCodeProperties,
+                lastSmsCode == null ? null : lastSmsCode.getCreateTime(),
+                lastSmsCode == null ? 0 : lastSmsCode.getTodayIndex());
+        if (dailyIndex == -2) {
+            throw exception(SMS_CODE_EXCEED_SEND_MAXIMUM_QUANTITY_PER_DAY);
+        }
+        if (dailyIndex <= 0) {
+            throw exception(SMS_CODE_SEND_TOO_FAST);
         }
 
         // 创建验证码记录
         String code = String.format("%0" + SMS_CODE_LENGTH + "d", SECURE_RANDOM.nextInt(SMS_CODE_BOUND));
         SmsCodeDO newSmsCode = SmsCodeDO.builder().mobile(mobile).code(code).scene(scene)
-                .todayIndex(lastSmsCode != null
-                        && LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now())
-                        ? lastSmsCode.getTodayIndex() + 1 : 1)
+                .todayIndex(Math.toIntExact(dailyIndex))
                 .createIp(ip).used(false).build();
         smsCodeMapper.insert(newSmsCode);
         return code;
@@ -97,9 +106,11 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     @Override
     public void useSmsCode(SmsCodeUseReqDTO reqDTO) {
         // 检测验证码是否有效
-        SmsCodeDO lastSmsCode = validateSmsCode0(reqDTO.getMobile(), reqDTO.getCode(), reqDTO.getScene());
+        SmsCodeDO lastSmsCode = validateSmsCode0(reqDTO.getMobile(), reqDTO.getCode(), reqDTO.getScene(), reqDTO.getUsedIp());
         // 条件更新用于阻止两个并发请求同时消费同一验证码。
-        int updated = smsCodeMapper.updateUsedIfUnused(lastSmsCode.getId(), LocalDateTime.now(), reqDTO.getUsedIp());
+        LocalDateTime now = LocalDateTime.now();
+        int updated = smsCodeMapper.updateUsedIfUnused(lastSmsCode.getId(), now, reqDTO.getUsedIp(),
+                now.minus(smsCodeProperties.getExpireTimes()));
         if (updated == 0) {
             throw exception(SMS_CODE_USED);
         }
@@ -112,15 +123,19 @@ public class SmsCodeServiceImpl implements SmsCodeService {
      */
     @Override
     public void validateSmsCode(SmsCodeValidateReqDTO reqDTO) {
-        validateSmsCode0(reqDTO.getMobile(), reqDTO.getCode(), reqDTO.getScene());
+        validateSmsCode0(reqDTO.getMobile(), reqDTO.getCode(), reqDTO.getScene(), reqDTO.getValidateIp());
     }
 
     /**
-     * 校验 validateSmsCode0 对应的输入与业务约束。
+     * 对每次尝试执行请求预算检查，仅接受最新未消费验证码并原子记入错误预算。
      */
-    private SmsCodeDO validateSmsCode0(String mobile, String code, Integer scene) {
+    private SmsCodeDO validateSmsCode0(String mobile, String code, Integer scene, String clientIp) {
+        if (clientIp == null || clientIp.isBlank()
+                || !smsVerificationRedisDAO.allowRequest(mobile, clientIp, smsCodeProperties)) {
+            throw exception(SMS_CODE_VERIFY_TOO_FAST);
+        }
         // 校验验证码
-        SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, code, scene);
+        SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, scene);
         // 若验证码不存在，抛出异常
         if (lastSmsCode == null) {
             throw exception(SMS_CODE_NOT_FOUND);
@@ -133,6 +148,16 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         // 判断验证码是否已被使用
         if (Boolean.TRUE.equals(lastSmsCode.getUsed())) {
             throw exception(SMS_CODE_USED);
+        }
+        boolean matched = code != null && MessageDigest.isEqual(code.getBytes(StandardCharsets.UTF_8),
+                lastSmsCode.getCode().getBytes(StandardCharsets.UTF_8));
+        long result = smsVerificationRedisDAO.checkFailureBudget(mobile, lastSmsCode.getId(), matched,
+                smsCodeProperties.getExpireTimes().toMillis(), smsCodeProperties.getVerificationMaximumFailures());
+        if (result == 2) {
+            throw exception(SMS_CODE_ATTEMPTS_EXHAUSTED);
+        }
+        if (result != 1) {
+            throw exception(SMS_CODE_NOT_FOUND);
         }
         return lastSmsCode;
     }

@@ -1,8 +1,11 @@
 <script setup lang="ts">
+/** 数字输入框内容容器：为增减按钮预留左右内边距，避免覆盖输入文本。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
 }>();
 </script>
 

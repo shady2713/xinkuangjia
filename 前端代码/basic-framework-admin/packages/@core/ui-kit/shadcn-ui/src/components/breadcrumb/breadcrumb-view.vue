@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+/** 面包屑渲染视图：按 styleType 在普通面包屑与带背景样式之间切换，并把选中项事件向上抛出。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { BreadcrumbProps } from './types';
 
 import { useForwardPropsEmits } from 'reka-ui';
@@ -7,7 +10,7 @@ import BreadcrumbBackground from './breadcrumb-background.vue';
 import Breadcrumb from './breadcrumb.vue';
 
 interface Props extends BreadcrumbProps {
-  class?: any;
+  class?: ClassValue;
 }
 
 const props = withDefaults(defineProps<Props>(), {});

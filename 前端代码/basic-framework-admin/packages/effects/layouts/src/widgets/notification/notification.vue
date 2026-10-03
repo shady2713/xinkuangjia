@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+/** 通知弹窗：展示消息列表，支持标记已读、删除与按通知配置跳转。 */
+import type { HistoryState, LocationQueryRaw } from 'vue-router';
+
 import type { NotificationItem } from './types';
 
 import { useRouter } from 'vue-router';
@@ -69,10 +72,20 @@ function handleClick(item: NotificationItem) {
   }
 }
 
+/**
+ * 跳转到通知项配置的链接。
+ *
+ * http/https 前缀视为外部链接，在新标签页打开且忽略 query 与 state；
+ * 其余按站内路由处理，query 与 state 原样交给 vue-router。
+ *
+ * @param link 路由路径或完整 URL
+ * @param query 站内跳转的查询参数，缺省时传空对象
+ * @param state 站内跳转的 history state
+ */
 function navigateTo(
   link: string,
-  query?: Record<string, any>,
-  state?: Record<string, any>,
+  query?: LocationQueryRaw,
+  state?: HistoryState,
 ) {
   if (link.startsWith('http://') || link.startsWith('https://')) {
     // 外部链接，在新标签页打开

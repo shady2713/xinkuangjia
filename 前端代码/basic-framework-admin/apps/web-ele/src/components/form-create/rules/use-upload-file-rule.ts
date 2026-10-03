@@ -1,3 +1,6 @@
+/** 文件上传组件的设计器规则：属性面板暴露文件类型、体积与数量限制。 */
+import type { FormCreatePropsContext } from '#/components/form-create/typing';
+
 import { buildUUID } from '@vben/utils';
 
 import {
@@ -5,6 +8,10 @@ import {
   makeRequiredRule,
 } from '#/components/form-create/helpers';
 
+/**
+ * 文件上传组件规则
+ * @returns form-create 设计器注册项；rule 生成表单规则，props 生成属性面板配置行
+ */
 export function useUploadFileRule() {
   const label = '文件上传';
   const name = 'FileUpload';
@@ -21,7 +28,14 @@ export function useUploadFileRule() {
         $required: false,
       };
     },
-    props(_: any, { t }: any) {
+    /**
+     * 生成文件上传组件的属性面板配置行。
+     * @param _name form-create 传入的目标组件名，本工程按闭包中的 name 取配置故不使用
+     * @param context 设计器上下文，只取其中的 t 翻译函数
+     * @returns 已完成文案国际化的属性面板配置行数组
+     */
+    props(_name: string, context: FormCreatePropsContext) {
+      const { t } = context;
       return localeProps(t, `${name}.props`, [
         makeRequiredRule(),
         {

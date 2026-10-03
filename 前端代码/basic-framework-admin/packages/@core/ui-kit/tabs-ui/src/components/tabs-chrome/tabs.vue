@@ -8,7 +8,8 @@ import { computed, ref } from 'vue';
 import { Pin, X } from '@vben-core/icons';
 import { VbenContextMenu, VbenIcon } from '@vben-core/shadcn-ui';
 
-interface Props extends TabsProps {}
+/** Chrome 风格标签页的属性契约别名：直接复用标签页属性，不额外声明成员。 */
+type Props = TabsProps;
 
 defineOptions({
   name: 'VbenTabsChrome',

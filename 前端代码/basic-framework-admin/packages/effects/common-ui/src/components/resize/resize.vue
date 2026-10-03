@@ -183,13 +183,58 @@ const styleMapping = {
   },
 };
 
-function addEvents(events: Map<string, (...args: any[]) => void>) {
+/** 同时能冒泡取消、又能读到指针坐标的最小事件结构，鼠标与触摸事件都满足。 */
+type ResizePointerEvent = Event & {
+  pageX?: number;
+  pageY?: number;
+  touches?: TouchList;
+};
+
+/** 拖动监听器：接收鼠标或触摸事件，内部再按需读取指针坐标。 */
+type ResizeDomEventHandler = (ev: ResizePointerEvent) => void;
+
+/**
+ * 拖动过程中注册到 documentElement 上的监听器集合。
+ * 键为原生事件名；mousemove 与 touchmove 共用同一处理器，因此值按 ResizePointerEvent 声明。
+ */
+type ResizeDomEvents = Map<string, ResizeDomEventHandler>;
+
+/**
+ * 从鼠标或触摸事件中解析当前指针坐标。
+ * @param ev 鼠标事件、触摸事件，或由 watch/程序化缩放构造的坐标片段
+ * @param ev.pageX 鼠标事件的页面横坐标，触摸事件没有该字段
+ * @param ev.pageY 鼠标事件的页面纵坐标，触摸事件没有该字段
+ * @param ev.touches 触摸事件的触点列表，鼠标事件没有该字段
+ * @returns 页面坐标；既无 pageX 也无触点时按 0 处理，拖动按 0 位移继续而不是抛错
+ */
+function readPointerPosition(ev: {
+  pageX?: number;
+  pageY?: number;
+  touches?: TouchList;
+}) {
+  const touch = ev.touches?.[0];
+  return {
+    pageX: ev.pageX ?? touch?.pageX ?? 0,
+    pageY: ev.pageY ?? touch?.pageY ?? 0,
+  };
+}
+
+/**
+ * 在 documentElement 上批量注册拖动事件监听。
+ * @param events 事件名到处理函数的映射
+ */
+function addEvents(events: ResizeDomEvents) {
   events.forEach((cb, eventName) => {
     document.documentElement.addEventListener(eventName, cb);
   });
 }
 
-function removeEvents(events: Map<string, (...args: any[]) => void>) {
+/**
+ * 从 documentElement 上移除由 addEvents 注册的监听。
+ * 组件卸载时必须调用，否则监听会残留在已移除的 DOM 上。
+ * @param events 与注册时相同的映射
+ */
+function removeEvents(events: ResizeDomEvents) {
   events.forEach((cb, eventName) => {
     document.documentElement.removeEventListener(eventName, cb);
   });
@@ -264,16 +309,36 @@ const currentStick = ref<null | string>(null);
 
 const parentElement = ref<HTMLElement | null>(null);
 
-const width = computed(() => parentWidth.value! - left.value! - right.value!);
+// 挂载前这四个尺寸都还是 null，按 0 参与运算与原来的隐式转换结果一致，
+// 因此首帧渲染不会出现 NaN，onMounted 写入真实值后自动重算。
+const width = computed(
+  /**
+   * 当前内容宽度 = 父容器宽度 - 左边距 - 右边距。
+   * @returns 挂载前按 0 计算的宽度，onMounted 后为真实像素值。
+   */
+  () => (parentWidth.value ?? 0) - (left.value ?? 0) - (right.value ?? 0),
+);
 
-const height = computed(() => parentHeight.value! - top.value! - bottom.value!);
+const height = computed(
+  /**
+   * 当前内容高度 = 父容器高度 - 上边距 - 下边距。
+   * @returns 挂载前按 0 计算的高度，onMounted 后为真实像素值。
+   */
+  () => (parentHeight.value ?? 0) - (top.value ?? 0) - (bottom.value ?? 0),
+);
 
-const rect = computed(() => ({
-  left: Math.round(left.value!),
-  top: Math.round(top.value!),
-  width: Math.round(width.value),
-  height: Math.round(height.value),
-}));
+const rect = computed(
+  /**
+   * 对外暴露的矩形信息，供 dragging/resizing 事件带出。
+   * @returns 取整后的位置与尺寸，挂载前为全 0。
+   */
+  () => ({
+    left: Math.round(left.value ?? 0),
+    top: Math.round(top.value ?? 0),
+    width: Math.round(width.value),
+    height: Math.round(height.value),
+  }),
+);
 
 const saveDimensionsBeforeMove = ({
   pointerX,
@@ -341,6 +406,16 @@ const rectCorrectionByLimit = (rect: {
   };
 };
 
+/**
+ * 按锁定宽高比修正拖动产生的矩形。
+ * 只调整与当前控制点垂直或水平的那一条边，另一条边保持调用方传入的值。
+ * @param rect 本次拖动计算出的候选矩形
+ * @param rect.newBottom 下边距
+ * @param rect.newLeft 左边距
+ * @param rect.newRight 右边距
+ * @param rect.newTop 上边距
+ * @returns 满足宽高比约束后的矩形。
+ */
 const rectCorrectionByAspectRatio = (rect: {
   newBottom: number;
   newLeft: number;
@@ -350,46 +425,63 @@ const rectCorrectionByAspectRatio = (rect: {
   let { newLeft, newRight, newTop, newBottom } = rect;
   // const { parentWidth, parentHeight, currentStick, aspectFactor, dimensionsBeforeMove } = this;
 
-  let newWidth = parentWidth.value! - newLeft - newRight;
-  let newHeight = parentHeight.value! - newTop - newBottom;
+  // 比例修正只在拖动过程中调用，此时父容器尺寸与比例系数都已写入；
+  // 万一缺失则退到 0 与 1，保证函数总能返回可用的矩形而不是抛错。
+  const parentW = parentWidth.value ?? 0;
+  const parentH = parentHeight.value ?? 0;
+  const stick = currentStick.value ?? '';
+  const factor = aspectFactor.value ?? 1;
 
-  if (currentStick.value![1] === 'm') {
+  let newWidth = parentW - newLeft - newRight;
+  let newHeight = parentH - newTop - newBottom;
+
+  if (stick[1] === 'm') {
     const deltaHeight = newHeight - dimensionsBeforeMove.value.height;
 
-    newLeft -= (deltaHeight * aspectFactor.value!) / 2;
-    newRight -= (deltaHeight * aspectFactor.value!) / 2;
-  } else if (currentStick.value![0] === 'm') {
+    newLeft -= (deltaHeight * factor) / 2;
+    newRight -= (deltaHeight * factor) / 2;
+  } else if (stick[0] === 'm') {
     const deltaWidth = newWidth - dimensionsBeforeMove.value.width;
 
-    newTop -= deltaWidth / aspectFactor.value! / 2;
-    newBottom -= deltaWidth / aspectFactor.value! / 2;
-  } else if (newWidth / newHeight > aspectFactor.value!) {
-    newWidth = aspectFactor.value! * newHeight;
+    newTop -= deltaWidth / factor / 2;
+    newBottom -= deltaWidth / factor / 2;
+  } else if (newWidth / newHeight > factor) {
+    newWidth = factor * newHeight;
 
-    if (currentStick.value![1] === 'l') {
-      newLeft = parentWidth.value! - newRight - newWidth;
+    if (stick[1] === 'l') {
+      newLeft = parentW - newRight - newWidth;
     } else {
-      newRight = parentWidth.value! - newLeft - newWidth;
+      newRight = parentW - newLeft - newWidth;
     }
   } else {
-    newHeight = newWidth / aspectFactor.value!;
+    newHeight = newWidth / factor;
 
-    if (currentStick.value![0] === 't') {
-      newTop = parentHeight.value! - newBottom - newHeight;
+    if (stick[0] === 't') {
+      newTop = parentH - newBottom - newHeight;
     } else {
-      newBottom = parentHeight.value! - newTop - newHeight;
+      newBottom = parentH - newTop - newHeight;
     }
   }
 
   return { newLeft, newRight, newTop, newBottom };
 };
 
+/**
+ * 按控制点位移量移动矩形的一条或两条边。
+ * 开启 snapToGrid 时会把结果吸附到网格；最后再按限制区间和宽高比收敛。
+ * @param delta 本次指针位移，已按父级缩放换算
+ * @param delta.x 水平位移，向右为正
+ * @param delta.y 垂直位移，向下为正
+ */
 const stickMove = (delta: { x: number; y: number }) => {
   let newTop = dimensionsBeforeMove.value.top;
   let newBottom = dimensionsBeforeMove.value.bottom;
   let newLeft = dimensionsBeforeMove.value.left;
   let newRight = dimensionsBeforeMove.value.right;
-  switch (currentStick.value![0]) {
+  // currentStick 形如 "br"，首字符是上下方向、次字符是左右方向；
+  // 尚未开始拖动时为空串，两个 switch 都不会命中，等价于不做位移。
+  const stick = currentStick.value ?? '';
+  switch (stick[0]) {
     case 'b': {
       newBottom = dimensionsBeforeMove.value.bottom + delta.y;
 
@@ -419,7 +511,7 @@ const stickMove = (delta: { x: number; y: number }) => {
     }
   }
 
-  switch (currentStick.value![1]) {
+  switch (stick[1]) {
     case 'l': {
       newLeft = dimensionsBeforeMove.value.left - delta.x;
 
@@ -502,6 +594,11 @@ const stickUp = () => {
   emit('resizestop', rect.value);
 };
 
+/**
+ * 计算整体拖动时四条边的可移动范围。
+ * 拖动只改变位置不改变尺寸，因此上限就是"父容器减去当前内容尺寸"。
+ * @returns 四个方向各自的最小值与最大值。
+ */
 const calcDragLimitation = () => {
   return {
     left: { min: 0, max: (parentWidth.value as number) - width.value },
@@ -511,6 +608,11 @@ const calcDragLimitation = () => {
   };
 };
 
+/**
+ * 计算单个控制点可拖动的范围。
+ * 先按最小宽高得到基础区间，开启宽高比时再与比例推导出的区间求交集。
+ * @returns 四个方向各自的最小值与最大值，供拖动过程中夹取。
+ */
 const calcResizeLimits = () => {
   // const { aspectFactor, width, height, bottom, top, left, right } = this;
 
@@ -543,58 +645,52 @@ const calcResizeLimits = () => {
     },
   };
 
+  // 以下换算都发生在拖动过程中，各尺寸与比例系数此时均已写入；
+  // 仍按 0 与 1 兜底，保证父容器尚未测量时也能返回可用的限制区间。
+  const leftPos = left.value ?? 0;
+  const rightPos = right.value ?? 0;
+  const topPos = top.value ?? 0;
+  const bottomPos = bottom.value ?? 0;
+  const factor = aspectFactor.value ?? 1;
+  const minHeight = minh.value ?? 0;
+  const minWidth = minw.value ?? 0;
+
   if (aspectRatio.value) {
     const aspectLimits = {
       left: {
-        min:
-          left.value! -
-          Math.min(top.value!, bottom.value!) * aspectFactor.value! * 2,
-        max:
-          left.value! +
-          ((height.value - minh.value!) / 2) * aspectFactor.value! * 2,
+        min: leftPos - Math.min(topPos, bottomPos) * factor * 2,
+        max: leftPos + ((height.value - minHeight) / 2) * factor * 2,
       },
       right: {
-        min:
-          right.value! -
-          Math.min(top.value!, bottom.value!) * aspectFactor.value! * 2,
-        max:
-          right.value! +
-          ((height.value - minh.value!) / 2) * aspectFactor.value! * 2,
+        min: rightPos - Math.min(topPos, bottomPos) * factor * 2,
+        max: rightPos + ((height.value - minHeight) / 2) * factor * 2,
       },
       top: {
-        min:
-          top.value! -
-          (Math.min(left.value!, right.value!) / aspectFactor.value!) * 2,
-        max:
-          top.value! +
-          ((width.value - minw.value) / 2 / aspectFactor.value!) * 2,
+        min: topPos - (Math.min(leftPos, rightPos) / factor) * 2,
+        max: topPos + ((width.value - minWidth) / 2 / factor) * 2,
       },
       bottom: {
-        min:
-          bottom.value! -
-          (Math.min(left.value!, right.value!) / aspectFactor.value!) * 2,
-        max:
-          bottom.value! +
-          ((width.value - minw.value) / 2 / aspectFactor.value!) * 2,
+        min: bottomPos - (Math.min(leftPos, rightPos) / factor) * 2,
+        max: bottomPos + ((width.value - minWidth) / 2 / factor) * 2,
       },
     };
 
-    if (currentStick.value![0] === 'm') {
+    if ((currentStick.value ?? '')[0] === 'm') {
       limits.left = {
-        min: Math.max(limits.left.min!, aspectLimits.left.min),
+        min: Math.max(limits.left.min ?? 0, aspectLimits.left.min),
         max: Math.min(limits.left.max, aspectLimits.left.max),
       };
       limits.right = {
-        min: Math.max(limits.right.min!, aspectLimits.right.min),
+        min: Math.max(limits.right.min ?? 0, aspectLimits.right.min),
         max: Math.min(limits.right.max, aspectLimits.right.max),
       };
-    } else if (currentStick.value![1] === 'm') {
+    } else if ((currentStick.value ?? '')[1] === 'm') {
       limits.top = {
-        min: Math.max(limits.top.min!, aspectLimits.top.min),
+        min: Math.max(limits.top.min ?? 0, aspectLimits.top.min),
         max: Math.min(limits.top.max, aspectLimits.top.max),
       };
       limits.bottom = {
-        min: Math.max(limits.bottom.min!, aspectLimits.bottom.min),
+        min: Math.max(limits.bottom.min ?? 0, aspectLimits.bottom.min),
         max: Math.min(limits.bottom.max, aspectLimits.bottom.max),
       };
     }
@@ -603,11 +699,19 @@ const calcResizeLimits = () => {
   return limits;
 };
 
-const positionStyle = computed(() => ({
-  top: `${top.value}px`,
-  left: `${left.value}px`,
-  zIndex: zIndex.value!,
-}));
+const positionStyle = computed(
+  /**
+   * 内容容器的定位样式。
+   * @returns 绝对定位所需的 top、left 与可选层级。
+   */
+  () => ({
+    top: `${top.value}px`,
+    left: `${left.value}px`,
+    // zIndex 为 null 表示"不接管层级"，交给外部样式控制；
+    // 归一成 undefined 才能通过 CSSProperties，运行时同样是不写该样式。
+    zIndex: zIndex.value ?? undefined,
+  }),
+);
 
 const sizeStyle = computed(() => ({
   width: w.value === 'auto' ? 'auto' : `${width.value}px`,
@@ -708,9 +812,24 @@ const bodyUp = () => {
   };
 };
 
+/**
+ * 在控制点上按下鼠标或触屏时开始单边缩放。
+ * 记录按下位置作为后续位移基准，并按当前尺寸与最小宽高算出本次可移动区间。
+ *
+ * @param stick 当前控制点，形如 'br'，首字符为上下、次字符为左右
+ * @param ev 鼠标或触摸事件；鼠标走 pageX/pageY，触屏取第一个触点
+ * @param ev.pageX 鼠标事件的页面横坐标，触摸事件没有该字段
+ * @param ev.pageY 鼠标事件的页面纵坐标，触摸事件没有该字段
+ * @param ev.touches 触摸事件的触点列表，鼠标事件没有该字段
+ * @param force 为 true 时忽略 isResizable 与 active 的前置判断，供 watch 触发的程序化缩放使用
+ */
 const stickDown = (
   stick: string,
-  ev: { pageX: any; pageY: any; touches?: any },
+  ev: {
+    pageX?: number;
+    pageY?: number;
+    touches?: TouchList;
+  },
   force = false,
 ) => {
   if ((!isResizable.value || !active.value) && !force) {
@@ -719,8 +838,9 @@ const stickDown = (
 
   stickDrag.value = true;
 
-  const pointerX = ev.pageX === undefined ? ev.touches[0].pageX : ev.pageX;
-  const pointerY = ev.pageY === undefined ? ev.touches[0].pageY : ev.pageY;
+  // 鼠标事件没有 pageX/pageY 时退回第一个触点；两者都取不到时按 0 处理，
+  // 与 move 的取值口径保持一致，避免在缺少 touches 的事件上抛错中断拖动。
+  const { pageX: pointerX, pageY: pointerY } = readPointerPosition(ev);
 
   saveDimensionsBeforeMove({ pointerX, pointerY });
 
@@ -729,16 +849,21 @@ const stickDown = (
   limits.value = calcResizeLimits();
 };
 
-const move = (ev: MouseEvent & TouchEvent) => {
+/**
+ * 指针移动的统一入口：按当前拖动模式分发到控制点或整体移动。
+ * 未处于拖动状态时直接返回，避免与页面自身的滚动、选择行为冲突。
+ * @param ev 鼠标或触摸事件；mousemove 与 touchmove 共用本函数，位移已按父级缩放换算后再传给下层。
+ */
+const move = (ev: ResizePointerEvent) => {
   if (!stickDrag.value && !bodyDrag.value) {
     return;
   }
 
   ev.stopPropagation();
 
-  // touches 兼容性代码
-  const pageX = ev.pageX === undefined ? ev.touches![0]!.pageX : ev.pageX;
-  const pageY = ev.pageY === undefined ? ev.touches![0]!.pageY : ev.pageY;
+  // 鼠标事件没有 pageX/pageY 时退回触点坐标；两者都取不到时按 0 处理，
+  // 避免在缺少 touches 的事件上直接抛错导致拖动中断。
+  const { pageX, pageY } = readPointerPosition(ev);
 
   const delta = {
     x: (dimensionsBeforeMove.value.pointerX - pageX) / parentScaleX.value,
@@ -800,50 +925,78 @@ const domEvents = ref(
 
 const container = ref<HTMLDivElement>();
 
-onMounted(() => {
-  const currentInstance = getCurrentInstance();
-  const $el = currentInstance?.vnode.el as HTMLElement;
+onMounted(
+  /**
+   * 挂载后测量父容器与自身尺寸，初始化四条边的位置，并注册全局拖动事件。
+   * 拖动事件挂在 document 上，保证指针移出组件范围后仍能继续拖动。
+   */
+  () => {
+    const currentInstance = getCurrentInstance();
+    const $el = currentInstance?.vnode.el as HTMLElement;
 
-  parentElement.value = $el?.parentNode as HTMLElement;
-  parentWidth.value = parentW.value ?? parentElement.value?.clientWidth;
-  parentHeight.value = parentH.value ?? parentElement.value?.clientHeight;
+    parentElement.value = $el?.parentNode as HTMLElement;
+    parentWidth.value = parentW.value ?? parentElement.value?.clientWidth;
+    parentHeight.value = parentH.value ?? parentElement.value?.clientHeight;
 
-  left.value = x.value;
-  top.value = y.value;
-  right.value = (parentWidth.value -
-    (w.value === 'auto' ? container.value!.scrollWidth : (w.value as number)) -
-    left.value) as number;
-  bottom.value = (parentHeight.value -
-    (h.value === 'auto' ? container.value!.scrollHeight : (h.value as number)) -
-    top.value) as number;
+    // w/h 为 auto 时按容器实际尺寸推算边距；容器尚未挂载时退到 0，
+    // 避免首帧因 ref 为空而抛错，onMounted 之后会拿到真实值。
+    const containerEl = container.value;
+    left.value = x.value;
+    top.value = y.value;
+    right.value =
+      (parentWidth.value ?? 0) -
+      (w.value === 'auto'
+        ? (containerEl?.scrollWidth ?? 0)
+        : (w.value as number)) -
+      (left.value ?? 0);
+    bottom.value =
+      (parentHeight.value ?? 0) -
+      (h.value === 'auto'
+        ? (containerEl?.scrollHeight ?? 0)
+        : (h.value as number)) -
+      (top.value ?? 0);
 
-  addEvents(domEvents.value);
+    addEvents(domEvents.value);
 
-  if (dragHandle.value) {
-    [...($el?.querySelectorAll(dragHandle.value) || [])].forEach(
-      (dragHandle) => {
-        (dragHandle as HTMLElement).dataset.dragHandle = String(
-          currentInstance?.uid,
-        );
-      },
-    );
-  }
+    if (dragHandle.value) {
+      [...($el?.querySelectorAll(dragHandle.value) || [])].forEach(
+        /**
+         * 给命中的元素打上当前实例标记，bodyDown 据此判断是否允许从这里开始拖动。
+         * @param dragHandle 选择器命中的元素。
+         */
+        (dragHandle) => {
+          (dragHandle as HTMLElement).dataset.dragHandle = String(
+            currentInstance?.uid,
+          );
+        },
+      );
+    }
 
-  if (dragCancel.value) {
-    [...($el?.querySelectorAll(dragCancel.value) || [])].forEach(
-      (cancelHandle) => {
-        (cancelHandle as HTMLElement).dataset.dragCancel = String(
-          currentInstance?.uid,
-        );
-      },
-    );
-  }
-});
+    if (dragCancel.value) {
+      [...($el?.querySelectorAll(dragCancel.value) || [])].forEach(
+        /**
+         * 打上取消标记，从这些元素上按下时不会开始拖动。
+         * @param cancelHandle 选择器命中的元素。
+         */
+        (cancelHandle) => {
+          (cancelHandle as HTMLElement).dataset.dragCancel = String(
+            currentInstance?.uid,
+          );
+        },
+      );
+    }
+  },
+);
 
 onBeforeUnmount(() => {
   removeEvents(domEvents.value);
 });
 
+/**
+ * 在内容区域按下时开始整体拖动。
+ * 先按 dragHandle、dragCancel 过滤是否允许拖动，再记录按下位置作为位移基准。
+ * @param ev 鼠标或触摸事件。
+ */
 const bodyDown = (ev: MouseEvent & TouchEvent) => {
   const { target, button } = ev;
 
@@ -861,18 +1014,19 @@ const bodyDown = (ev: MouseEvent & TouchEvent) => {
     return;
   }
 
+  // 事件目标可能不是元素（例如触摸事件的目标是文本节点），
+  // 取不到 dataset 时按"不是拖拽手柄"处理，等价于放弃本次拖动。
+  const targetDataset = (target as HTMLElement | null)?.dataset;
   if (
     dragHandle.value &&
-    (target! as HTMLElement).dataset.dragHandle !==
-      getCurrentInstance()?.uid.toString()
+    targetDataset?.dragHandle !== getCurrentInstance()?.uid.toString()
   ) {
     return;
   }
 
   if (
     dragCancel.value &&
-    (target! as HTMLElement).dataset.dragCancel ===
-      getCurrentInstance()?.uid.toString()
+    targetDataset?.dragCancel === getCurrentInstance()?.uid.toString()
   ) {
     return;
   }
@@ -889,8 +1043,9 @@ const bodyDown = (ev: MouseEvent & TouchEvent) => {
     bodyDrag.value = true;
   }
 
-  const pointerX = ev.pageX === undefined ? ev.touches[0]!.pageX : ev.pageX;
-  const pointerY = ev.pageY === undefined ? ev.touches[0]!.pageY : ev.pageY;
+  const touch = ev.touches?.[0];
+  const pointerX = ev.pageX ?? touch?.pageX ?? 0;
+  const pointerY = ev.pageY ?? touch?.pageY ?? 0;
 
   saveDimensionsBeforeMove({ pointerX, pointerY });
 
@@ -930,6 +1085,11 @@ watch(
 
 watch(
   () => x.value,
+  /**
+   * 外部改动 x 时按差值整体平移组件，保持指针位置不跳变。
+   * @param newVal 最新的 x 取值。
+   * @param oldVal 变化前的 x 取值。
+   */
   (newVal, oldVal) => {
     if (stickDrag.value || bodyDrag.value || newVal === left.value) {
       return;
@@ -937,8 +1097,10 @@ watch(
 
     const delta = oldVal - newVal;
 
-    bodyDown({ pageX: left.value!, pageY: top.value! } as MouseEvent &
-      TouchEvent);
+    bodyDown({
+      pageX: left.value ?? 0,
+      pageY: top.value ?? 0,
+    } as MouseEvent & TouchEvent);
     bodyMove({ x: delta, y: 0 });
 
     nextTick(() => {
@@ -968,6 +1130,11 @@ watch(
 
 watch(
   () => w.value,
+  /**
+   * 外部改动 w 时按差值从右边界缩放，并复用控制点拖动链路完成限制与比例收敛。
+   * @param newVal 最新的 w 取值。
+   * @param oldVal 变化前的 w 取值。
+   */
   (newVal, oldVal) => {
     if (stickDrag.value || bodyDrag.value || newVal === width.value) {
       return;
@@ -978,7 +1145,7 @@ watch(
 
     stickDown(
       stick,
-      { pageX: right.value, pageY: top.value! + height.value / 2 },
+      { pageX: right.value ?? 0, pageY: (top.value ?? 0) + height.value / 2 },
       true,
     );
     stickMove({ x: delta, y: 0 });
@@ -991,6 +1158,11 @@ watch(
 
 watch(
   () => h.value,
+  /**
+   * 外部改动 h 时按差值从下边界缩放，复用控制点拖动链路完成限制与比例收敛。
+   * @param newVal 最新的 h 取值。
+   * @param oldVal 变化前的 h 取值。
+   */
   (newVal, oldVal) => {
     if (stickDrag.value || bodyDrag.value || newVal === height.value) {
       return;
@@ -1001,7 +1173,7 @@ watch(
 
     stickDown(
       stick,
-      { pageX: left.value! + width.value / 2, pageY: bottom.value },
+      { pageX: (left.value ?? 0) + width.value / 2, pageY: bottom.value ?? 0 },
       true,
     );
     stickMove({ x: 0, y: delta });
@@ -1014,16 +1186,24 @@ watch(
 
 watch(
   () => parentW.value,
+  /**
+   * 父容器宽度变化时重算右边距，保持内容宽度不变。
+   * @param val 最新的父容器宽度。
+   */
   (val) => {
-    right.value = val - width.value - left.value!;
+    right.value = val - width.value - (left.value ?? 0);
     parentWidth.value = val;
   },
 );
 
 watch(
   () => parentH.value,
+  /**
+   * 父容器高度变化时重算下边距，保持内容高度不变。
+   * @param val 最新的父容器高度。
+   */
   (val) => {
-    bottom.value = val - height.value - top.value!;
+    bottom.value = val - height.value - (top.value ?? 0);
     parentHeight.value = val;
   },
 );

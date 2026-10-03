@@ -1,10 +1,13 @@
 <script lang="ts" setup>
+/** 表单项说明：展示字段下方的补充或校验提示。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { useFormField } from './useFormField';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
 }>();
 
 const { formDescriptionId } = useFormField();

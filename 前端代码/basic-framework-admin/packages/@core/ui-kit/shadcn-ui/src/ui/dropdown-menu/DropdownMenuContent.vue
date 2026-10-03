@@ -4,6 +4,8 @@ import type {
   DropdownMenuContentProps,
 } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -15,7 +17,7 @@ import {
 } from 'reka-ui';
 
 const props = withDefaults(
-  defineProps<DropdownMenuContentProps & { class?: any }>(),
+  defineProps<DropdownMenuContentProps & { class?: ClassValue }>(),
   {
     sideOffset: 4,
   },

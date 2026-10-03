@@ -1,50 +1,48 @@
+/** 汇集同一条件的所有等待者；重置或否定条件会明确拒绝旧等待。 */
 export class StateHandler {
-  private condition: boolean = false;
-  private rejectCondition: (() => void) | null = null;
-  private resolveCondition: (() => void) | null = null;
+  private condition = false;
+  private waiters: Array<{
+    /** 条件成立时释放此等待者。 */ reject: (reason: Error) => void;
+    /** 条件失效时通知此等待者。 */ resolve: () => void;
+  }> = [];
 
+  /**
+   * 返回当前条件是否成立。
+   * @returns 条件已成立时为 true；仍在等待或已被否定时为 false。
+   */
   isConditionTrue(): boolean {
     return this.condition;
   }
 
+  /** 重置为未就绪状态，并取消属于上一个生命周期的全部等待者。 */
   reset() {
-    this.condition = false;
-    this.clearPromises();
+    this.setConditionFalse();
   }
 
-  // 触发状态为 false 时，reject
+  /** 否定条件并拒绝所有挂起等待，避免遗留永不结束的 Promise。 */
   setConditionFalse() {
     this.condition = false;
-    if (this.rejectCondition) {
-      this.rejectCondition();
-      this.clearPromises();
-    }
+    const pending = this.waiters.splice(0);
+    for (const waiter of pending) waiter.reject(new Error('等待条件已失效'));
   }
 
-  // 触发状态为 true 时，resolve
+  /** 确认条件成立并释放所有等待者，完成后的句柄立即移除。 */
   setConditionTrue() {
     this.condition = true;
-    if (this.resolveCondition) {
-      this.resolveCondition();
-      this.clearPromises();
-    }
+    const pending = this.waiters.splice(0);
+    for (const waiter of pending) waiter.resolve();
   }
 
-  // 返回一个 Promise，等待 condition 变为 true
+  /** 等待本轮条件成立。
+   * @returns 条件已满足或随后被满足时完成的 Promise。
+   * @throws {Error} 等待期间条件被否定或生命周期重置。
+   */
   waitForCondition(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.condition) {
-        resolve(); // 如果 condition 已经为 true，立即 resolve
-      } else {
-        this.resolveCondition = resolve;
-        this.rejectCondition = reject;
-      }
-    });
-  }
-
-  // 清理 resolve/reject 函数
-  private clearPromises() {
-    this.resolveCondition = null;
-    this.rejectCondition = null;
+    if (this.condition) return Promise.resolve();
+    return new Promise(
+      /** 登记独立完成句柄，多个等待者互不覆盖。 */ (resolve, reject) => {
+        this.waiters.push({ resolve, reject });
+      },
+    );
   }
 }

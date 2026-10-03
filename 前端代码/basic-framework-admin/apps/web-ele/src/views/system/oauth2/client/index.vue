@@ -7,12 +7,12 @@ import { Page, useVbenModal } from '@vben/common-ui';
 import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteOAuth2Client,
   deleteOAuth2ClientList,
   getOAuth2ClientPage,
 } from '#/api/system/oauth2/client';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';

@@ -79,9 +79,11 @@ MyBatis Starter 管理 MySQL 访问，Redis Starter 管理缓存。运行时配�
 
 文件读写与调度都复用 infra 的公共入口，不在新业务中另建存储配置表或自行操作 Quartz。
 
-文件默认链路为上传 Controller → FileService → FileStorageService → S3 客户端。FileStorageService 在启动时根据 `basic-framework.file.minio` 创建唯一客户端，在销毁时关闭连接；配置来自 `MINIO_*`。文件服务检查名称、路径、类型，上传内容后登记元数据；路径唯一化避免同名覆盖。公开读取 URL 由 `MINIO_PUBLIC_URL` 和桶生成，客户端读取不会用用户 Token 保护对象。
+文件默认链路为上传 Controller → FileService → FileStorageService → S3 客户端。FileStorageService 在启动时根据 `basic-framework.file.minio` 创建唯一客户端，在销毁时关闭连接；配置来自 `MINIO_*`。文件服务检查名称、路径、类型，上传内容后登记元数据；对象键包含随机标识，避免同名并发请求依赖毫秒时间戳。公开读取 URL 由 `MINIO_PUBLIC_URL` 和桶生成，客户端读取不会用用户 Token 保护对象。
 
-直传链路获取预签名 PUT 地址、浏览器上传、再登记文件；跨域与浏览器可达 endpoint 是额外条件。对象存储与 MySQL 不构成同一事务，失败补偿要按实际代码和业务情况验证，不能把数据库事务描述为全资源原子提交。
+批量删除逐项完成对象及元数据删除；后续失败时先前已完成项保持生效，客户端应刷新列表后重试剩余项。该行为不提供整个批次的回滚。
+
+后端上传和直传先持久化用户预约与日预算。直传签名只允许写暂存键，服务端有界读取并验证真实内容后写入独立最终键，元数据与完成状态同事务提交；过期和失败预约由持久化补偿清理。对象存储与 MySQL 不构成同一事务，未知提交结果不能触发盲目删除。协议、迁移和真实中间件测试见[文件上传与故障恢复](../部署/文件上传协议.md)。
 
 Quartz 管理任务调度，infra 的 `JobService` 管理 handler、Cron 和日志。handler 是 Spring Bean 名称，新增任务需实现 core 的 `JobHandler` 并注册 Bean。当前 YAML 没有映射 `.env.example` 中 `QUARTZ_AUTO_STARTUP` 或 `QUARTZ_JDBC_INITIALIZE_SCHEMA`，也未配置 JDBC JobStore；需要这些能力时使用 Spring 标准 `spring.quartz.*` 配置并验证。`infra_job` 的存在不证明调度状态已写入 `QRTZ_*` 表。
 

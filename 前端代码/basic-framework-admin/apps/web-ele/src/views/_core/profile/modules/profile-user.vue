@@ -25,6 +25,13 @@ const avatar = computed(
   () => props.profile?.avatar || preferences.app.defaultAvatar,
 );
 
+/**
+ * 裁剪完成后上传头像并同步到用户资料。
+ * @param params 裁剪组件回传的图片二进制与原始文件名。
+ * @param params.file 裁剪后的图片二进制。
+ * @param params.filename 原始文件名，上传时沿用以保持后端命名一致。
+ * @returns 上传后的头像地址，供裁剪组件回填展示。
+ */
 async function handelUpload({
   file,
   filename,
@@ -39,6 +46,7 @@ async function handelUpload({
   const avatar = await httpRequest(fileObj);
   // 2. 更新用户头像
   await updateUserProfile({ avatar });
+  return avatar;
 }
 </script>
 

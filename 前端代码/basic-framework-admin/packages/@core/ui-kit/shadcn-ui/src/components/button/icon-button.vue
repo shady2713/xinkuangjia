@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/** 纯图标按钮：在只有图标的场景下补一层气泡提示，并把点击、禁用与外观透传给基础按钮。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { ButtonVariants } from '../../ui';
 import type { VbenButtonProps } from './button';
 
@@ -10,7 +13,7 @@ import { VbenTooltip } from '../tooltip';
 import VbenButton from './button.vue';
 
 interface Props extends VbenButtonProps {
-  class?: any;
+  class?: ClassValue;
   disabled?: boolean;
   onClick?: () => void;
   tooltip?: string;

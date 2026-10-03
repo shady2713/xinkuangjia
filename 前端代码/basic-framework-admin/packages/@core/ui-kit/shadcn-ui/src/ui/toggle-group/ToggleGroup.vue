@@ -2,6 +2,8 @@
 import type { VariantProps } from 'class-variance-authority';
 import type { ToggleGroupRootEmits, ToggleGroupRootProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { toggleVariants } from '../toggle';
 
 import { computed, provide } from 'vue';
@@ -14,7 +16,7 @@ type ToggleGroupVariants = VariantProps<typeof toggleVariants>;
 
 const props = defineProps<
   ToggleGroupRootProps & {
-    class?: any;
+    class?: ClassValue;
     size?: ToggleGroupVariants['size'];
     variant?: ToggleGroupVariants['variant'];
   }

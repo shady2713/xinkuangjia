@@ -14,11 +14,15 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Objects;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongSupplier;
 
 /**
  * 分页统计当前 MinIO 桶，按真实业务目录互斥分类，不读取文件内容。
  *
- * <p>每个进程串行采集，结果缓存 60 秒；每轮最多 100 页、启动新页前检查 5 秒预算。
+ * <p>每个进程最多一个采集者，其他调用者立即读取标明状态的旧快照或未就绪结果；结果缓存 60 秒。
+ * 每轮最多 100 页、启动新页前检查 5 秒预算。
  * 单页另受客户端 3 秒超时限制。达到边界或失败时明确返回部分数据，不能当作全量。</p>
  * @author 吴晓群
  */
@@ -30,7 +34,7 @@ public class InfraStorageStatisticsService {
     private static final int MAX_PAGES = 100;
     /** 扫描预算使用单调时钟，避免系统校时影响资源边界。 */
     private static final long SCAN_NANOS = Duration.ofSeconds(5).toNanos();
-    /** 页面每 30 秒轮询时复用一分钟快照，失败也缓存以避免请求放大。 */
+    /** 完成的采集结果缓存一分钟，失败也缓存以避免请求放大。 */
     private static final long CACHE_NANOS = Duration.ofSeconds(60).toNanos();
     /** 对象列表不提供 MIME；普通媒体按项目上传支持的扩展名归类。 */
     private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "ico", "tif", "tiff", "avif");
@@ -39,33 +43,89 @@ public class InfraStorageStatisticsService {
 
     @Resource
     private FileStorageService fileStorageService;
-    /** 缓存只在同步方法中访问，调用方得到副本避免污染后续结果。 */
-    private InfraStorageStatisticsDTO cachedStatistics;
-    /** 最近采集结束的单调时钟时间。 */
-    private long cachedAtNanos;
+    /** 单一采集锁；并发读取只尝试获取，不等待任何外部网络请求。 */
+    private final ReentrantLock collectionLock = new ReentrantLock();
+    /** 快照与生成时刻一起发布，避免读到新数据配旧缓存时间。 */
+    private volatile Snapshot cachedSnapshot;
+    /** 单调时间来源，统一用于过期和扫描预算，测试可独立控制实例时钟。 */
+    private final LongSupplier nanoClock;
+
+    /** 生产环境使用进程单调时钟，系统校时不会延长缓存或扫描预算。 */
+    public InfraStorageStatisticsService() {
+        this(System::nanoTime);
+    }
+
+    /** 为实例提供统一单调时钟，不修改全局时间或其他服务的缓存。 */
+    InfraStorageStatisticsService(LongSupplier nanoClock) {
+        this.nanoClock = Objects.requireNonNull(nanoClock);
+    }
 
     /**
-     * 返回当前桶容量快照，必要时执行有界的外部只读扫描。
-     * @return 独立快照；状态说明是否全量，失败不会伪装为空桶
+     * 返回独立容量快照；只有取得采集权的调用者执行有界外部扫描。
+     * @return 缓存有效时返回原完整性；正在采集时立即返回标明陈旧的快照，无历史结果则为 unavailable
      */
-    public synchronized InfraStorageStatisticsDTO getStorageStatistics() {
-        if (cachedStatistics == null || System.nanoTime() - cachedAtNanos >= CACHE_NANOS) {
-            cachedStatistics = collect();
-            cachedAtNanos = System.nanoTime();
+    public InfraStorageStatisticsDTO getStorageStatistics() {
+        Snapshot snapshot = cachedSnapshot;
+        if (isFresh(snapshot)) {
+            return copy(snapshot.statistics());
         }
-        return BeanUtils.toBean(cachedStatistics, InfraStorageStatisticsDTO.class);
+        if (!collectionLock.tryLock()) {
+            snapshot = cachedSnapshot;
+            return isFresh(snapshot) ? copy(snapshot.statistics()) : collectingSnapshot(snapshot);
+        }
+        try {
+            // 前一个采集者可能在本次取得锁之前刚发布新结果，避免重复扫描。
+            snapshot = cachedSnapshot;
+            if (!isFresh(snapshot)) {
+                snapshot = new Snapshot(collect(), nanoClock.getAsLong());
+                cachedSnapshot = snapshot;
+            }
+            return copy(snapshot.statistics());
+        } finally {
+            collectionLock.unlock();
+        }
+    }
+
+    /** 用同一快照内的时刻判断缓存新鲜度；空缓存始终需要采集。 */
+    private boolean isFresh(Snapshot snapshot) {
+        return snapshot != null && nanoClock.getAsLong() - snapshot.completedAtNanos() < CACHE_NANOS;
+    }
+
+    /** 返回脱离内部缓存的对象，调用方修改统计字段不会污染其他请求。 */
+    private InfraStorageStatisticsDTO copy(InfraStorageStatisticsDTO statistics) {
+        return BeanUtils.toBean(statistics, InfraStorageStatisticsDTO.class);
+    }
+
+    /** 保留旧采集时刻并明确标记未就绪或陈旧结果，不将历史完整快照冒充当前全量。 */
+    private InfraStorageStatisticsDTO collectingSnapshot(Snapshot snapshot) {
+        if (snapshot == null) {
+            InfraStorageStatisticsDTO result = emptyStatistics();
+            result.setCollectionStatus("unavailable");
+            result.setCollectionMessage("对象容量正在采集，尚无可用快照；未知容量不显示为零。");
+            return result;
+        }
+        InfraStorageStatisticsDTO result = copy(snapshot.statistics());
+        if (!"unavailable".equals(result.getCollectionStatus())) {
+            result.setCollectionStatus("partial");
+        }
+        result.setCollectionMessage("对象容量正在更新，当前展示上次采集结果；请结合采集时间判断，不作为当前桶总量。");
+        return result;
+    }
+
+    /** 只在内部持有的统计对象和对应结束时刻；发布后不再修改其字段。 */
+    private record Snapshot(InfraStorageStatisticsDTO statistics, long completedAtNanos) {
     }
 
     /** 扫描对象列表并标记完整性；不向页面泄漏第三方异常中的连接信息。 */
     private InfraStorageStatisticsDTO collect() {
         InfraStorageStatisticsDTO statistics = emptyStatistics();
-        long started = System.nanoTime();
+        long started = nanoClock.getAsLong();
         String token = null;
         Set<String> seenTokens = new HashSet<>();
         int pages = 0;
         try {
             do {
-                if (pages >= MAX_PAGES || System.nanoTime() - started >= SCAN_NANOS) {
+                if (pages >= MAX_PAGES || nanoClock.getAsLong() - started >= SCAN_NANOS) {
                     statistics.setCollectionStatus(pages == 0 ? "unavailable" : "partial");
                     statistics.setCollectionMessage("达到单次采集上限，仅展示已扫描对象；不能作为桶总量。");
                     break;

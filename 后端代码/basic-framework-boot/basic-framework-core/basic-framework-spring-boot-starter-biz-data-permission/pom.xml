@@ -38,6 +38,13 @@
             <groupId>com.basicframework</groupId>
             <artifactId>basic-framework-spring-boot-starter-mybatis</artifactId>
         </dependency>
+
+        <!-- Test 测试相关：数据权限 SQL 过滤依赖真实 MySQL 验证，隔离实例在测试中创建随机库 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

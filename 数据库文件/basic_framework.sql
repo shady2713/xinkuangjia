@@ -1,25 +1,7 @@
--- Repository baseline: historical sessions and runtime logs are omitted.
--- Before importing into an authorized empty database, supply the initial
--- system_users.password as a BCrypt hash, system_oauth2_client.secret as a
--- BCrypt hash, and infra_config.value for system.user.init-password through
--- a controlled provisioning process. These credential fields are empty here.
--- Never import this rebuilding script into an existing application database.
-
-/*
- Navicat Premium Dump SQL
-
- Source Server         : localhost
- Source Server Type    : MySQL
- Source Server Version : 80030 (8.0.30)
- Source Host           : localhost:3306
- Source Schema         : basic_framework1001
-
- Target Server Type    : MySQL
- Target Server Version : 80030 (8.0.30)
- File Encoding         : 65001
-
- Date: 01/10/2026 20:24:05
-*/
+-- MySQL 8.x 空库快照；只用于已确认的独立空库，禁止覆盖已有业务库。
+-- 无账号、密码哈希、Token 或演示组织；初始管理员使用受控 bootstrap 命令创建。
+-- 正式安装与升级使用 scripts/database/pom.xml 中固定版本的显式 Flyway 入口。
+-- 本快照不携带迁移历史；新装优先执行版本化迁移，不能将快照导入当作升级。
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -27,7 +9,6 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------
 -- Table structure for infra_api_access_log
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_api_access_log`;
 CREATE TABLE `infra_api_access_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志主键',
   `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '链路追踪编号',
@@ -56,7 +37,7 @@ CREATE TABLE `infra_api_access_log`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 264 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'API 访问日志表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'API 访问日志表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_api_access_log
@@ -65,7 +46,6 @@ CREATE TABLE `infra_api_access_log`  (
 -- ----------------------------
 -- Table structure for infra_api_error_log
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_api_error_log`;
 CREATE TABLE `infra_api_error_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '链路追踪编号',
@@ -97,7 +77,7 @@ CREATE TABLE `infra_api_error_log`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_process_status`(`process_status` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 21 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '系统异常日志' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '系统异常日志' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_api_error_log
@@ -106,7 +86,6 @@ CREATE TABLE `infra_api_error_log`  (
 -- ----------------------------
 -- Table structure for infra_config
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_config`;
 CREATE TABLE `infra_config`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '参数主键',
   `category` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '参数分组',
@@ -123,18 +102,17 @@ CREATE TABLE `infra_config`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_config_key`(`config_key` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '参数配置表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '参数配置表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_config
 -- ----------------------------
-INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', 'Init password Abcd12', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0');
-INSERT INTO `infra_config` VALUES (3, '用户管理-账号初始密码', 2, '用户管理-注册开关', 'system.user.register-enabled', 'true', b'0', '', '1', '2025-04-26 17:23:41', '1', '2025-04-26 17:23:41', b'0');
+INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', '仅用于受控用户导入；无预设初始口令', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0');
+INSERT INTO `infra_config` VALUES (3, '用户管理-账号初始密码', 2, '用户管理-注册开关', 'system.user.register-enabled', 'false', b'0', '', '1', '2025-04-26 17:23:41', '1', '2025-04-26 17:23:41', b'0');
 
 -- ----------------------------
 -- Table structure for infra_file
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_file`;
 CREATE TABLE `infra_file`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '文件编号',
   `name` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '文件名',
@@ -150,16 +128,43 @@ CREATE TABLE `infra_file`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_path`(`path` ASC) USING BTREE,
   INDEX `idx_type`(`type` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文件表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文件表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_file
 -- ----------------------------
 
+-- 仅空库初始化：上传预约与预算结构；已有库使用版本化迁移。
+CREATE TABLE `infra_file_upload` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '上传预约编号',
+  `owner_key` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '可信身份域与用户编号',
+  `path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '唯一且永不复用的最终对象键',
+  `staging_path` varchar(128) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL COMMENT '浏览器直传暂存对象键',
+  `name` varchar(256) NOT NULL COMMENT '规范化原文件名',
+  `size` bigint NOT NULL COMMENT '预约精确字节数',
+  `status` varchar(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'PENDING待完成 COMPLETE已登记 CANCELLED已取消',
+  `file_id` bigint DEFAULT NULL COMMENT '完成登记的文件编号',
+  `expires_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '预约截止时间UTC',
+  `next_cleanup_at` datetime DEFAULT NULL COMMENT '下一次补偿核对时间UTC，空表示无需清理',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_path` (`path`),
+  KEY `idx_cleanup` (`next_cleanup_at`, `id`),
+  CONSTRAINT `ck_upload_size` CHECK (`size` > 0),
+  CONSTRAINT `ck_upload_status` CHECK (`status` IN ('PENDING', 'COMPLETE', 'CANCELLED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='上传预约及持久化补偿记录';
+
+CREATE TABLE `infra_file_upload_quota` (
+  `owner_key` varchar(96) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '可信身份域与用户编号',
+  `quota_date` date NOT NULL COMMENT '预算UTC日期',
+  `reserved_bytes` bigint NOT NULL DEFAULT 0 COMMENT '累计预约字节数，失败不退款',
+  `requests` int NOT NULL DEFAULT 0 COMMENT '累计预约次数，失败不退款',
+  PRIMARY KEY (`owner_key`, `quota_date`),
+  CONSTRAINT `ck_upload_quota` CHECK (`reserved_bytes` >= 0 AND `requests` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每身份每日上传预约预算';
+
 -- ----------------------------
 -- Table structure for infra_job
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_job`;
 CREATE TABLE `infra_job`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '任务编号',
   `name` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务名称',
@@ -177,7 +182,7 @@ CREATE TABLE `infra_job`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 42 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_job
@@ -185,12 +190,10 @@ CREATE TABLE `infra_job`  (
 INSERT INTO `infra_job` VALUES (25, '访问日志清理 Job', 2, 'accessLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 10:59:41', '1', '2023-10-03 11:01:10', b'0');
 INSERT INTO `infra_job` VALUES (26, '错误日志清理 Job', 2, 'errorLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:00:43', '1', '2023-10-03 11:01:12', b'0');
 INSERT INTO `infra_job` VALUES (27, '任务日志清理 Job', 2, 'jobLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:01:33', '1', '2024-09-12 13:40:34', b'0');
-INSERT INTO `infra_job` VALUES (41, 'AI临时帧清理 Job', 2, 'aiTemporaryFrameCleanupJob', '', '0 30 0 * * ?', 3, 0, 0, 'migration', '2026-05-15 09:18:05', '1', '2026-10-01 19:52:32', b'1');
 
 -- ----------------------------
 -- Table structure for infra_job_log
 -- ----------------------------
-DROP TABLE IF EXISTS `infra_job_log`;
 CREATE TABLE `infra_job_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志编号',
   `job_id` bigint NOT NULL COMMENT '任务编号',
@@ -211,7 +214,7 @@ CREATE TABLE `infra_job_log`  (
   INDEX `idx_job_id`(`job_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务日志表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务日志表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_job_log
@@ -220,7 +223,6 @@ CREATE TABLE `infra_job_log`  (
 -- ----------------------------
 -- Table structure for system_auto_login_ticket
 -- ----------------------------
-DROP TABLE IF EXISTS `system_auto_login_ticket`;
 CREATE TABLE `system_auto_login_ticket`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `ticket` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '固定分享码，对应链接中的 ticket 参数',
@@ -236,7 +238,7 @@ CREATE TABLE `system_auto_login_ticket`  (
   UNIQUE INDEX `uk_auto_login_ticket`(`ticket` ASC) USING BTREE,
   INDEX `idx_auto_login_username`(`username` ASC) USING BTREE,
   INDEX `idx_auto_login_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '自动登录固定分享码表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '自动登录固定分享码表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_auto_login_ticket
@@ -245,7 +247,6 @@ CREATE TABLE `system_auto_login_ticket`  (
 -- ----------------------------
 -- Table structure for system_dept
 -- ----------------------------
-DROP TABLE IF EXISTS `system_dept`;
 CREATE TABLE `system_dept`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '部门id',
   `name` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '部门名称',
@@ -264,19 +265,15 @@ CREATE TABLE `system_dept`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_parent_id`(`parent_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 116 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '部门表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '部门表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_dept
 -- ----------------------------
-INSERT INTO `system_dept` VALUES (100, '总公司', 0, 'super_admin', 0, 1, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
-INSERT INTO `system_dept` VALUES (101, '深圳总公司', 100, 'super_admin', 1, NULL, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 20:22:50', b'0');
-INSERT INTO `system_dept` VALUES (103, '研发部门', 101, 'super_admin', 1, 1, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
 
 -- ----------------------------
 -- Table structure for system_dict_data
 -- ----------------------------
-DROP TABLE IF EXISTS `system_dict_data`;
 CREATE TABLE `system_dict_data`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '字典编码',
   `sort` int NOT NULL DEFAULT 0 COMMENT '字典排序',
@@ -294,7 +291,7 @@ CREATE TABLE `system_dict_data`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_dict_type`(`dict_type` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3037 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '字典数据表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '字典数据表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_dict_data
@@ -383,7 +380,6 @@ INSERT INTO `system_dict_data` VALUES (3036, 105, '分享码登录', '105', 'sys
 -- ----------------------------
 -- Table structure for system_dict_type
 -- ----------------------------
-DROP TABLE IF EXISTS `system_dict_type`;
 CREATE TABLE `system_dict_type`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '字典主键',
   `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '字典名称',
@@ -398,7 +394,7 @@ CREATE TABLE `system_dict_type`  (
   `deleted_time` datetime NULL DEFAULT NULL COMMENT '删除时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_type`(`type` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2010 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '字典类型表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '字典类型表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_dict_type
@@ -430,7 +426,6 @@ INSERT INTO `system_dict_type` VALUES (2009, '菜单类型', 'system_menu_type',
 -- ----------------------------
 -- Table structure for system_login_log
 -- ----------------------------
-DROP TABLE IF EXISTS `system_login_log`;
 CREATE TABLE `system_login_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '访问ID',
   `log_type` int NOT NULL COMMENT '日志类型',
@@ -450,7 +445,7 @@ CREATE TABLE `system_login_log`  (
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_username`(`username` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 199 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '系统访问记录' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '系统访问记录' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_login_log
@@ -459,7 +454,6 @@ CREATE TABLE `system_login_log`  (
 -- ----------------------------
 -- Table structure for system_menu
 -- ----------------------------
-DROP TABLE IF EXISTS `system_menu`;
 CREATE TABLE `system_menu`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '菜单ID',
   `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '菜单名称',
@@ -483,7 +477,7 @@ CREATE TABLE `system_menu`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_parent_id`(`parent_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 5047 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '菜单权限表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '菜单权限表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_menu
@@ -562,7 +556,6 @@ INSERT INTO `system_menu` VALUES (1106, '发送测试短信', 'system:sms-templa
 -- ----------------------------
 -- Table structure for system_oauth2_access_token
 -- ----------------------------
-DROP TABLE IF EXISTS `system_oauth2_access_token`;
 CREATE TABLE `system_oauth2_access_token`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `user_id` bigint NOT NULL DEFAULT 0 COMMENT '用户编号',
@@ -582,7 +575,7 @@ CREATE TABLE `system_oauth2_access_token`  (
   UNIQUE INDEX `uk_access_token`(`access_token` ASC) USING BTREE,
   INDEX `idx_refresh_token`(`refresh_token` ASC) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 8 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 访问令牌' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 访问令牌' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_oauth2_access_token
@@ -591,7 +584,6 @@ CREATE TABLE `system_oauth2_access_token`  (
 -- ----------------------------
 -- Table structure for system_oauth2_client
 -- ----------------------------
-DROP TABLE IF EXISTS `system_oauth2_client`;
 CREATE TABLE `system_oauth2_client`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `client_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '客户端编号',
@@ -616,17 +608,16 @@ CREATE TABLE `system_oauth2_client`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_client_id`(`client_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 客户端表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 客户端表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_oauth2_client
 -- ----------------------------
-INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', 'Default OAuth2 client. Change secret after deployment', 0, 1800, 2592000, '[\"https://admin.example.com/callback\",\"https://docs.example.com/callback\"]', '[\"password\",\"authorization_code\",\"implicit\",\"refresh_token\",\"client_credentials\"]', '[\"user.read\",\"user.write\"]', '[]', '[\"user.read\",\"user.write\"]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-04-11 12:40:17', b'0');
+INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', 'Default OAuth2 client. Change secret after deployment', 0, 1800, 2592000, '[\"https://admin.example.com/callback\",\"https://docs.example.com/callback\"]', '[\"password\",\"authorization_code\",\"implicit\",\"refresh_token\"]', '[\"user.read\",\"user.write\"]', '[]', '[\"user.read\",\"user.write\"]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-04-11 12:40:17', b'0');
 
 -- ----------------------------
 -- Table structure for system_oauth2_refresh_token
 -- ----------------------------
-DROP TABLE IF EXISTS `system_oauth2_refresh_token`;
 CREATE TABLE `system_oauth2_refresh_token`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `user_id` bigint NOT NULL COMMENT '用户编号',
@@ -642,7 +633,7 @@ CREATE TABLE `system_oauth2_refresh_token`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_refresh_token`(`refresh_token` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 刷新令牌' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 刷新令牌' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_oauth2_refresh_token
@@ -651,7 +642,6 @@ CREATE TABLE `system_oauth2_refresh_token`  (
 -- ----------------------------
 -- Table structure for system_operate_log
 -- ----------------------------
-DROP TABLE IF EXISTS `system_operate_log`;
 CREATE TABLE `system_operate_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志主键',
   `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '链路追踪编号',
@@ -675,7 +665,7 @@ CREATE TABLE `system_operate_log`  (
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_type`(`type` ASC) USING BTREE,
   INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '操作日志记录 V2 版本' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '操作日志记录 V2 版本' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_operate_log
@@ -684,7 +674,6 @@ CREATE TABLE `system_operate_log`  (
 -- ----------------------------
 -- Table structure for system_post
 -- ----------------------------
-DROP TABLE IF EXISTS `system_post`;
 CREATE TABLE `system_post`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '岗位ID',
   `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '岗位编码',
@@ -700,7 +689,7 @@ CREATE TABLE `system_post`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '岗位信息表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '岗位信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_post
@@ -709,7 +698,6 @@ CREATE TABLE `system_post`  (
 -- ----------------------------
 -- Table structure for system_role
 -- ----------------------------
-DROP TABLE IF EXISTS `system_role`;
 CREATE TABLE `system_role`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '角色ID',
   `name` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '角色名称',
@@ -729,7 +717,7 @@ CREATE TABLE `system_role`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 160 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色信息表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_role
@@ -739,7 +727,6 @@ INSERT INTO `system_role` VALUES (1, '超级管理员', 'super_admin', 'super_ad
 -- ----------------------------
 -- Table structure for system_role_menu
 -- ----------------------------
-DROP TABLE IF EXISTS `system_role_menu`;
 CREATE TABLE `system_role_menu`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增编号',
   `role_id` bigint NOT NULL COMMENT '角色ID',
@@ -752,7 +739,7 @@ CREATE TABLE `system_role_menu`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_role_id`(`role_id` ASC) USING BTREE,
   INDEX `idx_menu_id`(`menu_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6394 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色和菜单关联表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色和菜单关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_role_menu
@@ -831,7 +818,6 @@ INSERT INTO `system_role_menu` VALUES (6382, 1, 1106, '1', '2026-04-07 08:30:13'
 -- ----------------------------
 -- Table structure for system_sms_channel
 -- ----------------------------
-DROP TABLE IF EXISTS `system_sms_channel`;
 CREATE TABLE `system_sms_channel`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `signature` varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信签名',
@@ -848,7 +834,7 @@ CREATE TABLE `system_sms_channel`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信渠道' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信渠道' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_sms_channel
@@ -857,12 +843,11 @@ CREATE TABLE `system_sms_channel`  (
 -- ----------------------------
 -- Table structure for system_sms_code
 -- ----------------------------
-DROP TABLE IF EXISTS `system_sms_code`;
 CREATE TABLE `system_sms_code`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `mobile` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '手机号',
   `code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '验证码',
-  `create_ip` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '创建 IP',
+  `create_ip` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '创建 IP',
   `scene` tinyint NOT NULL COMMENT '发送场景',
   `today_index` tinyint NOT NULL COMMENT '今日发送的第几条',
   `used` tinyint NOT NULL COMMENT '是否使用',
@@ -876,7 +861,7 @@ CREATE TABLE `system_sms_code`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_mobile`(`mobile` ASC) USING BTREE COMMENT '手机号',
   INDEX `idx_mobile_scene`(`mobile` ASC, `scene` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '手机验证码' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '手机验证码' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_sms_code
@@ -885,7 +870,6 @@ CREATE TABLE `system_sms_code`  (
 -- ----------------------------
 -- Table structure for system_sms_log
 -- ----------------------------
-DROP TABLE IF EXISTS `system_sms_log`;
 CREATE TABLE `system_sms_log`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `channel_id` bigint NOT NULL COMMENT '短信渠道编号',
@@ -917,7 +901,7 @@ CREATE TABLE `system_sms_log`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_mobile`(`mobile` ASC) USING BTREE,
   INDEX `idx_send_time`(`send_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信日志' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信日志' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_sms_log
@@ -926,7 +910,6 @@ CREATE TABLE `system_sms_log`  (
 -- ----------------------------
 -- Table structure for system_sms_template
 -- ----------------------------
-DROP TABLE IF EXISTS `system_sms_template`;
 CREATE TABLE `system_sms_template`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `type` tinyint NOT NULL COMMENT '模板类型',
@@ -946,7 +929,7 @@ CREATE TABLE `system_sms_template`  (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信模板' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信模板' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_sms_template
@@ -955,7 +938,6 @@ CREATE TABLE `system_sms_template`  (
 -- ----------------------------
 -- Table structure for system_user_post
 -- ----------------------------
-DROP TABLE IF EXISTS `system_user_post`;
 CREATE TABLE `system_user_post`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
   `user_id` bigint NOT NULL DEFAULT 0 COMMENT '用户ID',
@@ -968,7 +950,7 @@ CREATE TABLE `system_user_post`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_post_id`(`post_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户岗位表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户岗位表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_user_post
@@ -977,7 +959,6 @@ CREATE TABLE `system_user_post`  (
 -- ----------------------------
 -- Table structure for system_user_role
 -- ----------------------------
-DROP TABLE IF EXISTS `system_user_role`;
 CREATE TABLE `system_user_role`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增编号',
   `user_id` bigint NOT NULL COMMENT '用户ID',
@@ -990,17 +971,15 @@ CREATE TABLE `system_user_role`  (
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
   INDEX `idx_role_id`(`role_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 54 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户和角色关联表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户和角色关联表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_user_role
 -- ----------------------------
-INSERT INTO `system_user_role` VALUES (1, 1, 1, '', '2022-01-11 13:19:45', '', '2022-05-12 12:35:17', b'0');
 
 -- ----------------------------
 -- Table structure for system_users
 -- ----------------------------
-DROP TABLE IF EXISTS `system_users`;
 CREATE TABLE `system_users`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户ID',
   `username` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户账号',
@@ -1028,11 +1007,10 @@ CREATE TABLE `system_users`  (
   INDEX `idx_email`(`email` ASC) USING BTREE,
   INDEX `idx_dept_id`(`dept_id` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 145 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户信息表' ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_users
 -- ----------------------------
-INSERT INTO `system_users` VALUES (1, 'admin', '', 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '18800000000', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0');
 
 SET FOREIGN_KEY_CHECKS = 1;

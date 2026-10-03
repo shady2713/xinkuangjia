@@ -49,17 +49,42 @@ export function resolveUploadUrl(response: unknown): string {
 
 /**
  * 计算某个已上传文件对外暴露的值。
- * 配置了 resultField 时返回完整响应对象，由调用方自行按字段取值；否则依次回退为文件 URL、响应中的 URL、原始响应。
+ * @param file 已上传完成的文件。
+ * @param resultField 响应中要对外暴露的字段名；不传表示直接暴露整个响应。
+ * @returns 配置了 resultField 时返回完整响应对象，由调用方自行按字段取值；
+ * 否则依次回退为文件 URL、响应中的 URL、原始响应。
  */
 export function resolveUploadValue(
   file: UploadFile,
   resultField?: string,
 ): unknown {
   const response = unwrapUploadResponse(file.response);
-  if (resultField && response != null) {
+  if (resultField && response !== null && response !== undefined) {
     return response;
   }
   return file.url || resolveUploadUrl(response) || response;
+}
+
+/**
+ * 把任意抛出值转换为 Element Plus onError 期望的上传错误对象。
+ * onError 的契约要求错误对象同时携带 status/method/url，直接把原始异常透传会让
+ * Element Plus 的失败分支读到 undefined 字段，因此用当前请求上下文补齐这三项；
+ * 原始异常通过 cause 保留，便于排查真实的失败原因。
+ * 业务代码自己发起的上传拿不到 HTTP 状态码，status 记为 0 表示「无响应状态」。
+ * @param error 捕获到的异常，类型未知。
+ * @param options 当前上传请求上下文，提供 method 与 action 作为兜底字段。
+ * @returns 满足 UploadAjaxError 形状的错误对象，可直接传给 options.onError。
+ */
+export function toUploadAjaxError(
+  error: unknown,
+  options: UploadRequestOptions,
+) {
+  const message = error instanceof Error ? error.message : String(error);
+  return Object.assign(new Error(message, { cause: error }), {
+    method: options.method,
+    status: 0,
+    url: options.action,
+  });
 }
 
 /**

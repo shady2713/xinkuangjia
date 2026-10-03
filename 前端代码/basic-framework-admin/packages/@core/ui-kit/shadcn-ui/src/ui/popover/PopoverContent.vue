@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { PopoverContentEmits, PopoverContentProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -12,7 +14,7 @@ defineOptions({
 });
 
 const props = withDefaults(
-  defineProps<PopoverContentProps & { class?: any }>(),
+  defineProps<PopoverContentProps & { class?: ClassValue }>(),
   {
     align: 'center',
     sideOffset: 4,

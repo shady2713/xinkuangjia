@@ -1,24 +1,19 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
+/** 管理平台布局；认证失效会完整退出并跳转登录，不保留旧页面登录弹层。 */
 import { computed, watch } from 'vue';
 
-import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
 import { useWatermark } from '@vben/hooks';
 import { AntdProfileOutlined } from '@vben/icons';
-import {
-  BasicLayout,
-  LockScreen,
-  UserDropdown,
-} from '@vben/layouts';
+import { BasicLayout, LockScreen, UserDropdown } from '@vben/layouts';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useUserStore } from '@vben/stores';
+
 import { $t } from '#/locales';
 import { router } from '#/router';
 import { useAuthStore } from '#/store';
-import LoginForm from '#/views/_core/authentication/login.vue';
 
 const userStore = useUserStore();
 const authStore = useAuthStore();
-const accessStore = useAccessStore();
 const { destroyWatermark, updateWatermark } = useWatermark();
 
 const menus = computed(() => [
@@ -72,14 +67,6 @@ watch(
         :tag-text="userStore.userInfo?.username"
         @logout="handleLogout"
       />
-    </template>
-    <template #extra>
-      <AuthenticationLoginExpiredModal
-        v-model:open="accessStore.loginExpired"
-        :avatar
-      >
-        <LoginForm />
-      </AuthenticationLoginExpiredModal>
     </template>
     <template #lock-screen>
       <LockScreen :avatar @to-login="handleLogout" />

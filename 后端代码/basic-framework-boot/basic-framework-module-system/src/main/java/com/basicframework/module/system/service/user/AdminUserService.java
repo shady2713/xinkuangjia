@@ -67,7 +67,7 @@ public interface AdminUserService {
     void updateUserProfile(Long id, @Valid UserProfileUpdateReqVO reqVO);
 
     /**
-     * 修改用户个人密码
+     * 校验旧密码后更新个人密码并撤销全部会话，调用方必须要求重新登录。
      *
      * @param id 用户编号
      * @param reqVO 更新用户个人密码
@@ -75,7 +75,7 @@ public interface AdminUserService {
     void updateUserPassword(Long id, @Valid UserProfileUpdatePasswordReqVO reqVO);
 
     /**
-     * 修改密码
+     * 重置密码并撤销全部会话；密码更新和会话撤销共同提交或回滚。
      *
      * @param id       用户编号
      * @param password 密码
@@ -83,7 +83,7 @@ public interface AdminUserService {
     void updateUserPassword(Long id, String password);
 
     /**
-     * 由管理端修改指定平台用户的密码。
+     * 由管理端修改指定平台用户的密码并撤销其全部会话。
      *
      * @param id 用户编号
      * @param password 新密码
@@ -142,6 +142,15 @@ public interface AdminUserService {
     AdminUserDO getUserByMobile(String mobile);
 
     /**
+     * 按手机号查询指定平台账号，供平台固定的短信认证入口使用。
+     *
+     * @param mobile 手机号
+     * @param userType 可信入口的平台类型
+     * @return 当前平台账号，不存在时返回 {@code null}
+     */
+    AdminUserDO getUserByMobileAndType(String mobile, String userType);
+
+    /**
      * 获得用户分页列表
      *
      * @param reqVO 分页条件
@@ -156,6 +165,14 @@ public interface AdminUserService {
      * @return 用户对象信息
      */
     AdminUserDO getUser(Long id);
+
+    /**
+     * 锁定并返回最新用户记录，供认证与改密在同一事务中串行执行。
+     *
+     * @param id 用户编号
+     * @return 当前用户；不存在时抛出业务异常；锁保持到外层事务结束
+     */
+    AdminUserDO lockUser(Long id);
 
     /**
      * 查询当前管理平台可访问的用户。

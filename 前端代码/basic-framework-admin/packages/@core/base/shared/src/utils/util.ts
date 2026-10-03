@@ -19,25 +19,42 @@ export function bindMethods<T extends object>(instance: T): void {
 }
 
 /**
+ * 按字符串键读取任意值上的属性，同时兼容数组下标。
+ * 路径分段的含义由调用方在运行时决定（对象属性名或数组下标），静态类型无法表达，
+ * 因此在唯一的取值入口做一次收窄，取到的值一律按 unknown 继续传递。
+ * @param source 待取值的容器，可以是对象、数组或其他任意值。
+ * @param key 属性名或数组下标。
+ * @returns 命中的值；source 不是对象（含 null）或键不存在时返回 undefined。
+ */
+function readKeyValue(source: unknown, key: string): unknown {
+  if (source === null || typeof source !== 'object') {
+    return undefined;
+  }
+  return (source as Record<string, unknown>)[key];
+}
+
+/**
  * 获取嵌套对象的字段值
  * @param obj - 要查找的对象
  * @param path - 用于查找字段的路径，使用小数点分隔
- * @returns 字段值，或者未找到时返回 undefined
+ * @returns 字段值，或者未找到时返回 undefined。结果按 unknown 暴露，调用方需按自身口径收窄。
+ * @throws path 不是非空字符串时抛出 Error。空路径会退回「返回整个对象」，
+ * 与「按路径取值」的语义冲突，属于调用方错误，因此显式失败而不是静默返回根对象。
  */
-export function getNestedValue<T>(obj: T, path: string): any {
+export function getNestedValue<T>(obj: T, path: string): unknown {
   if (typeof path !== 'string' || path.length === 0) {
     throw new Error('Path must be a non-empty string');
   }
   // 把路径字符串按 "." 分割成数组
-  const keys = path.split('.') as (number | string)[];
+  const keys = path.split('.');
 
-  let current: any = obj;
+  let current: unknown = obj;
 
   for (const key of keys) {
     if (current === null || current === undefined) {
       return undefined;
     }
-    current = current[key as keyof typeof current];
+    current = readKeyValue(current, key);
   }
 
   return current;
@@ -71,31 +88,53 @@ export function getUrlValue(
 
 /**
  * 将值复制到目标对象，且以目标对象属性为准，例：target: {a:1} source:{a:2,b:3} 结果为：{a:2}
- * @param target 目标对象
- * @param source 源对象
+ * @param target 目标对象，函数会把结果直接写回该对象
+ * @param source 源对象，只取 target 已有的同名属性
  */
-export function copyValueToTarget(target: any, source: any) {
-  const newObj = Object.assign({}, target, source);
-  // 删除多余属性
-  Object.keys(newObj).forEach((key) => {
-    // 如果不是target中的属性则删除
-    if (!Object.keys(target).includes(key)) {
-      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-      delete newObj[key];
-    }
-  });
+export function copyValueToTarget<T extends object>(
+  target: T,
+  source: object,
+): void {
+  // 泛型 T 只保证是对象，不保证有字符串索引签名，因此显式指定合并结果的容器类型
+  const newObj: Record<string, unknown> = Object.assign<
+    Record<string, unknown>,
+    object,
+    object
+  >({}, target, source);
+  // 源对象多出来的键不属于目标结构，必须剔除，否则会污染 target
+  const targetKeys = new Set(Object.keys(target));
+  Object.keys(newObj).forEach(
+    /**
+     * 剔除源对象多出来的键。
+     * @param key 当前待检查的合并结果键名。
+     */
+    (key) => {
+      if (!targetKeys.has(key)) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete newObj[key];
+      }
+    },
+  );
   // 更新目标对象值
   Object.assign(target, newObj);
 }
 
-/** 实现 groupBy 功能 */
-export function groupBy(array: any[], key: string) {
-  const result: Record<string, any[]> = {};
+/**
+ * 按指定字段把数组分组，等价于 Lodash 的 groupBy。
+ * @param array 待分组的数组，元素必须是对象。
+ * @param key 分组依据的字段名。
+ * @returns 以字段值的字符串形式为键、元素数组为值的分组结果。
+ * 字段值会经 String 转换后作键，缺失字段的元素归入 "undefined" 分组。
+ */
+export function groupBy<T extends object>(
+  array: T[],
+  key: string,
+): Record<string, T[]> {
+  const result: Record<string, T[]> = {};
   for (const item of array) {
-    const groupKey = item[key];
-    if (!result[groupKey]) {
-      result[groupKey] = [];
-    }
+    const groupKey = String((item as Record<string, unknown>)[key]);
+    // 首次见到该分组时先建桶，避免每次都重建数组
+    result[groupKey] ??= [];
     result[groupKey].push(item);
   }
   return result;

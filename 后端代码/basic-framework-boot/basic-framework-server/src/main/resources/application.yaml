@@ -7,9 +7,9 @@ spring:
       - optional:file:../.env[.properties]     # IDEA 默认工作目录在 basic-framework-server 模块时
   servlet:
     multipart:
-      # 通用文件上传由运行环境和存储容量控制，-1 表示不在 Spring Multipart 层设置固定大小上限。
-      max-file-size: -1
-      max-request-size: -1
+      # 文件采用应用限额；请求硬上限覆盖最大 32 MiB 文件及额外 1 MiB 表单开销。
+      max-file-size: ${FILE_UPLOAD_MAX_BYTES:10485760}B
+      max-request-size: 33MB
   jackson:
     serialization:
       write-dates-as-timestamps: true
@@ -48,6 +48,14 @@ spring:
 
 server:
   port: ${SERVER_PORT:48080}
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      # 默认不信任代理；部署时只列举受控代理的源地址，禁止空值（Tomcat 空值代表全部信任）。
+      internal-proxies: ${TRUSTED_PROXY_REGEX:(?!)}
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+      port-header: X-Forwarded-Port
   servlet:
     encoding:
       enabled: true
@@ -120,6 +128,10 @@ basic-framework:
     version: ${APP_VERSION:1.0.0}
     base-package: com.basicframework
   file:
+    upload:
+      max-bytes: ${FILE_UPLOAD_MAX_BYTES:10485760}
+      daily-bytes: ${FILE_UPLOAD_DAILY_BYTES:209715200}
+      daily-requests: ${FILE_UPLOAD_DAILY_REQUESTS:100}
     minio:
       endpoint: ${MINIO_ENDPOINT}
       access-key: ${MINIO_ACCESS_KEY}
@@ -130,6 +142,7 @@ basic-framework:
       # 对象 URL 按业务要求保持长期公开访问；代码会自动补齐 /{bucket} 路径。
       public-url: ${MINIO_PUBLIC_URL}
   web:
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGIN:}
     admin-ui:
       url: ${ADMIN_UI_URL:http://localhost:5175}
   xss:
@@ -137,6 +150,8 @@ basic-framework:
   security:
     mock-enable: false
     permit-all-urls: []
+  auth:
+    registration-enabled: ${AUTH_REGISTRATION_ENABLED:false}
   captcha:
     enable: true
   access-log:
@@ -157,5 +172,11 @@ basic-framework:
     license-url: ${SWAGGER_LICENSE_URL:https://example.com/basic-framework/LICENSE}
   sms-code:
     expire-times: 10m
-    send-frequency: 1m
-    send-maximum-quantity-per-day: 10
+    send-frequency: ${SMS_SEND_FREQUENCY:1m}
+    send-maximum-quantity-per-day: ${SMS_SEND_MAXIMUM_PER_DAY:10}
+    send-ip-window: ${SMS_SEND_IP_WINDOW:1m}
+    send-maximum-per-ip: ${SMS_SEND_MAXIMUM_PER_IP:50}
+    verification-maximum-failures: ${SMS_VERIFY_MAXIMUM_FAILURES:5}
+    verification-window: ${SMS_VERIFY_WINDOW:1m}
+    verification-maximum-per-mobile: ${SMS_VERIFY_MAXIMUM_PER_MOBILE:10}
+    verification-maximum-per-ip: ${SMS_VERIFY_MAXIMUM_PER_IP:50}

@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import type { SeparatorProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { Separator } from 'reka-ui';
 
-const props = defineProps<SeparatorProps & { class?: any; label?: string }>();
+const props = defineProps<
+  SeparatorProps & { class?: ClassValue; label?: string }
+>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

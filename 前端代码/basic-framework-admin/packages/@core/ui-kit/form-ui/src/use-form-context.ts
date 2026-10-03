@@ -2,7 +2,12 @@ import type { ZodRawShape } from 'zod';
 
 import type { ComputedRef } from 'vue';
 
-import type { ExtendedFormApi, FormActions, VbenFormProps } from './types';
+import type {
+  ExtendedFormApi,
+  FormActions,
+  FormValues,
+  VbenFormProps,
+} from './types';
 
 import { computed, unref, useSlots } from 'vue';
 
@@ -23,6 +28,12 @@ export const [injectFormProps, provideFormProps] =
 export const [injectComponentRefMap, provideComponentRefMap] =
   createContext<Map<string, unknown>>('ComponentRefMap');
 
+/**
+ * 根据表单定义创建 vee-validate 实例并推导初始值。
+ * 只在组件创建时执行一次，调用方不需要手动销毁。
+ * @param props 当前表单属性（响应式或普通对象均可）。
+ * @returns 委托插槽名与真实 vee-validate 表单上下文。
+ */
 export function useFormInitial(
   props: ComputedRef<VbenFormProps> | VbenFormProps,
 ) {
@@ -44,8 +55,13 @@ export function useFormInitial(
     return resultSlots;
   });
 
-  function generateInitialValues() {
-    const initialValues: Record<string, any> = {};
+  /**
+   * 收集 schema 中显式声明的 defaultValue 与 zod 规则可推导的默认值。
+   * 字段名支持点号路径，因此按路径写入而不是平铺。
+   * @returns 需要写入 useForm 的 initialValues；无默认值时返回空对象。
+   */
+  function generateInitialValues(): FormValues {
+    const initialValues: FormValues = {};
 
     const zodObject: ZodRawShape = {};
     (unref(props).schema || []).forEach((item) => {
@@ -63,21 +79,25 @@ export function useFormInitial(
 
     const schemaInitialValues = getDefaultsForSchema(object(zodObject));
 
-    const zodDefaults: Record<string, any> = {};
+    const zodDefaults: FormValues = {};
     for (const key in schemaInitialValues) {
       set(zodDefaults, key, schemaInitialValues[key]);
     }
     return mergeWithArrayOverride(initialValues, zodDefaults);
   }
-  // 自定义默认值提取逻辑
-  function getCustomDefaultValue(rule: any): any {
+  /**
+   * 从 zod 规则推导控件初始值，避免把 undefined 交给受控组件。
+   * @param rule 字段规则。
+   * @returns 与规则类型匹配的初始值；无法识别的规则返回 undefined，表示不提供默认值。
+   */
+  function getCustomDefaultValue(rule: unknown): unknown {
     if (rule instanceof ZodString) {
       return ''; // 默认为空字符串
     } else if (rule instanceof ZodNumber) {
       return null; // 默认为 null（避免显示 0）
     } else if (rule instanceof ZodObject) {
       // 递归提取嵌套对象的默认值
-      const defaultValues: Record<string, any> = {};
+      const defaultValues: FormValues = {};
       for (const [key, valueSchema] of Object.entries(rule.shape)) {
         defaultValues[key] = getCustomDefaultValue(valueSchema);
       }

@@ -9,7 +9,8 @@ import { $t } from '@vben/locales';
 
 import { VbenButton } from '@vben-core/shadcn-ui';
 
-interface Props extends FallbackProps {}
+/** 兜底页的属性契约别名：直接复用兜底页属性，不额外声明成员。 */
+type Props = FallbackProps;
 
 defineOptions({
   name: 'Fallback',

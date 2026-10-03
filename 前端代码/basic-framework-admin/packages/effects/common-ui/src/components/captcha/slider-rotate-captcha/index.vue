@@ -80,25 +80,36 @@ function handleStart() {
   state.startTime = Date.now();
 }
 
+/**
+ * 拖动滑块时按位移换算当前旋转角度。
+ * @description 位移按图片宽度归一化后再乘以 1.5 倍最大角度，使滑块走完整个行程恰好覆盖
+ * [minDegree, maxDegree] 区间；imageSize 为 0 时无法归一化，直接放弃本次更新。
+ * @param data 滑块组件回传的本次拖动数据
+ */
 function handleDragBarMove(data: SliderRotateVerifyPassingData) {
   state.dragging = true;
   const { imageSize, maxDegree } = props;
   const { moveX } = data;
-  const denominator = imageSize!;
+  const denominator = imageSize;
   if (denominator === 0) {
     return;
   }
   const currentRotate = Math.ceil(
-    (moveX / denominator) * 1.5 * maxDegree! * unref(getFactorRef),
+    (moveX / denominator) * 1.5 * maxDegree * unref(getFactorRef),
   );
   state.currentRotate = currentRotate;
   setImgRotate(state.randomRotate - currentRotate);
 }
 
+/**
+ * 图片加载完成后生成一轮随机目标角度。
+ * @description 每次换图都要重新随机，否则重放同一张图就能猜中答案；
+ * 随机结果写入状态并立即应用到图片，验证时由状态与用户旋转角度求差。
+ */
 function handleImgOnLoad() {
   const { maxDegree, minDegree } = props;
   const ranRotate = Math.floor(
-    minDegree! + Math.random() * (maxDegree! - minDegree!),
+    minDegree + Math.random() * (maxDegree - minDegree),
   ); // 生成随机角度
   state.randomRotate = ranRotate;
   setImgRotate(ranRotate);

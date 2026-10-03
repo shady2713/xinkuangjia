@@ -30,14 +30,24 @@ async function generateRoutesByFrontend(
 
 /**
  * 判断路由是否有权限访问
- * @param route
- * @param access
+ * @param route 具有可选角色元信息的路由。
+ * @param access 当前身份已验证的角色列表。
+ * @returns 是否满足角色条件；无效角色元信息拒绝访问。
  */
 function hasAuthority(route: RouteRecordRaw, access: string[]) {
   const authority = route.meta?.authority;
   if (!authority) {
     return true;
   }
+  // 权限元信息必须是字符串数组；错误配置不能因 truthy 值被误放行。
+  if (
+    !Array.isArray(authority) ||
+    !authority.every(
+      /** 逐项确认角色标识，不把对象或数字当成角色。 */ (role: unknown) =>
+        typeof role === 'string',
+    )
+  )
+    return false;
   const canAccess = access.some((value) => authority.includes(value));
 
   return canAccess || (!canAccess && menuHasVisibleWithForbidden(route));

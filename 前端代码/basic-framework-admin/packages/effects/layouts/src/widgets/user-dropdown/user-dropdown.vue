@@ -48,7 +48,8 @@ interface Props {
    */
   menus?: Array<{
     handler: AnyFunction;
-    icon?: Component | Function | string;
+    // 函数形态的图标就是函数式组件，Component 已覆盖 FunctionalComponent。
+    icon?: Component | string;
     text: string;
   }>;
 
@@ -153,17 +154,37 @@ function handleSubmitLogout() {
 
 if (enableShortcutKey.value) {
   const keys = useMagicKeys();
-  whenever(keys['Alt+KeyQ']!, () => {
-    if (enableLogoutShortcutKey.value) {
-      handleLogout();
-    }
-  });
+  // useMagicKeys 以 Proxy 惰性创建组合键，索引结果在类型上仍是可选的；
+  // 缺失时跳过注册即可，运行时这些组合键始终由 useMagicKeys 提供
+  const logoutKey = keys['Alt+KeyQ'];
+  if (logoutKey) {
+    whenever(
+      logoutKey,
+      /**
+       * Alt+Q 命中后按开关决定是否注销，避免与用户手动点击菜单项重复触发。
+       */
+      () => {
+        if (enableLogoutShortcutKey.value) {
+          handleLogout();
+        }
+      },
+    );
+  }
 
-  whenever(keys['Alt+KeyL']!, () => {
-    if (enableLockScreenShortcutKey.value) {
-      handleOpenLock();
-    }
-  });
+  const lockKey = keys['Alt+KeyL'];
+  if (lockKey) {
+    whenever(
+      lockKey,
+      /**
+       * Alt+L 命中后按开关决定是否打开锁屏弹窗。
+       */
+      () => {
+        if (enableLockScreenShortcutKey.value) {
+          handleOpenLock();
+        }
+      },
+    );
+  }
 }
 </script>
 

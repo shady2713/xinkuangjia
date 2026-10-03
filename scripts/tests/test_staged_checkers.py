@@ -36,7 +36,7 @@ def scan_staged(
         AssertionError: 检查器调用了替身未覆盖的 Git 命令。
     """
     module = java if language == "java" else python
-    path = "后端/java服务/Demo.java" if language == "java" else "src/demo.py"
+    path = "后端代码/basic-framework-boot/Demo.java" if language == "java" else "src/demo.py"
     patch = "index " + ("a" * 40 if before is not None else "0" * 40) + ".." + "b" * 40
     patch += " 100644\n" + "".join(
         difflib.unified_diff(
@@ -103,6 +103,28 @@ def test_numeric_credentials_are_not_measurements(key: str) -> None:
 def test_secret_builtin_regressions() -> None:
     """完整内置样本同时验证已有配置、注释、私钥和测试凭据边界。"""
     secrets._run_self_test()
+
+
+@pytest.mark.parametrize(
+    ("path", "source"),
+    [
+        ("src/Service.java", "if (password == null) return;"),
+        ("src/config.ts", "if (token === expected) return;"),
+        ("src/config.ts", "token" + ": string | null;"),
+        ("src/config.ts", "password" + ": string | undefined;"),
+    ],
+)
+def test_comparison_and_type_syntax_are_not_assignments(path: str, source: str) -> None:
+    """比较和基础类型联合不构成凭据赋值，不需要按目录豁免源文件。"""
+    assert secrets._scan_added_line(path, 1, source) == []
+
+
+@pytest.mark.parametrize("source", ["field: string | '{value}';", "field = '{value}';"])
+def test_type_filter_keeps_string_values_and_strong_signals(source: str) -> None:
+    """类型语法校准不豁免带字符串的敏感赋值，强密钥格式仍独立检查。"""
+    sample = "sk-" + "a1b2c3d4" * 4
+    findings = secrets._scan_added_line("src/config.ts", 1, source.format(value=sample).replace("field", "token"))
+    assert any(item.rule == "secret-prefix" for item in findings)
 
 
 @pytest.mark.parametrize(
@@ -185,7 +207,8 @@ def test_secret_cli_exit_status(
     """命令入口仅因阻断项失败，提示项可见但不能被描述为没有命中。"""
     findings = [secrets.Finding("config.yaml", 3, "test", "需核查", level) for level in levels]
     monkeypatch.setattr(secrets.sys, "argv", ["scan_staged_secrets.py"])
-    monkeypatch.setattr(secrets, "_scan_staged_diff", lambda: findings)
+    monkeypatch.setattr(secrets, "_staged_paths", lambda: ["config.yaml"])
+    monkeypatch.setattr(secrets, "_scan_staged_diff", lambda paths: findings)
     assert secrets.main() == expected
     output = capsys.readouterr()
     if "warning" in levels:
@@ -199,11 +222,12 @@ def test_secret_cli_exit_status(
 def test_secret_cli_read_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """读取失败仍返回错误，不能因加入提示分级变成成功。"""
 
-    def fail_scan() -> list[secrets.Finding]:
+    def fail_scan(paths: list[str]) -> list[secrets.Finding]:
         """模拟 Git 暂存内容不可读取。"""
         raise RuntimeError("无法读取 Git")
 
     monkeypatch.setattr(secrets.sys, "argv", ["scan_staged_secrets.py"])
+    monkeypatch.setattr(secrets, "_staged_paths", lambda: ["config.yaml"])
     monkeypatch.setattr(secrets, "_scan_staged_diff", fail_scan)
     assert secrets.main() == 2
 
@@ -403,6 +427,44 @@ def test_java_overloads_are_distinguished(monkeypatch: pytest.MonkeyPatch) -> No
     assert len(findings) == 1 and findings[0][0] == "method-javadoc"
 
 
+@pytest.mark.parametrize("documented", [False, True])
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        '@ValueSource(strings = {"one",\n        "two"})',
+        '@Nested(values = {@Case(name="one"),\n        @Case(name="two")})',
+    ],
+)
+def test_java_annotation_arrays_preserve_attached_documentation(
+    monkeypatch: pytest.MonkeyPatch, documented: bool, annotation: str
+) -> None:
+    """多行数组和嵌套注解不是成员结束；仍要求其后真实方法具备职责注释。"""
+    comment = "    /** 验证输入边界。 */\n" if documented else ""
+    source = JAVA_HEADER + "    /** 相邻旧方法。 */\n    void previous() {}\n" + comment
+    source += "    @ParameterizedTest\n    " + annotation + "\n    void run(String value) {}\n}\n"
+    findings = scan_staged(monkeypatch, "java", None, source)
+    assert [rule for rule, _ in findings] == ([] if documented else ["method-javadoc"])
+
+
+@pytest.mark.parametrize("comment,expected", [
+    ("/** 拒绝 text/* 与 image/* 的宽泛匹配。 */", []),
+    ("/** 文档内的 /** 示例不能改变外层起点。 */", []),
+    ("/* 普通注释中的 /** 不是 JavaDoc。 */", ["method-javadoc"]),
+])
+def test_java_comment_openers_inside_comments_are_plain_text(
+    monkeypatch: pytest.MonkeyPatch, comment: str, expected: list[str]
+) -> None:
+    """块注释内不嵌套，MIME 通配和注释示例不能使职责说明丢失或被伪造。"""
+    source = JAVA_HEADER + "    " + comment + "\n    @Test\n    void run() {}\n}\n"
+    assert [rule for rule, _ in scan_staged(monkeypatch, "java", None, source)] == expected
+
+
+def test_java_comment_marker_in_string_does_not_attach_javadoc() -> None:
+    """字符串中的伪注释不能冒充紧邻方法的真实职责说明。"""
+    source = 'class Demo { String text = "/** 伪造 */"; /* 普通说明 */ void run() {} }'
+    assert java._attached_javadoc(source, source.index("void run")) is None
+
+
 @pytest.mark.parametrize("scope", ["module", "class"])
 def test_deleted_python_scope_documentation(monkeypatch: pytest.MonkeyPatch, scope: str) -> None:
     """模块和类的纯 Docstring 删除均按新出现的职责缺失检查。"""
@@ -437,3 +499,97 @@ def test_existing_self_tests(language: str) -> None:
     """保留两种语言原有内置样例，防止新增变更识别破坏既有规则。"""
     module = java if language == "java" else python
     module._run_self_test()
+
+
+@pytest.mark.parametrize("explicit_columns", [False, True])
+@pytest.mark.parametrize("quoted_table", [False, True])
+def test_sql_insert_rejects_fixed_credentials(
+    monkeypatch: pytest.MonkeyPatch, explicit_columns: bool, quoted_table: bool
+) -> None:
+    """带列名与按位置写入均根据真实字段识别凭据，诊断不包含模拟值。"""
+    table = "`system_oauth2_refresh_token`" if quoted_table else "system_oauth2_refresh_token"
+    columns = "(id, refresh_token, memo)" if explicit_columns else ""
+    sample = "unit-" + "a" * 16
+    source = (
+        f"CREATE TABLE {table} (id bigint, refresh_token varchar(128), memo varchar(128));\n"
+        f"INSERT INTO {table} {columns} VALUES (1, '{sample}', 'text, with ) and ''quote');\n"
+    )
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert any(item.rule == "sql-sensitive-insert" for item in findings)
+    assert sample not in repr(findings)
+
+
+def test_sql_sensitive_positional_insert_requires_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """缺少敏感表字段映射时明确阻断，不能因凭据只出现在 VALUES 内而漏检。"""
+    source = "INSERT INTO system_oauth2_refresh_token VALUES (1, '" + "unit-" + "a" * 16 + "');\n"
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert [item.rule for item in findings] == ["sql-schema-unresolved"]
+
+
+def test_sql_placeholder_and_parameter_values_remain_valid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空值、受控绑定参数和明确占位符可初始化结构，普通标签不是凭据。"""
+    source = (
+        "CREATE TABLE system_users (id bigint, password varchar(128), remark varchar(128));\n"
+        "INSERT INTO system_users VALUES (1, '', 'text'), (2, NULL, 'more');\n"
+        "INSERT INTO system_users (id, password) VALUES (3, 'CHANGE_ME_PASSWORD');\n"
+        "INSERT INTO system_users (id, password) VALUES (4, @provided);\n"
+        "INSERT INTO other_table (label) VALUES ('refresh_token');\n"
+        "INSERT INTO other_table (`path`, token_type, token_count) VALUES ('/home', 'Bearer', 42);\n"
+    )
+    assert scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source) == []
+
+
+def test_sql_bcrypt_hash_is_not_an_environment_reference(monkeypatch: pytest.MonkeyPatch) -> None:
+    """以美元符号开头的固定密码摘要仍属于凭据，不能误用环境变量豁免。"""
+    sample = "$2a$10$" + "a" * 53
+    source = f"INSERT INTO system_users (id, password) VALUES (1, '{sample}');\n"
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert any(item.rule == "sql-sensitive-insert" for item in findings)
+    assert sample not in repr(findings)
+
+
+def test_sql_changed_field_rechecks_unchanged_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """把旧字段改为凭据字段时检查其既有写入值，普通尾部修改不追查无关旧行。"""
+    sample = "unit-" + "a" * 16
+    before = f"CREATE TABLE demo (label varchar(128));\nINSERT INTO demo VALUES ('{sample}');\n"
+    source = before.replace("label", "password")
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source, before)
+    assert [item.rule for item in findings] == ["sql-sensitive-insert"]
+    assert scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source + "SELECT 1;\n", source) == []
+
+
+def test_sql_key_value_configuration_and_tickets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """初始化密码配置和登录票据的间接字段也阻断，安全开关值继续允许。"""
+    sample = "unit-" + "a" * 16
+    source = (
+        f"INSERT INTO infra_config (`key`, `value`) VALUES ('system.user.init-password', '{sample}');\n"
+        "INSERT INTO infra_config (`key`, `value`) VALUES ('system.user.register-enabled', 'false');\n"
+        f"INSERT INTO system_auto_login_ticket (`ticket`) VALUES ('{sample}');\n"
+    )
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert [(item.line, item.rule) for item in findings] == [(1, "sql-sensitive-insert"), (3, "sql-sensitive-insert")]
+
+
+def test_sql_comments_cannot_hide_executable_inserts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """普通注释不当成初始化语句，MySQL 可执行注释内的写入仍须检查。"""
+    sample = "unit-" + "a" * 16
+    statement = f"INSERT INTO system_users (password) VALUES ('{sample}');"
+    source = f"-- {statement}\n/* plain: {statement} */\n/*!50000 {statement} */\n"
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert [(item.line, item.rule) for item in findings] == [(3, "sql-sensitive-insert")]
+
+
+def test_empty_python_containers_are_not_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空容器初始化不含固定凭据，相邻非空敏感赋值仍须阻断。"""
+    source = "tokens = []\ncredentials = {}\npasswords = ()\n"
+    assert scan_secret_source(monkeypatch, "src/parser.py", source) == []
+    source += "password" + " = '" + "unit-" + "a" * 16 + "'\n"
+    findings = scan_secret_source(monkeypatch, "src/parser.py", source)
+    assert [item.rule for item in findings] == ["sensitive-assignment"]
+
+
+def test_sql_metadata_cannot_hide_fixed_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """名称声称计量但写入固定字符串时仍阻断，不能按列名整体豁免。"""
+    source = "INSERT INTO other_table (token_count) VALUES ('" + "unit-" + "a" * 16 + "');\n"
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
+    assert [item.rule for item in findings] == ["sql-sensitive-insert"]

@@ -12,7 +12,6 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { ElLoading, ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteJob,
   deleteJobList,
@@ -21,6 +20,7 @@ import {
   runJob,
   updateJobStatus,
 } from '#/api/infra/job';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -57,6 +57,11 @@ function handleDetail(row: InfraJobApi.Job) {
 }
 
 /** 更新任务状态 */
+/**
+ * 切换定时任务的启用/停用状态。
+ * @param row 当前操作的任务行，提供任务主键与名称。
+ * @returns 无返回值；失败信息由提示组件给出。
+ */
 async function handleUpdateStatus(row: InfraJobApi.Job) {
   const status =
     row.status === InfraJobStatusEnum.STOP
@@ -64,12 +69,18 @@ async function handleUpdateStatus(row: InfraJobApi.Job) {
       : InfraJobStatusEnum.STOP;
   const statusText = status === InfraJobStatusEnum.NORMAL ? '启用' : '停用';
 
+  // 状态变更会写库，行缺少 id 时无法定位目标任务，直接提示失败而不是用 undefined 发请求
+  if (row.id === undefined) {
+    ElMessage.error($t('ui.actionMessage.operationFailed'));
+    return;
+  }
+
   await confirm(`确定${statusText} ${row.name} 吗？`);
   const loadingInstance = ElLoading.service({
     text: `正在${statusText}中...`,
   });
   try {
-    await updateJobStatus(row.id!, status);
+    await updateJobStatus(row.id, status);
     ElMessage.success($t('ui.actionMessage.operationSuccess'));
     handleRefresh();
   } finally {
@@ -79,12 +90,17 @@ async function handleUpdateStatus(row: InfraJobApi.Job) {
 
 /** 执行一次任务 */
 async function handleTrigger(row: InfraJobApi.Job) {
+  // 触发任务会写库并调度执行，行缺少 id 时无法定位目标任务，直接提示失败
+  if (row.id === undefined) {
+    ElMessage.error($t('ui.actionMessage.operationFailed'));
+    return;
+  }
   await confirm(`确定执行一次 ${row.name} 吗？`);
   const loadingInstance = ElLoading.service({
     text: '正在执行中...',
   });
   try {
-    await runJob(row.id!);
+    await runJob(row.id);
     ElMessage.success($t('ui.actionMessage.operationSuccess'));
   } finally {
     loadingInstance.close();

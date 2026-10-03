@@ -1,61 +1,86 @@
-version: "3.4"
-
 name: basic-framework-system
 
 services:
   mysql:
-    container_name: basic-framework-mysql
     image: mysql:8
     restart: unless-stopped
-    tty: true
     ports:
-      - "3306:3306"
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-basic_framework}
+      MYSQL_DATABASE: ${DB_NAME:-basic_framework}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_USER: ${DB_USERNAME:?DB_USERNAME is required and must not be root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
-      - mysql:/var/lib/mysql/
+      - mysql:/var/lib/mysql
 
   redis:
-    container_name: basic-framework-redis
-    image: redis:6-alpine
+    image: redis:6.2-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis:/data
+    # 仅把密码哈希写入受限 ACL 文件；密码不拼入进程命令行或 Redis 配置日志。
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        umask 077
+        redis_hash=$$(printf '%s' "$$REDIS_PASSWORD" | sha256sum)
+        redis_hash=$${redis_hash%% *}
+        printf 'user default reset on #%s ~* &* +@all\n' "$$redis_hash" > /data/users.acl
+        chown redis:redis /data/users.acl
+        unset REDIS_PASSWORD redis_hash
+        exec /usr/local/bin/docker-entrypoint.sh redis-server --aclfile /data/users.acl --appendonly yes
 
   server:
-    container_name: basic-framework-server
     build:
-      context: ./basic-framework-server/
-    image: basic-framework-server
+      context: ../../basic-framework-server
+    image: ${SERVER_IMAGE:-basic-framework-server:local}
     restart: unless-stopped
     ports:
-      - "48080:48080"
+      - "127.0.0.1:${SERVER_PORT:-48080}:48080"
     environment:
-      SPRING_PROFILES_ACTIVE: local
-      JAVA_OPTS:
-        ${JAVA_OPTS:-
-          -Xms512m
-          -Xmx512m
-          -Djava.security.egd=file:/dev/./urandom
-        }
-      ARGS:
-        --spring.datasource.dynamic.datasource.master.url=${MASTER_DATASOURCE_URL:-jdbc:mysql://basic-framework-mysql:3306/basic_framework?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true}
-        --spring.datasource.dynamic.datasource.master.username=${MASTER_DATASOURCE_USERNAME:-root}
-        --spring.datasource.dynamic.datasource.master.password=${MASTER_DATASOURCE_PASSWORD:?MASTER_DATASOURCE_PASSWORD is required}
-        --spring.datasource.dynamic.datasource.slave.url=${SLAVE_DATASOURCE_URL:-jdbc:mysql://basic-framework-mysql:3306/basic_framework?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true}
-        --spring.datasource.dynamic.datasource.slave.username=${SLAVE_DATASOURCE_USERNAME:-root}
-        --spring.datasource.dynamic.datasource.slave.password=${SLAVE_DATASOURCE_PASSWORD:?SLAVE_DATASOURCE_PASSWORD is required}
-        --spring.data.redis.host=${REDIS_HOST:-basic-framework-redis}
+      SERVER_PORT: 48080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx512m -Djava.security.egd=file:/dev/./urandom}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-basic_framework}
+      DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      ADMIN_UI_URL: ${ADMIN_UI_URL:?ADMIN_UI_URL is required}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-}
+      SERVER_FORWARD_HEADERS_STRATEGY: native
+      TRUSTED_PROXY_REGEX: ${TRUSTED_PROXY_REGEX:-(?!)}
+      AUTH_REGISTRATION_ENABLED: ${AUTH_REGISTRATION_ENABLED:-false}
+      FILE_UPLOAD_MAX_BYTES: ${FILE_UPLOAD_MAX_BYTES:-10485760}
+      FILE_UPLOAD_DAILY_BYTES: ${FILE_UPLOAD_DAILY_BYTES:-209715200}
+      FILE_UPLOAD_DAILY_REQUESTS: ${FILE_UPLOAD_DAILY_REQUESTS:-100}
+      SMS_SEND_FREQUENCY: ${SMS_SEND_FREQUENCY:-1m}
+      SMS_SEND_MAXIMUM_PER_DAY: ${SMS_SEND_MAXIMUM_PER_DAY:-10}
+      SMS_SEND_IP_WINDOW: ${SMS_SEND_IP_WINDOW:-1m}
+      SMS_SEND_MAXIMUM_PER_IP: ${SMS_SEND_MAXIMUM_PER_IP:-50}
+      SMS_VERIFY_MAXIMUM_FAILURES: ${SMS_VERIFY_MAXIMUM_FAILURES:-5}
+      SMS_VERIFY_WINDOW: ${SMS_VERIFY_WINDOW:-1m}
+      SMS_VERIFY_MAXIMUM_PER_MOBILE: ${SMS_VERIFY_MAXIMUM_PER_MOBILE:-10}
+      SMS_VERIFY_MAXIMUM_PER_IP: ${SMS_VERIFY_MAXIMUM_PER_IP:-50}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:?MINIO_ENDPOINT is required}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+      MINIO_BUCKET: ${MINIO_BUCKET:?MINIO_BUCKET is required}
+      MINIO_SECURE: ${MINIO_SECURE:?MINIO_SECURE is required}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL is required}
     depends_on:
       - mysql
       - redis
 
-
 volumes:
   mysql:
-    driver: local
   redis:
-    driver: local

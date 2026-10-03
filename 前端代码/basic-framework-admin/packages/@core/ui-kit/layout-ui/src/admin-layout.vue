@@ -25,7 +25,8 @@ import {
 } from './components';
 import { useLayout } from './hooks/use-layout';
 
-interface Props extends VbenLayoutProps {}
+/** 后台布局的属性契约别名：直接复用布局属性，不额外声明成员。 */
+type Props = VbenLayoutProps;
 
 defineOptions({
   name: 'VbenLayout',

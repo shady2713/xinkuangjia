@@ -10,11 +10,12 @@ import { useClipboard } from '@vueuse/core';
 import { ElButton, ElImage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteFile, deleteFileList, getFilePage } from '#/api/infra/file';
+import { deleteFile, getFilePage } from '#/api/infra/file';
 import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 import { showErrorMessage, showSuccessMessage } from '#/utils/feedback';
 
+import { deleteFileBatchAndRefreshOnFailure } from './batch-delete';
 import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
@@ -24,9 +25,9 @@ const [FormModal, formModalApi] = useVbenModal({
 });
 
 /** 刷新表格 */
-function handleRefresh() {
+async function handleRefresh() {
   clearCheckedIds();
-  gridApi.query();
+  await gridApi.query();
 }
 
 const {
@@ -37,7 +38,9 @@ const {
   handleDelete,
   handleDeleteBatch,
 } = useCrudActions<InfraFileApi.File>({
-  batchDeleteApi: deleteFileList,
+  /** 批删后可能仅部分完成，失败也必须重新查询服务端剩余记录。 */
+  batchDeleteApi: (ids) =>
+    deleteFileBatchAndRefreshOnFailure(ids, handleRefresh),
   deleteApi: deleteFile,
   getDeleteName: (row) => row.name || row.path || '',
   modalApi: formModalApi,
@@ -148,5 +151,3 @@ const [Grid, gridApi] = useVbenVxeGrid({
     </Grid>
   </Page>
 </template>
-
-

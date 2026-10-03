@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-import type { Recordable } from '@vben/types';
-
+/**
+ * 角色菜单分配弹窗：只提交勾选的菜单编号集合。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemMenuApi } from '#/api/system/menu';
 import type { SystemRoleApi } from '#/api/system/role';
 
@@ -19,6 +21,12 @@ import { $t } from '#/locales';
 
 import { useAssignMenuFormSchema } from '../data';
 
+/** 分配菜单表单值：角色编号与勾选的菜单编号。 */
+type AssignMenuForm = {
+  id: number;
+  menuIds: number[];
+};
+
 const emit = defineEmits(['success']);
 
 const menuTree = ref<SystemMenuApi.Menu[]>([]); // 菜单树
@@ -28,11 +36,11 @@ const isExpanded = ref(false); // 展开状态
 const expandedKeys = ref<number[]>([]); // 展开的节点
 
 type TreeNodeLike = {
-  id?: number;
   children?: TreeNodeLike[];
+  id?: number;
 };
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, AssignMenuForm>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -46,6 +54,9 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 提交菜单勾选结果：未勾选任何菜单时直接返回，避免提交空集合覆盖已有授权。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -67,6 +78,10 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 打开弹窗时先加载菜单树再回填已授权菜单；关闭时不做任何事。
+   * @param isOpen 当前弹窗是否打开。
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
@@ -83,7 +98,8 @@ const [Modal, modalApi] = useVbenModal({
       const menuIds = await getRoleMenuList(data.id);
       await formApi.setFieldValue('menuIds', menuIds);
 
-      await formApi.setValues(data);
+      // 弹窗只回填角色编号，菜单勾选状态由上面的菜单编号单独设置。
+      await formApi.setValues({ id: data.id, menuIds: [] });
     } finally {
       await nextTick(); // 菜单过多，渲染较慢，需要等下一次事件循环
       modalApi.unlock();
@@ -119,24 +135,48 @@ function handleExpandAll() {
   expandedKeys.value = isExpanded.value ? getAllNodeIds(menuTree.value) : [];
 }
 
-/** 递归获取所有节点 ID */
+/**
+ * 递归收集菜单树中所有可勾选的节点编号。
+ * @param nodes 当前层的菜单节点。
+ * @param ids 收集结果的累加数组，递归时复用同一个引用。
+ * @returns 收集到的全部节点编号。
+ */
 function getAllNodeIds(nodes: TreeNodeLike[], ids: number[] = []): number[] {
-  nodes.forEach((node) => {
-    if (typeof node.id === 'number') {
-      ids.push(node.id);
-    }
-    if (Array.isArray(node.children) && node.children.length > 0) {
-      getAllNodeIds(node.children, ids);
-    }
-  });
+  nodes.forEach(
+    /**
+     * 处理单个节点：有编号则收集，并继续下钻子节点。
+     * @param node 当前正在处理的菜单节点。
+     */
+    (node) => {
+      if (typeof node.id === 'number') {
+        ids.push(node.id);
+      }
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        getAllNodeIds(node.children, ids);
+      }
+    },
+  );
   return ids;
 }
 
-function getNodeClass(node: Recordable<any>) {
+/** 树控件的节点形状：value 是菜单节点数据，index 是同层位置。 */
+type MenuTreeNode = {
+  index?: number | string;
+  value?: {
+    type?: (typeof SystemMenuTypeEnum)[keyof typeof SystemMenuTypeEnum];
+  };
+};
+
+/**
+ * 按菜单类型与同层位置决定节点的展示样式。
+ * @param node 树控件的节点数据。
+ * @returns 追加到节点 class 上的样式片段。
+ */
+function getNodeClass(node: MenuTreeNode) {
   const classes: string[] = [];
   if (node.value?.type === SystemMenuTypeEnum.BUTTON) {
     classes.push('inline-flex');
-    if (node.index % 3 >= 1) {
+    if (Number(node.index) % 3 >= 1) {
       classes.push('!pl-0');
     }
   }

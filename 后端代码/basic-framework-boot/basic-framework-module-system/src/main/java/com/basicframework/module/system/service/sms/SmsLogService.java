@@ -1,6 +1,7 @@
 package com.basicframework.module.system.service.sms;
 
 import com.basicframework.module.system.dal.dataobject.sms.SmsTemplateDO;
+import com.basicframework.module.system.framework.sms.core.client.SmsReceiptException;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -45,17 +46,22 @@ public interface SmsLogService {
                              String apiRequestId, String apiSerialNo);
 
     /**
-     * 更新短信接收结果。
+     * 将已发送短信的初始接收状态推进到供应商报告的终态。
      *
-     * @param id           短信日志编号
-     * @param apiSerialNo  平台流水号
-     * @param mobile       手机号
-     * @param success      是否接收成功
-     * @param receiveTime  接收时间
+     * <p>渠道、供应商流水号和手机号必须共同匹配已有日志；内部编号存在时额外交叉校验。
+     * 首次终态原子写入，重复或乱序回执不覆盖已有终态，也不会新建日志。</p>
+     *
+     * @param channelCode  回调入口对应的供应商渠道编码，不可为空
+     * @param id           短信日志编号，可为空
+     * @param apiSerialNo  平台流水号，不可为空
+     * @param mobile       发送时保存的手机号，不可为空
+     * @param success      是否接收成功，不可为 {@code null}
+     * @param receiveTime  供应商报告的接收时间，不可为 {@code null}
      * @param apiErrorCode 平台错误编码
      * @param apiErrorMsg  平台错误描述
+     * @throws SmsReceiptException 回执必要字段不完整或未匹配已有日志
      */
-    void updateSmsReceiveResult(Long id, String apiSerialNo, String mobile,
+    void updateSmsReceiveResult(String channelCode, Long id, String apiSerialNo, String mobile,
                                 Boolean success, LocalDateTime receiveTime,
                                 String apiErrorCode, String apiErrorMsg);
 

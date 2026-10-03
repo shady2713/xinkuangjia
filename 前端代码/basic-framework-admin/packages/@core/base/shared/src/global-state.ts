@@ -4,7 +4,11 @@
  */
 
 interface ComponentsState {
-  [key: string]: any;
+  /**
+   * 组件注册表：键是业务方自定义的组件名，值是实际组件。
+   * 键名与组件类型都无法在编译期确定，读取方需自行按名称收窄。
+   */
+  [key: string]: unknown;
 }
 
 interface MessageState {

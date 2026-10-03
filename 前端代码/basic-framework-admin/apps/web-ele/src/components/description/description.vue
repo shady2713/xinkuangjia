@@ -1,5 +1,6 @@
 <script lang="tsx">
-import type { CSSProperties, PropType, Slots } from 'vue';
+/** 描述列表：按 schema 渲染键值对，并支持额外的 extra 插槽。 */
+import type { CSSProperties, PropType, Slots, VNode } from 'vue';
 
 import type { DescriptionItemSchema, DescriptionProps } from './typing';
 
@@ -32,12 +33,30 @@ const props = {
   direction: { default: 'horizontal', type: String },
 };
 
+/**
+ * 描述列表的单个插槽：无参渲染函数，返回该插槽要输出的节点数组。
+ * 描述项插槽只由本组件生成，因此签名固定，不接受调用方传入参数。
+ * @returns 该插槽要渲染的节点数组。
+ */
+type DescriptionSlot = () => VNode[];
+
+/** 描述列表渲染用的插槽表：键为插槽名，值为对应的渲染函数。 */
+type DescriptionSlots = Record<string, DescriptionSlot>;
+
+/**
+ * 安全地取出调用方提供的具名插槽。
+ * 插槽缺失或不是函数时返回 null 并告警，让调用方回退到默认渲染而不是崩溃。
+ * @param slots 组件当前收到的全部插槽。
+ * @param slot 要取用的插槽名。
+ * @param data 传给插槽的描述数据，供插槽内部按字段取值。
+ * @returns 插槽渲染结果数组；插槽不可用时为 null。
+ */
 function getSlot(slots: Slots, slot: string, data?: Record<string, unknown>) {
   if (!slots || !Reflect.has(slots, slot)) {
     return null;
   }
   if (!isFunction(slots[slot])) {
-    logWarn('description:slot', slot + ' is not a function!');
+    logWarn('description:slot', `${slot} is not a function!`);
     return null;
   }
   const slotFn = slots[slot];
@@ -48,18 +67,33 @@ function getSlot(slots: Slots, slot: string, data?: Record<string, unknown>) {
 export default defineComponent({
   name: 'Description',
   props,
+  /**
+   * 组装描述列表的渲染逻辑。
+   * schema 既可以由 props 直接给出，也可以由 `useDescription` 在异步取数后回填，
+   * 两者最终都收敛到同一份合并后的属性上再渲染。
+   * @param props 组件声明的描述列表属性。
+   * @returns 渲染函数，输出完整的描述列表节点。
+   */
   setup(props, { slots }) {
     const propsRef = ref<null | Partial<DescriptionProps>>(null);
 
     const prefixCls = 'description';
     const attrs = useAttrs();
 
-    const getMergeProps = computed(() => {
-      return {
-        ...props,
-        ...(unref(propsRef) as any),
-      } as DescriptionProps;
-    });
+    const getMergeProps = computed(
+      /**
+       * 合并组件属性与异步回填数据；回填数据为空时等价于只使用组件属性。
+       * @returns 合并后的完整描述列表属性。
+       */
+      () => {
+        return {
+          ...props,
+          // propsRef 初始为 null，展开 null 等价于展开空对象，
+          // 表示尚无异步回填数据，此时只用组件自身声明的属性。
+          ...unref(propsRef),
+        } as DescriptionProps;
+      },
+    );
 
     const getProps = computed(() => {
       const opt = {
@@ -138,9 +172,15 @@ export default defineComponent({
         .filter((item) => !!item);
     }
 
+    /**
+     * 渲染描述列表主体。
+     * extra 插槽只透传不加工，保证调用方自定义的表头区域与默认渲染互不干扰。
+     * @returns 描述列表节点，含描述项插槽与可选的 extra 插槽。
+     */
     function renderDesc() {
       const extraSlot = getSlot(slots, 'extra');
-      const slotsObj: Record<string, Function> = {
+      // 描述项插槽只由本组件生成，签名是“无参返回渲染结果数组”的函数。
+      const slotsObj: DescriptionSlots = {
         default: () => renderItem(),
       };
       if (extraSlot) {
@@ -150,7 +190,7 @@ export default defineComponent({
         <ElDescriptions
           class={`${prefixCls}`}
           title={unref(getMergeProps).title}
-          {...(unref(getDescriptionsProps) as any)}
+          {...unref(getDescriptionsProps)}
         >
           {slotsObj}
         </ElDescriptions>

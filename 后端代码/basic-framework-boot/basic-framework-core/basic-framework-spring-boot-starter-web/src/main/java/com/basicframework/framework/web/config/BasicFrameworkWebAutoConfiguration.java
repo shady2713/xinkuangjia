@@ -134,17 +134,20 @@ public class BasicFrameworkWebAutoConfiguration {
     // ========== Filter 相关 ==========
 
     /**
-     * 创建 CorsFilter Bean，解决跨域问题
+     * 按精确源白名单允许跨域 Bearer 请求，不允许浏览器附带 Cookie 等隐式凭据。
+     *
+     * @param webProperties 已校验的 Web 配置；空白名单拒绝跨域
+     * @return 先于认证执行、允许 Authorization 与 Content-Type 预检的过滤器
      */
     @Bean
     @Order(value = WebFilterOrderEnum.CORS_FILTER) // 特殊：修复因执行顺序影响到跨域配置不生效问题
     public FilterRegistrationBean<CorsFilter> corsFilterBean(WebProperties webProperties) {
         // 创建 CorsConfiguration 对象
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        // 从配置读取允许的源地址，生产环境应配置为具体域名
-        webProperties.getCorsAllowedOrigins().forEach(config::addAllowedOriginPattern);
+        config.setAllowCredentials(false);
+        webProperties.getCorsAllowedOrigins().forEach(config::addAllowedOrigin);
         config.addAllowedHeader("*"); // 设置访问源请求头
+        config.addExposedHeader("Content-Disposition"); // 明确授权的前端可读取下载文件名
         config.addAllowedMethod("*"); // 设置访问源请求方法
         // 创建 UrlBasedCorsConfigurationSource 对象
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

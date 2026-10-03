@@ -2,6 +2,15 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成 JSON/JSONC 文件的 ESLint 扁平配置。
+ *
+ * 覆盖 .json、.json5、.jsonc 与 .code-workspace：前三个交给 jsonc-eslint-parser 解析，
+ * 并启用 jsonc 插件的规范类规则；后三类文件再叠加排序规则，保证 tsconfig 与 package.json
+ * 的键顺序在各机器上保持一致。
+ *
+ * @returns 依次作用于 JSON 文件本体、package.json、cspell 词表与 tsconfig 的配置数组
+ */
 export async function jsonc(): Promise<Linter.Config[]> {
   const [pluginJsonc, parserJsonc] = await Promise.all([
     interopDefault(import('eslint-plugin-jsonc')),
@@ -12,10 +21,10 @@ export async function jsonc(): Promise<Linter.Config[]> {
     {
       files: ['**/*.json', '**/*.json5', '**/*.jsonc', '*.code-workspace'],
       languageOptions: {
-        parser: parserJsonc as any,
+        parser: parserJsonc,
       },
       plugins: {
-        jsonc: pluginJsonc as any,
+        jsonc: pluginJsonc,
       },
       rules: {
         'jsonc/no-bigint-literals': 'error',

@@ -7,11 +7,11 @@ import { Page } from '@vben/common-ui';
 import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudDeleteActions } from '#/composables/use-crud-actions';
 import {
   deleteOAuth2Token,
   getOAuth2TokenPage,
 } from '#/api/system/oauth2/token';
+import { useCrudDeleteActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -21,18 +21,27 @@ function handleRefresh() {
   gridApi.query();
 }
 
-const {
-  checkedIds,
-  handleDelete,
-  handleDeleteBatch,
-  handleRowCheckboxChange,
-} = useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
-  batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
-  deleteApi: deleteOAuth2Token,
-  getDeleteName: () => '令牌',
-  getRowKey: (row) => row.accessToken,
-  refresh: handleRefresh,
-});
+const { checkedIds, handleDelete, handleDeleteBatch, handleRowCheckboxChange } =
+  useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
+    /**
+     * 批量删除把选中令牌拼成逗号串提交，与后端批量接口约定一致。
+     * @param tokens 本次选中的令牌列表。
+     * @returns 删除接口的响应。
+     */
+    batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
+    deleteApi: deleteOAuth2Token,
+    /**
+     * 令牌本身是长串不适合做确认文案，统一用"令牌"指代当前对象。
+     */
+    getDeleteName: () => '令牌',
+    /**
+     * 令牌以 accessToken 作为唯一标识，删除与勾选都以它为准。
+     * @param row 当前行数据。
+     * @returns 该行的访问令牌。
+     */
+    getRowKey: (row) => row.accessToken,
+    refresh: handleRefresh,
+  });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {

@@ -34,4 +34,8 @@ public class SmsCodeValidateReqDTO {
     @NotEmpty(message = "验证码")
     private String code;
 
+    /** 由可信调用方从连接信息确定的验证 IP，不接受匿名请求体直接指定。 */
+    @NotEmpty(message = "验证 IP 不能为空")
+    private String validateIp;
+
 }

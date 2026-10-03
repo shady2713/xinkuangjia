@@ -1,3 +1,4 @@
+/** 权限路由生成与安装；动态记录按 Router 分配清理所有权。 */
 import type { Component, DefineComponent } from 'vue';
 
 import type {
@@ -18,51 +19,84 @@ import {
   mapTree,
 } from '@vben/utils';
 
+/** 路由安装需要在异步生成完成后确认仍属于当前登录身份。 */
+export type AccessibleOptions = {
+  /** 返回 false 时丢弃本次生成，不移除或安装任何路由。 */
+  isCurrent?: () => boolean;
+} & GenerateMenuAndRoutesOptions;
+
+/** Vue Router 返回的路由移除句柄。 */
+type RemoveRoute = ReturnType<AccessibleOptions['router']['addRoute']>;
+
+/** 每个 Router 独立持有本次安装的移除句柄，包含未命名及布局外路由。 */
+const routeOwners = new WeakMap<AccessibleOptions['router'], RemoveRoute[]>();
+
+/** 移除本模块安装的动态路由，保持静态根路由及其声明不变。
+ * @param router 需要清理动态权限路由的 Router 实例。
+ */
+export function resetAccessibleRoutes(
+  router: AccessibleOptions['router'],
+): void {
+  for (const remove of routeOwners.get(router) ?? []) remove();
+  routeOwners.delete(router);
+}
+
+/** 生成并安装当前身份可访问路由，替换此前由本模块拥有的动态路由。
+ * @param mode 权限来源模式。
+ * @param options 路由来源、Router 及安装前的身份校验。
+ * @returns 当前身份的菜单和路由；身份过期时返回空列表且不修改 Router。
+ * @throws {Error} 动态路由名称重复或覆盖静态记录时拒绝安装。
+ */
 async function generateAccessible(
   mode: AccessModeType,
-  options: GenerateMenuAndRoutesOptions,
+  options: AccessibleOptions,
 ) {
   const { router } = options;
-
-  options.routes = cloneDeep(options.routes);
-  // 生成路由
-  const accessibleRoutes = await generateRoutes(mode, options);
-
-  const root = router.getRoutes().find((item) => item.path === '/');
-
-  // 获取已有的路由名称列表
-  const names = root?.children?.map((item) => item.name) ?? [];
-
-  // 动态添加到router实例内
-  accessibleRoutes.forEach((route) => {
-    if (root && !route.meta?.noBasicLayout) {
+  const accessibleRoutes = await generateRoutes(mode, {
+    ...options,
+    routes: cloneDeep(options.routes),
+  });
+  // 必须在首次 Router 写入前校验；守卫在 await 之后检查已不足以防止旧路由安装。
+  if (options.isCurrent && !options.isCurrent()) {
+    return { accessibleMenus: [], accessibleRoutes: [] };
+  }
+  resetAccessibleRoutes(router);
+  const names = new Set<RouteRecordRaw['name']>();
+  /** 在安装前拒绝覆盖静态入口或另一条权限记录的名称。
+   * @param routes 本次权限路由树或递归子树。
+   * @throws {Error} 路由名称已存在于静态记录或本次其他记录。
+   */
+  function validateNames(routes: RouteRecordRaw[]): void {
+    for (const route of routes) {
+      if (route.name) {
+        if (router.hasRoute(route.name) || names.has(route.name)) {
+          throw new Error(`权限路由名称与已有记录冲突：${String(route.name)}`);
+        }
+        names.add(route.name);
+      }
+      if (route.children) validateNames(route.children);
+    }
+  }
+  validateNames(accessibleRoutes);
+  const rootName = router
+    .getRoutes()
+    .find(
+      /** 查找用于安装业务子路由的静态根。 */ (item) => item.path === '/',
+    )?.name;
+  const removers: RemoveRoute[] = [];
+  routeOwners.set(router, removers);
+  for (const route of accessibleRoutes) {
+    if (rootName && !route.meta?.noBasicLayout) {
       // 为了兼容之前的版本用法，如果包含子路由，则将component移除，以免出现多层BasicLayout
       // 如果你的项目已经跟进了本次修改，移除了所有自定义菜单首级的BasicLayout，可以将这段if代码删除
       if (route.children && route.children.length > 0) {
         delete route.component;
       }
-      // 根据router name判断，如果路由已经存在，则不再添加
-      if (names?.includes(route.name)) {
-        // 找到已存在的路由索引并更新，不更新会造成切换用户时，一级目录未更新，homePath 在二级目录导致的404问题
-        const index = root.children?.findIndex(
-          (item) => item.name === route.name,
-        );
-        if (index !== undefined && index !== -1 && root.children) {
-          root.children[index] = route;
-        }
-      } else {
-        root.children?.push(route);
-      }
+      // 使用 Router 的父路由 API，不把本次权限写回静态根记录的 children。
+      removers.push(router.addRoute(rootName, route));
     } else {
-      router.addRoute(route);
+      removers.push(router.addRoute(route));
     }
-  });
-
-  if (root) {
-    if (root.name) {
-      router.removeRoute(root.name);
-    }
-    router.addRoute(root);
   }
 
   // 生成菜单

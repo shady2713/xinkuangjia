@@ -4,6 +4,8 @@ import type {
   DropdownMenuCheckboxItemProps,
 } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -15,7 +17,9 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 
-const props = defineProps<DropdownMenuCheckboxItemProps & { class?: any }>();
+const props = defineProps<
+  DropdownMenuCheckboxItemProps & { class?: ClassValue }
+>();
 const emits = defineEmits<DropdownMenuCheckboxItemEmits>();
 
 const delegatedProps = computed(() => {

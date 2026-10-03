@@ -120,17 +120,27 @@ def owner(path: Path, items: list[workspace.Package]) -> workspace.Package:
     )
 
 
-def forbidden_layer(path: str, spec: str) -> bool:
-    """沿用当前 ESLint 方向约束，并供动态及相对跨包导入复用。"""
+def forbidden_layer(path: str, spec: str, app_packages: set[str] | None = None) -> bool:
+    """禁止共享包向上依赖应用或聚合层；应用可消费自己的源码别名。
+
+    Args:
+        path: 相对于前端工作区的源文件路径。
+        spec: 导入说明符，跨包相对导入已转换为目标包名。
+        app_packages: 从工作区清单发现的应用包名。
+    Returns:
+        导入方向违反当前工程边界时为 True。
+    """
+    if path.startswith("packages/") and (
+        spec.startswith("#/") or package_name(spec) in (app_packages or set())
+    ):
+        return True
     if path.startswith("packages/@core/base/"):
         return spec.startswith(("@vben/", "@vben-core/"))
     if path.startswith("packages/@core/"):
         return spec.startswith("@vben/")
     if any(path.startswith(f"packages/{part}/") for part in BASE_PACKAGES):
         return spec.startswith("@vben/")
-    return path.startswith("apps/") and any(
-        spec.startswith(f"#/{part}/") for part in ("api", "layouts", "locales", "stores")
-    )
+    return False
 
 
 def inspect(root: Path, kind: str) -> dict[str, object]:
@@ -146,6 +156,9 @@ def inspect(root: Path, kind: str) -> dict[str, object]:
     """
     root = root.resolve()
     items = packages(root)
+    app_packages = {
+        item.name for item in items if item.path.relative_to(root).as_posix().startswith("apps/")
+    }
     paths = source_files(root, items)
     facts, builtins = parse_files(root, paths)
     findings: list[dict[str, object]] = []
@@ -205,7 +218,7 @@ def inspect(root: Path, kind: str) -> dict[str, object]:
                 findings.append(
                     {"path": relative, "line": entry["line"], "rule": "unknown-package-alias"}
                 )
-            if kind in ("all", "layers") and forbidden_layer(relative, target):
+            if kind in ("all", "layers") and forbidden_layer(relative, target, app_packages):
                 findings.append(
                     {"path": relative, "line": entry["line"], "rule": "layer-direction"}
                 )

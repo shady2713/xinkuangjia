@@ -18,7 +18,7 @@ withDefaults(defineProps<SettingProps>(), {
 });
 
 const emit = defineEmits<{
-  change: [Recordable<any>];
+  change: [Recordable<unknown>];
 }>();
 
 function handleChange(fieldName: string, value: boolean) {

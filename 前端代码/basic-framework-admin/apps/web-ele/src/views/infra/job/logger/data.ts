@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -6,7 +6,7 @@ import { h } from 'vue';
 
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-import { formatDateTime } from '@vben/utils';
+import { formatDateTime, toFormatDateValue } from '@vben/utils';
 
 import dayjs from 'dayjs';
 
@@ -70,7 +70,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 表格列配置 */
+/**
+ * 表格列配置
+ * @returns 定时任务日志表格的列定义，含时间格式化与状态字典渲染。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
@@ -102,8 +105,17 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'beginTime',
       title: '执行时间',
       minWidth: 280,
+      /**
+       * 渲染执行时间区间；任一端非法时按空串输出，区间仍以「 ~ 」分隔保持列宽稳定。
+       * @param params vxe-table 的单元格上下文。
+       * @param params.row 当前行的原始数据，执行时间字段按日期类型收窄后再格式化。
+       * @returns 格式化后的时间区间文本。
+       */
       formatter: ({ row }) => {
-        return `${formatDateTime(row.beginTime)} ~ ${formatDateTime(row.endTime)}`;
+        // 行字段是 unknown，按日期类型收窄后再格式化，非法值输出空串
+        const beginTime = formatDateTime(toFormatDateValue(row.beginTime));
+        const endTime = formatDateTime(toFormatDateValue(row.endTime));
+        return `${beginTime} ~ ${endTime}`;
       },
     },
     {
@@ -133,6 +145,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
 }
 
 /** 详情页的字段 */
+/**
+ * 构造任务日志详情的描述项。
+ * @returns 日志详情页的描述项定义数组。
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -177,10 +193,15 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'status',
       label: '任务状态',
+      /**
+       * 日志记录的是执行那一刻的状态快照，字典值渲染成标签便于和任务列表对照。
+       * @param val 当前单元格的字典值。
+       * @returns 字典标签节点。
+       */
       render: (val) => {
         return h(DictTag, {
           type: DICT_TYPE.INFRA_JOB_LOG_STATUS,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         });
       },
     },
@@ -190,4 +211,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

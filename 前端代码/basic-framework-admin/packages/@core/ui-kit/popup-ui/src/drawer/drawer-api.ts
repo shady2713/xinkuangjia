@@ -4,8 +4,8 @@ import { Store } from '@vben-core/shared/store';
 import { bindMethods, isFunction } from '@vben-core/shared/utils';
 
 export class DrawerApi {
-  // 共享数据
-  public sharedData: Record<'payload', any> = {
+  // 共享数据；payload 由 setData 写入，形状完全由调用方决定
+  public sharedData: Record<'payload', unknown> = {
     payload: {},
   };
   public store: Store<DrawerState>;
@@ -102,7 +102,13 @@ export class DrawerApi {
     }
   }
 
-  getData<T extends object = Record<string, any>>() {
+  /**
+   * 读取 setData 写入的共享数据。
+   *
+   * @returns 调用方写入的原始负载；未写入过数据时返回空对象而不是 undefined，
+   *   因此调用方无需判空即可安全展开
+   */
+  getData<T extends object = Record<string, unknown>>() {
     return (this.sharedData?.payload ?? {}) as T;
   }
 

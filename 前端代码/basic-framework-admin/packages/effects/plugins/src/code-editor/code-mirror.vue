@@ -43,7 +43,7 @@ const emit = defineEmits(['change']);
 const { isDark } = usePreferences();
 const { width, height } = useWindowSize();
 
-const el = ref();
+const el = ref<HTMLDivElement>();
 let editor: Nullable<CodeMirror.Editor>;
 
 const debounceRefresh = useDebounceFn(refresh, 100);
@@ -90,7 +90,18 @@ function refresh() {
   editor?.refresh();
 }
 
+/**
+ * 在模板根节点上创建 CodeMirror 实例并挂上主题、快捷键等配置。
+ * @returns 无返回值；实例写入模块级 editor，供后续 watch 与 defineExpose 使用。
+ */
 async function init() {
+  // 模板根节点在 onMounted + nextTick 后必然存在；缺失说明组件已被异常卸载，
+  // 此时放弃初始化，避免把 undefined 交给 CodeMirror 产生难以定位的内部报错
+  const container = el.value;
+  if (!container) {
+    return;
+  }
+
   const addonOptions = {
     autoCloseBrackets: true,
     autoCloseTags: true,
@@ -98,7 +109,7 @@ async function init() {
     gutters: ['CodeMirror-linenumbers'],
   };
 
-  editor = CodeMirror(el.value!, {
+  editor = CodeMirror(container, {
     value: '',
     mode: props.mode,
     readOnly: props.readonly,

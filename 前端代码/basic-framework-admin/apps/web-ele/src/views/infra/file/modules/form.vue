@@ -1,5 +1,10 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import type { UploadFile, UploadRawFile } from 'element-plus';
+
+/**
+ * 文件上传弹窗：选择本地文件后上传，并回传服务器返回的文件访问地址。
+ */
+import type { ComponentType } from '#/adapter/component';
 
 import { useVbenModal } from '@vben/common-ui';
 
@@ -12,9 +17,14 @@ import { showSuccessMessage, showWarningMessage } from '#/utils/feedback';
 
 import { useFormSchema } from '../data';
 
+/** 上传表单值：待上传的原始文件。 */
+type UploadForm = {
+  file: File;
+};
+
 const emit = defineEmits(['success']);
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, UploadForm>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -24,11 +34,17 @@ const [Form, formApi] = useVbenForm({
     hideLabel: true,
   },
   layout: 'horizontal',
-  schema: useFormSchema().map((item) => ({ ...item, label: '' })), // 去除label
+  schema: useFormSchema().map(
+    // 上传区不需要字段标签：表单项本身就是上传控件。
+    (item) => ({ ...item, label: '' }),
+  ),
   showDefaultActions: false,
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 提交待上传文件：未选择文件时直接返回，避免提交空文件请求。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -100,5 +116,3 @@ function beforeUpload(_rawFile: UploadRawFile) {
     </Form>
   </Modal>
 </template>
-
-

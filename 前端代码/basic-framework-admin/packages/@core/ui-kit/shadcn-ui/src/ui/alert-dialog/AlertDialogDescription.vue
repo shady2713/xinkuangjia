@@ -1,13 +1,17 @@
 <script lang="ts" setup>
 import type { AlertDialogDescriptionProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { AlertDialogDescription, useForwardProps } from 'reka-ui';
 
-const props = defineProps<AlertDialogDescriptionProps & { class?: any }>();
+const props = defineProps<
+  AlertDialogDescriptionProps & { class?: ClassValue }
+>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

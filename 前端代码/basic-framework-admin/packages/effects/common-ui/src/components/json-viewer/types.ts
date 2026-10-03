@@ -1,6 +1,11 @@
 export interface JsonViewerProps {
-  /** 要展示的结构数据 */
-  value: any;
+  /**
+   * 要展示的结构数据
+   *
+   * 允许任意 JSON 可表示的取值（对象、数组、字符串、数字、布尔、null），
+   * 展示组件只负责渲染而不解释业务含义，因此按 unknown 接收。
+   */
+  value: unknown;
   /** 展开深度 */
   expandDepth?: number;
   /** 是否可复制 */
@@ -30,7 +35,13 @@ export interface JsonViewerAction {
 }
 
 export interface JsonViewerValue {
-  value: any;
+  /**
+   * 被点击节点的原始值
+   *
+   * 由节点文本 JSON.parse 得到，解析失败时可能为 undefined；
+   * 形状完全取决于被查看的数据，调用方需自行收窄。
+   */
+  value: unknown;
   path: string;
   depth: number;
   el: HTMLElement;

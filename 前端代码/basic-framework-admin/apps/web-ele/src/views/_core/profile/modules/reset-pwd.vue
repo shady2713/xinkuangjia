@@ -1,15 +1,26 @@
 <script setup lang="ts">
-import type { Recordable } from '@vben/types';
+/** 个人改密成功后结束全部旧会话；迟到响应由认证 Store 校验身份。 */
+import type { ComponentType } from '#/adapter/component';
+import type { SystemUserProfileApi } from '#/api/system/user/profile';
 
 import { $t } from '@vben/locales';
-import { logError, md5 } from '@vben/utils';
+import { logError } from '@vben/utils';
 
 import { ElMessage } from 'element-plus';
 
-import { buildLoginPasswordSchema, buildRequiredPasswordSchema, useVbenForm } from '#/adapter/form';
-import { updateUserPassword } from '#/api/system/user/profile';
+import {
+  buildLoginPasswordSchema,
+  buildRequiredPasswordSchema,
+  useVbenForm,
+} from '#/adapter/form';
+import { useAuthStore } from '#/store';
 
-const [Form, formApi] = useVbenForm({
+const authStore = useAuthStore();
+
+const [Form, formApi] = useVbenForm<
+  ComponentType,
+  SystemUserProfileApi.UpdatePasswordReqVO
+>({
   commonConfig: {
     labelWidth: 70,
   },
@@ -71,12 +82,15 @@ const [Form, formApi] = useVbenForm({
   handleSubmit,
 });
 
-async function handleSubmit(values: Recordable<any>) {
+/** 提交表单并退出修改密码时的身份，失败时保留可重试的表单。
+ * @param values 已通过密码一致性校验的表单值。
+ */
+async function handleSubmit(values: SystemUserProfileApi.UpdatePasswordReqVO) {
   try {
     formApi.setLoading(true);
-    await updateUserPassword({
-      oldPassword: md5(values.oldPassword),
-      newPassword: md5(values.newPassword),
+    await authStore.changePassword({
+      oldPassword: values.oldPassword ?? '',
+      newPassword: values.newPassword ?? '',
     });
     ElMessage.success($t('ui.actionMessage.operationSuccess'));
   } catch (error) {

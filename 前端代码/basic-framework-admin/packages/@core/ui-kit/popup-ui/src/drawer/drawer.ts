@@ -133,7 +133,7 @@ export interface DrawerState extends DrawerProps {
   /**
    * 共享数据
    */
-  sharedData?: Record<string, any>;
+  sharedData?: Record<string, unknown>;
 }
 
 export type ExtendedDrawerApi = DrawerApi & {

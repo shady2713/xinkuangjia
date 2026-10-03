@@ -1,6 +1,9 @@
+/** 折叠展开计算：依据容器可视高度决定哪些表单项保持展开。 */
+import type { Ref } from 'vue';
+
 import type { FormRenderProps } from '../types';
 
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 import {
   breakpointsTailwind,
@@ -9,10 +12,15 @@ import {
 } from '@vueuse/core';
 
 /**
- * 动态计算行数
+ * 依据容器可视高度计算哪些表单项保持展开。
+ * @param props 表单渲染属性。
+ * @param wrapperRef 表单容器引用，由调用方从模板取得。
+ * @returns 是否已完成行数计算、保持展开的表单项索引集合，以及按级别展开的方法。
  */
-export function useExpandable(props: FormRenderProps) {
-  const wrapperRef = useTemplateRef<HTMLElement>('wrapperRef');
+export function useExpandable(
+  props: FormRenderProps,
+  wrapperRef: Readonly<Ref<HTMLElement | null>>,
+) {
   const isVisible = useElementVisibility(wrapperRef);
   const rowMapping = ref<Record<number, number>>({});
   // 是否已经计算过一次

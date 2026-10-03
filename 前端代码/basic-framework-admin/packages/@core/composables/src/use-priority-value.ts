@@ -8,53 +8,87 @@ import {
 } from '@vben-core/shared/utils';
 
 /**
+ * 按字段名从外部状态中读取值。
+ * @description state 的实际类型与 props 无关，两个泛型之间无法直接互转键名，
+ * 因此这里按字符串键只读自有属性，字段不存在时返回 undefined。
+ * @param source 外部状态对象，可为空
+ * @param key 字段名
+ * @returns 字段值；对象为空或字段不存在时为 undefined
+ */
+function readStateValue(source: object | undefined, key: string): unknown {
+  if (!source || !Object.hasOwn(source, key)) {
+    return undefined;
+  }
+  return Object.getOwnPropertyDescriptor(source, key)?.value;
+}
+
+/**
  * 依次从插槽、attrs、props、state 中获取值
- * @param key
- * @param props
- * @param state
+ * @description 泛型约束只要求 props/state 是对象，不使用索引签名，
+ * 否则 Dept[]、Menu[] 这类数组 state 会因为缺少字符串索引签名而无法传入。
+ * @param key 要读取的字段名
+ * @param props 组件声明的 props
+ * @param state 外部状态，可为空
+ * @returns 按 插槽 > attrs > props > state 优先级解析出的字段值
  */
 export function usePriorityValue<
-  T extends Record<string, any>,
-  S extends Record<string, any>,
+  T extends object,
+  S extends object,
   K extends keyof T = keyof T,
 >(key: K, props: T, state: Readonly<Ref<NoInfer<S>>> | undefined) {
-  const instance = getCurrentInstance();
-  const slots = useSlots();
-  const attrs = useAttrs() as T;
-
-  const value = computed((): T[K] => {
-    // props不管有没有传，都会有默认值，会影响这里的顺序，
-    // 通过判断原始props是否有值来判断是否传入
-    const rawProps = (instance?.vnode?.props || {}) as T;
-
-    const standardRawProps = {} as T;
-
-    for (const [key, value] of Object.entries(rawProps)) {
-      standardRawProps[kebabToCamelCase(key) as K] = value;
-    }
-    const propsKey =
-      standardRawProps?.[key] === undefined ? undefined : props[key];
-
-    // slot可以关闭
-    return getFirstNonNullOrUndefined(
-      slots[key as string],
-      attrs[key],
-      propsKey,
-      state?.value?.[key as keyof S],
-    ) as T[K];
-  });
-
+  /** 任一来源（插槽/attrs/props/state）变化都会重新解析出该字段的值。 */
+  const resolve = (): T[K] => resolvePriorityValue(key, props, state);
+  const value = computed(resolve);
   return value;
 }
 
 /**
+ * 按 插槽 > attrs > props > state 的顺序解析出字段值。
+ * @description 抽成具名函数以便单测直接覆盖各来源的优先级；slot 可以关闭。
+ * @param key 要读取的字段名
+ * @param props 组件声明的 props
+ * @param state 外部状态，可为空
+ * @returns 第一个非 null/undefined 的来源值；全部为空时为 undefined
+ */
+function resolvePriorityValue<
+  T extends object,
+  S extends object,
+  K extends keyof T,
+>(key: K, props: T, state: Readonly<Ref<NoInfer<S>>> | undefined): T[K] {
+  const instance = getCurrentInstance();
+  const slots = useSlots();
+  const attrs = useAttrs() as T;
+
+  // props不管有没有传，都会有默认值，会影响这里的顺序，
+  // 通过判断原始props是否有值来判断是否传入
+  const rawProps = (instance?.vnode?.props || {}) as T;
+
+  const standardRawProps = {} as T;
+
+  for (const [rawKey, rawValue] of Object.entries(rawProps)) {
+    standardRawProps[kebabToCamelCase(rawKey) as K] = rawValue;
+  }
+  const propsKey =
+    standardRawProps?.[key] === undefined ? undefined : props[key];
+
+  // 四个来源的值类型互不相同，这里统一按 unknown 收集后回落到 T[K]
+  return getFirstNonNullOrUndefined<unknown>(
+    slots[key as string],
+    attrs[key],
+    propsKey,
+    readStateValue(state?.value, key as string),
+  ) as T[K];
+}
+
+/**
  * 批量获取state中的值（每个值都是ref）
- * @param props
- * @param state
+ * @param props 组件声明的 props，字段名决定返回对象的键
+ * @param state 外部状态，可为空
+ * @returns 与 props 字段一一对应的 ComputedRef 映射
  */
 export function usePriorityValues<
-  T extends Record<string, any>,
-  S extends Ref<Record<string, any>> = Readonly<Ref<NoInfer<T>, NoInfer<T>>>,
+  T extends object,
+  S extends Ref<object> = Readonly<Ref<NoInfer<T>, NoInfer<T>>>,
 >(props: T, state: S | undefined) {
   const result: { [K in keyof T]: ComputedRef<T[K]> } = {} as never;
 
@@ -66,29 +100,42 @@ export function usePriorityValues<
 }
 
 /**
+ * 解包一批 ComputedRef，得到与 props 字段一一对应的普通对象。
+ * @description 供 useForwardPriorityValues 聚合成单个 computed 透传时使用。
+ * @param source ComputedRef 映射
+ * @returns 解包后的普通对象
+ */
+function unwrapAll<T extends object>(source: {
+  [K in keyof T]: ComputedRef<T[K]>;
+}): { [K in keyof T]: T[K] } {
+  const unwrapResult: Record<string, unknown> = {};
+  for (const key of Object.keys(source) as (keyof T)[]) {
+    unwrapResult[key as string] = unref(source[key]);
+  }
+  return unwrapResult as { [K in keyof T]: T[K] };
+}
+
+/**
  * 批量获取state中的值（集中在一个computed，用于透传）
- * @param props
- * @param state
+ * @param props 组件声明的 props，字段名决定返回对象的键
+ * @param state 外部状态，可为空
+ * @returns 单个 ComputedRef，解包后为与 props 字段一一对应的普通对象
  */
 export function useForwardPriorityValues<
-  T extends Record<string, any>,
-  S extends Ref<Record<string, any>> = Readonly<Ref<NoInfer<T>, NoInfer<T>>>,
+  T extends object,
+  S extends Ref<object> = Readonly<Ref<NoInfer<T>, NoInfer<T>>>,
 >(props: T, state: S | undefined) {
   const computedResult: { [K in keyof T]: ComputedRef<T[K]> } = {} as never;
 
-  (Object.keys(props) as (keyof T)[]).forEach((key) => {
+  for (const key of Object.keys(props) as (keyof T)[]) {
     computedResult[key] = usePriorityValue(
       key as keyof typeof props,
       props,
       state,
     );
-  });
+  }
 
-  return computed(() => {
-    const unwrapResult: Record<string, any> = {};
-    Object.keys(props).forEach((key) => {
-      unwrapResult[key] = unref(computedResult[key]);
-    });
-    return unwrapResult as { [K in keyof T]: T[K] };
-  });
+  /** 聚合成单个 computed 透传；任一字段的来源变化都会触发整体重新解包。 */
+  const forward = () => unwrapAll(computedResult);
+  return computed(forward);
 }

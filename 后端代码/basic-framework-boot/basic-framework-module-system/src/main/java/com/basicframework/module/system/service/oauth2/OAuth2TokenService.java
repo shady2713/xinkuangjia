@@ -18,7 +18,8 @@ public interface OAuth2TokenService {
     /**
      * 创建访问令牌。
      * <p>
-     * 创建访问令牌时会同步创建刷新令牌。
+     * 创建访问令牌时会同步创建刷新令牌。本方法是可信内部签发能力，不能直接公开为 HTTP 接口。
+     * 调用方必须在同一事务内完成身份验证；真实管理员签发与改密共用用户行锁。
      *
      * @param userId   用户编号
      * @param userType 用户类型
@@ -38,7 +39,7 @@ public interface OAuth2TokenService {
     OAuth2AccessTokenDO refreshAccessToken(String refreshToken, String clientId);
 
     /**
-     * 获取访问令牌。
+     * 从数据库权威会话记录获取访问令牌，不接受缓存残留作为身份依据。
      *
      * @param accessToken 访问令牌
      * @return 访问令牌信息
@@ -62,7 +63,7 @@ public interface OAuth2TokenService {
     OAuth2AccessTokenDO removeAccessToken(String accessToken);
 
     /**
-     * 移除指定用户的访问令牌和关联刷新令牌。
+     * 在同一事务内撤销指定用户全部访问和刷新会话，包括孤立刷新令牌。
      *
      * @param userId   用户编号
      * @param userType 用户类型

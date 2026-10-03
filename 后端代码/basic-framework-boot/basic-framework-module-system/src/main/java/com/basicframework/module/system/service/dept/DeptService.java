@@ -107,10 +107,10 @@ public interface DeptService {
     List<DeptDO> getDeptListByLeaderUserId(Long id);
 
     /**
-     * 获取指定部门及其所有子部门编号（优先从缓存读取）。
+     * 内部权限计算读取指定根部门所属平台的子部门编号（优先从缓存读取），不含根部门本身。
      *
      * @param id 部门编号
-     * @return 子部门编号集合
+     * @return 与根同平台的子部门编号集合；根不存在时返回空集合，不按调用者平台改变缓存内容
      */
     Set<Long> getChildDeptIdListFromCache(Long id);
 

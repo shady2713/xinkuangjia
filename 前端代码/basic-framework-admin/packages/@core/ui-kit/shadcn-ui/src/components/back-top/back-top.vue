@@ -8,7 +8,8 @@ import { ArrowUpToLine } from '@vben-core/icons';
 import { VbenButton } from '../button';
 import { useBackTop } from './use-backtop';
 
-interface Props extends BacktopProps {}
+/** 回到顶部按钮的属性契约别名：直接复用按钮属性，不额外声明成员。 */
+type Props = BacktopProps;
 
 defineOptions({ name: 'BackTop' });
 

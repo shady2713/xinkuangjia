@@ -15,7 +15,8 @@ import { Form } from './form-render';
 import { provideFormProps, useFormInitial } from './use-form-context';
 
 // 使用 extends 会导致热更新异常，这里显式展开定义。
-interface Props extends VbenFormProps {}
+/** 表单组件的属性契约别名：直接复用通用表单属性，不额外声明成员。 */
+type Props = VbenFormProps;
 const props = withDefaults(defineProps<Props>(), {
   actionWrapperClass: '',
   collapsed: false,

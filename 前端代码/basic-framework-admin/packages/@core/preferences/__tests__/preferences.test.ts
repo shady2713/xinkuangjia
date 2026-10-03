@@ -1,10 +1,19 @@
+/**
+ * 偏好管理器（PreferenceManager）的行为规格。
+ *
+ * 覆盖三组职责：构造时按 overrides 初始化、updatePreferences 的增量合并与
+ * 字段校验边界（未定义值不写入、schema 外字段被丢弃）、以及主题色与暗色判定的派生计算。
+ * 用例以真实状态断言为主，只有 matchMedia 为 jsdom 缺失的浏览器 API，单独用 vi.stubGlobal 兜底。
+ */
+import type { DeepPartial, Preferences } from '../src/types';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultPreferences } from '../src/config';
 import { PreferenceManager } from '../src/preferences';
 import { isDarkTheme } from '../src/update-css-variables';
 
-describe('preferences', () => {
+describe('preferences', /** 偏好管理器的行为规格：初始化覆盖、增量更新、类型与字段校验、主题色计算。 */ () => {
   let preferenceManager: PreferenceManager;
 
   // 模拟 window.matchMedia 方法
@@ -30,8 +39,8 @@ describe('preferences', () => {
     expect(preferences).toEqual(defaultPreferences);
   });
 
-  it('initializes preferences with overrides', async () => {
-    const overrides: any = {
+  it('initializes preferences with overrides', /** 初始化时按 overrides 覆盖对应偏好，未提及的字段保持默认值。 */ async () => {
+    const overrides: DeepPartial<Preferences> = {
       app: {
         locale: 'en-US',
       },
@@ -55,8 +64,7 @@ describe('preferences', () => {
     expect(preferenceManager.getPreferences()).toEqual(expected);
   });
 
-
-  it('updates theme mode correctly', () => {
+  it('updates theme mode correctly', /** 增量更新只改写 theme.mode，其余偏好保持默认值不变。 */ () => {
     preferenceManager.updatePreferences({
       theme: {
         mode: 'light',
@@ -134,13 +142,13 @@ describe('preferences', () => {
 
     expect(preferenceManager.getPreferences().sidebar.collapsed).toBe(true);
   });
-  it('updates the navigation style type correctly', () => {
+  it('updates the navigation style type correctly', /** NavigationStyleType 只接受 plain 与 rounded，默认值是 rounded，这里改为 plain。 */ () => {
     preferenceManager.updatePreferences({
-      navigation: { styleType: 'flat' },
-    } as any);
+      navigation: { styleType: 'plain' },
+    });
 
     expect(preferenceManager.getPreferences().navigation.styleType).toBe(
-      'flat',
+      'plain',
     );
   });
 
@@ -160,12 +168,12 @@ describe('preferences', () => {
     expect(preferenceManager.getPreferences()).toEqual(defaultPreferences);
   });
 
-  it('does not update undefined preferences', () => {
+  it('does not update undefined preferences', /** 故意传入 schema 中不存在的字段，验证它不会被写入状态。 */ () => {
     const originalPreferences = preferenceManager.getPreferences();
 
-    preferenceManager.updatePreferences({
-      app: { nonexistentField: 'value' },
-    } as any);
+    // 先绑定到变量再传入，可绕开对象字面量的多余属性检查，从而无需断言类型。
+    const updateWithUnknownField = { app: { nonexistentField: 'value' } };
+    preferenceManager.updatePreferences(updateWithUnknownField);
 
     expect(preferenceManager.getPreferences()).toEqual(originalPreferences);
   });
@@ -208,8 +216,8 @@ describe('preferences', () => {
     expect(preferenceManager.getPreferences()).toEqual(expected);
   });
 
-  it('applies updates immediately after initialization', async () => {
-    const overrides: any = {
+  it('applies updates immediately after initialization', /** 初始化完成后立即提交的更新同样生效，无需再次初始化。 */ async () => {
+    const overrides: DeepPartial<Preferences> = {
       app: {
         locale: 'en-US',
       },

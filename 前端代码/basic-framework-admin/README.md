@@ -77,6 +77,7 @@ pnpm dev:ele
 | 命令 | 用途 |
 | --- | --- |
 | `pnpm check:type` | 工作区 TypeScript 类型检查 |
+| `python -B -X utf8 scripts/quality/check_crud.py <api-path> <views-path>` | 完整 CRUD 的文件、导入边界、应用类型与模块 ESLint；环境缺失不能通过 |
 | `pnpm lint` | ESLint、Prettier、Stylelint 检查；不加 --format 不自动修复 |
 | `pnpm quality:comments` | 当前变更中文职责注释检查 |
 | `pnpm quality:workspace` | workspace 和 catalog 约束 |

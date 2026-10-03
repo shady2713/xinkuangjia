@@ -21,7 +21,8 @@ const {
 
 const emit = defineEmits<{
   complete: [];
-  sendError: [error: any];
+  /** 发送验证码失败；载荷是捕获到的原始异常，类型未知，由使用方自行收窄 */
+  sendError: [error: unknown];
 }>();
 
 const timer = ref<ReturnType<typeof setTimeout>>();

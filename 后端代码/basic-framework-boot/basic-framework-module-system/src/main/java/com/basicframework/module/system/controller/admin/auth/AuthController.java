@@ -98,14 +98,14 @@ public class AuthController {
     }
 
     /**
-     * 使用受控分享票据登录。
+     * 为旧分享链接返回已停用的业务错误，不签发身份。
      *
      * @param ticket 分享票据
-     * @return 分享登录结果
+     * @return 当前入口始终由业务异常返回分享登录未开放
      */
     @PostMapping("/share-login")
     @PermitAll
-    @Operation(summary = "使用固定分享码自动登录")
+    @Operation(summary = "分享登录（已停用）")
     @Parameter(name = "ticket", description = "固定分享码", required = true)
     public CommonResult<AuthShareLoginRespVO> shareLogin(@RequestParam("ticket") String ticket) {
         return success(authService.shareLogin(ticket));

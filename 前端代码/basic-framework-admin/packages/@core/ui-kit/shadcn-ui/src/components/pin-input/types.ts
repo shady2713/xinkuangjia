@@ -1,5 +1,8 @@
+/** 验证码输入组件的属性契约：集中声明长度、倒计时文案、发送逻辑与重试上限等外部可配项。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 interface PinInputProps {
-  class?: any;
+  class?: ClassValue;
   /**
    * 验证码长度
    */

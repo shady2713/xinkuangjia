@@ -12,6 +12,10 @@ import { requestClient } from '#/api/request';
 defineOptions({ name: 'DeptSelect' });
 
 const props = withDefaults(defineProps<Props>(), {
+  // 注入上下文缺省为空对象，读取方无需再判空。
+  formCreateInject: () => ({}),
+  // 未选中任何部门时保持未设置，不要退化成空串或空数组。
+  modelValue: undefined,
   multiple: false,
   returnType: 'id',
   defaultCurrentDept: false,
@@ -39,10 +43,15 @@ interface DeptVO {
   status?: number;
 }
 
+/** 部门树节点：在接口返回的部门字段上由 handleTree 补出子节点数组 */
+interface DeptTreeNode extends DeptVO {
+  children?: DeptTreeNode[];
+}
+
 /** 接受父组件参数 */
 interface Props {
   /** 当前选中的部门，支持 v-model；multiple 为 true 时传数组 */
-  modelValue?: number | number[] | string | string[];
+  modelValue?: null | number | number[] | string | string[];
   /** 是否允许多选 */
   multiple?: boolean;
   /** 返回值口径：'id' 返回部门主键，'name' 返回部门名称，默认 'id' */
@@ -64,7 +73,7 @@ const treeProps = {
   children: 'children',
 };
 
-const deptTree = ref<any[]>([]); // 部门树形数据
+const deptTree = ref<DeptTreeNode[]>([]); // 部门树形数据
 const deptList = ref<DeptVO[]>([]); // 原始部门列表（用于 returnType='name' 时查找名称）
 const selectedValue = ref<number | number[] | undefined>(); // 当前选中值
 
@@ -124,7 +133,7 @@ function handleChange(value: number | number[] | undefined): void {
 /** 树节点过滤方法（支持搜索过滤） */
 function filterNode(
   value: string,
-  data: { label?: string; name?: string; children?: unknown[] },
+  data: { children?: unknown[]; label?: string; name?: string },
 ): boolean {
   if (!value) return true;
   return !!data.name?.toLowerCase().includes(value.toLowerCase());

@@ -1,4 +1,5 @@
-import type { ButtonProps } from 'element-plus';
+/** 表格操作按钮的类型契约：按钮属性、权限编码、显示条件与二次确认配置。 */
+import type { ButtonProps, ElTooltipProps } from 'element-plus';
 
 export type ButtonType =
   | 'danger'
@@ -32,5 +33,9 @@ export interface ActionItem extends Partial<ButtonProps> {
   auth?: string[];
   // 业务控制是否显示
   ifShow?: ((action: ActionItem) => boolean) | boolean;
-  tooltip?: string | { [key: string]: any; content?: string };
+  /**
+   * 提示文案。可直接给字符串；给对象时整体透传给 ElTooltip，
+   * 其中 content 为必填提示文案，其余为 ElTooltip 支持的属性（如 placement、effect）。
+   */
+  tooltip?: (ElTooltipProps & { content: string }) | string;
 }

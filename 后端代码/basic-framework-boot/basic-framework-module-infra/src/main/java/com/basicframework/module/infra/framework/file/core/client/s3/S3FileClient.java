@@ -118,6 +118,8 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .region(region)
                 .endpointOverride(endpoint)
                 .serviceConfiguration(serviceConfiguration)
+                .overrideConfiguration(builder -> builder.apiCallTimeout(Duration.ofSeconds(30))
+                        .apiCallAttemptTimeout(Duration.ofSeconds(10)))
                 .build();
         try {
             S3Presigner newPresigner = S3Presigner.builder()
@@ -172,6 +174,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .bucket(config.getBucket())
                 .key(path)
                 .contentType(type)
+                .contentDisposition(type != null && type.startsWith("image/") ? "inline" : "attachment")
                 .contentLength((long) content.length)
                 .build();
         // 上传文件
@@ -195,19 +198,42 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
-     * 读取指定对象的完整字节内容。
-     *
+     * 读取普通下载内容，使用 32 MiB 上限避免无界堆分配；更大文件应使用流式交付。
      * @param path 对象路径
      * @return 文件字节内容
+     * @throws IOException 对象超限或读取失败
      */
     @Override
     public byte[] getContent(String path) throws IOException {
+        return getContent(path, 32 * 1024 * 1024);
+    }
+
+    /**
+     * 根据响应长度及实际读取双重限制下载大小，并在所有结果下关闭响应流。
+     * @param path 对象路径
+     * @param maximumBytes 最大字节数，1 至 32 MiB
+     * @return 未超过上限的完整内容
+     * @throws IOException 响应声明或实际内容超过上限、读取失败
+     */
+    @Override
+    public byte[] getContent(String path, int maximumBytes) throws IOException {
+        if (maximumBytes < 1 || maximumBytes > 32 * 1024 * 1024) {
+            throw new IllegalArgumentException("文件读取上限必须在 1 至 32 MiB 之间");
+        }
         GetObjectRequest getRequest = GetObjectRequest.builder()
-                .bucket(config.getBucket())
-                .key(path)
-                .build();
+                .bucket(config.getBucket()).key(path).build();
         try (ResponseInputStream<GetObjectResponse> inputStream = client.getObject(getRequest)) {
-            return inputStream.readAllBytes();
+            Long declared = inputStream.response().contentLength();
+            if (declared != null && declared > maximumBytes) {
+                inputStream.abort();
+                throw new IOException("对象大小超过预约上限");
+            }
+            byte[] content = inputStream.readNBytes(maximumBytes + 1);
+            if (content.length > maximumBytes) {
+                inputStream.abort();
+                throw new IOException("对象实际内容超过预约上限");
+            }
+            return content;
         }
     }
 
@@ -290,16 +316,22 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
-     * 生成有效期为 24 小时的对象上传预签名地址。
+     * 生成五分钟上传地址，绑定大小和下载为附件的元数据，暂存内容不以内联页面展示。
      *
      * @param path 对象路径
+     * @param size 签名绑定的精确字节数
      * @return 上传预签名地址
      */
     @Override
-    public String presignPutUrl(String path) {
+    public String presignPutUrl(String path, long size) {
+        if (size < 1 || size > 32 * 1024 * 1024) {
+            throw new IllegalArgumentException("上传大小必须在 1 至 32 MiB 之间");
+        }
         return presigner.presignPutObject(PutObjectPresignRequest.builder()
-                .signatureDuration(EXPIRATION_DEFAULT)
-                .putObjectRequest(b -> b.bucket(config.getBucket()).key(path)).build())
+                .signatureDuration(Duration.ofMinutes(5))
+                .putObjectRequest(b -> b.bucket(config.getBucket()).key(path)
+                        .contentLength(size).contentType("application/octet-stream")
+                        .contentDisposition("attachment")).build())
                 .url().toString();
     }
 

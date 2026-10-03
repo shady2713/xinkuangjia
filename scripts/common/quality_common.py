@@ -16,9 +16,11 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
+
+from scripts.common.check_protocol import payload
 
 # 质量入口只维护 Python 源码，导入及派生检查不在 scripts 下生成字节码。
 sys.dont_write_bytecode = True
@@ -49,6 +51,10 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 class CheckError(RuntimeError):
     """表示检查无法完成的环境、输入或解析错误，退出码为 2。"""
+
+
+class CheckTimeout(CheckError):
+    """表示子进程已超过约定时限并完成终止，不能等同于规则检查失败。"""
 
 
 @dataclass(frozen=True)
@@ -152,7 +158,7 @@ def run_process(
             stderr.seek(0)
             return ProcessResult(process.returncode, stdout.read(), stderr.read())
     except subprocess.TimeoutExpired as exc:
-        raise CheckError(f"子进程超过 {timeout:g} 秒，已终止") from exc
+        raise CheckTimeout(f"子进程超过 {timeout:g} 秒，已终止") from exc
     except OSError as exc:
         raise CheckError(f"无法启动子进程 {arguments[0]}：{exc}") from exc
 
@@ -264,12 +270,7 @@ def report(name: str, checked: int, findings: list[Finding], *, as_json: bool) -
     if as_json:
         print(
             json.dumps(
-                {
-                    "check": name,
-                    "checked": checked,
-                    "findings": [asdict(f) for f in findings],
-                    "status": "failed" if findings else "passed",
-                },
+                payload(name, checked, findings),
                 ensure_ascii=False,
             )
         )

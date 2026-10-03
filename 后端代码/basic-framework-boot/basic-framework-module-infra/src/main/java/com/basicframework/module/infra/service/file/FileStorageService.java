@@ -51,6 +51,15 @@ public interface FileStorageService {
     byte[] getContent(String path) throws Exception;
 
     /**
+     * 有界读取待验证对象；实现不得先无界读取再检查长度。
+     * @param path 对象键
+     * @param maximumBytes 允许的最大字节数
+     * @return 完整且未超过限制的字节
+     * @throws Exception 对象不存在、超限或存储故障
+     */
+    byte[] getContent(String path, int maximumBytes) throws Exception;
+
+    /**
      * 复制文件。
      *
      * @param sourcePath 来源对象路径
@@ -84,9 +93,10 @@ public interface FileStorageService {
      * 生成上传地址。
      *
      * @param path 对象路径
+     * @param size 签名绑定的精确字节数；上传有效期五分钟
      * @return 预签名上传地址
      */
-    String presignPutUrl(String path);
+    String presignPutUrl(String path, long size);
 
     /**
      * 生成读取地址。

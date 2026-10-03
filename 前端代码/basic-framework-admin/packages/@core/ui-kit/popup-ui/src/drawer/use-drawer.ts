@@ -21,12 +21,31 @@ import VbenDrawer from './drawer.vue';
 
 const USER_DRAWER_INJECT_KEY = Symbol('VBEN_DRAWER_INJECT');
 
+/** connectedComponent 模式下由父组件 provide、内层抽屉 inject 的连接信息。 */
+interface UserDrawerInjectData {
+  /** 内层抽屉创建时用来接管 api 原型的方法。 */
+  extendApi?: (api: ExtendedDrawerApi) => void;
+  /** 父组件为该抽屉声明的默认配置，会被内层自己的 options 覆盖。 */
+  options: DrawerApiOptions;
+  /** 强制卸载并重建内层抽屉组件，用于 destroyOnClose 后清空内部状态。 */
+  reCreateDrawer?: () => Promise<void>;
+}
+
 const DEFAULT_DRAWER_PROPS: Partial<DrawerProps> = {};
 
 export function setDefaultDrawerProps(props: Partial<DrawerProps>) {
   Object.assign(DEFAULT_DRAWER_PROPS, props);
 }
 
+/**
+ * 声明一个受控抽屉组件及其命令式 API。
+ *
+ * 传入 connectedComponent 表示抽屉被抽离为独立组件，此时由外层通过 provide/inject
+ * 把 API 交接给内层抽屉；否则在本组件内直接创建 API。
+ *
+ * @param options 抽屉初始状态与各类生命周期回调
+ * @returns 抽屉组件与对应 API 的二元组，可在模板中解构使用
+ */
 export function useVbenDrawer<
   TParentDrawerProps extends DrawerProps = DrawerProps,
 >(options: DrawerApiOptions = {}) {
@@ -74,7 +93,10 @@ export function useVbenDrawer<
     return [Drawer, extendedApi as ExtendedDrawerApi] as const;
   }
 
-  const injectData = inject<any>(USER_DRAWER_INJECT_KEY, {});
+  // 没有 connectedComponent 时不存在父级注入，退化为空的默认配置而不是 undefined。
+  const injectData = inject<UserDrawerInjectData>(USER_DRAWER_INJECT_KEY, {
+    options: {},
+  });
 
   const mergedOptions = {
     ...DEFAULT_DRAWER_PROPS,
@@ -121,7 +143,19 @@ export function useVbenDrawer<
   return [Drawer, extendedApi] as const;
 }
 
-async function checkProps(api: ExtendedDrawerApi, attrs: Record<string, any>) {
+/**
+ * 校验 connectedComponent 模式下外部传入的 props 是否与抽屉状态键冲突。
+ *
+ * props、attrs 与 slots 会被合并后透传给内部抽屉，若其中包含状态字段会绕过 api 直接改状态，
+ * 导致回调与状态不同步，因此这里逐个比对并告警。只提示不阻断，保持向后兼容。
+ *
+ * @param api 内层抽屉暴露的 api，用于读取当前状态键集合
+ * @param attrs 外部组件实际传入的 props、attrs 与 slots 合并结果
+ */
+async function checkProps(
+  api: ExtendedDrawerApi,
+  attrs: Record<string, unknown>,
+) {
   if (!attrs || Object.keys(attrs).length === 0) {
     return;
   }

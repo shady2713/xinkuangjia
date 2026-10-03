@@ -8,9 +8,11 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.net.URI;
 
 /**
  * Web 自动配置参数
@@ -42,10 +44,39 @@ public class WebProperties {
     private Ui adminUi;
 
     /**
-     * CORS 允许的源地址列表，支持 Ant 风格通配符
-     * 生产环境应配置为具体域名
+     * CORS 精确源白名单；默认不允许跨域，不接受通配符或含路径的 URL。
      */
-    private List<String> corsAllowedOrigins = List.of("*");
+    @NotNull
+    private List<String> corsAllowedOrigins = List.of();
+
+    /**
+     * 拒绝无法作为浏览器 Origin 精确比较的配置，避免通配符扩大信任范围。
+     *
+     * @return 空列表或全部为 http(s) 源时为 true；非法项使配置绑定失败
+     */
+    @AssertTrue(message = "CORS 仅允许精确 http(s) 源，禁止通配符、路径及用户信息")
+    public boolean isCorsAllowedOriginsValid() {
+        if (corsAllowedOrigins == null) {
+            return false;
+        }
+        return corsAllowedOrigins.stream().allMatch(WebProperties::isExactOrigin);
+    }
+
+    /** 校验源的协议、主机及可选端口，拒绝路径、查询、片段和用户信息。 */
+    private static boolean isExactOrigin(String origin) {
+        if (origin == null || origin.isBlank()) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(origin);
+            return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
+                    && uri.getHost() != null && uri.getUserInfo() == null
+                    && uri.getPort() >= -1 && uri.getPort() != 0 && uri.getPort() <= 65535
+                    && origin.equals(uri.getScheme() + "://" + uri.getRawAuthority());
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
 
     /**
      * API 路径映射配置

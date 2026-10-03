@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -12,8 +12,8 @@ import { DictTag } from '#/components/dict-tag';
 import { getRangePickerDefaultProps } from '#/utils';
 
 type OperateLogDetail = {
-  traceId?: string;
   requestMethod?: string;
+  traceId?: string;
 };
 
 /** 列表的搜索表单 */
@@ -133,6 +133,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
 }
 
 /** 详情页的字段 */
+/**
+ * 构造操作日志详情的描述项。
+ * @returns 操作日志详情页的描述项定义数组。
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -142,7 +146,12 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'traceId',
       label: '链路追踪',
-      show: (...args) => !((args[0] as OperateLogDetail | undefined)?.traceId),
+      /**
+       * 列表页没有链路号，只有详情数据里才有，因此按行数据决定是否显示该列。
+       * @param args vxe-table 传入的显示回调参数，首个参数是当前行数据。
+       * @returns 隐藏该列时返回 true。
+       */
+      show: (...args) => !(args[0] as OperateLogDetail | undefined)?.traceId,
     },
     {
       field: 'userId',
@@ -151,8 +160,16 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'userType',
       label: '操作人类型',
+      /**
+       * 操作人类型是字典值，渲染成标签便于区分用户与自动化任务。
+       * @param val 当前单元格的字典值。
+       * @returns 字典标签节点。
+       */
       render: (val) =>
-        h(DictTag, { type: DICT_TYPE.USER_TYPE, value: val as string | number | boolean }),
+        h(DictTag, {
+          type: DICT_TYPE.USER_TYPE,
+          value: val as boolean | number | string,
+        }),
     },
     {
       field: 'userName',
@@ -197,7 +214,13 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'createTime',
       label: '操作时间',
-      render: (val) => formatDateTime(val as Date | string | undefined) as string,
+      /**
+       * 操作时间按统一的日期时间格式展示，空值交给格式化函数兜底为空串。
+       * @param val 原始时间值，可能是 Date、字符串或空值。
+       * @returns 格式化后的日期时间文本。
+       */
+      render: (val) =>
+        formatDateTime(val as Date | string | undefined) as string,
     },
     {
       field: 'bizId',
@@ -205,4 +228,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

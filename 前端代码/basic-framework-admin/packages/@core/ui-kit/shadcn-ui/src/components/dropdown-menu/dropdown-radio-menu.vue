@@ -9,7 +9,8 @@ import {
   DropdownMenuTrigger,
 } from '../../ui';
 
-interface Props extends DropdownMenuProps {}
+/** 单选下拉菜单的属性契约别名：直接复用菜单属性，不额外声明成员。 */
+type Props = DropdownMenuProps;
 
 defineOptions({ name: 'DropdownRadioMenu' });
 withDefaults(defineProps<Props>(), {});

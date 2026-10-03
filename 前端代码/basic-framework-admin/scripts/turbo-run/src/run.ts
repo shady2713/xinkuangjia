@@ -6,6 +6,14 @@ interface RunOptions {
   command?: string;
 }
 
+/**
+ * 交互式选择并执行某个 workspace 包的 script。
+ *
+ * 只列出 package.json 中声明了该 script 的包；命中多个时让用户选择，命中唯一时直接执行，
+ * 一个都没有则以错误码 1 退出。命令通过 `pnpm --filter=<包名> run <command>` 执行。
+ *
+ * @param options 目标命令名；缺省时打印错误并退出
+ */
 export async function run(options: RunOptions) {
   const { command } = options;
   if (!command) {
@@ -14,10 +22,14 @@ export async function run(options: RunOptions) {
   }
   const { packages } = await getPackages();
 
-  // 只显示有对应命令的包
-  const selectPkgs = packages.filter((pkg) => {
-    return (pkg?.packageJson as Record<string, any>)?.scripts?.[command];
-  });
+  // 只显示有对应命令的包；@manypkg 读取的 packageJson 运行时含 scripts，但类型未声明该字段
+  const selectPkgs = packages.filter(
+    /** 判断该包是否声明了目标命令，用于过滤出真正可执行的包。 */
+    (pkg) =>
+      (pkg?.packageJson as { scripts?: Record<string, string> })?.scripts?.[
+        command
+      ],
+  );
 
   let selectPkg: string | symbol;
   if (selectPkgs.length > 1) {

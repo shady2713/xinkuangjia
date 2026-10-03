@@ -26,10 +26,12 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.dept.UserPostMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.framework.auth.config.AdminAuthenticationProperties;
 import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
+import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.mzt.logapi.context.LogRecordContext;
@@ -43,6 +45,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -86,6 +89,12 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Resource
     private ConfigApi configApi;
+
+    @Resource
+    private AdminAuthenticationProperties authenticationProperties;
+
+    @Resource
+    private ObjectProvider<OAuth2TokenService> oauth2TokenServiceProvider;
 
     /**
      * 创建用户。
@@ -136,7 +145,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public Long registerUser(AuthRegisterReqVO registerReqVO) {
         // 1.1 校验是否开启注册
-        if (ObjUtil.notEqual(configApi.getConfigValueByKey(USER_REGISTER_ENABLED_KEY), "true")) {
+        if (!authenticationProperties.isRegistrationEnabled()
+                || ObjUtil.notEqual(configApi.getConfigValueByKey(USER_REGISTER_ENABLED_KEY), "true")) {
             throw exception(USER_REGISTER_DISABLED);
         }
         // 1.2 校验正确性
@@ -166,6 +176,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void updateUser(UserSaveReqVO updateReqVO, String userType) {
         updateReqVO.setPassword(null); // 特殊：此处不更新密码
         String resolvedUserType = AdminPlatformTypeEnum.defaultType(userType);
+        // 与部门/平台迁移串行，避免通过可见性校验后目标又被移出授权范围。
+        lockUser(updateReqVO.getId());
         // 1. 校验正确性
         AdminUserDO oldUser = validateUserForCreateOrUpdate(updateReqVO.getId(), updateReqVO.getUsername(),
                 updateReqVO.getMobile(), updateReqVO.getEmail(), updateReqVO.getDeptId(), updateReqVO.getPostIds(),
@@ -247,65 +259,91 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验旧密码后更新个人密码，保留现有登录摘要与 BCrypt 存储口径。
+     * 锁定用户后校验旧密码、更新个人密码并撤销全部会话，要求重新登录。
      *
      * @param id 当前登录用户编号
      * @param reqVO 前端提交的新旧密码 MD5 摘要
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
         // 旧密码沿用当前登录协议的 MD5 摘要；校验失败时不得写入新密码。
-        validateOldPassword(id, reqVO.getOldPassword());
+        AdminUserDO user = lockUser(id);
+        if (!isPasswordMatch(reqVO.getOldPassword(), user.getPassword())) {
+            throw exception(USER_PASSWORD_FAILED);
+        }
         // 执行更新
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         // 新密码已由前端转换为 MD5，直接使用 BCrypt 存储，不能再次摘要导致与登录请求不一致。
         updateObj.setPassword(encodePassword(reqVO.getNewPassword()));
         userMapper.updateById(updateObj);
+        oauth2TokenServiceProvider.getObject().removeAccessToken(id, UserTypeEnum.ADMIN.getValue());
     }
 
     /**
-     * 更新用户密码。
+     * 更新用户密码并在同一事务中撤销其全部访问和刷新会话。
      *
      * @param id 主键编号
      * @param password password 参数
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password) {
         // 1. 校验用户存在
-        AdminUserDO user = validateUserExists(id);
+        AdminUserDO user = lockUser(id);
 
         // 2. 更新密码
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password)); // 加密密码
         userMapper.updateById(updateObj);
+        oauth2TokenServiceProvider.getObject().removeAccessToken(id, UserTypeEnum.ADMIN.getValue());
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
     }
 
     /**
-     * 由管理端更新当前平台用户的密码，目标用户不属于当前平台时拒绝写入。
+     * 由管理端更新当前平台用户密码并撤销全部会话，跨平台目标拒绝写入。
      *
      * @param id 用户编号
      * @param password 新密码
      * @param userType 当前管理平台类型
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password, String userType) {
-        AdminUserDO user = validateUserForPlatform(id, userType);
+        AdminUserDO user = lockUser(id);
+        validateUserPlatform(user, AdminPlatformTypeEnum.defaultType(userType));
 
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password));
         userMapper.updateById(updateObj);
+        oauth2TokenServiceProvider.getObject().removeAccessToken(id, UserTypeEnum.ADMIN.getValue());
 
         LogRecordContext.putVariable("user", user);
+    }
+
+    /**
+     * 通过数据库当前读持有用户行锁；认证与密码写入共享此串行化边界。
+     *
+     * @param id 用户编号
+     * @return 最新用户记录；用户不存在时抛出业务异常；无事务调用由框架拒绝
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public AdminUserDO lockUser(Long id) {
+        AdminUserDO user = userMapper.selectByIdForUpdate(id);
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
+        return user;
     }
 
     /**
@@ -410,6 +448,18 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public AdminUserDO getUserByMobile(String mobile) {
         return userMapper.selectByMobile(mobile);
+    }
+
+    /**
+     * 查询固定平台的手机号身份，不回退到其他管理平台。
+     *
+     * @param mobile 手机号
+     * @param userType 可信入口的平台类型
+     * @return 匹配账号，不存在时返回 {@code null}
+     */
+    @Override
+    public AdminUserDO getUserByMobileAndType(String mobile, String userType) {
+        return userMapper.selectByMobileAndUserType(mobile, AdminPlatformTypeEnum.defaultType(userType));
     }
 
     /**
@@ -585,33 +635,29 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验 validateUserForCreateOrUpdate 对应的输入与业务约束。
+     * 先在调用者的数据范围内校验目标用户、部门和岗位，仅唯一性查询忽略数据范围。
      */
     private AdminUserDO validateUserForCreateOrUpdate(Long id, String username, String mobile, String email,
                                                Long deptId, Set<Long> postIds, String userType) {
-        // 关闭数据权限，避免因为没有数据权限，查询不到数据，进而导致唯一校验不正确
-        return DataPermissionUtils.executeIgnore(() -> {
-            // 校验用户存在
-            AdminUserDO user = validateUserExists(id);
-            // 用户名唯一性按平台类型隔离；编辑老数据时沿用原账号的平台类型。
-            String resolvedUserType = AdminPlatformTypeEnum.defaultType(
-                    user != null && StrUtil.isBlank(userType) ? user.getUserType() : userType);
-            if (user != null) {
-                // 编辑入口传入的是可信登录平台，禁止借修改资料迁移其他平台账号。
-                validateUserPlatform(user, resolvedUserType);
-            }
+        // 目标不可见即拒绝，避免主表 UPDATE 被拦截但关联岗位仍被修改。
+        AdminUserDO user = validateUserExists(id);
+        String resolvedUserType = AdminPlatformTypeEnum.defaultType(
+                user != null && StrUtil.isBlank(userType) ? user.getUserType() : userType);
+        if (user != null) {
+            validateUserPlatform(user, resolvedUserType);
+        }
+        deptService.validateDeptList(deptId == null ? Collections.emptySet() : singleton(deptId));
+        postService.validatePostList(postIds);
+        // 唯一键必须覆盖不可见数据，但不允许将对象访问校验包含在豁免范围内。
+        DataPermissionUtils.executeIgnore(() -> {
             // 校验用户名唯一
             validateUsernameUnique(id, username, resolvedUserType);
             // 校验手机号唯一
             validateMobileUnique(id, mobile);
             // 校验邮箱唯一
             validateEmailUnique(id, email);
-            // 校验部门处于开启状态
-            deptService.validateDeptList(singleton(deptId));
-            // 校验岗位处于开启状态
-            postService.validatePostList(postIds);
-            return user;
         });
+        return user;
     }
 
     /**
@@ -742,22 +788,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         if (!user.getId().equals(id)) {
             throw exception(USER_MOBILE_EXISTS);
-        }
-    }
-
-    /**
-     * 校验旧密码
-     * @param id          用户 id
-     * @param oldPassword 旧密码
-     */
-    @VisibleForTesting
-    void validateOldPassword(Long id, String oldPassword) {
-        AdminUserDO user = userMapper.selectById(id);
-        if (user == null) {
-            throw exception(USER_NOT_EXISTS);
-        }
-        if (!isPasswordMatch(oldPassword, user.getPassword())) {
-            throw exception(USER_PASSWORD_FAILED);
         }
     }
 

@@ -1,0 +1,231 @@
+# basic-framework CI 门禁。
+#
+# 重要状态（维护者必读，勿据此推断 CI 曾经通过）：
+#   1. 本文件从未在 GitHub Actions 云端运行过，仓库内没有任何一次真实流水线运行记录。
+#   2. 本地仅验证了编排语义与所用命令：run_checks.py、ci_gate.py、ci_services.py、
+#      vitest JSON 报告都在本机实际执行过；云端 runner 行为未验证。
+#   3. MinIO 镜像来源在本环境无法证实（Docker Hub 匿名 401、dl.min.io 官方端点 410），
+#      因此没有写死默认值。backend 作业必须由仓库变量 BF_CI_IMAGE_MINIO 显式提供
+#      已按 sha256 固定的引用；未配置时该作业与门禁如实红灯，不做任何降级。
+#
+# 门禁语义（与 scripts/workflow/ci_gate.py 的强制规则一致）：
+#   * docs_tools、backend、frontend 三个作业都是必需作业，必须 result == success。
+#   * skipped、cancelled、failure 一律不算通过；零用例、空报告同样不算通过。
+#   * 每个作业只能上报本阶段的真实计数；阶段由 workflow_dispatch 的 stage 输入决定。
+#   * audit 阶段通过不代表 release 通过：aggregate() 只在 stage == release 时
+#     才返回 release_verified，审计证据不能顶替发布证据。
+name: ci-gate
+
+on:
+  push:
+    branches:
+      - codex/framework-remediation
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 本次验证阶段；发布结论只能由 release 阶段给出
+        required: true
+        default: audit
+        type: choice
+        options:
+          - functional
+          - audit
+          - release
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  docs_tools:
+    name: 文档与工具检查
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+      checked: ${{ steps.count.outputs.checked }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # 文档检查里的 Mermaid 解析使用管理前端已安装依赖，与本地要求一致。
+      - name: 安装管理前端依赖
+        working-directory: 前端代码/basic-framework-admin
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: 运行已登记质量检查
+        run: |
+          python -B -X utf8 scripts/workflow/run_checks.py --group docs --json \
+            --report "$RUNNER_TEMP/docs-report.json"
+
+      - name: 复核证据
+        run: |
+          python -B -X utf8 scripts/workflow/verify_report.py "$RUNNER_TEMP/docs-report.json" --json
+
+      # 只统计真实通过检查的对象数；零对象必须失败，不能用空报告冒充通过。
+      - name: 汇总真实检查对象
+        id: count
+        env:
+          REPORT: ${{ runner.temp }}/docs-report.json
+          OUTPUT: ${{ github.output }}
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json, os, sys
+          report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
+          passed = [item for item in report["results"] if item.get("status") == "passed"]
+          total = sum(int(item["checked"]) for item in passed)
+          if total <= 0:
+              sys.exit("没有任何实际检查对象，docs_tools 不计为通过")
+          with open(os.environ["OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"checked={total}\n")
+          PY
+
+      - id: stage
+        env:
+          STAGE: ${{ inputs.stage || 'audit' }}
+        run: printf 'stage=%s\n' "$STAGE" >> "$GITHUB_OUTPUT"
+
+  frontend:
+    name: 管理前端测试
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+      checked: ${{ steps.count.outputs.checked }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
+
+      - name: 安装管理前端依赖
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm install --frozen-lockfile
+
+      # 与本地 quality:verify 使用同一条 test:unit；JSON 报告提供机器可读的真实用例数，
+      # 退出码仍由 pnpm 原样传递，失败不会被报告文件掩盖。
+      - name: 运行单元测试并产出 JSON 报告
+        id: vitest
+        working-directory: 前端代码/basic-framework-admin
+        env:
+          REPORT: ${{ runner.temp }}/frontend-vitest.json
+        run: |
+          set +e
+          pnpm test:unit --reporter=json --outputFile="$REPORT"
+          status=$?
+          set -e
+          test -s "$REPORT" || { echo "前端没有产出 JSON 测试报告"; exit 1; }
+          exit $status
+
+      - name: 汇总真实用例数
+        id: count
+        env:
+          REPORT: ${{ runner.temp }}/frontend-vitest.json
+          OUTPUT: ${{ github.output }}
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json, os, sys
+          report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
+          total = int(report["numTotalTests"])
+          failed = int(report["numFailedTests"])
+          if total <= 0:
+              sys.exit("前端没有实际用例，frontend 不计为通过")
+          if failed or not report.get("success"):
+              sys.exit(f"前端存在 {failed} 个失败用例，frontend 不计为通过")
+          with open(os.environ["OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"checked={total}\n")
+          PY
+
+      - id: stage
+        env:
+          STAGE: ${{ inputs.stage || 'audit' }}
+        run: printf 'stage=%s\n' "$STAGE" >> "$GITHUB_OUTPUT"
+
+  backend:
+    name: Java 测试与真实集成依赖
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.stage.outputs.stage }}
+      checked: ${{ steps.reports.outputs.checked }}
+    env:
+      # MinIO 来源无法在仓库内证实，必须由仓库变量显式提供已固定的摘要引用。
+      BF_CI_IMAGE_MINIO: ${{ vars.BF_CI_IMAGE_MINIO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 安装固定版本的 CI 工具依赖
+        run: python -m pip install --require-hashes -r scripts/workflow/requirements-ci.txt
+
+      - name: 安装固定 Maven
+        run: bash scripts/workflow/install_ci_maven.sh
+
+      - name: 校验 MinIO 镜像来源已显式配置
+        run: |
+          test -n "$BF_CI_IMAGE_MINIO" || {
+            echo "未配置 BF_CI_IMAGE_MINIO：MinIO 镜像来源未证实，backend 不计为通过"; exit 1; }
+          echo "BF_CI_IMAGE_MINIO=${BF_CI_IMAGE_MINIO%%@sha256:*}@sha256:<已配置摘要>"
+
+      - name: 启动真实 MySQL、Redis、MinIO
+        run: python -B -X utf8 scripts/workflow/ci_services.py start
+
+      - name: 运行后端测试
+        working-directory: 后端代码/basic-framework-boot
+        # Surefire 默认不包含 *IT；显式保留四种单测命名并纳入全部集成测试。
+        # 无测试的 reactor 模块允许继续，reports 步骤仍拒绝零用例或必需类缺失。
+        run: mvn -B -ntp '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: 校验真实集成测试证据
+        id: reports
+        run: |
+          python -B -X utf8 scripts/workflow/ci_gate.py reports \
+            --backend 后端代码/basic-framework-boot
+          printf 'stage=%s\n' "${{ inputs.stage || 'audit' }}" >> "$GITHUB_OUTPUT"
+
+      # 无论测试成败都回收本次运行自建的容器；所有权不匹配时拒绝删除并保留证据。
+      - name: 停止真实服务
+        if: always()
+        run: python -B -X utf8 scripts/workflow/ci_services.py stop
+
+  gate:
+    name: 门禁汇总
+    runs-on: ubuntu-latest
+    # 必需作业失败或被跳过时仍要产出结论，避免出现"没有结论"的绿灯。
+    if: always()
+    needs:
+      - docs_tools
+      - backend
+      - frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # toJSON(needs) 保留每个作业的真实 result；skipped/cancelled 会被 aggregate 拒绝。
+      - name: 核对必需作业与真实用例
+        env:
+          STAGE: ${{ inputs.stage || 'audit' }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python -B -X utf8 scripts/workflow/ci_gate.py aggregate --stage "$STAGE"

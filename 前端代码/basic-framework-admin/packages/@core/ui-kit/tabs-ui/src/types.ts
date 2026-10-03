@@ -1,4 +1,10 @@
-import type { IContextMenuItem } from '@vben-core/shadcn-ui';
+/**
+ * 标签页组件的类型契约：描述标签集合、外观、拖拽与右键菜单等可配置项。
+ */
+import type {
+  ContextMenuHandlerData,
+  IContextMenuItem,
+} from '@vben-core/shadcn-ui';
 import type { TabDefinition, TabsStyleType } from '@vben-core/typings';
 
 export type TabsEmits = {
@@ -15,9 +21,12 @@ export interface TabsProps {
    */
   contentClass?: string;
   /**
-   * @zh_CN 右键菜单
+   * 右键菜单：入参是触发菜单的标签页实体，菜单构建方可直接按 TabDefinition 字段使用。
+   * 用方法语法声明，使使用方可以只声明自己关心的实体类型。
+   * @param data 触发右键菜单的标签页实体。
+   * @returns 该标签页对应的菜单项列表，空数组表示不展示菜单。
    */
-  contextMenus?: (data: any) => IContextMenuItem[];
+  contextMenus?(data: ContextMenuHandlerData): IContextMenuItem[];
   /**
    * @zh_CN 是否可以拖拽
    */

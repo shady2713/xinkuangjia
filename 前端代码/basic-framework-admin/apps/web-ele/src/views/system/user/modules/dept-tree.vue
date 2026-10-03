@@ -12,7 +12,7 @@ import { getSimpleDeptList } from '#/api/system/dept';
 
 const emit = defineEmits(['select']);
 const deptList = ref<SystemDeptApi.Dept[]>([]); // 部门列表
-const deptTree = ref<any[]>([]); // 部门树
+const deptTree = ref<SystemDeptApi.Dept[]>([]); // 部门树
 const expandedKeys = ref<number[]>([]); // 展开的节点
 const loading = ref(false); // 加载状态
 const searchValue = ref(''); // 搜索值
@@ -26,8 +26,24 @@ function handleSearch(value: string) {
       )
     : deptList.value;
   deptTree.value = handleTree(filteredList);
-  // 展开所有节点
-  expandedKeys.value = deptTree.value.map((node) => node.id!);
+  // 展开所有节点；缺少 id 的节点无法被 ElTree 定位，天然排除
+  expandedKeys.value = deptTree.value
+    .map(
+      /**
+       * 取出节点主键，作为 ElTree 的展开依据。
+       * @param node 当前部门树节点。
+       * @returns 节点主键；DTO 未提供时为 undefined。
+       */
+      (node) => node.id,
+    )
+    .filter(
+      /**
+       * 剔除缺少主键的节点，它们无法被 ElTree 定位。
+       * @param id 节点主键。
+       * @returns 主键存在时返回 true。
+       */
+      (id): id is number => id !== undefined,
+    );
 }
 
 /** 选中部门 */

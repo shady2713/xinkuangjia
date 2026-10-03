@@ -15,6 +15,11 @@ interface Props {
   avatar?: string;
 }
 
+/** 密码输入框的组件实例形状：只用于定位内部原生 input 元素。 */
+type PasswordFieldRef = {
+  $el?: HTMLElement;
+};
+
 defineOptions({
   name: 'LockScreen',
 });
@@ -62,25 +67,34 @@ const validPass = computed(
   () => lockScreenPassword?.value === form?.values?.password,
 );
 
+/**
+ * 提交解锁密码。
+ * 密码正确才真正解锁；密码错误时把错误写到字段上，让用户看到失败原因。
+ */
 async function handleSubmit() {
   const { valid } = await validate();
   if (valid) {
     if (validPass.value) {
       accessStore.unlockScreen();
     } else {
-      form.setFieldError('password', $t('authentication.passwordErrorTip'));
+      // 表单未挂载时没有可写入的上下文，这里直接结束，避免抛出未处理异常。
+      form?.setFieldError('password', $t('authentication.passwordErrorTip'));
     }
   }
 }
 
+/** 展开或收起解锁表单，展开后立刻聚焦密码输入框。 */
 function toggleUnlockForm() {
   showUnlockForm.value = !showUnlockForm.value;
   if (showUnlockForm.value) {
-    requestAnimationFrame(() => {
-      getFieldComponentRef('password')
-        ?.$el?.querySelector('[name="password"]')
-        ?.focus();
-    });
+    requestAnimationFrame(
+      /** 等表单渲染完成再聚焦，否则此时还找不到原生 input。 */
+      () => {
+        getFieldComponentRef<PasswordFieldRef>('password')
+          ?.$el?.querySelector<HTMLInputElement>('[name="password"]')
+          ?.focus();
+      },
+    );
   }
 }
 

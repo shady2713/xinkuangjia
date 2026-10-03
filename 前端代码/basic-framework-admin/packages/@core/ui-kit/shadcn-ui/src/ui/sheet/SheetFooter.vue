@@ -1,7 +1,10 @@
 <script setup lang="ts">
+/** 抽屉底部操作区：放置抽屉的主要操作按钮。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
-const props = defineProps<{ class?: any }>();
+const props = defineProps<{ class?: ClassValue }>();
 </script>
 
 <template>

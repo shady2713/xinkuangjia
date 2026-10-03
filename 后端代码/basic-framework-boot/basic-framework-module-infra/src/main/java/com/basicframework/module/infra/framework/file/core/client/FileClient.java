@@ -57,6 +57,15 @@ public interface FileClient extends AutoCloseable {
     byte[] getContent(String path) throws Exception;
 
     /**
+     * 有界读取待验证对象；实现不得先无界读取再检查长度。
+     * @param path 对象键
+     * @param maximumBytes 允许的最大字节数
+     * @return 完整且未超过限制的字节
+     * @throws Exception 对象不存在、超限或存储故障
+     */
+    byte[] getContent(String path, int maximumBytes) throws Exception;
+
+    /**
      * 复制对象到新的路径。
      *
      * @param sourcePath 来源对象路径，例如 frames/20260515/a.jpg
@@ -98,9 +107,10 @@ public interface FileClient extends AutoCloseable {
      * 获得文件预签名地址，用于上传
      *
      * @param path 相对路径
+     * @param size 签名绑定的精确字节数；上传有效期五分钟
      * @return 文件预签名地址
      */
-    default String presignPutUrl(String path) {
+    default String presignPutUrl(String path, long size) {
         throw new UnsupportedOperationException("不支持的操作");
     }
 

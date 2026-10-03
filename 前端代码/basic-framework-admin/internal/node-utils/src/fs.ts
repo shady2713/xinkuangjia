@@ -1,9 +1,17 @@
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';
 
+/**
+ * 将数据序列化为 JSON 并写入文件，父目录不存在时先创建。
+ *
+ * @param filePath 目标文件路径，父目录会按需递归创建
+ * @param data 任意可被 JSON.stringify 序列化的数据；无法序列化时由 JSON.stringify 抛错
+ * @param spaces 缩进空格数，默认 2
+ * @throws 目录创建或文件写入失败时由底层 fs 抛出，调用方需自行捕获
+ */
 export async function outputJSON(
   filePath: string,
-  data: any,
+  data: unknown,
   spaces: number = 2,
 ) {
   try {

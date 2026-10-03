@@ -14,11 +14,14 @@ import type {
  * @returns 应用接口和认证配置
  */
 export function useAppConfig(
-  env: Record<string, any>,
+  env: Record<string, unknown>,
   isProduction: boolean,
 ): ApplicationConfig {
   const config = window._VBEN_ADMIN_PRO_APP_CONF_;
-  const developmentApiURL = isProduction ? undefined : env.VITE_GLOB_API_URL;
+  // Vite 环境变量在 .env 中声明为字符串；开发期允许用 VITE_GLOB_API_URL 覆盖配置里的地址。
+  const developmentApiURL = isProduction
+    ? undefined
+    : (env.VITE_GLOB_API_URL as string | undefined);
 
   const { VITE_GLOB_AUTH_DINGDING_CORP_ID, VITE_GLOB_AUTH_DINGDING_CLIENT_ID } =
     config;

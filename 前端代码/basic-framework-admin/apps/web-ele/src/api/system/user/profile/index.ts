@@ -14,7 +14,7 @@ export namespace SystemUserProfileApi {
     loginDate: string;
     createTime: string;
     roles: { id: number; name: string }[];
-    dept: { id: number; name: string } | null;
+    dept: null | { id: number; name: string };
     posts: { id: number; name: string }[];
   }
 

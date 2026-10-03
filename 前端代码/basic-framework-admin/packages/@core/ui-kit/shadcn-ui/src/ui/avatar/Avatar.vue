@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/** 头像容器：按尺寸与形状渲染头像根节点，并允许外部 class 覆盖默认样式。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { AvatarVariants } from './avatar';
 
 import { cn } from '@vben-core/shared/utils';
@@ -9,7 +12,7 @@ import { avatarVariant } from './avatar';
 
 const props = withDefaults(
   defineProps<{
-    class?: any;
+    class?: ClassValue;
     shape?: AvatarVariants['shape'];
     size?: AvatarVariants['size'];
   }>(),

@@ -1,14 +1,14 @@
 import { z } from '@vben/common-ui';
 
-const USERNAME_REGEX = /^[A-Za-z0-9]{4,30}$/;
+const USERNAME_REGEX = /^[A-Z0-9]{4,30}$/i;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{6,16}$/;
 const MOBILE_REGEX = /^1\d{10}$/;
-const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const EMAIL_REGEX = /^[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const ID_CARD_REGEX =
-  /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[0-9Xx]$/;
-const REAL_NAME_REGEX = /^[A-Za-z\u4e00-\u9fa5·]{2,30}$/;
+  /^[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9X]$/i;
+const REAL_NAME_REGEX = /^[A-Z\u4E00-\u9FA5·]{2,30}$/i;
 const BANK_CARD_NO_REGEX = /^\d{12,19}$/;
-const PERCENT_REGEX = /^(100(?:\.0{1,2})?|\d{1,2}(?:\.\d{1,2})?)$/;
+const PERCENT_REGEX = /^(?:100(?:\.0{1,2})?|\d{1,2}(?:\.\d{1,2})?)$/;
 const ID_CARD_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
 const ID_CARD_CHECK_CODES = [
   '1',
@@ -110,7 +110,12 @@ export function isBankCardNoValue(value: string) {
   return sum % 10 === 0;
 }
 
-export function isPercentValue(value: string | number) {
+/**
+ * 判断取值是否为合法百分比。
+ * @param value 待判断的取值，允许数字或数字字符串。
+ * @returns 落在 0 到 100 且最多两位小数的范围内时为 true。
+ */
+export function isPercentValue(value: number | string) {
   return PERCENT_REGEX.test(String(value));
 }
 

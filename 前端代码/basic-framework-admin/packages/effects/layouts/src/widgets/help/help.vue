@@ -11,9 +11,20 @@ defineOptions({
 });
 
 const keys = useMagicKeys();
-whenever(keys['Alt+KeyH']!, () => {
-  modalApi.open();
-});
+// useMagicKeys 以 Proxy 惰性创建组合键，索引结果在类型上仍是可选的；
+// 缺失时跳过注册即可，运行时该组合键始终由 useMagicKeys 提供
+const helpKey = keys['Alt+KeyH'];
+if (helpKey) {
+  whenever(
+    helpKey,
+    /**
+     * 快捷键命中后打开帮助弹窗。
+     */
+    () => {
+      modalApi.open();
+    },
+  );
+}
 
 const [Modal, modalApi] = useVbenModal({
   draggable: true,

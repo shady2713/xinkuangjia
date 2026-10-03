@@ -39,10 +39,14 @@ const bindProps = computed(() => {
       };
 });
 
+/**
+ * 切换深浅色主题，并尽量用圆形扩散动画过渡。
+ * 浏览器不支持视图过渡或用户要求减弱动效时直接切换，不做动画。
+ * @param event 触发切换的鼠标事件，用于确定扩散动画的圆心。
+ */
 function toggleTheme(event: MouseEvent) {
   const isAppearanceTransition =
-    // @ts-expect-error
-    document.startViewTransition &&
+    typeof document.startViewTransition === 'function' &&
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!isAppearanceTransition || !event) {
     isDark.value = !isDark.value;
@@ -54,32 +58,53 @@ function toggleTheme(event: MouseEvent) {
     Math.max(x, innerWidth - x),
     Math.max(y, innerHeight - y),
   );
-  // @ts-ignore startViewTransition
-  const transition = document.startViewTransition(async () => {
+  // 上面的能力探测已通过；这里仍做一次存在性保护，避免在不支持的浏览器上直接调用。
+  const startViewTransition = document.startViewTransition;
+  if (!startViewTransition) {
     isDark.value = !isDark.value;
-    await nextTick();
-  });
-  transition.ready.then(() => {
-    const clipPath = [
-      `circle(0px at ${x}px ${y}px)`,
-      `circle(${endRadius}px at ${x}px ${y}px)`,
-    ];
-    const animate = document.documentElement.animate(
-      {
-        clipPath: isDark.value ? [...clipPath].toReversed() : clipPath,
-      },
-      {
-        duration: 450,
-        easing: 'ease-in',
-        pseudoElement: isDark.value
-          ? '::view-transition-old(root)'
-          : '::view-transition-new(root)',
-      },
-    );
-    animate.onfinish = () => {
-      transition.skipTransition();
-    };
-  });
+    return;
+  }
+  const transition = startViewTransition.call(
+    document,
+    /**
+     * 在视图过渡的快照阶段翻转主题并等待一次渲染，确保新旧快照颜色不同。
+     */
+    async () => {
+      isDark.value = !isDark.value;
+      await nextTick();
+    },
+  );
+  transition.ready.then(
+    /**
+     * 视图过渡就绪后播放圆形裁剪动画，动画结束后跳过剩余的默认过渡。
+     */
+    () => {
+      const clipPath = [
+        `circle(0px at ${x}px ${y}px)`,
+        `circle(${endRadius}px at ${x}px ${y}px)`,
+      ];
+      const animate = document.documentElement.animate(
+        {
+          // 切到深色时旧画面被新画面盖住，裁剪方向要反过来。
+          clipPath: isDark.value ? [...clipPath].toReversed() : clipPath,
+        },
+        {
+          duration: 450,
+          easing: 'ease-in',
+          pseudoElement: isDark.value
+            ? '::view-transition-old(root)'
+            : '::view-transition-new(root)',
+        },
+      );
+      animate.onfinish =
+        /**
+         * 自绘动画播完即跳过视图过渡的默认收尾，避免画面被二次淡出。
+         */
+        () => {
+          transition.skipTransition();
+        };
+    },
+  );
 }
 </script>
 

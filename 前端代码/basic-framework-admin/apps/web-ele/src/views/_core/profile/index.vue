@@ -55,7 +55,6 @@ onMounted(loadProfile);
           <ElTabPane name="resetPwd" label="密码设置">
             <ResetPwd />
           </ElTabPane>
-          
         </ElTabs>
       </ElCard>
     </div>

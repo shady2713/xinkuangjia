@@ -10,6 +10,15 @@ export interface ApiSelectMapping {
   valueField: string;
 }
 
+/**
+ * 归一化后的选择器选项。
+ * @description label 与 value 保留接口返回的原始值，不做字符串化；由 ElOption 负责渲染与选中。
+ */
+export interface ApiSelectOption {
+  label: unknown;
+  value: unknown;
+}
+
 /** 映射解析结果，并标识是否来自历史白名单语法迁移。 */
 export interface ApiSelectMappingResult {
   mapping?: ApiSelectMapping;
@@ -70,7 +79,7 @@ export function parseApiSelectMapping(source: string): ApiSelectMappingResult {
 export function mapApiSelectOptions(
   payload: unknown,
   mapping: ApiSelectMapping,
-): Array<{ label: unknown; value: unknown }> | undefined {
+): ApiSelectOption[] | undefined {
   const list = mapping.listPath
     ? resolveOwnPath(payload, mapping.listPath)
     : payload;
@@ -171,3 +180,5 @@ function isSafePath(path: string): boolean {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+export { isRecord, resolveOwnPath };

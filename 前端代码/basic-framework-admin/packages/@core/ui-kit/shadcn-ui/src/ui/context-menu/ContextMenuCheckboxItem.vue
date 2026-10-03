@@ -4,6 +4,8 @@ import type {
   ContextMenuCheckboxItemProps,
 } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -15,7 +17,9 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 
-const props = defineProps<ContextMenuCheckboxItemProps & { class?: any }>();
+const props = defineProps<
+  ContextMenuCheckboxItemProps & { class?: ClassValue }
+>();
 const emits = defineEmits<ContextMenuCheckboxItemEmits>();
 
 const delegatedProps = computed(() => {

@@ -1,14 +1,17 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { z } from '@vben/common-ui';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
-
-import { z } from '@vben/common-ui';
 
 import { getRangePickerDefaultProps } from '#/utils';
 
 /** 新增/修改的表单 */
+/**
+ * 构造参数配置的表单 schema。
+ * @returns 配置表单的字段定义数组。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -26,7 +29,10 @@ export function useFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请输入参数分类',
       },
-      rules: z.string().min(1, '请输入参数分类').max(50, '参数分类不能超过50个字符'),
+      rules: z
+        .string()
+        .min(1, '请输入参数分类')
+        .max(50, '参数分类不能超过50个字符'),
     },
     {
       fieldName: 'name',

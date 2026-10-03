@@ -1,7 +1,7 @@
 import CryptoJS from 'crypto-js';
+import { JSEncrypt } from 'jsencrypt';
 
 import { logError } from './error';
-import { JSEncrypt } from 'jsencrypt';
 
 const AES_IV_SIZE_BYTES = 16;
 const AES_IV_SIZE_WORDS = AES_IV_SIZE_BYTES / 4;
@@ -30,10 +30,11 @@ function assertAesKey(key: string, operation: string) {
  */
 export const AES = {
   /**
-   * AES 加密
-   * @param data 要加密的数据
-   * @param key 加密密钥
-   * @returns 加密后的字符串
+   * AES 加密：按 CBC 模式加密，IV 随机生成并拼在密文前面一起 Base64 输出。
+   * @param data 要加密的明文，通常是 JSON 化的请求体。
+   * @param key 加密密钥，长度必须是 16、24 或 32 位。
+   * @returns Base64 编码后的密文串，前 16 字节是随机 IV。
+   * @throws 密钥长度非法，或加密过程中出现底层异常时原样抛出，调用方必须处理。
    */
   encrypt(data: string, key: string): string {
     try {
@@ -46,7 +47,12 @@ export const AES = {
         mode: CryptoJS.mode.CBC,
         padding: CryptoJS.pad.Pkcs7,
       });
-      const payload = iv.clone().concat(encrypted.ciphertext);
+      // WordArray 本身不可迭代，只有 words 数组可展开；
+      // 显式合并词数组并累加有效字节数，等价于 clone().concat() 的结果。
+      const payload = CryptoJS.lib.WordArray.create(
+        [...iv.words, ...encrypted.ciphertext.words],
+        iv.sigBytes + encrypted.ciphertext.sigBytes,
+      );
       return CryptoJS.enc.Base64.stringify(payload);
     } catch (error) {
       logError('AES encrypt failed', error);
@@ -111,19 +117,24 @@ export const AES = {
 export const AjCaptchaAES = {
   /**
    * 按 aj-captcha 后端约定加密验证码坐标或二次校验串。
-   *
+   * 该接口用 ECB 模式且不传 IV，因此同一明文每次密文相同，这是后端协议要求而非缺陷。
    * @param data 要加密的验证码数据
    * @param key 后端下发的 16 位 secretKey
-   * @returns Base64(AES-ECB-PKCS7(ciphertext))
+   * @returns Base64 编码的密文串，即 AES-ECB-PKCS7 加密结果
+   * @throws 密钥长度非法或底层加密异常时原样抛出，调用方必须处理
    */
   encrypt(data: string, key: string): string {
     try {
       assertAesKey(key, '验证码加密');
 
-      const encrypted = CryptoJS.AES.encrypt(data, CryptoJS.enc.Utf8.parse(key), {
-        mode: CryptoJS.mode.ECB,
-        padding: CryptoJS.pad.Pkcs7,
-      });
+      const encrypted = CryptoJS.AES.encrypt(
+        data,
+        CryptoJS.enc.Utf8.parse(key),
+        {
+          mode: CryptoJS.mode.ECB,
+          padding: CryptoJS.pad.Pkcs7,
+        },
+      );
       return CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
     } catch (error) {
       logError('AJ captcha AES encrypt failed', error);
@@ -203,8 +214,14 @@ export const RSA = {
  * API 加解密配置接口
  */
 export interface ApiEncryptConfig {
-  /** 加密算法 */
-  algorithm: 'AES' | 'RSA';
+  /**
+   * 加密算法，取值来自环境变量，实际只支持 AES 与 RSA。
+   * 类型保持 string 是因为取值在运行期来自环境变量，
+   * 合法性由 encryptRequest/decryptResponse 中的运行时分支强制：
+   * 非 AES/RSA 的取值会在真正加解密时抛出「不支持的加密算法」，
+   * 而不是在这里静默改写成默认算法，避免配置错误被掩盖。
+   */
+  algorithm: string;
   /** 是否启用加解密 */
   enable: boolean;
   /** 加密头名称 */
@@ -228,9 +245,12 @@ export class ApiEncrypt {
   /**
    * 解密响应数据
    * @param encryptedData 加密的响应数据
-   * @returns 解密后的数据
+   * @returns 解密后的数据。优先按 JSON 解析，解析失败时返回解密出的原始字符串；
+   * 未启用加密时原样返回入参。结果按 unknown 暴露，由调用方按业务响应结构收窄。
+   * @throws 密钥未配置、解密算法不被支持、解密结果为空或解析失败时抛出原始异常；
+   * 调用方据此中断本次响应处理，避免把密文当成业务数据继续解析。
    */
-  decryptResponse(encryptedData: string): any {
+  decryptResponse(encryptedData: string): unknown {
     if (!this.config.enable) {
       return encryptedData;
     }
@@ -272,10 +292,13 @@ export class ApiEncrypt {
 
   /**
    * 加密请求数据
-   * @param data 要加密的数据
-   * @returns 加密后的数据
+   * @param data 要加密的数据，通常是 Axios 请求体对象或已序列化的字符串
+   * @returns 启用加密时返回密文字符串；未启用加密时原样返回入参。
+   * 因此返回类型为 unknown，调用方需自行按 Axios 请求体的赋值口径使用。
+   * @throws 密钥未配置或加密算法不被支持时抛出 Error；调用方应中断本次请求，
+   * 因为此时数据仍未加密，直接放行会把明文发到服务端。
    */
-  encryptRequest(data: any): string {
+  encryptRequest(data: unknown): unknown {
     if (!this.config.enable) {
       return data;
     }
@@ -316,10 +339,12 @@ export class ApiEncrypt {
 
 /**
  * 创建基于环境变量的 API 加解密实例
- * @param env 环境变量对象
+ * @param env 环境变量对象，值均为字符串，未配置的键为 undefined
  * @returns ApiEncrypt 实例
  */
-export function createApiEncrypt(env: Record<string, any>): ApiEncrypt {
+export function createApiEncrypt(
+  env: Record<string, string | undefined>,
+): ApiEncrypt {
   const config: ApiEncryptConfig = {
     enable: env.VITE_APP_API_ENCRYPT_ENABLE === 'true',
     header: env.VITE_APP_API_ENCRYPT_HEADER || 'X-Api-Encrypt',

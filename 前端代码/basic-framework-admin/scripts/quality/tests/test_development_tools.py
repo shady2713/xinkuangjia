@@ -95,7 +95,30 @@ class DevelopmentTests(unittest.TestCase):
         self.assertTrue(audit.forbidden_layer("packages/@core/x/src/a.ts", "@vben/foo"))
         self.assertTrue(audit.forbidden_layer("packages/utils/src/a.ts", "@vben/foo"))
         self.assertFalse(audit.forbidden_layer("packages/utils/src/a.ts", ""))
-        self.assertTrue(audit.forbidden_layer("apps/web-ele/src/a.ts", "#/api/foo"))
+        self.assertFalse(audit.forbidden_layer("apps/web-ele/src/a.ts", "#/api/foo"))
+
+    def test_app_aliases_remain_legal_and_shared_imports_cannot_reach_apps(self) -> None:
+        """真实解析允许应用本地 API，拒绝共享包静态、动态及相对反向依赖。"""
+        self.package("apps/web-ele", "@test/app", imports={"#/*": "./src/*"})
+        self.write(
+            "apps/web-ele/src/page.vue",
+            '<script setup lang="ts">\nimport "#/api/foo";\n'
+            'import "#/layouts/basic";\nimport "#/locales";\n'
+            'import "#/store/auth";\n</script>\n',
+        )
+        self.assertEqual(audit.inspect(self.root, "layers")["findings"], [])
+        self.write(
+            "packages/core/src/a.ts",
+            '// import "@test/app";\nimport "./local";\n'
+            'import "@test/app/api/foo";\nimport("#/api/foo");\n'
+            'export * from "../../../apps/web-ele/src/store/auth";\n',
+        )
+        report = audit.inspect(self.root, "layers")
+        self.assertEqual(report["files"], 2)
+        self.assertEqual(
+            [(item["rule"], item["line"]) for item in report["findings"]],
+            [("layer-direction", 3), ("layer-direction", 4), ("layer-direction", 5)],
+        )
 
     def test_config_diagnostics_do_not_expose_values(self) -> None:
         """配置入口绕过和内联端点只输出位置，不泄露字面量值。"""

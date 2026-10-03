@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { SelectScrollDownButtonProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -8,7 +10,9 @@ import { cn } from '@vben-core/shared/utils';
 import { ChevronDown } from 'lucide-vue-next';
 import { SelectScrollDownButton, useForwardProps } from 'reka-ui';
 
-const props = defineProps<SelectScrollDownButtonProps & { class?: any }>();
+const props = defineProps<
+  SelectScrollDownButtonProps & { class?: ClassValue }
+>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

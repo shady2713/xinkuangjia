@@ -4,6 +4,7 @@ import {
   createWebHistory,
 } from 'vue-router';
 
+import { resetAccessibleRoutes } from '@vben/access';
 import { resetStaticRoutes } from '@vben/utils';
 
 import { createRouterGuard } from './guard';
@@ -29,7 +30,11 @@ const router = createRouter({
   // strict: true,
 });
 
-const resetRoutes = () => resetStaticRoutes(router, routes);
+/** 结束动态路由所有权并按静态声明恢复 Router，避免旧身份路由残留。 */
+const resetRoutes = () => {
+  resetAccessibleRoutes(router);
+  resetStaticRoutes(router, routes);
+};
 
 // 创建路由守卫
 createRouterGuard(router);

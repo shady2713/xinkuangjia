@@ -7,11 +7,17 @@ import { convertToRgb, updateCSSVariables } from '@vben/utils';
  * 用于适配各个框架的设计系统
  */
 
+/**
+ * 读取 Ant Design 语义主题变量。
+ * 主题切换时按 CSS 变量重新解析颜色与圆角，圆角按 1rem = 16px 换算为像素。
+ * @returns 含 tokens 的对象，tokens 为响应式的 Ant Design 主题变量集合。
+ */
 export function useAntdDesignTokens() {
   const rootStyles = getComputedStyle(document.documentElement);
 
   const tokens = reactive({
-    borderRadius: '' as any,
+    // 圆角在下方按 1rem = 16px 换算成像素数值，初始值不会被读取到（watch 为 immediate）
+    borderRadius: 0,
     colorBgBase: '',
     colorBgContainer: '',
     colorBgElevated: '',

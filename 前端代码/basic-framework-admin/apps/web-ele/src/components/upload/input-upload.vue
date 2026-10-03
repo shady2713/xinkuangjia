@@ -20,9 +20,15 @@ const props = defineProps<{
 }>();
 
 const emits = defineEmits<{
-  (e: 'change', payload: number | string): void;
-  (e: 'update:value', payload: number | string): void;
-  (e: 'update:modelValue', payload: number | string): void;
+  /**
+   * 通知父组件输入值已变化。
+   * @param e 事件名，change 表示用户确认，update:* 表示双向绑定同步。
+   * @param payload 变化后的输入值。
+   */
+  (
+    e: 'change' | 'update:modelValue' | 'update:value',
+    payload: number | string,
+  ): void;
 }>();
 
 const modelValue = useVModel(props, 'modelValue', emits, {

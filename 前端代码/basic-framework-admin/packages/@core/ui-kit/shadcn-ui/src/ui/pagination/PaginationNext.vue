@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { PaginationNextProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -11,7 +13,7 @@ import { PaginationNext } from 'reka-ui';
 import { Button } from '../button';
 
 const props = withDefaults(
-  defineProps<PaginationNextProps & { class?: any }>(),
+  defineProps<PaginationNextProps & { class?: ClassValue }>(),
   {
     asChild: true,
   },

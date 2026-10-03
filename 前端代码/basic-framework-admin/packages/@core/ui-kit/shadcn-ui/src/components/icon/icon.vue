@@ -14,7 +14,8 @@ import {
 const props = defineProps<{
   // 没有是否显示默认图标
   fallback?: boolean;
-  icon?: Component | Function | string;
+  // 函数形态的图标就是函数式组件，Component 已覆盖 FunctionalComponent。
+  icon?: Component | string;
 }>();
 
 const isRemoteIcon = computed(() => {

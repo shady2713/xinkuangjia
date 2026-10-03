@@ -15,11 +15,6 @@
     <description>消息队列，支持 Redis 与 RabbitMQ</description>
     <url>https://example.com/basic-framework</url>
 
-    <properties>
-        <!-- 当前实测行覆盖率约 3.40%，先固化真实基线，后续只能提升不能回退。 -->
-        <quality.coverage.minimum>0.03</quality.coverage.minimum>
-    </properties>
-
     <dependencies>
         <!-- DB 相关 -->
         <dependency>

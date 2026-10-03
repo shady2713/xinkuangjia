@@ -16,13 +16,13 @@ export interface DescriptionItemSchema {
   slot?: string; // 插槽名称
   render?: (
     val: unknown,
-    data?: Recordable<any>,
+    data?: Recordable<unknown>,
   ) => Element | JSX.Element | number | string | undefined | VNode; // 自定义需要展示的内容
 }
 
 export interface DescriptionProps extends ElDescriptionProps {
   schema: DescriptionItemSchema[]; // 描述项配置
-  data: Recordable<any>; // 数据
+  data: Recordable<unknown>; // 数据
 }
 
 export interface DescInstance {

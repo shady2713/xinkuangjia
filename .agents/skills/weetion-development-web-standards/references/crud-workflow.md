@@ -79,7 +79,7 @@ bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh <ap
 # 示例: bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
 ```
 
-如果脚本以 `exit 1` 退出，修复错误后重新运行。
+任何非零退出码均表示未通过；缺少配置、依赖或解析失败返回 `2`，类型与 ESLint 保留实际失败退出码。修复对应问题后重新运行。模块内部允许 `../data` 等相对导入；越出 API 或页面模块的导入须使用应用别名。脚本使用真实语法树，不将注释和普通字符串误认作导入。
 只有脚本输出 "🎉 全部检查通过" 之后，才能进入 4.2。
 
 #### 4.2 手工对照文档检查（脚本通过后执行）

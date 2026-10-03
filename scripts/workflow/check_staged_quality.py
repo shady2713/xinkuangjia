@@ -41,6 +41,7 @@ from scripts.common.staged_content import (
     read_git,
     read_index,
 )
+from scripts.common.repository_layout import is_java_source
 
 RULE_FILE = "scripts/tools/document_rules.py"
 SOURCE_SUFFIXES = {".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"}
@@ -62,7 +63,7 @@ def core_jobs(changes: list[Change]) -> list[tuple[str, str, list[str]]]:
     """根据暂存后仍存在的源码选择核心检查，密钥检查始终覆盖本次提交。"""
     paths = [item.path for item in changes if item.status != "D" and not excluded(Path(item.path))]
     jobs = [("secrets", "security/scan_staged_secrets.py", [])]
-    if any(path.startswith("后端/java服务/") and path.endswith(".java") for path in paths):
+    if any(is_java_source(path) for path in paths):
         jobs.append(("java-comments", "code/java/check_staged_java_comments.py", []))
     if any(path.endswith(".py") for path in paths):
         jobs.append(("python-comments", "code/python/check_staged_python_comments.py", []))
@@ -349,7 +350,7 @@ def main() -> int:
     if not index_path.is_absolute():
         index_path = root / index_path
     if not index_path.is_file():
-        print("提交前检查：没有暂存索引。")
+        print("提交前检查：不适用，没有暂存索引；未验证任何提交内容。")
         return 0
     original = index_path.read_bytes()
     original_head = read_git(root, "rev-parse", "--revs-only", "HEAD")
@@ -389,7 +390,7 @@ def main() -> int:
             )
             return 0
         if not changes:
-            print("提交前检查：没有暂存变更。")
+            print("提交前检查：不适用，没有暂存变更；未验证任何提交内容。")
             return 0
         result = run_checks(root, folder, env, changes)
     if (

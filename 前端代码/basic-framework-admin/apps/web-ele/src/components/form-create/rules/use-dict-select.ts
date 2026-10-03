@@ -1,4 +1,6 @@
+/** 字典选择器的设计器规则：字典类型下拉需要异步加载，因此不复用通用选择器规则。 */
 import type { SystemDictTypeApi } from '#/api/core/dict';
+import type { FormCreatePropsContext } from '#/components/form-create/typing';
 
 import { onMounted, ref } from 'vue';
 
@@ -11,7 +13,10 @@ import {
 } from '#/components/form-create/helpers';
 import { selectRule } from '#/components/form-create/rules/data';
 
-/** 字典选择器规则，如果规则使用到动态数据则需要单独配置不能使用 useSelectRule */
+/**
+ * 字典选择器规则，如果规则使用到动态数据则需要单独配置不能使用 useSelectRule
+ * @returns form-create 设计器注册项；挂载时会拉取字典类型列表填充属性面板下拉
+ */
 export function useDictSelectRule() {
   const label = '字典选择器';
   const name = 'DictSelect';
@@ -42,7 +47,14 @@ export function useDictSelectRule() {
         modelField: 'model-value', // 当前表单运行时使用 model-value 作为字段绑定名
       };
     },
-    props(_: any, { t }: any) {
+    /**
+     * 生成字典选择器的属性面板配置行。
+     * @param _name form-create 传入的目标组件名，本工程按闭包中的 name 取配置故不使用
+     * @param context 设计器上下文，只取其中的 t 翻译函数
+     * @returns 已完成文案国际化的属性面板配置行数组，字典类型下拉取自接口数据
+     */
+    props(_name: string, context: FormCreatePropsContext) {
+      const { t } = context;
       return localeProps(t, `${name}.props`, [
         makeRequiredRule(),
         {

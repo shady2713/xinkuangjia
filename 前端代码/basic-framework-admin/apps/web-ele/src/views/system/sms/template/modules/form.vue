@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 短信模板新增/修改弹窗：按是否已存在主键决定走新增还是修改接口。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemSmsTemplateApi } from '#/api/system/sms/template';
 
 import { ref } from 'vue';
@@ -20,7 +24,10 @@ import { useFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const formData = ref<SystemSmsTemplateApi.Template>();
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<
+  ComponentType,
+  SystemSmsTemplateApi.Template
+>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -35,13 +42,16 @@ const [Form, formApi] = useVbenForm({
 
 const [Modal, modalApi] = useVbenModal({
   /** 校验并保存短信模板，成功后关闭弹窗并通知列表刷新；失败时释放弹窗锁。 */
+  /**
+   * 提交弹窗表单：校验通过后按是否存在主键选择新增还是修改，并在结束时释放弹窗锁。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    const data = (await formApi.getValues()) as SystemSmsTemplateApi.Template;
+    const data = await formApi.getValues();
     try {
       await (formData.value?.id
         ? updateSmsTemplate(data)

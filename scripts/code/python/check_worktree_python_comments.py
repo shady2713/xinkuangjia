@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""在临时 Git 索引中检查工作区 Python 变更，不改动真实暂存区。
+"""在私有索引和对象库中检查 Python 暂存及工作区变更，不改动真实仓库。
 
 @author 李杰
 """
 
 from __future__ import annotations
 
-import os
-import shutil
+import argparse
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Sequence
+
+if __package__ in (None, ""):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from scripts.common.worktree_snapshot import prepare_index
+from scripts.common.check_protocol import emit
 
 
 def _configure_console_encoding() -> None:
@@ -43,7 +49,6 @@ def _run_git(
             capture_output=True,
             text=text,
             encoding="utf-8" if text else None,
-            errors="replace" if text else None,
             timeout=30,
         )
     except FileNotFoundError as exc:
@@ -56,9 +61,9 @@ def _run_git(
 
 
 def _repo_root() -> Path:
-    """根据脚本位置返回 AIMaster 仓库根目录。"""
+    """根据当前执行目录解析 Git 根目录，便于真实仓库和隔离快照复用。"""
 
-    return Path(__file__).resolve().parents[3]
+    return Path(_run_git(Path.cwd(), ["rev-parse", "--show-toplevel"]).stdout.strip()).resolve()
 
 
 def _worktree_python_paths(repo_root: Path) -> list[str]:
@@ -69,36 +74,15 @@ def _worktree_python_paths(repo_root: Path) -> list[str]:
         ["ls-files", "--modified", "--others", "--exclude-standard", "-z", "--", "*.py"],
         text=False,
     )
-    return [item.decode("utf-8", "replace") for item in result.stdout.split(b"\0") if item]
+    return sorted({item.decode("utf-8") for item in result.stdout.split(b"\0") if item})
 
 
-def _real_index_path(repo_root: Path) -> Path:
-    """返回真实 Git 索引路径，兼容普通仓库和 worktree。"""
-
-    result = _run_git(repo_root, ["rev-parse", "--git-path", "index"])
-    index_path = Path(result.stdout.strip())
-    return index_path if index_path.is_absolute() else repo_root / index_path
-
-
-def _temporary_index_environment(repo_root: Path, temporary_index: Path) -> dict[str, str]:
-    """创建仅覆盖 Git 索引位置的子进程环境。"""
-
-    env = os.environ.copy()
-    real_index = _real_index_path(repo_root)
-    if real_index.exists():
-        shutil.copy2(real_index, temporary_index)
-    else:
-        temporary_index.touch()
-    env["GIT_INDEX_FILE"] = str(temporary_index)
-    return env
-
-
-def _run_checker(repo_root: Path, env: dict[str, str]) -> int:
+def _run_checker(repo_root: Path, env: dict[str, str], as_json: bool = False) -> int:
     """使用临时索引运行仓库级 Python 暂存区检查器。"""
 
     checker = repo_root / "scripts" / "code" / "python" / "check_staged_python_comments.py"
     result = subprocess.run(
-        [sys.executable, str(checker)],
+        [sys.executable, str(checker), *(["--json"] if as_json else [])],
         cwd=repo_root,
         env=env,
         check=False,
@@ -110,21 +94,32 @@ def _run_checker(repo_root: Path, env: dict[str, str]) -> int:
 def main() -> int:
     """将工作区 Python 变化写入临时索引并执行注释检查。"""
 
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", action="store_true", help="输出私有快照检查的结构化结果")
+    args = parser.parse_args()
     _configure_console_encoding()
-    repo_root = _repo_root()
     try:
+        repo_root = _repo_root()
         paths = _worktree_python_paths(repo_root)
-        if not paths:
-            print("工作区没有需要检查的 Python 变更。")
-            return 0
-
         with tempfile.TemporaryDirectory(prefix="aimaster-python-comments-") as temp_dir:
             temporary_index = Path(temp_dir) / "index"
-            env = _temporary_index_environment(repo_root, temporary_index)
-            _run_git(repo_root, ["add", "-A", "--", *paths], env=env)
-            return _run_checker(repo_root, env)
-    except (RuntimeError, subprocess.TimeoutExpired) as exc:
-        print(f"Python 工作区注释检查无法执行：{exc}", file=sys.stderr)
+            env = prepare_index(repo_root, temporary_index)
+            if paths:
+                _run_git(repo_root, ["add", "-A", "--", *paths], env=env)
+            selected = _run_git(repo_root, ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR", "--", "*.py"], env=env)
+            count = len([name for name in selected.stdout.split("\0") if name])
+            if not count:
+                if args.json:
+                    return emit("Python 注释", 0, [])
+                print("Python 注释检查：不适用，没有暂存或工作区 Python 差异；未验证 Python 声明。")
+                return 0
+            if not args.json:
+                print(f"Python 注释检查范围：{count} 个私有快照文件，仅检查受影响声明。", flush=True)
+            return _run_checker(repo_root, env, args.json)
+    except (RuntimeError, OSError, UnicodeError, subprocess.SubprocessError) as exc:
+        # 只打印类型名会让"无法执行"无法定位；补上原因，检查未完成必须可诊断。
+        detail = str(exc).strip() or type(exc).__name__
+        print(f"Python 工作区注释检查无法执行：{type(exc).__name__}: {detail}", file=sys.stderr)
         return 2
 
 

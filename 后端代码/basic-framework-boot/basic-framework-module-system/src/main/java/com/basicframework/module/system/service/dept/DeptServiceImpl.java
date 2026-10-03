@@ -6,17 +6,23 @@ import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.datapermission.core.annotation.DataPermission;
+import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
 import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
 import com.basicframework.module.system.dal.mysql.dept.DeptMapper;
 import com.basicframework.module.system.dal.redis.RedisKeyConstants;
+import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
+import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.service.user.AdminUserService;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
@@ -39,6 +45,9 @@ public class DeptServiceImpl implements DeptService {
     @Resource
     private DeptMapper deptMapper;
 
+    @Resource
+    private ObjectProvider<AdminUserService> userServiceProvider;
+
     /**
      * 创建部门。
      *
@@ -56,9 +65,11 @@ public class DeptServiceImpl implements DeptService {
         validateParentDept(null, createReqVO.getParentId());
         // 校验部门名的唯一性
         validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
+        validateLeaderUser(createReqVO.getLeaderUserId());
 
         // 插入部门
         DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
+        dept.setRoleType(currentPlatform());
         deptMapper.insert(dept);
         return dept.getId();
     }
@@ -81,9 +92,11 @@ public class DeptServiceImpl implements DeptService {
         validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
         // 校验部门名的唯一性
         validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
+        validateLeaderUser(updateReqVO.getLeaderUserId());
 
         // 更新部门
         DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
+        updateObj.setRoleType(currentPlatform());
         deptMapper.updateById(updateObj);
     }
 
@@ -99,7 +112,7 @@ public class DeptServiceImpl implements DeptService {
         // 校验是否存在
         validateDeptExists(id);
         // 校验是否有子部门
-        if (deptMapper.selectCountByParentId(id) > 0) {
+        if (DataPermissionUtils.executeIgnore(() -> deptMapper.selectCountByParentId(id)) > 0) {
             throw exception(DEPT_EXITS_CHILDREN);
         }
         // 删除部门
@@ -112,6 +125,7 @@ public class DeptServiceImpl implements DeptService {
      * @param ids ids 编号集合
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDeptList(List<Long> ids) {
@@ -119,9 +133,9 @@ public class DeptServiceImpl implements DeptService {
         ids.forEach(this::validateDeptExists);
         // 校验是否有子部门（排除本次也要删除的部门）
         for (Long id : ids) {
-            if (deptMapper.selectCount(new LambdaQueryWrapperX<DeptDO>()
+            if (DataPermissionUtils.executeIgnore(() -> deptMapper.selectCount(new LambdaQueryWrapperX<DeptDO>()
                     .eq(DeptDO::getParentId, id)
-                    .notIn(DeptDO::getId, ids)) > 0) {
+                    .notIn(DeptDO::getId, ids))) > 0) {
                 throw exception(DEPT_EXITS_CHILDREN);
             }
         }
@@ -138,7 +152,7 @@ public class DeptServiceImpl implements DeptService {
         if (id == null) {
             return;
         }
-        DeptDO dept = deptMapper.selectById(id);
+        DeptDO dept = getDept(id);
         if (dept == null) {
             throw exception(DEPT_NOT_FOUND);
         }
@@ -157,7 +171,7 @@ public class DeptServiceImpl implements DeptService {
             throw exception(DEPT_PARENT_ERROR);
         }
         // 2. 父部门不存在
-        DeptDO parentDept = deptMapper.selectById(parentId);
+        DeptDO parentDept = getDept(parentId);
         if (parentDept == null) {
             throw exception(DEPT_PARENT_NOT_EXITS);
         }
@@ -175,7 +189,7 @@ public class DeptServiceImpl implements DeptService {
             if (parentId == null || DeptDO.PARENT_ID_ROOT.equals(parentId)) {
                 break;
             }
-            parentDept = deptMapper.selectById(parentId);
+            parentDept = getDept(parentId);
             if (parentDept == null) {
                 break;
             }
@@ -187,7 +201,8 @@ public class DeptServiceImpl implements DeptService {
      */
     @VisibleForTesting
     void validateDeptNameUnique(Long id, Long parentId, String name) {
-        DeptDO dept = deptMapper.selectByParentIdAndName(parentId, name);
+        DeptDO dept = DataPermissionUtils.executeIgnore(
+                () -> deptMapper.selectByParentIdAndName(parentId, name, currentPlatform()));
         if (dept == null) {
             return;
         }
@@ -208,7 +223,8 @@ public class DeptServiceImpl implements DeptService {
      */
     @Override
     public DeptDO getDept(Long id) {
-        return deptMapper.selectById(id);
+        DeptDO dept = deptMapper.selectById(id);
+        return dept != null && AdminPlatformTypeEnum.isSame(dept.getRoleType(), currentPlatform()) ? dept : null;
     }
 
     /**
@@ -222,7 +238,7 @@ public class DeptServiceImpl implements DeptService {
         if (CollUtil.isEmpty(ids)) {
             return Collections.emptyList();
         }
-        return deptMapper.selectByIds(ids);
+        return deptMapper.selectListByIdsAndRoleType(ids, currentPlatform());
     }
 
     /**
@@ -233,7 +249,7 @@ public class DeptServiceImpl implements DeptService {
      */
     @Override
     public List<DeptDO> getDeptList(DeptListReqVO reqVO) {
-        List<DeptDO> list = deptMapper.selectList(reqVO);
+        List<DeptDO> list = deptMapper.selectList(reqVO, currentPlatform());
         list.sort(Comparator.comparing(DeptDO::getSort));
         return list;
     }
@@ -246,12 +262,23 @@ public class DeptServiceImpl implements DeptService {
      */
     @Override
     public List<DeptDO> getChildDeptList(Collection<Long> ids) {
+        List<DeptDO> roots = getDeptList(ids);
+        if (roots.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return findChildren(convertSet(roots, DeptDO::getId), currentPlatform());
+    }
+
+    /** 沿指定平台的父子边遍历，已访问节点不重复扩展，历史环路也能有限结束。 */
+    private List<DeptDO> findChildren(Collection<Long> ids, String roleType) {
         List<DeptDO> children = new LinkedList<>();
+        Set<Long> visited = new HashSet<>(ids);
         // 遍历每一层
         Collection<Long> parentIds = ids;
         for (int i = 0; i < Short.MAX_VALUE; i++) { // 使用 Short.MAX_VALUE 避免 bug 场景下，存在死循环
             // 查询当前层，所有的子部门
-            List<DeptDO> depts = deptMapper.selectListByParentId(parentIds);
+            List<DeptDO> depts = deptMapper.selectListByParentId(parentIds, roleType).stream()
+                    .filter(dept -> visited.add(dept.getId())).toList();
             // 1. 如果没有子部门，则结束遍历
             if (CollUtil.isEmpty(depts)) {
                 break;
@@ -271,7 +298,7 @@ public class DeptServiceImpl implements DeptService {
      */
     @Override
     public List<DeptDO> getDeptListByLeaderUserId(Long id) {
-        return deptMapper.selectListByLeaderUserId(id);
+        return deptMapper.selectListByLeaderUserId(id, currentPlatform());
     }
 
     /**
@@ -284,7 +311,12 @@ public class DeptServiceImpl implements DeptService {
     @DataPermission(enable = false) // 禁用数据权限，避免建立不正确的缓存
     @Cacheable(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST, key = "#id")
     public Set<Long> getChildDeptIdListFromCache(Long id) {
-        List<DeptDO> children = getChildDeptList(id);
+        // 缓存按根编号共享，必须由根本身的平台确定内容，不能受首个调用者的平台污染。
+        DeptDO root = deptMapper.selectById(id);
+        if (root == null) {
+            return Collections.emptySet();
+        }
+        List<DeptDO> children = findChildren(Collections.singleton(id), root.getRoleType());
         return convertSet(children, DeptDO::getId);
     }
 
@@ -323,7 +355,26 @@ public class DeptServiceImpl implements DeptService {
         if (StrUtil.isBlank(name)) {
             return null;
         }
-        return deptMapper.selectFirstOne(DeptDO::getName, name);
+        return deptMapper.selectByNameAndRoleType(name, currentPlatform());
+    }
+
+    /** 使用已认证账号的平台，匿名内部调用沿用框架的业务平台默认，不消费请求 DTO 字段。 */
+    private String currentPlatform() {
+        return userServiceProvider.getObject().getLoginUserTypeOrDefault();
+    }
+
+    /** 部门负责人必须可见、启用且同属当前平台；空负责人表示不指定。 */
+    private void validateLeaderUser(Long userId) {
+        if (userId == null) {
+            return;
+        }
+        AdminUserDO user = userServiceProvider.getObject().getUser(userId, currentPlatform());
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
+        if (!CommonStatusEnum.ENABLE.getStatus().equals(user.getStatus())) {
+            throw exception(USER_IS_DISABLE, user.getNickname());
+        }
     }
 
 }

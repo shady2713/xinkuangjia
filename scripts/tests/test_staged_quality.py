@@ -1,6 +1,6 @@
 """验证提交钩子的暂存隔离、检查路由、失败汇总与真实命令入口。
 
-真实 Git 验证使用私有索引和对象目录，不创建仓库、不提交、不改变用户索引。
+真实 Git 验证在临时仓库自行建立基线，不依赖用户 HEAD 或改变用户索引。
 @author 李杰
 """
 
@@ -20,6 +20,7 @@ from scripts.code.web import check_worktree_web_comments as web
 from scripts.common import staged_content as staged
 from scripts.common.quality_common import DEFAULT_ROOT, CheckError, ProcessResult
 from scripts.workflow import check_staged_quality as runner
+from scripts.tests.git_sandbox import create_sandbox
 
 OLD = "a" * 40
 NEW = "b" * 40
@@ -245,7 +246,7 @@ def test_web_uses_staged_content_and_separate_scopes(
 
 @pytest.fixture
 def private_index(tmp_path: Path) -> Iterator[dict[str, str]]:
-    """复制 HEAD 到私有索引，所有测试对象也隔离存放，结束时核对真实索引。"""
+    """构造独立的最小提交基线，真实工程只提供工具与配置，索引保持不变。"""
     root = DEFAULT_ROOT
     real_index = Path(
         subprocess.check_output(
@@ -256,32 +257,18 @@ def private_index(tmp_path: Path) -> Iterator[dict[str, str]]:
     )
     if not real_index.is_absolute():
         real_index = root / real_index
-    before = hashlib.sha256(real_index.read_bytes()).digest()
-    objects = Path(
-        subprocess.check_output(
-            ["git", "rev-parse", "--git-path", "objects"],
-            cwd=root,
-            text=True,
-        ).strip()
-    )
-    if not objects.is_absolute():
-        objects = root / objects
-    private_objects = tmp_path / "objects"
-    private_objects.mkdir()
-    env = {
-        **os.environ,
-        "GIT_INDEX_FILE": str(tmp_path / "index"),
-        "GIT_OBJECT_DIRECTORY": str(private_objects),
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(objects.resolve()),
-        "PYTHONIOENCODING": "utf-8",
-    }
-    subprocess.run(
-        ["git", "read-tree", "HEAD"], cwd=root, env=env, check=True, capture_output=True, timeout=30
-    )
+    before = hashlib.sha256(real_index.read_bytes()).digest() if real_index.exists() else None
+    sandbox = create_sandbox(tmp_path / "repository")
+    sandbox.stage(runner.RULE_FILE, (root / runner.RULE_FILE).read_text(encoding="utf-8"))
+    sandbox.stage("AGENTS.md", "# Isolated fixture\n")
+    sandbox.stage("baseline-reference.md", "[受影响](AGENTS.md)\n[历史](missing.md)\n")
+    sandbox.record_baseline()
+    env = {**sandbox.env, "GIT_WORK_TREE": str(root)}
     try:
         yield env
     finally:
-        assert hashlib.sha256(real_index.read_bytes()).digest() == before
+        after = hashlib.sha256(real_index.read_bytes()).digest() if real_index.exists() else None
+        assert after == before
 
 
 def stage_blob(env: dict[str, str], name: str, content: str) -> None:
@@ -392,7 +379,7 @@ def test_all_thirteen_checks_are_dispatched(
             )
         ),
         "hook-probe.py": '"""说明检查样本。\n@author 李杰\n"""\nVALUE = 1\n',
-        "后端/java服务/HookProbe.java": "/** 验证检查。\n * @author 李杰\n */\npublic class HookProbe {}\n",
+        "后端代码/basic-framework-boot/HookProbe.java": "/** 验证检查。\n * @author 李杰\n */\npublic class HookProbe {}\n",
         "前端/业务系统/hook-probe.ts": "/** 模块说明。 */\nconst value = 1;\n",
     }
     for name, content in samples.items():
@@ -428,11 +415,6 @@ def test_all_thirteen_checks_are_dispatched(
 
 def test_deleted_doc_ignores_unrelated_history(private_index: dict[str, str]) -> None:
     """实际删除已跟踪文档时，关联路径检查执行且不把删除当成输入丢失错误。"""
-    # 关联引用扫描需要可解码的源码视图；私有索引带入本次已修复的两个 UTF-8 文件。
-    # 真实索引仍不变；旧对象的 Web 编码边界由独立回归测试验证。
-    for filename in ("cropper.vue", "typing.ts"):
-        name = "前端代码/basic-framework-admin/apps/web-ele/src/components/cropper/" + filename
-        stage_blob(private_index, name, (DEFAULT_ROOT / name).read_text(encoding="utf-8"))
     subprocess.run(
         ["git", "update-index", "--force-remove", "AGENTS.md"],
         cwd=DEFAULT_ROOT,

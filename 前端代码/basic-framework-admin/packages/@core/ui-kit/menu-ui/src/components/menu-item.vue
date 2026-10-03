@@ -9,7 +9,8 @@ import { VbenIcon, VbenTooltip } from '@vben-core/shadcn-ui';
 import { MenuBadge } from '../components';
 import { useMenu, useMenuContext, useSubMenuContext } from '../hooks';
 
-interface Props extends MenuItemProps {}
+/** 菜单项的属性契约别名：直接复用菜单项属性，不额外声明成员。 */
+type Props = MenuItemProps;
 
 defineOptions({ name: 'MenuItem' });
 

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import subprocess
@@ -16,6 +17,42 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from delivery_rules import BYPASS, PROXY_KEYS
+
+
+def coverage_inputs(root: Path) -> dict[str, str]:
+    """绑定本次覆盖率运行的前端源码、测试和配置。
+
+    Args:
+        root: 所属前端工程，不排除纳管的 vendor 源码。
+    Returns:
+        输入文件与裁决工具的内容摘要；运行前后变化使成功证据无效。
+    Raises:
+        OSError: 纳管输入或工具源码无法读取。
+        ValueError: 输入链接越过前端边界。
+    """
+    suffixes = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue", ".json", ".yaml", ".yml", ".py"}
+    excluded = {"node_modules", "dist", "coverage", ".cache", ".turbo", ".git", "__pycache__"}
+    result: dict[str, str] = {}
+    for folder, directories, filenames in os.walk(root, followlinks=False):
+        directories[:] = [name for name in directories if name not in excluded]
+        for filename in filenames:
+            path = Path(folder) / filename
+            if path.suffix in suffixes:
+                if not path.resolve().is_relative_to(root):
+                    raise ValueError("测试输入链接越过前端边界")
+                result[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    for relative in ("scripts/workflow/coverage_gate.py", "scripts/code/java/check_staged_java_comments.py", "scripts/common/quality_common.py"):
+        path = root.parents[1] / relative
+        result["tool:" + relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
+
+def coverage_output_signature(report: Path) -> tuple[int, int, str] | None:
+    """读取报告版本标识；用前后变动检测旧报告，不依赖系统时钟与文件时间精度一致。"""
+    if not report.is_file():
+        return None
+    stat = report.stat()
+    return stat.st_mtime_ns, stat.st_size, hashlib.sha256(report.read_bytes()).hexdigest()
 
 
 def test_environment(environment: dict[str, str], profile: str) -> dict[str, str]:
@@ -86,11 +123,14 @@ def main() -> int:
     parser.add_argument("--suite", choices=("unit", "e2e"), default="unit")
     parser.add_argument("--proxy", choices=("local", "inherit"), default="local")
     parser.add_argument("--coverage", action="store_true")
+    parser.add_argument("--coverage-stage", choices=("audit", "full", "release"), default="audit")
     parser.add_argument("--timeout", type=int, default=600)
     # pnpm 可能移除第一层 --；未知参数继续交给测试运行器验证，保持原顺序。
     args, arguments = parser.parse_known_args()
     if args.timeout < 1 or (args.coverage and args.suite != "unit"):
         parser.error("超时必须为正数，coverage 仅用于 unit")
+    if args.coverage_stage != "audit" and not args.coverage:
+        parser.error("full/release 必须同时启用 coverage")
     root = Path(__file__).resolve().parents[2]
     node = shutil.which("node")
     if not node:
@@ -115,10 +155,22 @@ def main() -> int:
         ]
     command.extend(arguments[1:] if arguments[:1] == ["--"] else arguments)
     try:
-        return run_process(
+        before = coverage_inputs(root) if args.coverage else None
+        report = root / "coverage/coverage-final.json"
+        prior_report = coverage_output_signature(report) if args.coverage else None
+        code = run_process(
             command, root, test_environment(dict(os.environ), args.proxy), args.timeout
         )
-    except (OSError, subprocess.TimeoutExpired):
+        if code or not args.coverage:
+            return code
+        current_report = coverage_output_signature(report)
+        if current_report is None or current_report == prior_report or before != coverage_inputs(root):
+            print("覆盖率输出缺失、过期或运行期间输入发生变化。", file=sys.stderr)
+            return 2
+        # 最终门槛由逐源码门禁执行；Vitest 的空类型占位计数不能冒充可执行函数。
+        checker = root.parents[1] / "scripts/workflow/coverage_gate.py"
+        return run_process([sys.executable, "-B", "-X", "utf8", str(checker), "--kind", "web", "--stage", args.coverage_stage], root, dict(os.environ), args.timeout)
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
         print("测试进程无法启动或未能及时清理。", file=sys.stderr)
         return 2
 

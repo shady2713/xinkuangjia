@@ -3,6 +3,14 @@ import type { FlattenedItem } from 'reka-ui';
 
 import type { Recordable } from '@vben-core/typings';
 
+/**
+ * 树节点数据。
+ *
+ * 取值字段、禁用字段与子节点字段名都由调用方配置，
+ * 每个键的真实类型只能在读取处收窄，因此这里只声明键空间。
+ */
+export type TreeNode = Recordable<unknown>;
+
 export interface TreeProps {
   /** 单选时允许取消已有选项 */
   allowClear?: boolean;
@@ -25,7 +33,7 @@ export interface TreeProps {
   /** 禁用字段名 */
   disabledField?: string;
   /** 自定义节点类名 */
-  getNodeClass?: (item: FlattenedItem<Recordable<any>>) => string;
+  getNodeClass?: (item: FlattenedItem<TreeNode>) => string;
   iconField?: string;
   /** label字段 */
   labelField?: string;
@@ -36,11 +44,17 @@ export interface TreeProps {
   /** 启用展开收缩动画 */
   transition?: boolean;
   /** 树数据 */
-  treeData: Recordable<any>[];
+  treeData: TreeNode[];
   /** 值字段 */
   valueField?: string;
 }
 
+/**
+ * 树属性的缺省值：集中一处，避免各调用点自行拼默认值。
+ * 用函数返回而不是常量对象，是因为 `defaultExpandedKeys` 需要每次拿到独立数组，
+ * 共用同一个数组会让多个树实例互相污染展开状态。
+ * @returns 与 `TreeProps` 缺省项对应的全新对象。
+ */
 export function treePropsDefaults() {
   return {
     allowClear: false,

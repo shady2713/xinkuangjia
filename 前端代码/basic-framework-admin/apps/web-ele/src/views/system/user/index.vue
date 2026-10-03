@@ -14,7 +14,6 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { ElCard, ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteUser,
   deleteUserList,
@@ -22,6 +21,7 @@ import {
   getUserPage,
   updateUserStatus,
 } from '#/api/system/user';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -106,21 +106,46 @@ async function handleStatusChange(
   newStatus: number,
   row: SystemUserApi.User,
 ): Promise<boolean | undefined> {
-  return new Promise((resolve, reject) => {
-    confirm({
-      content: `你要将${row.username}的状态切换为【${getDictLabel(DICT_TYPE.COMMON_STATUS, newStatus)}】吗？`,
-    })
-      .then(async () => {
-        // 更新用户状态
-        await updateUserStatus(row.id!, newStatus);
-        // 提示并返回成功
-        ElMessage.success($t('ui.actionMessage.operationSuccess'));
-        resolve(true);
+  return new Promise(
+    /**
+     * 交由二次确认组件承载用户决策；确认后执行状态更新并按结果 resolve。
+     * @param resolve 状态更新成功时 resolve true，缺少主键或失败时 resolve false。
+     * @param reject 更新过程抛出异常时调用，向调用方透出原始错误。
+     */
+    (resolve, reject) => {
+      confirm({
+        content: `你要将${row.username}的状态切换为【${getDictLabel(DICT_TYPE.COMMON_STATUS, newStatus)}】吗？`,
       })
-      .catch(() => {
-        reject(new Error('取消操作'));
-      });
-  });
+        .then(
+          /**
+           * 用户确认后写库：缺少主键直接判失败，否则提交状态变更并给出成功提示。
+           * @returns 无返回值；结果通过 resolve 传给调用方。
+           */
+          async () => {
+            // 状态变更会写库，行缺少 id 时无法定位目标记录，直接失败而不是用 undefined 发请求
+            const userId = row.id;
+            if (userId === undefined) {
+              ElMessage.error($t('ui.actionMessage.operationFailed'));
+              resolve(false);
+              return;
+            }
+            // 更新用户状态
+            await updateUserStatus(userId, newStatus);
+            // 提示并返回成功
+            ElMessage.success($t('ui.actionMessage.operationSuccess'));
+            resolve(true);
+          },
+        )
+        .catch(
+          /**
+           * 用户取消确认时以「取消操作」拒绝，让调用方据此回滚行内状态。
+           */
+          () => {
+            reject(new Error('取消操作'));
+          },
+        );
+    },
+  );
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({

@@ -143,15 +143,28 @@ const ElRate = defineAsyncComponent(() =>
   ]).then(([res]) => res.ElRate),
 );
 
+/**
+ * 给组件套一层统一的中英文占位文案。
+ * 表单 schema 只声明了组件类型，占位文案由这里按控件种类补齐，
+ * 同时把内部组件实例的方法通过 Proxy 暴露给表单层（如 focus、blur）。
+ * @param component 需要包裹的 Element Plus 组件。
+ * @param type 控件种类，决定默认占位文案走 input 还是 select 的翻译键。
+ * @param componentProps 追加到组件上的固定属性，会被调用方传入的属性覆盖。
+ * @returns 包装后的组件定义，渲染时输出真实组件并补上占位文案。
+ */
 const withDefaultPlaceholder = <T extends Component>(
   component: T,
   type: 'input' | 'select',
-  componentProps: Recordable<any> = {},
+  componentProps: Recordable<unknown> = {},
 ) => {
   return defineComponent({
     name: component.name,
     inheritAttrs: false,
-    setup: (props: any, { attrs, expose, slots }) => {
+    // 未声明 props，组件只通过 attrs 接收调用方属性，这里按只读属性表处理。
+    setup: (
+      props: Readonly<Record<string, unknown>>,
+      { attrs, expose, slots },
+    ) => {
       const placeholder =
         props?.placeholder ||
         attrs?.placeholder ||
@@ -205,6 +218,12 @@ export type ComponentType =
   | 'Upload'
   | BaseFormComponentType;
 
+/**
+ * 装配表单组件适配层并注册到全局共享状态。
+ * 组件映射表在启动时只构建一次，随后由 `initComponentAdapter` 的调用方等待完成；
+ * 适配层负责把 Element Plus 与业务组件的差异收敛在一处，页面不再直接依赖具体实现。
+ * @returns 注册完成即结束；组件映射通过全局共享状态对外提供，因此不返回组件表。
+ */
 async function initComponentAdapter() {
   const components: Partial<Record<ComponentType, Component>> = {
     // 如果你的组件体积比较大，可以使用异步加载
@@ -310,9 +329,15 @@ async function initComponentAdapter() {
     },
     Space: ElSpace,
     Switch: ElSwitch,
+    /**
+     * 时间选择器的适配：范围模式下 Element Plus 需要成对的 name 和 id，
+     * 这里按 `_end` 后缀补齐，否则表单只会校验到起始值。
+     * @param props 表单项当前值与事件绑定；范围模式下 name、id 为单个值。
+     * @returns 时间选择器的渲染结果。
+     */
     TimePicker: (props, { attrs, slots }) => {
       const { name, id, isRange } = props;
-      const extraProps: Recordable<any> = {};
+      const extraProps: Recordable<unknown> = {};
       if (isRange) {
         if (name && !Array.isArray(name)) {
           extraProps.name = [name, `${name}_end`];
@@ -331,9 +356,15 @@ async function initComponentAdapter() {
         slots,
       );
     },
+    /**
+     * 日期时间范围选择器的适配：始终按 `datetimerange` 渲染，
+     * 并把单个 name、id 扩展成起止两个，缺一头会导致范围值无法完整回填。
+     * @param props 表单项当前值与事件绑定。
+     * @returns 范围选择器的渲染结果。
+     */
     RangePicker: (props, { attrs, slots }) => {
       const { name, id } = props;
-      const extraProps: Recordable<any> = {};
+      const extraProps: Recordable<unknown> = {};
       if (name && !Array.isArray(name)) {
         extraProps.name = [name, `${name}_end`];
       }
@@ -352,9 +383,15 @@ async function initComponentAdapter() {
       );
     },
     Rate: ElRate,
+    /**
+     * 日期选择器的适配：只有 type 含 range 时才需要成对的 name 和 id，
+     * 单值模式下补成数组反而会让 Element Plus 取不到值。
+     * @param props 表单项当前值与事件绑定；type 决定是否为范围模式。
+     * @returns 日期选择器的渲染结果。
+     */
     DatePicker: (props, { attrs, slots }) => {
       const { name, id, type } = props;
-      const extraProps: Recordable<any> = {};
+      const extraProps: Recordable<unknown> = {};
       if (type && type.includes('range')) {
         if (name && !Array.isArray(name)) {
           extraProps.name = [name, `${name}_end`];

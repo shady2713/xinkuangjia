@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import type { VbenFormSchema } from '#/adapter/form';
+/**
+ * OAuth2 授权同意页：展示第三方应用申请的权限范围，由用户勾选后提交授权结果。
+ */
+import type { ComponentType, VbenFormSchema } from '#/adapter/form';
 
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
@@ -10,6 +13,11 @@ import { useVbenForm } from '#/adapter/form';
 import { authorize, getAuthorize } from '#/api/system/oauth2/open';
 
 defineOptions({ name: 'SSOLogin' });
+
+/** 授权表单值：用户本次勾选的授权范围。 */
+type AuthorizeForm = {
+  scopes: string[];
+};
 
 const { query } = useRoute();
 
@@ -58,26 +66,54 @@ async function init() {
   const data = await getAuthorize(queryParams.clientId);
   client.value = data.client;
   // 1.2 解析 scope
-  let scopes;
+  let scopes: typeof data.scopes;
   // 如果 params.scope 非空，则过滤下返回的 scopes
   if (queryParams.scopes.length > 0) {
-    scopes = data.scopes.filter((scope) =>
-      queryParams.scopes.includes(scope.key),
+    scopes = data.scopes.filter(
+      /**
+       * 只保留客户端在授权请求中显式声明过的范围。
+       * @param scope 后端返回的单个授权范围。
+       * @returns 该范围是否在请求参数中出现。
+       */
+      (scope) => queryParams.scopes.includes(scope.key),
     );
     // 如果 params.scope 为空，则使用返回的 scopes 设置它
   } else {
     scopes = data.scopes;
-    queryParams.scopes = scopes.map((scope) => scope.key);
+    queryParams.scopes = scopes.map(
+      /** 请求未声明范围时，默认接受后端返回的全部范围。 */
+      (scope) => scope.key,
+    );
   }
 
   // 2.设置表单的初始值
   formApi.setFieldValue(
     'scopes',
-    scopes.filter((scope) => scope.value).map((scope) => scope.key),
+    scopes
+      .filter(
+        /**
+         * 只把后端标记为默认勾选的范围作为初始值。
+         * @param scope 待判断的授权范围。
+         * @returns 该范围是否需要默认勾选。
+         */
+        (scope) => scope.value,
+      )
+      .map(
+        /**
+         * 表单只提交范围键，后端按键判定实际权限。
+         * @param scope 单个授权范围。
+         * @returns 该范围对应的键。
+         */
+        (scope) => scope.key,
+      ),
   );
 }
 
-/** 处理授权的提交 */
+/**
+ * 处理授权确认：同意时按用户勾选提交，拒绝时全部取消。
+ * @param approved 用户是否同意授权。
+ * @returns 授权请求完成后兑现；后端未返回跳转地址时不跳转。
+ */
 async function handleSubmit(approved: boolean) {
   // 计算 checkedScopes + uncheckedScopes
   let checkedScopes: string[];
@@ -87,6 +123,11 @@ async function handleSubmit(approved: boolean) {
     const res = await formApi.getValues();
     checkedScopes = res.scopes;
     uncheckedScopes = queryParams.scopes.filter(
+      /**
+       * 未被勾选的范围按取消处理，后端据此回收既有授权。
+       * @param item 当前待判断的授权范围键。
+       * @returns 该范围是否未被勾选。
+       */
       (item) => !checkedScopes.includes(item),
     );
   } else {
@@ -143,24 +184,40 @@ function formatScope(scope: string) {
   }
 }
 
-const formSchema = computed((): VbenFormSchema[] => {
-  return [
-    {
-      fieldName: 'scopes',
-      label: '授权范围',
-      component: 'CheckboxGroup',
-      componentProps: {
-        options: queryParams.scopes.map((scope) => ({
-          label: formatScope(scope),
-          value: scope,
-        })),
-        class: 'flex flex-col gap-2',
+/**
+ * 授权范围表单：范围列表在授权信息返回后才确定，因此整体用计算属性生成。
+ */
+const formSchema = computed(
+  /**
+   * 授权范围的可选项：范围列表在授权信息返回后才确定，必须整体重算。
+   * @returns 只含“授权范围”一个字段的表单项列表。
+   */
+  (): VbenFormSchema[] => {
+    return [
+      {
+        fieldName: 'scopes',
+        label: '授权范围',
+        component: 'CheckboxGroup',
+        componentProps: {
+          options: queryParams.scopes.map(
+            /**
+             * 每个范围键对应一个可勾选项，展示名由范围键格式化而来。
+             * @param scope 授权范围的键。
+             * @returns 勾选项的标签与取值。
+             */
+            (scope) => ({
+              label: formatScope(scope),
+              value: scope,
+            }),
+          ),
+          class: 'flex flex-col gap-2',
+        },
       },
-    },
-  ];
-});
+    ];
+  },
+);
 
-const [Form, formApi] = useVbenForm(
+const [Form, formApi] = useVbenForm<ComponentType, AuthorizeForm>(
   reactive({
     commonConfig: {
       hideLabel: true,
@@ -171,10 +228,12 @@ const [Form, formApi] = useVbenForm(
   }),
 );
 
-/** 初始化 */
-onMounted(() => {
-  init();
-});
+onMounted(
+  /** 首次进入授权页时拉取客户端信息与授权范围。 */
+  () => {
+    init();
+  },
+);
 </script>
 
 <template>

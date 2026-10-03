@@ -26,7 +26,20 @@ interface ToolbarConfigOptions extends VxeGridPropTypes.ToolbarConfig {
   search?: boolean;
 }
 
-export interface VxeTableGridOptions<T = any> extends VxeTableGridProps<T> {
+/**
+ * 表格行数据的兜底类型。
+ * 调用方没有声明行类型时用它占位；此时行字段只能通过 vxe 的运行时取值接口访问，
+ * 需要具体字段的场景必须显式传入行类型。
+ */
+type DefaultRowData = Record<string, unknown>;
+
+/**
+ * vxe-grid 的配置项：在 vxe-table 原生配置基础上补充本项目的工具栏搜索开关。
+ * @typeParam T 表格行类型；不指定时按 DefaultRowData 占位。
+ */
+export interface VxeTableGridOptions<
+  T = DefaultRowData,
+> extends VxeTableGridProps<T> {
   /** 工具栏配置 */
   toolbarConfig?: ToolbarConfigOptions;
 }
@@ -36,8 +49,13 @@ export interface SeparatorOptions {
   backgroundColor?: string;
 }
 
+/**
+ * VbenVxeGrid 组件的属性契约：把表格配置、事件、搜索表单与标题区一次性描述完整。
+ * @typeParam T 表格行类型。
+ * @typeParam D 表单组件类型，决定搜索表单可用的控件集合。
+ */
 export interface VxeGridProps<
-  T extends Record<string, any> = any,
+  T extends object = DefaultRowData,
   D extends BaseFormComponentType = BaseFormComponentType,
 > {
   /**
@@ -78,14 +96,27 @@ export interface VxeGridProps<
   separator?: boolean | SeparatorOptions;
 }
 
+/**
+ * 表格状态选择器：从表格状态中挑选出调用方关心的数据，不传则取整个状态。
+ * 入参按未指定行类型的状态暴露，因为使用方通常只取分页、加载态这类与行数据无关的字段。
+ * @typeParam T 挑选结果的类型，由使用方自行推断。
+ */
+type VxeStateSelector<T> = (
+  state: NoInfer<VxeGridProps<DefaultRowData, BaseFormComponentType>>,
+) => T;
+
 export type ExtendedVxeGridApi<
-  D extends Record<string, any> = any,
+  D extends object = DefaultRowData,
   F extends BaseFormComponentType = BaseFormComponentType,
-> = VxeGridApi<D> & {
+> = {
+  /**
+   * 以响应式只读形式读取表格内部状态。
+   * selector 用于从状态中挑选需要的数据，不传时返回整个状态。
+   */
   useStore: <T = NoInfer<VxeGridProps<D, F>>>(
-    selector?: (state: NoInfer<VxeGridProps<any, any>>) => T,
+    selector?: VxeStateSelector<T>,
   ) => Readonly<Ref<T>>;
-};
+} & VxeGridApi<D>;
 
 export interface SetupVxeTable {
   configVxeTable: (ui: VxeUIExport) => void;

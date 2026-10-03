@@ -1,6 +1,7 @@
+/** 管理凭据、服务端权限模型及路由转换后的独立展示状态。 */
 import type { RouteRecordRaw } from 'vue-router';
 
-import type { MenuRecordRaw } from '@vben-core/typings';
+import type { AppRouteRecordRaw, MenuRecordRaw } from '@vben-core/typings';
 
 import { acceptHMRUpdate, defineStore } from 'pinia';
 
@@ -43,13 +44,21 @@ interface AccessState {
    * 登录 accessToken
    */
   refreshToken: AccessToken;
+  /** 服务端原始权限菜单，独立于展示菜单，禁止通过同一字段反复变换类型。 */
+  serverMenus: AppRouteRecordRaw[];
 }
 
 /**
- * @zh_CN 访问权限相关
+ * 定义可按身份重置的访问权限状态，服务端菜单不进入持久化缓存。
  */
 export const useAccessStore = defineStore('core-access', {
   actions: {
+    /** 保存已经校验的服务端权限菜单，供路由生成器使用。
+     * @param menus 只含服务端 DTO 字段的独立菜单集合。
+     */
+    setServerMenus(menus: AppRouteRecordRaw[]) {
+      this.serverMenus = menus;
+    },
     getMenuByPath(path: string) {
       function findMenu(
         menus: MenuRecordRaw[],
@@ -109,7 +118,9 @@ export const useAccessStore = defineStore('core-access', {
       'lockScreenPassword',
     ],
   },
+  /** 每次重置恢复空权限与空菜单，不复用前一身份对象。 */
   state: (): AccessState => ({
+    serverMenus: [],
     accessCodes: [],
     accessMenus: [],
     accessRoutes: [],

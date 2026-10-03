@@ -19,7 +19,11 @@ const userRoles = computed(() => userStore.userRoles);
 const quickLinks = [
   { title: '用户管理', path: '/system/user', description: '管理系统用户账号' },
   { title: '角色管理', path: '/system/role', description: '配置角色与权限' },
-  { title: '部门管理', path: '/system/dept', description: '组织架构与部门管理' },
+  {
+    title: '部门管理',
+    path: '/system/dept',
+    description: '组织架构与部门管理',
+  },
   { title: '字典管理', path: '/system/dict', description: '维护系统字典数据' },
 ].filter((link) => accessStore.getMenuByPath(link.path));
 
@@ -45,7 +49,9 @@ function getGreeting(): string {
       <div class="welcome-content">
         <div class="welcome-text">
           <h1 class="welcome-title">
-            {{ getGreeting() }}，{{ userInfo?.nickname || userInfo?.username || '用户' }}
+            {{ getGreeting() }}，{{
+              userInfo?.nickname || userInfo?.username || '用户'
+            }}
           </h1>
           <p class="welcome-desc">欢迎回到管理系统后台</p>
         </div>
@@ -153,83 +159,99 @@ function getGreeting(): string {
 .welcome-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+
 .welcome-card :deep(.el-card__body) {
   padding: 24px 32px;
 }
+
 .welcome-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .welcome-title {
-  color: #fff;
+  margin: 0 0 8px;
   font-size: 24px;
   font-weight: 600;
-  margin: 0 0 8px 0;
+  color: #fff;
 }
+
 .welcome-desc {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 14px;
   margin: 0;
+  font-size: 14px;
+  color: rgb(255 255 255 / 85%);
 }
+
 .welcome-avatar {
   flex-shrink: 0;
 }
+
 .avatar-img {
   width: 64px;
   height: 64px;
+  border: 3px solid rgb(255 255 255 / 50%);
   border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.5);
 }
+
 .card-header-title {
   font-size: 15px;
   font-weight: 600;
 }
+
 .info-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
 .info-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 14px;
 }
+
 .info-label {
-  color: #909399;
   flex-shrink: 0;
+  color: #909399;
 }
+
 .info-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   color: #303133;
   text-align: right;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
+
 .quick-links {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
 .quick-link-item {
   padding: 10px 12px;
-  border-radius: 6px;
   cursor: pointer;
+  border-radius: 6px;
   transition: background-color 0.2s;
 }
+
 .quick-link-item:hover {
   background-color: #f5f7fa;
 }
+
 .quick-link-title {
   font-size: 14px;
   font-weight: 500;
   color: #303133;
 }
+
 .quick-link-desc {
+  margin-top: 2px;
   font-size: 12px;
   color: #909399;
-  margin-top: 2px;
 }
 </style>

@@ -14,6 +14,8 @@ export const overridesPreferences = defineOverridesPreferences({
     defaultHomePath: '/dashboard',
     enablePreferences: appConfig.VITE_APP_ENABLE_PREFERENCES === 'true',
     enableRefreshToken: true,
+    /** 本应用认证失效固定完整退出并跳转登录；不展示旧页面内续登选项。 */
+    loginExpiredMode: 'page',
     name: appConfig.VITE_APP_TITLE,
   },
   logo: {

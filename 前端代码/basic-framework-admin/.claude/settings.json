@@ -6,8 +6,6 @@
       "Bash(git rev-parse *)",
       "Read(//e/project/2026技术框架/2026/**)"
     ],
-    "additionalDirectories": [
-      "E:\\project\\2026技术框架\\2026"
-    ]
+    "additionalDirectories": ["E:\\project\\2026技术框架\\2026"]
   }
 }

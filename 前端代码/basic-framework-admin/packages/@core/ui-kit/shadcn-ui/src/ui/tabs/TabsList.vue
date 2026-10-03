@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { TabsListProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { TabsList } from 'reka-ui';
 
-const props = defineProps<TabsListProps & { class?: any }>();
+const props = defineProps<TabsListProps & { class?: ClassValue }>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

@@ -47,7 +47,19 @@ export function initTippy(app: App<Element>, options?: DefaultProps) {
   app.directive('tippy', useTippyDirective(isDark));
 }
 
-export const Tippy = (props: any, { attrs, slots }: SetupContext) => {
+/**
+ * Tippy 组件的包装函数：合并调用方属性与透传属性，并把 theme 归一化为
+ * tippy 能识别的取值（auto 依据当前主题落成空串或 light）。
+ * @param props 由组件实例传入的属性，本组件不单独声明 props，统一并入透传属性。
+ * @param context 组件的渲染上下文，本组件只取其中的透传属性与插槽。
+ * @param context.attrs 透传属性。
+ * @param context.slots 插槽。
+ * @returns 渲染 TippyComponent 的 vnode。
+ */
+export const Tippy = (
+  props: Record<string, unknown>,
+  { attrs, slots }: SetupContext,
+) => {
   let theme: string = (attrs.theme as string) ?? 'auto';
   if (theme === 'auto') {
     theme = isDark.value ? '' : 'light';

@@ -6,11 +6,8 @@ import type { SystemSmsChannelApi } from '#/api/system/sms/channel';
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import { deleteSmsChannel, getSmsChannelPage } from '#/api/system/sms/channel';
 import { useCrudItemActions } from '#/composables/use-crud-actions';
-import {
-  deleteSmsChannel,
-  getSmsChannelPage,
-} from '#/api/system/sms/channel';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -30,7 +27,8 @@ const { handleCreate, handleDelete, handleEdit } =
   useCrudItemActions<SystemSmsChannelApi.Channel>({
     deleteApi: deleteSmsChannel,
     getDeleteName: (row) => row.signature || '',
-    getRowKey: (row) => row.id!,
+    // 列表接口未返回 id 的异常行以 NaN 占位；批量勾选路径会按非有限数值过滤掉这类行
+    getRowKey: (row) => row.id ?? Number.NaN,
     modalApi: formModalApi,
     refresh: handleRefresh,
   });

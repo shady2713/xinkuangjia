@@ -1,14 +1,16 @@
+/** 根据部署上传模式编排请求，只有对象与元数据均登记成功后才返回可用地址。 */
 import type { Ref } from 'vue';
 
-import type { AxiosProgressEvent, InfraFileApi } from '#/api/core/file';
+import type { AxiosProgressEvent } from '#/api/core/file';
 
 import { computed, unref } from 'vue';
 
 import { useAppConfig } from '@vben/hooks';
 import { $t } from '@vben/locales';
 
-import { createFile, getFilePresignedUrl, uploadFile } from '#/api/core/file';
-import { baseRequestClient } from '#/api/request';
+import { uploadFile } from '#/api/core/file';
+
+import { uploadDirect } from './upload-direct';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 const uploadType = window._VBEN_ADMIN_PRO_APP_CONF_.VITE_UPLOAD_TYPE;
@@ -99,34 +101,14 @@ export function useUpload(directory?: string) {
   const uploadUrl = getUploadUrl();
   // 是否使用前端直连上传
   const isClientUpload = UPLOAD_TYPE.CLIENT === uploadType;
-  // 重写ElUpload上传方法
+  /** 等待预约完成与持久化登记，失败必须由上传组件显示为失败。 */
   async function httpRequest(
     file: File,
     onUploadProgress?: AxiosProgressEvent,
   ) {
-    // 模式一：前端上传
-    if (isClientUpload) {
-      // 1.1 生成文件名称
-      const fileName = await generateFileName(file);
-      // 1.2 获取文件预签名地址
-      const presignedInfo = await getFilePresignedUrl(fileName, directory);
-      // 1.3 上传文件
-      return baseRequestClient
-        .put(presignedInfo.uploadUrl, file, {
-          headers: {
-            'Content-Type': file.type,
-          },
-        })
-        .then(() => {
-          // 1.4. 记录文件信息到后端（异步）
-          createFile0(presignedInfo, file);
-          // 通知成功，数据格式保持与后端上传的返回结果一致
-          return { url: presignedInfo.url };
-        });
-    } else {
-      // 模式二：后端上传
-      return uploadFile({ file, directory }, onUploadProgress);
-    }
+    return isClientUpload
+      ? uploadDirect(file, directory, onUploadProgress)
+      : uploadFile({ file, directory }, onUploadProgress);
   }
 
   return {
@@ -136,38 +118,9 @@ export function useUpload(directory?: string) {
 }
 
 /**
- * 获得上传 URL
+ * 获得后端 multipart 上传入口地址。
+ * @returns 与当前应用 API 根地址一致的上传 URL
  */
 export function getUploadUrl(): string {
   return `${apiURL}/infra/file/upload`;
-}
-
-/**
- * 创建文件信息
- *
- * @param vo 文件预签名信息
- * @param file 文件
- */
-function createFile0(
-  vo: InfraFileApi.FilePresignedUrlRespVO,
-  file: File,
-): InfraFileApi.File {
-  const fileVO = {
-    url: vo.url,
-    path: vo.path,
-    name: file.name,
-    type: file.type,
-    size: file.size,
-  };
-  createFile(fileVO);
-  return fileVO;
-}
-
-/**
- * 生成文件名称（使用算法SHA256）
- *
- * @param file 要上传的文件
- */
-async function generateFileName(file: File) {
-  return file.name;
 }

@@ -1,4 +1,4 @@
-﻿export interface ShortcutsType {
+export interface ShortcutsType {
   text: string;
   value: string;
 }
@@ -13,7 +13,18 @@ export interface CronLoop<TStart = number, TEnd = number> {
   end: TEnd | undefined;
 }
 
-export interface CronItem<TRange = number, TLoopStart = number, TLoopEnd = number> {
+/**
+ * 单个时间单位的调度配置。
+ * 三种模式互斥使用：range 给固定区间，loop 给周期区间，appoint 给出具体时刻列表。
+ * @template TRange 区间端点类型，通常是数字。
+ * @template TLoopStart 周期起始类型，通常是数字。
+ * @template TLoopEnd 周期结束类型，通常是数字。
+ */
+export interface CronItem<
+  TRange = number,
+  TLoopStart = number,
+  TLoopEnd = number,
+> {
   type: string;
   range: CronRange<TRange>;
   loop: CronLoop<TLoopStart, TLoopEnd>;
@@ -143,6 +154,10 @@ export const CronValueDefault: CronValue = {
   },
 };
 
+/**
+ * 各时间单位在面板上默认高亮的候选项。
+ * 秒和分钟给常用步长，月份给 1-12，星期给中文标签，年份由当前年份起算 11 年。
+ */
 export const CronDataDefault: CronData = {
   second: [
     '0',
@@ -264,4 +279,3 @@ export const CronDataDefault: CronData = {
   ],
   year: getYear(),
 };
-

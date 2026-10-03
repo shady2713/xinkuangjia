@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { uniqueByField } from '../unique';
 
-describe('uniqueByField', () => {
+describe('uniqueByField', /** 覆盖按字段去重时保留首次出现顺序，以及空数组与单元素输入的边界。 */ () => {
   it('should return an array with unique items based on id field', () => {
     const items = [
       { id: 1, name: 'Item 1' },
@@ -21,8 +21,8 @@ describe('uniqueByField', () => {
     ]);
   });
 
-  it('should return an empty array when input array is empty', () => {
-    const items: any[] = []; // Empty array
+  it('should return an empty array when input array is empty', /** 元素类型与下面两处保持一致，保证 keyof T 能推导出 id 字段。 */ () => {
+    const items: { id: number; name: string }[] = []; // Empty array
 
     const uniqueItems = uniqueByField(items, 'id');
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { PrimitiveProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { ButtonVariants, ButtonVariantSize } from './types';
 
 import { cn } from '@vben-core/shared/utils';
@@ -10,7 +12,7 @@ import { Primitive } from 'reka-ui';
 import { buttonVariants } from './button';
 
 interface Props extends PrimitiveProps {
-  class?: any;
+  class?: ClassValue;
   size?: ButtonVariantSize;
   variant?: ButtonVariants;
 }

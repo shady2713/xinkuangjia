@@ -18,7 +18,7 @@ public interface InfraMonitorStatisticsApi {
     /**
      * 读取当前桶对象容量快照，覆盖直接上传、复制和文件登记链路。
      *
-     * @return 分类统计与采集完整性；缓存最多 60 秒，部分或失败数据不能作为桶总量
+     * @return 分类统计与采集完整性；已完成快照缓存 60 秒，并发采集时立即返回明确标记的旧结果或 unavailable；部分或失败数据不能作为当前桶总量
      */
     InfraStorageStatisticsDTO getStorageStatistics();
 

@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+/** Vben 表格网格：合并全局与调用方配置，注入分页/工具栏默认值并暴露网格 API。 */
+import type { VxePagerPropTypes } from 'vxe-pc-ui';
 import type {
   VxeGridDefines,
   VxeGridInstance,
@@ -234,60 +236,68 @@ const toolbarOptions = computed(() => {
   return { toolbarConfig };
 });
 
-const options = computed(() => {
-  const globalGridConfig = VxeUI?.getConfig()?.grid ?? {};
+const options = computed(
+  /**
+   * 合并工具栏、分页与全局网格配置，产出最终传给 vxe-grid 的 props。
+   * 数组型配置按覆盖语义合并，避免默认值与调用方配置被拼接成两份。
+   * @returns 可直接绑定到 vxe-grid 的完整配置对象
+   */
+  () => {
+    const globalGridConfig = VxeUI?.getConfig()?.grid ?? {};
 
-  const mergedOptions: VxeTableGridProps = cloneDeep(
-    mergeWithArrayOverride(
-      {},
-      toRaw(toolbarOptions.value),
-      toRaw(gridOptions.value),
-      globalGridConfig,
-    ),
-  );
-
-  if (mergedOptions.proxyConfig) {
-    const { ajax } = mergedOptions.proxyConfig;
-    mergedOptions.proxyConfig.enabled = !!ajax;
-    // 不自动加载数据, 由组件控制
-    mergedOptions.proxyConfig.autoLoad = false;
-  }
-
-  if (mergedOptions.pagerConfig) {
-    const mobileLayouts = [
-      'PrevJump',
-      'PrevPage',
-      'Number',
-      'NextPage',
-      'NextJump',
-    ] as any;
-    const layouts = [
-      'Total',
-      'Sizes',
-      'Home',
-      ...mobileLayouts,
-      'End',
-    ] as readonly string[];
-    mergedOptions.pagerConfig = mergeWithArrayOverride(
-      {},
-      mergedOptions.pagerConfig,
-      {
-        pageSize: 20,
-        background: true,
-        pageSizes: [10, 20, 30, 50, 100, 200],
-        className: 'mt-2 w-full',
-        layouts: isMobile.value ? mobileLayouts : layouts,
-        size: 'mini' as const,
-      },
+    const mergedOptions: VxeTableGridProps = cloneDeep(
+      mergeWithArrayOverride(
+        {},
+        toRaw(toolbarOptions.value),
+        toRaw(gridOptions.value),
+        globalGridConfig,
+      ),
     );
-  }
-  if (mergedOptions.formConfig) {
-    mergedOptions.formConfig.enabled = false;
-  }
-  appendDefaultSeqColumn(mergedOptions);
-  return mergedOptions;
-});
 
+    if (mergedOptions.proxyConfig) {
+      const { ajax } = mergedOptions.proxyConfig;
+      mergedOptions.proxyConfig.enabled = !!ajax;
+      // 不自动加载数据, 由组件控制
+      mergedOptions.proxyConfig.autoLoad = false;
+    }
+
+    if (mergedOptions.pagerConfig) {
+      // 窄屏时压缩分页控件：去掉跳页与页码，只保留上一页/下一页，减少横向占位。
+      const mobileLayouts: VxePagerPropTypes.Layouts = [
+        'PrevJump',
+        'PrevPage',
+        'Number',
+        'NextPage',
+        'NextJump',
+      ];
+      const layouts: VxePagerPropTypes.Layouts = [
+        'Total',
+        'Sizes',
+        'Home',
+        ...mobileLayouts,
+        'End',
+      ];
+      mergedOptions.pagerConfig = mergeWithArrayOverride(
+        {},
+        mergedOptions.pagerConfig,
+        {
+          pageSize: 20,
+          background: true,
+          pageSizes: [10, 20, 30, 50, 100, 200],
+          className: 'mt-2 w-full',
+          layouts: isMobile.value ? mobileLayouts : layouts,
+          size: 'mini' as const,
+        },
+      );
+    }
+
+    if (mergedOptions.formConfig) {
+      mergedOptions.formConfig.enabled = false;
+    }
+    appendDefaultSeqColumn(mergedOptions);
+    return mergedOptions;
+  },
+);
 function onToolbarToolClick(event: VxeGridDefines.ToolbarToolClickEventParams) {
   if (event.code === 'search') {
     onSearchBtnClick();
@@ -343,6 +353,10 @@ const showDefaultEmpty = computed(() => {
   return !hasEmptyText && !hasEmptyRender;
 });
 
+/**
+ * 初始化表格：合并全局与本地配置，挂载 vxe-grid 并注册各区块的联动。
+ * 放在 nextTick 之后执行，确保父组件已经把默认插槽内容渲染出来。
+ */
 async function init() {
   await nextTick();
   const globalGridConfig = VxeUI?.getConfig()?.grid ?? {};
@@ -370,8 +384,8 @@ async function init() {
       '[Vben Vxe Table]: The formConfig in the grid is not supported, please use the `formOptions` props',
     );
   }
-  // @ts-ignore
-  props.api?.setState?.({ gridOptions: defaultGridOptions });
+  // 走公开的 setGridOptions 入口：它内部就是 setState({ gridOptions })，行为一致。
+  props.api?.setGridOptions?.(defaultGridOptions);
   extendProxyOptions(props.api, defaultGridOptions, () =>
     formApi.getLatestSubmissionValues(),
   );

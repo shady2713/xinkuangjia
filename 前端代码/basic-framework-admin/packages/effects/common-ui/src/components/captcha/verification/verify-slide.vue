@@ -53,7 +53,8 @@ const {
   getCaptchaApi,
 } = toRefs(props);
 
-const { proxy } = getCurrentInstance()!;
+// setup 一定在组件实例内执行，取不到实例属于框架异常，这里按可空处理并在下游逐处判空
+const { proxy } = getCurrentInstance() ?? {};
 const secretKey = ref(); // 后端返回的 AES 加密密钥
 const passFlag = ref(); // 是否通过的标识
 const backImgBase = ref(); // 验证码背景图片
@@ -87,19 +88,35 @@ const startLeft = ref(0);
 const barArea = computed(() => {
   return proxy?.$el.querySelector('.verify-bar-area');
 });
+
+/**
+ * DOM 更新后按真实容器尺寸换算图片区与提示条大小，并通知父级组件就绪。
+ * @description 必须等渲染完成，父容器此时才有真实 offsetWidth；
+ * 弹层未展开时父级可能还没有尺寸，resetSize 内部会退回到视口尺寸兜底。
+ */
+function syncSize() {
+  const { barHeight, barWidth, imgHeight, imgWidth } = resetSize(proxy, {
+    barSize: props.barSize,
+    imgSize: props.imgSize,
+  });
+  setSize.imgHeight = imgHeight;
+  setSize.imgWidth = imgWidth;
+  setSize.barHeight = barHeight;
+  setSize.barWidth = barWidth;
+  proxy?.$parent?.$emit('ready', proxy);
+}
+
+/**
+ * 初始化滑块验证码。
+ * @description 先拉取验证码数据，再重新绑定全局拖动事件；
+ * 每次进入或刷新都先解绑上一轮监听，避免重复注册导致一次拖动触发多次校验。
+ */
 function init() {
   text.value =
     explain.value === '' ? $t('ui.captcha.sliderDefaultText') : explain.value;
 
   getPictrue();
-  nextTick(() => {
-    const { barHeight, barWidth, imgHeight, imgWidth } = resetSize(proxy);
-    setSize.imgHeight = imgHeight;
-    setSize.imgWidth = imgWidth;
-    setSize.barHeight = barHeight;
-    setSize.barWidth = barWidth;
-    proxy?.$parent?.$emit('ready', proxy);
-  });
+  nextTick(syncSize);
 
   window.removeEventListener('touchmove', move);
   window.removeEventListener('mousemove', move);
@@ -188,51 +205,73 @@ function end() {
         : JSON.stringify({ x: moveLeftDistance, y: 5 }),
       token: backToken.value,
     };
-    checkCaptchaApi?.value?.(data).then((response) => {
-      const res = response.data;
-      if (res.repCode === '0000') {
-        moveBlockBackgroundColor.value = '#5cb85c';
-        leftBarBorderColor.value = '#5cb85c';
-        iconColor.value = '#fff';
-        iconClass.value = 'icon-check';
-        showRefresh.value = false;
-        isEnd.value = true;
-        if (mode.value === 'pop') {
-          setTimeout(() => {
-            emit('onClose');
-            refresh();
-          }, 1500);
-        }
-        passFlag.value = true;
-        tipWords.value = `${((endMovetime.value - startMoveTime.value) / 1000).toFixed(2)}s
+    checkCaptchaApi?.value?.(data).then(
+      /**
+       * 按后端结果更新滑块状态。
+       * @param response 后端响应；接口未配置时为 undefined，视为校验未通过
+       */
+      (response) => {
+        const res = response?.data;
+        if (res?.repCode === '0000') {
+          moveBlockBackgroundColor.value = '#5cb85c';
+          leftBarBorderColor.value = '#5cb85c';
+          iconColor.value = '#fff';
+          iconClass.value = 'icon-check';
+          showRefresh.value = false;
+          isEnd.value = true;
+          if (mode.value === 'pop') {
+            setTimeout(
+              /** 弹层模式下停留 1.5 秒让用户看清成功提示，再自动收起并换图。 */
+              () => {
+                emit('onClose');
+                refresh();
+              },
+              1500,
+            );
+          }
+          passFlag.value = true;
+          tipWords.value = `${((endMovetime.value - startMoveTime.value) / 1000).toFixed(2)}s
             ${$t('ui.captcha.title')}`;
-        const captchaVerification = secretKey.value
-          ? AjCaptchaAES.encrypt(
-              `${backToken.value}---${JSON.stringify({ x: moveLeftDistance, y: 5 })}`,
-              secretKey.value,
-            )
-          : `${backToken.value}---${JSON.stringify({ x: moveLeftDistance, y: 5 })}`;
-        setTimeout(() => {
-          tipWords.value = '';
-          emit('onSuccess', { captchaVerification });
-          emit('onClose');
-        }, 1000);
-      } else {
-        moveBlockBackgroundColor.value = '#d9534f';
-        leftBarBorderColor.value = '#d9534f';
-        iconColor.value = '#fff';
-        iconClass.value = 'icon-close';
-        passFlag.value = false;
-        setTimeout(() => {
-          refresh();
-        }, 1000);
-        emit('onError', proxy);
-        tipWords.value = $t('ui.captcha.sliderRotateFailTip');
-        setTimeout(() => {
-          tipWords.value = '';
-        }, 1000);
-      }
-    });
+          const captchaVerification = secretKey.value
+            ? AjCaptchaAES.encrypt(
+                `${backToken.value}---${JSON.stringify({ x: moveLeftDistance, y: 5 })}`,
+                secretKey.value,
+              )
+            : `${backToken.value}---${JSON.stringify({ x: moveLeftDistance, y: 5 })}`;
+          setTimeout(
+            /** 成功提示展示满 1 秒后再把凭据交给业务方并关闭弹层。 */
+            () => {
+              tipWords.value = '';
+              emit('onSuccess', { captchaVerification });
+              emit('onClose');
+            },
+            1000,
+          );
+        } else {
+          moveBlockBackgroundColor.value = '#d9534f';
+          leftBarBorderColor.value = '#d9534f';
+          iconColor.value = '#fff';
+          iconClass.value = 'icon-close';
+          passFlag.value = false;
+          setTimeout(
+            /** 失败提示停留 1 秒后换图，避免用户来不及看清失败原因。 */
+            () => {
+              refresh();
+            },
+            1000,
+          );
+          emit('onError', proxy);
+          tipWords.value = $t('ui.captcha.sliderRotateFailTip');
+          setTimeout(
+            /** 1 秒后清空失败提示文本，等待下一轮交互。 */
+            () => {
+              tipWords.value = '';
+            },
+            1000,
+          );
+        }
+      },
+    );
     status.value = false;
   }
 }
@@ -267,12 +306,13 @@ async function getPictrue() {
     captchaType: captchaType.value,
   };
   const res = await getCaptchaApi?.value?.(data);
+  const repData = res?.data?.repData;
 
-  if (res?.data?.repCode === '0000') {
-    backImgBase.value = `data:image/png;base64,${res?.data?.repData?.originalImageBase64}`;
-    blockBackImgBase.value = `data:image/png;base64,${res?.data?.repData?.jigsawImageBase64}`;
-    backToken.value = res.data.repData.token;
-    secretKey.value = res.data.repData.secretKey;
+  if (res?.data?.repCode === '0000' && repData) {
+    backImgBase.value = `data:image/png;base64,${repData.originalImageBase64 ?? ''}`;
+    blockBackImgBase.value = `data:image/png;base64,${repData.jigsawImageBase64 ?? ''}`;
+    backToken.value = repData.token;
+    secretKey.value = repData.secretKey;
   } else {
     tipWords.value = res?.data?.repMsg;
   }

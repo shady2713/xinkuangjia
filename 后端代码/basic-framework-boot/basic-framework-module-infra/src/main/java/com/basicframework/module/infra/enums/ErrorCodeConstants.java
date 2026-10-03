@@ -36,6 +36,9 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_TYPE_NOT_ALLOWED = new ErrorCode(1_001_003_003, "不支持的文件类型");
     ErrorCode FILE_PATH_INVALID = new ErrorCode(1_001_003_004, "文件路径不正确");
     ErrorCode FILE_METADATA_INVALID = new ErrorCode(1_001_003_005, "文件元数据超过数据库字段限制");
+    ErrorCode FILE_SIZE_EXCEEDED = new ErrorCode(1_001_003_006, "文件大小无效或超过上传限制");
+    ErrorCode FILE_UPLOAD_QUOTA_EXCEEDED = new ErrorCode(1_001_003_007, "今日文件上传预算已用完");
+    ErrorCode FILE_UPLOAD_INVALID = new ErrorCode(1_001_003_008, "上传预约不存在、已过期或不属于当前用户");
 
     // ========= 数据导出 1-001-004-000 =================
     ErrorCode EXPORT_SIZE_EXCEEDED = new ErrorCode(1_001_004_000, "单次最多导出 10000 条数据，请缩小查询范围");

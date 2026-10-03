@@ -20,6 +20,30 @@ import java.util.List;
 public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO> {
 
     /**
+     * 在持有用户锁后撤销全部访问会话，不依赖之前查询到的记录集合。
+     *
+     * @param userId 用户编号
+     * @param userType 认证用户类型
+     * @return 删除的记录数
+     */
+    default int deleteByUserIdAndUserType(Long userId, Integer userType) {
+        return delete(new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
+                .eq(OAuth2AccessTokenDO::getUserId, userId)
+                .eq(OAuth2AccessTokenDO::getUserType, userType));
+    }
+
+    /**
+     * 按刷新会话撤销访问令牌，供刷新和退出操作在事务内使用。
+     *
+     * @param refreshToken 刷新会话标识
+     * @return 删除的记录数
+     */
+    default int deleteByRefreshToken(String refreshToken) {
+        return delete(new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
+                .eq(OAuth2AccessTokenDO::getRefreshToken, refreshToken));
+    }
+
+    /**
      * 查询By访问令牌。
      *
      * @param accessToken 访问令牌参数

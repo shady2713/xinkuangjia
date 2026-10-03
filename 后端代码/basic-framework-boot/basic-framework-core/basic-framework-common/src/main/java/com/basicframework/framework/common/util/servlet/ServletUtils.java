@@ -68,7 +68,7 @@ public class ServletUtils {
     }
 
     /**
-     * 从当前请求上下文获取客户端 IP。
+     * 读取容器确认的客户端 IP；代理地址仅由容器的可信代理规则解析，不直接读取转发头。
      *
      * @return 客户端 IP；当前线程无请求时返回 null
      */
@@ -77,7 +77,7 @@ public class ServletUtils {
         if (request == null) {
             return null;
         }
-        return JakartaServletUtil.getClientIP(request);
+        return request.getRemoteAddr();
     }
 
     /**
@@ -119,13 +119,13 @@ public class ServletUtils {
     }
 
     /**
-     * 获取指定请求的客户端 IP。
+     * 读取指定请求经容器可信代理规则处理后的地址，忽略未经容器认可的转发头。
      *
      * @param request 请求对象
      * @return 客户端 IP
      */
     public static String getClientIP(HttpServletRequest request) {
-        return JakartaServletUtil.getClientIP(request);
+        return request.getRemoteAddr();
     }
 
     /**

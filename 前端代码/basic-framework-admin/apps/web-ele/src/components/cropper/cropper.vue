@@ -152,11 +152,25 @@ function cropped() {
   );
 }
 
-/** 生成圆形裁剪结果的画布：先用 destination-in 合成圆形遮罩，再由调用方导出为图片 */
+/**
+ * 生成圆形裁剪结果的画布：先用 destination-in 合成圆形遮罩，再由调用方导出为图片
+ * @returns 合成圆形遮罩后的画布
+ * @throws 裁剪实例尚未就绪，或浏览器未提供 2D 绘图上下文时抛出 Error。
+ * 缺少 2D 上下文属于运行环境异常，继续执行会在后续绘制属性赋值处抛出
+ * 难以定位的 TypeError，因此在唯一的上下文获取入口显式失败。
+ */
 function getRoundedCanvas() {
-  const sourceCanvas = cropper.value!.getCroppedCanvas();
+  // 调用方 cropped() 已判空；这里再取一次是为了不把可空性带出函数边界
+  const instance = cropper.value;
+  if (!instance) {
+    throw new Error('裁剪实例尚未就绪，无法生成圆形裁剪画布');
+  }
+  const sourceCanvas = instance.getCroppedCanvas();
   const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d')!;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('当前浏览器不支持 Canvas 2D 上下文，无法生成圆形裁剪画布');
+  }
   const width = sourceCanvas.width;
   const height = sourceCanvas.height;
   canvas.width = width;

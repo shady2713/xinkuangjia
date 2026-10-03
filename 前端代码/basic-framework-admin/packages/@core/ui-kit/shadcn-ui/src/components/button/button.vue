@@ -10,7 +10,8 @@ import { Primitive } from 'reka-ui';
 
 import { buttonVariants } from '../../ui';
 
-interface Props extends VbenButtonProps {}
+/** 业务按钮的属性契约别名：直接复用按钮属性，不额外声明成员。 */
+type Props = VbenButtonProps;
 
 const props = withDefaults(defineProps<Props>(), {
   as: 'button',

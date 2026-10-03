@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { Recordable } from '@vben/types';
+/**
+ * 锁屏解锁弹窗：只负责收集锁屏密码并上抛，由外层容器完成真正的解锁校验。
+ */
+import type { BaseFormComponentType } from '@vben-core/form-ui';
 
 import { computed, reactive } from 'vue';
 
@@ -14,6 +17,16 @@ interface Props {
   text?: string;
 }
 
+/** 密码输入框的组件实例形状：只用于定位内部原生 input 元素。 */
+type PasswordFieldRef = {
+  $el?: HTMLElement;
+};
+
+/** 锁屏弹窗表单值：用户输入的锁屏密码。 */
+type LockScreenForm = {
+  lockScreenPassword: string;
+};
+
 defineOptions({
   name: 'LockScreenModal',
 });
@@ -24,11 +37,11 @@ withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  submit: [Recordable<any>];
+  submit: [value: string];
 }>();
 
 const [Form, { resetForm, validate, getValues, getFieldComponentRef }] =
-  useVbenForm(
+  useVbenForm<BaseFormComponentType, LockScreenForm>(
     reactive({
       commonConfig: {
         hideLabel: true,
@@ -61,20 +74,31 @@ const [Modal] = useVbenModal({
       resetForm();
     }
   },
+  /**
+   * 弹窗动画结束后再聚焦输入框。
+   * 必须等动画结束，否则焦点会被弹窗的位移动画重置。
+   */
   onOpened() {
-    requestAnimationFrame(() => {
-      getFieldComponentRef('lockScreenPassword')
-        ?.$el?.querySelector('[name="lockScreenPassword"]')
-        ?.focus();
-    });
+    requestAnimationFrame(
+      /** 在下一帧聚焦原生 input，弹窗容器自身不接收输入。 */
+      () => {
+        getFieldComponentRef<PasswordFieldRef>('lockScreenPassword')
+          ?.$el?.querySelector<HTMLInputElement>('[name="lockScreenPassword"]')
+          ?.focus();
+      },
+    );
   },
 });
 
+/**
+ * 提交解锁密码。
+ * 校验不通过时不通知上层：解锁是敏感操作，不能把空密码送到鉴权接口。
+ */
 async function handleSubmit() {
   const { valid } = await validate();
   const values = await getValues();
   if (valid) {
-    emit('submit', values?.lockScreenPassword);
+    emit('submit', values.lockScreenPassword);
   }
 }
 </script>

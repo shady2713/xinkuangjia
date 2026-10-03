@@ -1,10 +1,13 @@
 <script setup lang="ts">
+/** 多行文本输入框：渲染可换行的文本域，并透传双向绑定值。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { useVModel } from '@vueuse/core';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
   defaultValue?: number | string;
   modelValue?: number | string;
 }>();

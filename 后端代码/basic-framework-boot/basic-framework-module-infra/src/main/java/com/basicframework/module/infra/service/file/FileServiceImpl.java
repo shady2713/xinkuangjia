@@ -5,13 +5,15 @@ import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.pojo.PageResult;
-import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
+import org.springframework.web.context.request.RequestContextHolder;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.dal.mysql.file.FileMapper;
 import com.basicframework.module.infra.enums.ErrorCodeConstants;
+import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils;
 import com.google.common.annotations.VisibleForTesting;
@@ -20,6 +22,8 @@ import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
+import java.util.Map;
 
 import static cn.hutool.core.date.DatePattern.PURE_DATE_PATTERN;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -40,16 +44,17 @@ public class FileServiceImpl implements FileService {
      * 目的：按照日期分目录，便于后续定位和归档。
      */
     private static final boolean PATH_PREFIX_DATE_ENABLE = true;
-    /**
-     * 上传文件的后缀，是否包含时间戳。
-     *
-     * 目的：保证文件名唯一，避免同名文件覆盖。
-     */
-    private static final boolean PATH_SUFFIX_TIMESTAMP_ENABLE = true;
-
     /** 统一对象存储服务。 */
     @Resource
     private FileStorageService fileStorageService;
+
+    /** 上传预约、事务提交和故障补偿。 */
+    @Resource
+    private FileUploadLifecycle uploadLifecycle;
+
+    /** 内部文件 API 也在内容识别之前遵守统一大小上限。 */
+    @Resource
+    private FileUploadProperties uploadLimits;
 
     /** 文件元数据 Mapper。 */
     @Resource
@@ -81,6 +86,9 @@ public class FileServiceImpl implements FileService {
         // 先拦截空内容，避免后续 MIME 识别、摘要计算和长度访问时出现空指针。
         if (content == null || content.length == 0) {
             throw exception(ErrorCodeConstants.FILE_IS_EMPTY);
+        }
+        if (content.length > uploadLimits.getMaxBytes()) {
+            throw exception(ErrorCodeConstants.FILE_SIZE_EXCEEDED);
         }
         // 浏览器可能上送本地完整路径，只保留最后一级名称，避免调用方改变业务目录。
         name = FilePathUtils.normalizeFileName(name);
@@ -116,27 +124,9 @@ public class FileServiceImpl implements FileService {
 
         // 生成唯一上传路径，避免不同目录/同名文件互相覆盖。
         String path = generateUploadPath(name, directory);
-        String url = fileStorageService.upload(content, path, type);
-        if (!FilePathUtils.isFileUrlValid(url)) {
-            // 对象已经上传但元数据无法入库时立即补偿删除，避免留下无法管理的孤立对象。
-            var metadataException = exception(ErrorCodeConstants.FILE_METADATA_INVALID);
-            try {
-                fileStorageService.delete(path);
-            } catch (Exception cleanupException) {
-                metadataException.addSuppressed(cleanupException);
-            }
-            throw metadataException;
-        }
-
-        // 上传成功后持久化文件元数据，便于后续查询、预签名和删除。
-        FileDO file = new FileDO();
-        file.setName(name);
-        file.setPath(path);
-        file.setUrl(url);
-        file.setType(type);
-        file.setSize((long) content.length);
-        fileMapper.insert(file);
-        return url;
+        String owner = currentOwner(false);
+        uploadLifecycle.reserve(owner, path, name, content.length, false);
+        return uploadLifecycle.complete(path, owner, content).getUrl();
     }
 
     /**
@@ -146,32 +136,27 @@ public class FileServiceImpl implements FileService {
      *
      * @param name 文件名
      * @param directory 可选业务目录
-     * @return 带日期和时间戳的对象路径
+     * @return 带日期和随机标识的对象路径；同名并发上传不复用对象键
      */
     @VisibleForTesting
     String generateUploadPath(String name, String directory) {
         name = FilePathUtils.normalizeFileName(name);
-        if (!FilePathUtils.isFileNameValid(name) || !FilePathUtils.isDirectoryValid(directory)) {
+        if (!FilePathUtils.isFileNameValid(name) || !FilePathUtils.isDirectoryValid(directory)
+                || "upload-staging".equals(directory)
+                || (directory != null && directory.startsWith("upload-staging/"))) {
             throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
         }
-        // 先准备日期前缀和时间戳后缀，两者都可按需关闭。
+        // 日期仅用于归档；唯一性由独立随机标识保证，不依赖实例时钟或请求间隔。
         String prefix = null;
         if (PATH_PREFIX_DATE_ENABLE) {
             prefix = LocalDateTimeUtil.format(LocalDateTimeUtil.now(), PURE_DATE_PATTERN);
         }
-        String suffix = null;
-        if (PATH_SUFFIX_TIMESTAMP_ENABLE) {
-            suffix = String.valueOf(System.currentTimeMillis());
-        }
-
-        // 先拼接时间戳，保留原始扩展名结构。
-        if (StrUtil.isNotEmpty(suffix)) {
-            String ext = FileUtil.extName(name);
-            if (StrUtil.isNotEmpty(ext)) {
-                name = FileUtil.mainName(name) + StrUtil.C_UNDERLINE + suffix + StrUtil.DOT + ext;
-            } else {
-                name = name + StrUtil.C_UNDERLINE + suffix;
-            }
+        String suffix = UUID.randomUUID().toString().replace("-", "");
+        String ext = FileUtil.extName(name);
+        if (StrUtil.isNotEmpty(ext)) {
+            name = FileUtil.mainName(name) + StrUtil.C_UNDERLINE + suffix + StrUtil.DOT + ext;
+        } else {
+            name = name + StrUtil.C_UNDERLINE + suffix;
         }
         // 再拼接日期前缀，按天分目录。
         if (StrUtil.isNotEmpty(prefix)) {
@@ -192,21 +177,20 @@ public class FileServiceImpl implements FileService {
      *
      * @param name 文件名
      * @param directory 可选业务目录
+     * @param size 文件精确字节数，用于签名及预约预算
      * @return 预签名上传信息
      */
     @Override
     @SneakyThrows
-    public FilePresignedUrlRespVO presignPutUrl(String name, String directory) {
-        // 预签名上传同样复用统一的路径生成规则，避免和直接上传路径不一致。
+    public FilePresignedUrlRespVO presignPutUrl(String name, String directory, long size) {
+        name = FilePathUtils.normalizeFileName(name);
         String path = generateUploadPath(name, directory);
-
-        // 同时返回上传地址和访问地址，前端上传后可以直接使用访问地址预览。
-        String uploadUrl = fileStorageService.presignPutUrl(path);
-        String visitUrl = fileStorageService.presignGetUrl(path, null);
+        var upload = uploadLifecycle.reserve(currentOwner(true), path, name, size, true);
         FilePresignedUrlRespVO response = new FilePresignedUrlRespVO();
         response.setPath(path);
-        response.setUploadUrl(uploadUrl);
-        response.setUrl(visitUrl);
+        response.setUploadUrl(fileStorageService.presignPutUrl(upload.getStagingPath(), size));
+        response.setUrl(fileStorageService.presignGetUrl(path, null));
+        response.setHeaders(Map.of("Content-Type", "application/octet-stream", "Content-Disposition", "attachment"));
         return response;
     }
 
@@ -223,30 +207,33 @@ public class FileServiceImpl implements FileService {
     }
 
     /**
-     * 登记已经通过预签名地址上传的文件。
-     *
-     * <p>访问 URL 由服务端根据对象路径生成，不信任客户端回传的 URL，避免持久化外部地址或签名参数。</p>
-     *
-     * @param createReqVO 文件登记请求
-     * @return 文件记录编号
+     * 完成本身份的上传预约；原名称、大小和类型以预约及实际对象内容为准。
+     * @param createReqVO 客户端持有的预约路径，其他兼容字段不作为真实性依据
+     * @return 文件编号；同一预约重复完成返回原编号
      */
     @Override
+    @SneakyThrows
     public Long createFile(FileCreateReqVO createReqVO) {
-        if (!FilePathUtils.isObjectPathValid(createReqVO.getPath())
-                || !FilePathUtils.isFileNameValid(createReqVO.getName())) {
+        if (!FilePathUtils.isObjectPathValid(createReqVO.getPath())) {
             throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
         }
-        if (!FilePathUtils.isMimeTypeValid(createReqVO.getType())) {
-            throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+        return uploadLifecycle.complete(createReqVO.getPath(), currentOwner(true), null).getId();
+    }
+
+    /**
+     * 从可信登录上下文取得预约身份，不接受请求参数指定所有者。
+     * @param requireUser 直传预约及完成必须有登录用户；内部文件 API 可使用独立系统预算
+     * @return 带身份域的所有者键
+     */
+    private String currentOwner(boolean requireUser) {
+        var user = SecurityFrameworkUtils.getLoginUser();
+        if (user != null && user.getId() != null && user.getUserType() != null) {
+            return user.getUserType() + ":" + user.getId();
         }
-        FileDO file = BeanUtils.toBean(createReqVO, FileDO.class);
-        // 只持久化受控对象存储生成的稳定 URL，客户端 URL 仅为旧协议兼容字段。
-        file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
-        if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
-            throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+        if (requireUser || RequestContextHolder.getRequestAttributes() != null) {
+            throw exception(ErrorCodeConstants.FILE_UPLOAD_INVALID);
         }
-        fileMapper.insert(file);
-        return file.getId();
+        return "internal:system";
     }
 
     /**
@@ -281,18 +268,17 @@ public class FileServiceImpl implements FileService {
      * 批量删除对象存储内容和文件元数据。
      *
      * @param ids 文件记录编号列表
-     * @throws Exception 任一对象删除失败时抛出，数据库批量删除不会执行
+     * @throws Exception 任一存储或元数据删除失败时停止，已完成项保留删除结果，其他项可重试
      */
     @Override
     @SneakyThrows
     public void deleteFileList(List<Long> ids) {
-        // 批量删除时先遍历存储，再统一删除数据库记录，保持数据一致性。
+        // 逐项完成存储和元数据删除，后续失败不留下已删除对象的旧元数据。
         List<FileDO> files = fileMapper.selectByIds(ids);
         for (FileDO file : files) {
             fileStorageService.delete(file.getPath());
+            fileMapper.deleteById(file.getId());
         }
-
-        fileMapper.deleteByIds(ids);
     }
 
     /**
@@ -318,6 +304,10 @@ public class FileServiceImpl implements FileService {
      */
     @Override
     public byte[] getFileContent(String path) throws Exception {
+        // 暂存对象尚未完成内容验证，不得通过应用同源下载入口重新以 inline 类型输出。
+        if (!FilePathUtils.isObjectPathValid(path) || path.startsWith("upload-staging/")) {
+            return null;
+        }
         return fileStorageService.getContent(path);
     }
 

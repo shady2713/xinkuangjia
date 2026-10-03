@@ -1,6 +1,9 @@
 package com.basicframework.module.infra.controller.admin.file;
 
-import cn.hutool.core.io.IoUtil;
+import java.io.InputStream;
+import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_SIZE_EXCEEDED;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.core.util.URLUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
@@ -28,6 +31,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -62,6 +66,10 @@ public class FileController {
     @Resource
     private FileService fileService;
 
+    /** 与实际对象校验一致的单次上传内存上限。 */
+    @Resource
+    private FileUploadProperties uploadLimits;
+
     /**
      * 上传文件并登记文件元数据。
      *
@@ -75,7 +83,16 @@ public class FileController {
             schema = @Schema(type = "string", format = "binary"))
     public CommonResult<String> uploadFile(@Valid FileUploadReqVO uploadReqVO) throws Exception {
         MultipartFile file = uploadReqVO.getFile();
-        byte[] content = IoUtil.readBytes(file.getInputStream());
+        if (file.getSize() > uploadLimits.getMaxBytes()) {
+            throw exception(FILE_SIZE_EXCEEDED);
+        }
+        byte[] content;
+        try (InputStream input = file.getInputStream()) {
+            content = input.readNBytes(uploadLimits.getMaxBytes() + 1);
+        }
+        if (content.length > uploadLimits.getMaxBytes()) {
+            throw exception(FILE_SIZE_EXCEEDED);
+        }
         return success(fileService.createFile(content, file.getOriginalFilename(),
                 uploadReqVO.getDirectory(), file.getContentType()));
     }
@@ -85,10 +102,11 @@ public class FileController {
      *
      * @param name 文件名称
      * @param directory 目标目录；为空时写入默认日期目录
+     * @param size 文件精确字节数，签名和登记均校验
      * @return 上传地址、访问地址和对象路径
      */
     @GetMapping("/presigned-url")
-    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端上传文件：用于前端直接上传七牛、阿里云 OSS 等文件存储器")
+    @Operation(summary = "获取文件预签名地址（上传）", description = "预约有界直传；浏览器上传暂存对象后必须调用完成接口")
     @Parameters({
             @Parameter(name = "name", description = "文件名称", required = true),
             @Parameter(name = "directory", description = "文件目录")
@@ -98,8 +116,9 @@ public class FileController {
             @Size(max = FilePathUtils.MAX_FILE_NAME_LENGTH, message = "文件名长度不能超过 {max} 个字符") String name,
             @RequestParam(value = "directory", required = false)
             @Size(max = FilePathUtils.MAX_DIRECTORY_LENGTH, message = "文件目录长度不能超过 {max} 个字符")
-            String directory) {
-        return success(fileService.presignPutUrl(name, directory));
+            String directory,
+            @RequestParam("size") @Positive(message = "文件大小必须大于 0") long size) {
+        return success(fileService.presignPutUrl(name, directory, size));
     }
 
     /**
@@ -109,7 +128,7 @@ public class FileController {
      * @return 文件记录编号
      */
     @PostMapping("/create")
-    @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
+    @Operation(summary = "创建文件", description = "完成当前身份的上传预约，验证真实对象内容后登记")
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
         return success(fileService.createFile(createReqVO));
     }
@@ -149,7 +168,7 @@ public class FileController {
      *
      * @param ids 文件记录编号列表，单次最多 100 条
      * @return 删除成功标记
-     * @throws Exception 任一对象存储删除失败时抛出
+     * @throws Exception 任一删除失败时停止；先前已删除项保持生效，刷新列表后可重试剩余项
      */
     @DeleteMapping("/delete-list")
     @Operation(summary = "批量删除文件")

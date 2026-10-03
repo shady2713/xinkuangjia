@@ -1,4 +1,4 @@
-﻿import type { UploadRawFile } from 'element-plus';
+import type { UploadRawFile } from 'element-plus';
 
 import { showErrorMessage } from '#/utils/feedback';
 
@@ -64,5 +64,3 @@ const useBeforeUpload = (type: UploadType, maxSizeMB: number) => {
 };
 
 export { UploadType, useBeforeUpload };
-
-

@@ -7,3 +7,4 @@ export { default as SliderTranslateCaptcha } from './slider-translate-captcha/in
 export type * from './types';
 
 export { default as Verification } from './verification/index.vue';
+export type * from './verification/typing';

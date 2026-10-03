@@ -1,10 +1,12 @@
-﻿<!-- 网页 iframe 组件 (Element Plus 版本) -->
+<!-- 网页 iframe 组件 (Element Plus 版本) -->
 <script lang="ts" setup>
 import { computed } from 'vue';
 
 defineOptions({ name: 'IframeComponent' });
 
 const props = withDefaults(defineProps<Props>(), {
+  // 注入上下文缺省为空对象，读取方无需再判空。
+  formCreateInject: () => ({}),
   modelValue: '',
   url: '',
   height: '500px',
@@ -86,9 +88,9 @@ function isValidUrl(url: string): boolean {
 }
 
 .iframe-preview {
+  overflow: hidden;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  overflow: hidden;
 }
 
 .iframe-content {
@@ -101,8 +103,8 @@ function isValidUrl(url: string): boolean {
   align-items: center;
   justify-content: center;
   min-height: 200px;
+  background-color: #fafafa;
   border: 1px dashed #dcdfe6;
   border-radius: 4px;
-  background-color: #fafafa;
 }
 </style>

@@ -19,10 +19,6 @@
             基于 https://example.com/external/modood/Administrative-divisions-of-China 实现
     </description>
 
-    <properties>
-        <!-- 当前实测行覆盖率约 26.60%，先固化真实基线，后续只能提升不能回退。 -->
-        <quality.coverage.minimum>0.26</quality.coverage.minimum>
-    </properties>
     <url>https://example.com/basic-framework</url>
 
     <dependencies>

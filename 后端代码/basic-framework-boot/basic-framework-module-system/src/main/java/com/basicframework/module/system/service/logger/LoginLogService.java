@@ -17,6 +17,13 @@ import jakarta.validation.Valid;
 public interface LoginLogService {
 
     /**
+     * 在独立事务中持久化认证失败，避免登录事务回滚同时删除审计证据。
+     *
+     * @param reqDTO 认证失败事件，不得传入认证成功结果
+     */
+    void createLoginFailureLog(LoginLogCreateReqDTO reqDTO);
+
+    /**
      * 获取登录日志。
      *
      * @param id 登录日志编号

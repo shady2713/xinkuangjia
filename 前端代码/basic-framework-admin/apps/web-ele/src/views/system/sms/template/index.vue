@@ -6,8 +6,11 @@ import type { SystemSmsTemplateApi } from '#/api/system/sms/template';
 import { Page, useVbenModal } from '@vben/common-ui';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import {
+  deleteSmsTemplate,
+  getSmsTemplatePage,
+} from '#/api/system/sms/template';
 import { useCrudItemActions } from '#/composables/use-crud-actions';
-import { deleteSmsTemplate, getSmsTemplatePage } from '#/api/system/sms/template';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';
@@ -27,7 +30,8 @@ const { handleCreate, handleDelete, handleEdit } =
   useCrudItemActions<SystemSmsTemplateApi.Template>({
     deleteApi: deleteSmsTemplate,
     getDeleteName: (row) => row.name || '',
-    getRowKey: (row) => row.id!,
+    // 列表接口未返回 id 的异常行以 NaN 占位；批量勾选路径会按非有限数值过滤掉这类行
+    getRowKey: (row) => row.id ?? Number.NaN,
     modalApi: formModalApi,
     refresh: handleRefresh,
   });

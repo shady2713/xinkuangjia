@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest';
+/** 通用对象工具的测试：方法绑定、嵌套取值、链接参数、按目标结构复制、分组与 JSON 解析。 */
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { bindMethods, getNestedValue } from '../util';
+import {
+  bindMethods,
+  copyValueToTarget,
+  getNestedValue,
+  getUrlNumberValue,
+  getUrlValue,
+  groupBy,
+  jsonParse,
+} from '../util';
 
 class TestClass {
   public value: string;
@@ -79,7 +88,7 @@ describe('bindMethods', () => {
   });
 });
 
-describe('getNestedValue', () => {
+describe('getNestedValue', /** 按点分路径逐层取值，路径穿过原始值时返回 undefined。 */ () => {
   interface UserProfile {
     age: number;
     name: string;
@@ -152,5 +161,134 @@ describe('getNestedValue', () => {
     const complexData = { list: [{ name: 'Item1' }] };
     const result = getNestedValue(complexData, 'list.2.name');
     expect(result).toBeUndefined();
+  });
+
+  it('should return undefined when a path segment runs through a primitive', /** 原始值上取属性没有意义，必须返回 undefined 而不是抛错。 */ () => {
+    expect(getNestedValue({ count: 5 }, 'count.toFixed')).toBeUndefined();
+    expect(
+      getNestedValue({ name: 'a' }, 'name.length.toFixed'),
+    ).toBeUndefined();
+  });
+});
+
+describe('getUrlValue 与 getUrlNumberValue', /** 从链接上读取查询参数，缺失时给出确定的空值。 */ () => {
+  it('reads an existing query parameter', /** 链接上的查询参数应原样返回。 */ () => {
+    expect(getUrlValue('page', 'https://host.com/list?page=2')).toBe('2');
+  });
+
+  it('returns an empty string for a missing parameter', /** 参数不存在时返回空串，调用方无需再判空。 */ () => {
+    expect(getUrlValue('missing', 'https://host.com/list?page=2')).toBe('');
+  });
+
+  it('decodes percent-encoded values', /** 编码后的参数要还原成可读文本。 */ () => {
+    expect(
+      getUrlValue('name', 'https://host.com/list?name=%E5%BC%A0%E4%B8%89'),
+    ).toBe('张三');
+  });
+
+  it('returns an empty string when the url or key is empty', /** 空地址或空键名都直接返回空串。 */ () => {
+    expect(getUrlValue('page', '')).toBe('');
+    expect(getUrlValue('', 'https://host.com/list?page=2')).toBe('');
+  });
+
+  it('reads a numeric query parameter', /** 分页参数需要数值，缺失时得到 NaN 由调用方决定兜底。 */ () => {
+    expect(getUrlNumberValue('page', 'https://host.com/list?page=3')).toBe(3);
+  });
+
+  it('converts a non-numeric value to NaN', /** 不能把 'abc' 静默变成 0。 */ () => {
+    expect(
+      getUrlNumberValue('page', 'https://host.com/list?page=abc'),
+    ).toBeNaN();
+  });
+
+  it('reads from the current location by default', /** 不传地址时读当前页面。 */ () => {
+    expect(
+      getUrlValue('page', `${location.origin}${location.pathname}?page=9`),
+    ).toBe('9');
+  });
+});
+
+describe('copyValueToTarget', /** 把源对象的同名属性写回目标对象，源对象多出的键必须被剔除。 */ () => {
+  it('keeps only the keys that already exist on the target', /** 多余键会污染目标结构。 */ () => {
+    const target = { a: 1, b: 2 };
+    const source = { a: 10, b: 20, c: 30 };
+
+    copyValueToTarget(target, source);
+
+    expect(target).toEqual({ a: 10, b: 20 });
+  });
+
+  it('keeps the target value when the source lacks the key', /** 源对象缺键时不能把目标原有值清掉。 */ () => {
+    const target = { a: 1, b: 2 };
+
+    copyValueToTarget(target, { a: 10 });
+
+    expect(target).toEqual({ a: 10, b: 2 });
+  });
+
+  it('does not add keys that the source introduces', /** 目标对象的键集合是白名单。 */ () => {
+    const target: Record<string, number> = { a: 1 };
+
+    copyValueToTarget(target, { extra: 5 });
+
+    expect(Object.keys(target)).toEqual(['a']);
+  });
+});
+
+describe('groupBy', /** 按字段值把数组分组，字段值统一转成字符串作键。 */ () => {
+  it('groups items by the given field', /** 相同字段值的元素进入同一组。 */ () => {
+    const rows = [
+      { dept: 'tech', name: 'a' },
+      { dept: 'hr', name: 'b' },
+      { dept: 'tech', name: 'c' },
+    ];
+
+    expect(groupBy(rows, 'dept')).toEqual({
+      hr: [{ dept: 'hr', name: 'b' }],
+      tech: [
+        { dept: 'tech', name: 'a' },
+        { dept: 'tech', name: 'c' },
+      ],
+    });
+  });
+
+  it('buckets items without the field under undefined', /** 缺字段的元素不能被丢弃。 */ () => {
+    const rows = [{ name: 'a' } as { dept?: string; name: string }];
+
+    expect(Object.keys(groupBy(rows, 'dept'))).toEqual(['undefined']);
+  });
+
+  it('converts numeric field values to string keys', /** 键统一为字符串，便于直接索引。 */ () => {
+    const rows = [
+      { level: 1, name: 'a' },
+      { level: 2, name: 'b' },
+    ];
+
+    expect(Object.keys(groupBy(rows, 'level'))).toEqual(['1', '2']);
+  });
+
+  it('returns an empty object for an empty array', /** 空输入没有分组。 */ () => {
+    expect(groupBy([], 'dept')).toEqual({});
+  });
+});
+
+describe('jsonParse', /** 解析失败时回退到原字符串，并给出可定位的告警。 */ () => {
+  afterEach(
+    /** 恢复真实控制台，避免告警 Spy 影响其它用例。 */ () => {
+      vi.restoreAllMocks();
+    },
+  );
+
+  it('parses a valid JSON object', /** 合法 JSON 必须解析成对象。 */ () => {
+    expect(jsonParse('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('falls back to the original string and warns', /** 解析失败不能抛错，否则会中断整批数据处理。 */ () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(/** 不真正打印告警，只让 Spy 记录调用。 */ () => {});
+
+    expect(jsonParse('not json')).toBe('not json');
+    expect(warn).toHaveBeenCalledWith('str[not json] 不是一个 JSON 字符串');
   });
 });

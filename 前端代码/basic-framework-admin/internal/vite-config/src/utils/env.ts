@@ -52,11 +52,21 @@ async function readEnvFiles(root: string, mode?: string) {
   return envConfig;
 }
 
-async function loadEnv<T extends Record<string, any> = Record<string, string>>(
-  root: string,
-  mode?: string,
-  extraFiles?: string[],
-): Promise<T> {
+/**
+ * 合并并返回指定模式下的环境变量。
+ *
+ * 按 .env、.env.local、.env.<mode>、.env.<mode>.local 的顺序读取，越靠后的文件覆盖先前的同名键；
+ * extraFiles 里的文件最后读取，用于注入构建机上的额外配置。缺失的文件直接跳过，
+ * 不存在的路径不视为错误。
+ *
+ * @param root 工作区根目录
+ * @param mode Vite 运行模式，决定加载 .env.<mode> 系列文件
+ * @param extraFiles 需要额外合并的绝对路径文件列表
+ * @returns 所有来源合并后的键值表；泛型只用于调用方声明期望的键集合
+ */
+async function loadEnv<
+  T extends Record<string, unknown> = Record<string, string>,
+>(root: string, mode?: string, extraFiles?: string[]): Promise<T> {
   const envConfig = await readEnvFiles(root, mode);
   if (extraFiles?.length) {
     for (const file of extraFiles) {

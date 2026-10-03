@@ -81,6 +81,7 @@ def test_runner_failure_skips_only_dependents(
             1 if gate.name == "a" else 0,
             0,
             "",
+            checked=1,
         )
 
     monkeypatch.setattr(run_checks, "execute", fake_execute)
@@ -88,7 +89,7 @@ def test_runner_failure_skips_only_dependents(
         [Gate("a", "", ""), Gate("b", "", "", ("a",)), Gate("c", "", "")], tmp_path, 2, 5
     )
     assert calls.count("a") == 1 and "c" in calls and "b" not in calls
-    assert results[1].status == "skipped" and combined_code(results) == 1
+    assert results[1].status == "not-run" and combined_code(results) == 1
 
 
 def test_runner_concurrency_is_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -107,7 +108,7 @@ def test_runner_concurrency_is_bounded(tmp_path: Path, monkeypatch: pytest.Monke
         barrier.wait(timeout=5)
         with lock:
             active -= 1
-        return Outcome(gate.name, "passed", 0, 0, "")
+        return Outcome(gate.name, "passed", 0, 0, "", checked=1)
 
     monkeypatch.setattr(run_checks, "execute", fake_execute)
     results = schedule([Gate("a", "", ""), Gate("b", "", "")], tmp_path, 2, 5)

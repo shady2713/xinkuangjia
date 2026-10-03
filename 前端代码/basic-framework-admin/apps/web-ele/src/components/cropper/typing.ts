@@ -55,7 +55,7 @@ export interface CropperAvatarProps {
   /** 上传按钮文案，为空时使用国际化默认文案 */
   btnText?: string;
   /** 上传接口，接收裁剪后的 Blob，返回图片访问地址 */
-  uploadApi?: (params: apiFunParams) => Promise<any>;
+  uploadApi?: (params: apiFunParams) => Promise<string>;
   /** 图片大小上限，单位 MB；不大于 0 表示不限制，默认 5 */
   size?: number;
 }
@@ -65,7 +65,7 @@ export interface CropperModalProps {
   /** 是否按圆形裁剪输出，默认 true */
   circled?: boolean;
   /** 上传接口，接收裁剪后的 Blob，返回图片访问地址 */
-  uploadApi?: (params: apiFunParams) => Promise<any>;
+  uploadApi?: (params: apiFunParams) => Promise<string>;
   /** 初始展示的图片地址 */
   src?: string;
   /** 图片大小上限，单位 MB；不大于 0 表示不限制 */

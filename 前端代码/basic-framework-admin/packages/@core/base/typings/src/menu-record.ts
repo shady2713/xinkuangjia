@@ -1,22 +1,19 @@
 import type { Component } from 'vue';
-import type { RouteMeta, RouteRecordRaw } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
 
-/** 路由元信息 */
-interface AppRouteRecordRaw extends Omit<RouteRecordRaw, 'meta'> {
+/** 服务端权限菜单；尚未解析为 Vue 组件或前端菜单，不能与路由记录混用。 */
+interface AppRouteRecordRaw {
   children?: AppRouteRecordRaw[];
-  component?: any;
+  component?: string;
   componentName?: string;
-  components?: any;
-  fullPath?: string;
   icon?: string;
-  id?: any;
-  keepAlive?: boolean;
-  meta: RouteMeta;
+  id: number;
+  keepAlive: boolean;
   name: string;
-  parentId?: number;
-  props?: any;
+  parentId: number;
+  path: string;
   sort?: number;
-  visible?: boolean;
+  visible: boolean;
 }
 
 /**
@@ -25,7 +22,6 @@ interface AppRouteRecordRaw extends Omit<RouteRecordRaw, 'meta'> {
 type ExRouteRecordRaw = RouteRecordRaw & {
   parent?: string;
   parents?: string[];
-  path?: any;
 };
 
 interface MenuRecordBadgeRaw {

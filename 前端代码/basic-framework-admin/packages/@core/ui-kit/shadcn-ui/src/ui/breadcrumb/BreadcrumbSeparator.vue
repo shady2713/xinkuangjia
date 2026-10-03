@@ -1,10 +1,13 @@
 <script lang="ts" setup>
+/** 面包屑分隔符：渲染层级之间的视觉分隔。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { ChevronRight } from 'lucide-vue-next';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
 }>();
 </script>
 

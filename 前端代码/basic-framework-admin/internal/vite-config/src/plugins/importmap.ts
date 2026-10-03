@@ -41,6 +41,16 @@ async function getShimsUrl(provide: string) {
 
 let generator: Generator;
 
+/**
+ * 生成在构建期为依赖安装 import map 并改写 HTML 的 Vite 插件组。
+ *
+ * 仅在非 SSR 的生产构建中生效：先把 inputMap 与 importmap 选项里的依赖交给 jspm 安装，
+ * 再由 external 插件把这些依赖标记为 external，最后把生成的 import map 注入 HTML。
+ * 安装失败时 buildEnd 会抛错终止构建，避免产出缺少依赖映射的产物。
+ *
+ * @param pluginOptions jspm 生成器配置与需要纳入 import map 的依赖清单
+ * @returns 按 pre、post 顺序返回的插件数组
+ */
 async function viteImportMapPlugin(
   pluginOptions?: pluginOptions,
 ): Promise<Plugin[]> {
@@ -118,6 +128,11 @@ async function viteImportMapPlugin(
     {
       enforce: 'post',
       name: 'importmap:install',
+      /**
+       * 在首次解析依赖时触发 jspm 安装，保证 import map 早于 external 标记生成。
+       *
+       * @returns 恒为 null；本插件不改写模块解析结果，只负责触发安装副作用
+       */
       async resolveId() {
         if (isSSR || !isBuild || installed) {
           return null;
@@ -127,8 +142,10 @@ async function viteImportMapPlugin(
           await Promise.allSettled(
             (installDeps || []).map((dep) => generator.install(dep)),
           );
-        } catch (error: any) {
-          installError = error;
+        } catch (error) {
+          // 生成器安装依赖失败时保留原始错误，buildEnd 会打印它并中止构建以免产出错误的产物。
+          installError =
+            error instanceof Error ? error : new Error(String(error));
           installed = false;
         }
         return null;

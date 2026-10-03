@@ -3,8 +3,12 @@ import dayjs from 'dayjs';
 import { formatDate } from './date';
 
 /**
- * @param {Date | number | string} time 需要转换的时间
- * @param {string} fmt 需要转换的格式 如 yyyy-MM-dd、yyyy-MM-dd HH:mm:ss
+ * 把时间按自定义占位符格式化为字符串。
+ * 支持的占位符：y+ 年、M+ 月、d+ 日、H+ 时、m+ 分、s+ 秒、q+ 季度、S 毫秒；
+ * 多字符占位符（如 yyyy）按原值长度截取补零后的结果。
+ * @param time 需要转换的时间，可为 Date、时间戳或时间字符串。
+ * @param fmt 目标格式串，由上述占位符组成。
+ * @returns 格式化后的字符串；time 为空或非法时返回空串，避免调用方渲染出 Invalid Date。
  */
 export function formatTime(time: Date | number | string, fmt: string) {
   if (time) {
@@ -28,13 +32,14 @@ export function formatTime(time: Date | number | string, fmt: string) {
     for (const k in o) {
       const match = fmt.match(new RegExp(`(${k})`));
       if (match) {
+        // 单个占位符（如 m+）补零后输出两位，多位占位符（如 y+）按原值长度截取，
+        // 因此先按原值长度补零再截断，行为与原有 any 实现一致。
+        const value = o[k as keyof typeof o];
         fmt = fmt.replace(
           match[0],
           match[0].length === 1
-            ? (o[k as keyof typeof o] as any)
-            : `00${o[k as keyof typeof o]}`.slice(
-                `${o[k as keyof typeof o]}`.length,
-              ),
+            ? `${value}`
+            : `00${value}`.slice(`${value}`.length),
         );
       }
     }
@@ -80,13 +85,15 @@ export function formatPast(
   format = 'YYYY-MM-DD HH:mm:ss',
 ): string {
   // 传入格式处理、存储转换值
-  let s: number, t: any;
+  let s: number;
+  // 归一化后的对比基准：字符串走浏览器解析规则取毫秒数，Date 保留原对象，
+  // 使下方的 time - t 仍按 Date 的隐式数值转换语义计算。
+  const t: Date | number =
+    typeof param === 'string' || typeof param === 'object'
+      ? new Date(param).getTime()
+      : param;
   // 获取js 时间戳
   let time: number = Date.now();
-  // 是否是对象
-  typeof param === 'string' || typeof param === 'object'
-    ? (t = new Date(param).getTime())
-    : (t = param);
   // 当前时间戳 - 传入时间戳
   time = Number.parseInt(`${time - t}`);
   if (time < 10_000) {

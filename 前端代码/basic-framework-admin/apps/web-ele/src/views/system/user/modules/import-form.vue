@@ -1,9 +1,14 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
+/**
+ * 用户导入弹窗：上传 Excel 后展示新增、更新与失败明细，不阻断列表刷新。
+ */
+import type { ComponentType } from '#/adapter/component';
+
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
-
 import { ElButton, ElMessageBox, ElUpload } from 'element-plus';
+
 import { useVbenForm } from '#/adapter/form';
 import { importUser, importUserTemplate } from '#/api/system/user';
 import { $t } from '#/locales';
@@ -11,9 +16,15 @@ import { showSuccessMessage } from '#/utils/feedback';
 
 import { useImportFormSchema } from '../data';
 
+/** 导入表单值：待导入文件与是否允许更新已存在用户。 */
+type ImportForm = {
+  file: File;
+  updateSupport: boolean;
+};
+
 const emit = defineEmits(['success']);
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, ImportForm>({
   commonConfig: {
     formItemClass: 'col-span-2',
     labelWidth: 120,
@@ -23,10 +34,19 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-/** 转义 HTML，避免用户名中的特殊字符破坏弹窗结构 */
+/**
+ * 转义 HTML，避免用户名中的特殊字符破坏导入结果弹窗的结构。
+ * @param value 待转义的原始文本。
+ * @returns 转义后可安全插入 HTML 的文本。
+ */
 function escapeHtml(value: string) {
-  return value.replace(
+  return value.replaceAll(
     /[&<>"']/g,
+    /**
+     * 把单个特殊字符替换为对应的 HTML 实体。
+     * @param c 当前匹配的字符。
+     * @returns 对应的 HTML 实体文本。
+     */
     (c) =>
       ({
         '&': '&amp;',
@@ -39,6 +59,9 @@ function escapeHtml(value: string) {
 }
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 提交导入文件：未选择文件时直接返回，避免提交空文件请求。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -62,8 +85,15 @@ const [Modal, modalApi] = useVbenModal({
         // 有失败时使用 MessageBox 展示明细，避免被 Message 截断
         const failureItems = failureEntries
           .map(
-            ([username, msg]) =>
-              `<li>${escapeHtml(username)}：${escapeHtml(String(msg))}</li>`,
+            /**
+             * 把一条失败明细渲染成列表项，用户名与提示都先转义。
+             * @param entry 后端返回的“用户名 + 失败原因”二元组。
+             * @returns 形如“用户名：失败原因”的列表项 HTML。
+             */
+            (entry) => {
+              const [username, msg] = entry;
+              return `<li>${escapeHtml(username)}：${escapeHtml(String(msg))}</li>`;
+            },
           )
           .join('');
         ElMessageBox.alert(
@@ -89,10 +119,13 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
-/** 文件改变时 */
-function handleChange(file: any) {
+/** 上传组件回传的原始文件项：只有 raw 是真正要落库的文件。 */
+type UploadChangeItem = { raw?: File };
+
+/** 文件改变时：只取原始文件写入表单，组件附加的状态字段一律不落库。 */
+function handleChange(file: UploadChangeItem) {
   if (file.raw) {
-    formApi.setFieldValue('file', file.raw as File);
+    formApi.setFieldValue('file', file.raw);
   }
 }
 
@@ -126,15 +159,3 @@ async function handleDownload() {
     </template>
   </Modal>
 </template>
-
-
-
-
-
-
-
-
-
-
-
-

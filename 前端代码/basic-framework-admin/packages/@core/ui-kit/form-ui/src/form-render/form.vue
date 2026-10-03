@@ -4,12 +4,15 @@ import type { ZodTypeAny } from 'zod';
 
 import type {
   FormCommonConfig,
+  FormComponentProps,
+  FormFieldOptions,
   FormRenderProps,
   FormSchema,
   FormShape,
+  FormValues,
 } from '../types';
 
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 
 import { Form } from '@vben-core/shadcn-ui';
 import {
@@ -24,7 +27,8 @@ import { useExpandable } from './expandable';
 import FormField from './form-field.vue';
 import { getBaseRules, getDefaultValueInZodStack } from './helper';
 
-interface Props extends FormRenderProps {}
+/** 表单容器的外部入参：直接复用渲染属性定义，避免两处声明漂移。 */
+type Props = FormRenderProps;
 
 const props = withDefaults(
   defineProps<Props & { globalCommonConfig?: FormCommonConfig }>(),
@@ -38,7 +42,7 @@ const props = withDefaults(
 );
 
 const emits = defineEmits<{
-  submit: [event: any];
+  submit: [event: FormValues];
 }>();
 
 const wrapperClass = computed(() => {
@@ -53,8 +57,10 @@ const wrapperClass = computed(() => {
 
 provideFormRenderProps(props);
 
-// @ts-expect-error unused
-const { isCalculated, keepFormItemIndex, wrapperRef } = useExpandable(props);
+// 模板只负责提供 ref="wrapperRef" 绑定，真实消费方是展开计算：
+// 在脚本侧取一次引用再交给 useExpandable，绑定关系才不会被当成无人使用的悬空 ref。
+const wrapperRef = useTemplateRef<HTMLElement>('wrapperRef');
+const { isCalculated, keepFormItemIndex } = useExpandable(props, wrapperRef);
 
 const shapes = computed(() => {
   const resultShapes: FormShape[] = [];
@@ -96,9 +102,14 @@ const formCollapsed = computed(() => {
 });
 
 const computedSchema = computed(
+  /**
+   * 把全局表单配置下沉到每个表单项。
+   * 表单项自己的配置排在全局配置之后，因此单个字段可以覆盖全局默认值。
+   * @returns 合并公共配置后的表单项列表。
+   */
   (): (Omit<FormSchema, 'formFieldProps'> & {
-    commonComponentProps: Record<string, any>;
-    formFieldProps: Record<string, any>;
+    commonComponentProps: FormComponentProps;
+    formFieldProps: FormFieldOptions;
   })[] => {
     const {
       colon = false,

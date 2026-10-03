@@ -47,7 +47,18 @@ export function deleteSmsChannel(id: number) {
   return requestClient.delete(`/system/sms-channel/delete?id=${id}`);
 }
 
-/** 发送测试短信 */
-export function sendTestSms(data: { templateCode: string; templateParams: Record<string, object>; mobile: string }) {
+/**
+ * 发送测试短信。
+ * @param data 测试短信内容。
+ * @param data.mobile 接收号码。
+ * @param data.templateCode 模板编码。
+ * @param data.templateParams 模板参数。
+ * @returns 请求完成后兑现的 Promise；发送失败时按接口错误抛出。
+ */
+export function sendTestSms(data: {
+  mobile: string;
+  templateCode: string;
+  templateParams: Record<string, object>;
+}) {
   return requestClient.post('/system/sms-channel/test-sms', data);
 }

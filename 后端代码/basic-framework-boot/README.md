@@ -34,7 +34,7 @@ kind: package-reference
 
 ## 环境与配置
 
-准备 JDK 17 或兼容运行时、Maven 3.8+、MySQL 8.x、Redis 和 MinIO；编译目标固定 Java 17，不随本机 JDK 自动升级。
+准备 JDK 17 或兼容运行时、Maven 3.8+、MySQL 8.x、Redis 和 MinIO；通过 `maven.compiler.release=17` 同时约束语法、字节码和 JDK API，不随本机 JDK 自动升级。构建保留源码行号用于故障定位与逐行覆盖率；更改编译配置后应执行干净构建，不能沿用旧 class 文件证明新配置生效。
 
 配置入口为 [application.yaml](basic-framework-server/src/main/resources/application.yaml)，Java 工程根的本机文件为 `.env`，按 [.env.example](.env.example)填写。实际凭据只放被忽略的文件或受控环境，不进入 SQL、文档或前端。Spring 按当前工作目录读取 `.env` 或 `../.env`；IDE 工作目录应为本工程根或 server 模块。
 
@@ -51,13 +51,13 @@ kind: package-reference
 
 `.env` 按 Java properties 读取，值不加 shell 引号；示例中的 `your_*` 是占位值，使用前替换。与 Docker 共用 MinIO 配置时，`MINIO_SECURE` 使用 `true` 或 `false`，endpoint 与 TLS 实际方式一致。不要把宿主机 localhost 当作容器中的外部服务地址。
 
-样例中的 `FLYWAY_ENABLED`、`QUARTZ_AUTO_STARTUP`、`QUARTZ_JDBC_INITIALIZE_SCHEMA`、`CORS_ALLOWED_ORIGIN` 当前没有相应 YAML 映射，不能据此认为迁移、调度或跨域已配置。需要调整时使用实际 Spring 属性或已绑定的 `basic-framework.web.cors-allowed-origins`，见[服务器配置](../../docs/部署/部署说明.md#准备目录与配置)。
+数据库使用[独立迁移入口](../../docs/部署/数据库初始化与迁移.md)，不由应用启动执行。`CORS_ALLOWED_ORIGIN` 已绑定为精确来源列表，留空关闭跨域；禁止通配符。转发头使用 Tomcat 原生处理，`TRUSTED_PROXY_REGEX` 默认不信任任何代理，见[服务器配置](../../docs/部署/部署说明.md#准备目录与配置)。
 
 ## 本地启动
 
 以下 Java 命令在本 README 所在目录执行。先准备数据库和中间件；不要在应用启动时向已有库自动导入整库 SQL。
 
-1. 核对[数据库 SQL](../../数据库文件/basic_framework.sql)的版本、目标库及重建语句，在已授权的空库初始化后检查表结构与基础数据。
+1. 按[数据库初始化与迁移](../../docs/部署/数据库初始化与迁移.md)核实目标，在授权空库执行版本化迁移并创建初始管理员；已有库使用经核对的升级与恢复流程。
 2. 按环境样例建立本机配置；通用服务器的中间件安装见[部署说明](../../docs/部署/部署说明.md#安装中间件与初始化数据库)，个人开发环境按自己的服务地址填写。
 3. 运行测试并生成 JAR：
 
@@ -78,7 +78,8 @@ java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-se
 | 命令 | 用途 |
 | --- | --- |
 | `mvn -q test` | 实际 Surefire 测试；核对数量、失败与跳过 |
-| `mvn -q -Pquality-gate verify` | 测试、PMD、JaCoCo 等已配置门禁 |
+| `mvn -q -Pquality-audit verify` | 测试、PMD、JaCoCo 及覆盖缺口报告；审计不能替代最终门禁 |
+| `mvn -q -Pquality-gate verify` | 测试、PMD、JaCoCo；每个手写生产文件 LINE/METHOD 全覆盖门禁 |
 | `mvn -q -DskipTests package` | 生成应用 JAR，不证明测试通过 |
 | `python -B -X utf8 scripts/code/check_worktree_comments.py`，仓库根 | 当前工作区 Java/Python 注释检查 |
 
@@ -91,7 +92,7 @@ java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-se
 
 Controller 的 admin 包自动获得 `/admin-api` 前缀，Service 编排业务，Mapper 管理持久化，模块间通过提供方 API/DTO 交互。身份来自 Security 上下文，操作用现有权限表达式校验，DO 不作为稳定对外契约。
 
-Token、角色菜单关系和验证码有各自的 Redis 生命周期；不能通过直接修改数据库推断缓存已刷新。文件统一交给 infra 文件 API，MySQL 元数据与 MinIO 对象不是同一事务；失败补偿按具体业务验证。
+访问令牌以数据库当前记录为权威，密码修改会撤销该用户全部访问与刷新会话；旧 Redis 令牌缓存不能恢复已撤销身份。角色菜单和短信预算仍有各自缓存生命周期。开放注册默认关闭，分享登录不受支持。文件统一交给 infra 文件 API，上传预约、实际内容核验、日预算与持久化补偿见[文件上传协议](../../docs/部署/文件上传协议.md)。
 
 详见[Java 后端架构](../../docs/架构/03-Java后端.md)与[Java 技能](../../.agents/skills/weetion-development-java-standards/SKILL.md)。
 
@@ -104,6 +105,6 @@ Token、角色菜单关系和验证码有各自的 Redis 生命周期；不能�
 配置与构建只证明相应工程条件，不能证明业务外部依赖已可用。
 
 - 不包含 AI、Workflow、代码生成器、数据源管理、多存储配置、公告或站内通知业务。
-- 未接入自动数据库迁移；已有数据库升级需另行设计备份与恢复。
+- 数据库迁移需要独立运维执行，目标生产环境仍需完成实际备份恢复演练。
 - 短信、OAuth2、Quartz handler 需匹配实际配置和数据。
 - 当前文件地址按公开读取契约生成；需要私有文件授权时须设计完整权限与签名链路，不能只修改桶策略。

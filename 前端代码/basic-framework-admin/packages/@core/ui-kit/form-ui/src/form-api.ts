@@ -1,32 +1,78 @@
 import type {
   FormState,
-  GenericObject,
+  Path,
+  PathValue,
   ResetFormOpts,
   ValidationOptions,
 } from 'vee-validate';
 
-import type { ComponentPublicInstance } from 'vue';
-
-import type { Recordable } from '@vben-core/typings';
-
-import type { FormActions, FormSchema, VbenFormProps } from './types';
+import type {
+  BaseFormComponentType,
+  FormActions,
+  FormSchema,
+  FormValues,
+  FormValuesConstraint,
+  VbenFormProps,
+} from './types';
 
 import { isRef, toRaw } from 'vue';
 
 import { Store } from '@vben-core/shared/store';
 import {
   bindMethods,
-  createMerge,
   formatDate,
   isDate,
   isDayjsObject,
   isFunction,
-  isObject,
   mergeWithArrayOverride,
   StateHandler,
 } from '@vben-core/shared/utils';
 
-function getDefaultState(): VbenFormProps {
+import { isValueRecord } from './form-render/helper';
+
+/** 表单属性与组件/值类型的组合别名：泛型值类型决定读写时的实际数据形状。 */
+type TypedFormProps<
+  TValues extends FormValuesConstraint,
+  TComp extends BaseFormComponentType,
+> = VbenFormProps<TComp, TValues>;
+
+/** vee-validate 的 setValues 接受部分深层值，此处取其真实入参类型而不重复声明。 */
+type SetValuesArg<TValues extends FormValuesConstraint> = Parameters<
+  FormActions<TValues>['setValues']
+>[0];
+
+/**
+ * 组合表单的一个成员读取能力。
+ * 组合只关心“校验通过后的值”，与各成员声明的值类型无关，因此用闭包而不是实例列表登记。
+ */
+type FormCollector = () => Promise<FormValues | undefined>;
+
+/**
+ * 单个字段值的转换器，用于数组与字符串之间的互转。
+ * @param value 字段当前的值，可能已被调用方收窄为数组或字符串。
+ * @param separator 字符串与数组之间的分隔符。
+ * @returns 转换后的字段值。
+ */
+type FieldValueTransform = (value: unknown, separator: string) => unknown;
+
+/**
+ * 基于当前状态计算状态增量。
+ * 用函数式更新而不是外部快照，避免读到的状态落后于并发写入。
+ * @param prev 当前的表单状态快照。
+ * @returns 本次要覆盖的增量。
+ */
+type StateUpdater<
+  TValues extends FormValuesConstraint,
+  TComp extends BaseFormComponentType,
+> = (
+  prev: TypedFormProps<TValues, TComp>,
+) => Partial<TypedFormProps<TValues, TComp>>;
+
+/** 创建互不共享的表单配置默认值。 */
+function getDefaultState<
+  TValues extends FormValuesConstraint,
+  TComp extends BaseFormComponentType,
+>(): TypedFormProps<TValues, TComp> {
   return {
     actionWrapperClass: '',
     collapsed: false,
@@ -50,31 +96,52 @@ function getDefaultState(): VbenFormProps {
   };
 }
 
-export class FormApi {
-  public form = {} as FormActions;
+/**
+ * 协调动态表单状态、验证及挂载生命周期。
+ *
+ * `TValues` 是调用方声明的表单值类型，决定 `getValues`、`setValues`、提交回调的入参与返回类型；
+ * `TComp` 是当前适配层注册的组件名集合，决定 schema 中 `component` 的可取值。
+ */
+export class FormApi<
+  TValues extends FormValuesConstraint = FormValues,
+  TComp extends BaseFormComponentType = BaseFormComponentType,
+> {
+  public form: FormActions<TValues> | undefined;
   isMounted = false;
-
-  public state: null | VbenFormProps = null;
+  public state: null | TypedFormProps<TValues, TComp> = null;
   stateHandler: StateHandler;
 
-  public store: Store<VbenFormProps>;
-
+  public store: Store<TypedFormProps<TValues, TComp>>;
   /**
    * 组件实例映射
    */
   private componentRefMap: Map<string, unknown> = new Map();
 
   // 最后一次点击提交时的表单值
-  private latestSubmissionValues: null | Recordable<any> = null;
+  private latestSubmissionValues: null | TValues = null;
 
-  private prevState: null | VbenFormProps = null;
+  private lifecycle = 0;
 
-  constructor(options: VbenFormProps = {}) {
+  private prevState: null | TypedFormProps<TValues, TComp> = null;
+
+  private wasUnmounted = false;
+
+  /**
+   * 建立表单实例的状态容器，并把实例方法绑定到自身，供代理与 `useVbenForm` 直接取出调用。
+   * 挂载前的所有读写都只作用于 `state`；真实的 vee-validate 上下文由 `mount` 补入。
+   * @param options 调用方声明的表单配置；缺省时使用 `getDefaultState` 的默认值。
+   */
+  constructor(
+    options: TypedFormProps<TValues, TComp> = {} as TypedFormProps<
+      TValues,
+      TComp
+    >,
+  ) {
     const { ...storeState } = options;
 
-    const defaultState = getDefaultState();
+    const defaultState = getDefaultState<TValues, TComp>();
 
-    this.store = new Store<VbenFormProps>(
+    this.store = new Store<TypedFormProps<TValues, TComp>>(
       {
         ...defaultState,
         ...storeState,
@@ -95,36 +162,22 @@ export class FormApi {
 
   /**
    * 获取字段组件实例
+   *
+   * 实例形状由注册进 `COMPONENT_MAP` 的控件决定，类型系统无法推断，
+   * 因此由调用方按实际控件声明需要的结构。
    * @param fieldName 字段名
-   * @returns 组件实例
+   * @returns 组件实例；字段尚未渲染时返回 undefined
    */
-  getFieldComponentRef<T = ComponentPublicInstance>(
-    fieldName: string,
-  ): T | undefined {
-    let target = this.componentRefMap.has(fieldName)
-      ? (this.componentRefMap.get(fieldName) as ComponentPublicInstance)
-      : undefined;
-    if (
-      target &&
-      target.$.type.name === 'AsyncComponentWrapper' &&
-      target.$.subTree.ref
-    ) {
-      if (Array.isArray(target.$.subTree.ref)) {
-        if (
-          target.$.subTree.ref.length > 0 &&
-          isRef(target.$.subTree.ref[0]?.r)
-        ) {
-          target = target.$.subTree.ref[0]?.r.value as ComponentPublicInstance;
-        }
-      } else if (isRef(target.$.subTree.ref.r)) {
-        target = target.$.subTree.ref.r.value as ComponentPublicInstance;
-      }
-    }
-    return target as T;
+  getFieldComponentRef<R = unknown>(fieldName: string): R {
+    const target = this.componentRefMap.get(fieldName);
+    return (isRef(target) ? target.value : target) as R;
   }
 
   /**
    * 获取当前聚焦的字段，如果没有聚焦的字段则返回undefined
+   * 字段是否聚焦以真实 DOM 焦点为准：组件实例自身是元素时直接比较，
+   * 否则回退到其 `$el`，因此未渲染或已销毁的字段不会被误判。
+   * @returns 持有焦点的字段名；没有任何字段聚焦时返回 undefined。
    */
   getFocusedField() {
     for (const fieldName of this.componentRefMap.keys()) {
@@ -133,7 +186,7 @@ export class FormApi {
         let el: HTMLElement | null = null;
         if (ref instanceof HTMLElement) {
           el = ref;
-        } else if (ref.$el instanceof HTMLElement) {
+        } else if (isValueRecord(ref) && ref.$el instanceof HTMLElement) {
           el = ref.$el;
         }
         if (!el) {
@@ -150,73 +203,114 @@ export class FormApi {
     return undefined;
   }
 
-  getLatestSubmissionValues() {
-    return this.latestSubmissionValues || {};
+  /**
+   * 读取最近一次点击提交时捕获的表单值。
+   * 业务提交常在 await 之后才请求详情页的取消/重置标记，需要读提交瞬间的值而不是当前输入值。
+   * @returns 最近一次提交的表单值；尚未提交过且未挂载时返回空值视图而非 undefined。
+   */
+  getLatestSubmissionValues(): TValues {
+    return this.latestSubmissionValues ?? this.toValueType({});
   }
 
   getState() {
     return this.state;
   }
 
-  async getValues<T = Recordable<any>>() {
+  /** 读取当前表单值，必要时展开时间区间与数组字段。
+   * @returns 调用方声明的值类型；表单未挂载或已销毁时抛出。
+   */
+  async getValues(): Promise<TValues> {
     const form = await this.getForm();
-    return (form.values ? this.handleRangeTimeValue(form.values) : {}) as T;
+    this.assertMountedForm(form);
+    return this.toValueType(this.handleRangeTimeValue(form.values));
   }
 
+  /**
+   * 判断单个字段当前是否通过校验。
+   * 字段名来自调用方声明的 schema，但类型系统无法在运行时证明它属于 `TValues` 的哪条路径。
+   * @param fieldName 待检查的字段名。
+   * @returns 该字段无校验错误时为 true。
+   * @throws {Error} 表单未挂载或挂载已失效。
+   */
   async isFieldValid(fieldName: string) {
     const form = await this.getForm();
-    return form.isFieldValid(fieldName);
+    this.assertMountedForm(form);
+    return form.isFieldValid(fieldName as Path<TValues>);
   }
 
-  merge(formApi: FormApi) {
-    const chain = [this, formApi];
+  /** 创建表单组合视图，只有全部校验通过才返回聚合值。
+   *
+   * 组合成员只按“校验后取值”的能力登记，不要求各成员声明相同的值类型，
+   * 因此这里保存读取闭包而不是实例列表。
+   * @param formApi 需要共同提交的表单。
+   * @returns 以目标表单方法为底、只覆盖 `merge` 与 `submitAllForm` 的视图。
+   */
+  merge<T extends FormValuesConstraint>(formApi: FormApi<T>): FormApi<T> {
+    const readers: FormCollector[] = [
+      /** 组合的第一个成员始终是调用方当前持有的实例。 */ () =>
+        this.collectOne(this),
+      /** 第二个成员是本次 merge 传入的实例，其值类型可以与当前实例不同。 */ () =>
+        this.collectOne(formApi),
+    ];
+
+    // 代理处理函数里的 this 指向 handler 自身而不是本实例，
+    // 因此组合动作统一走这里预绑定好的读取闭包，避免把 this 别名成局部变量。
+    /** 把下一个成员登记进组合，登记时只记录读取能力，不缓存实例。 */
+    const addReader = (nextFormApi: FormApi): void => {
+      readers.push(
+        /** 读取闭包而非实例，合并时才读取该成员的当前值。 */ () =>
+          this.collectOne(nextFormApi),
+      );
+    };
+    /** 提交组合中每个真实表单，needMerge 决定是否顺带合并当前值。 */
+    const submitReaders = (needMerge = true) =>
+      this.collectAll(readers, needMerge);
+
     const proxy = new Proxy(formApi, {
-      get(target: any, prop: any) {
+      /**
+       * 只拦截组合动作，其余成员原样转发给真实目标实例，
+       * 这样调用方在组合视图上调用的仍是同一套 FormApi 契约。
+       * @param target 被代理的真实表单实例。
+       * @param prop 访问的属性名。
+       * @param receiver 触发访问的接收者。
+       * @returns 组合动作返回新的处理函数，其余成员返回目标实例上的原值。
+       */
+      get(target, prop, receiver): unknown {
         if (prop === 'merge') {
-          return (nextFormApi: FormApi) => {
-            chain.push(nextFormApi);
+          return /** 将下一个表单加入当前组合。 */ (nextFormApi: FormApi) => {
+            addReader(nextFormApi);
             return proxy;
           };
         }
         if (prop === 'submitAllForm') {
-          return async (needMerge: boolean = true) => {
-            try {
-              const results = await Promise.all(
-                chain.map(async (api) => {
-                  const validateResult = await api.validate();
-                  if (!validateResult.valid) {
-                    return;
-                  }
-                  const rawValues = toRaw((await api.getValues()) || {});
-                  return rawValues;
-                }),
-              );
-              if (needMerge) {
-                const mergedResults = Object.assign({}, ...results);
-                return mergedResults;
-              }
-              return results;
-            } catch (error) {
-              console.error('Validation error:', error);
-            }
-          };
+          return /** 校验组合中每个真实表单。 */ (needMerge = true) =>
+            submitReaders(needMerge);
         }
-        return target[prop];
+        return Reflect.get(target, prop, receiver);
       },
     });
-
     return proxy;
   }
 
-  mount(formActions: FormActions, componentRefMap: Map<string, unknown>) {
+  /**
+   * 交入真实表单上下文并放行挂载等待。
+   * 重复挂载直接忽略：第二次调用来自组件重渲染，不能覆盖已在使用的上下文与组件引用。
+   * @param formActions 由 `use-form-renderer` 提供的 vee-validate 表单上下文。
+   * @param componentRefMap 字段名到组件实例的映射，用于聚焦定位与滚动定位。
+   */
+  mount(
+    formActions: FormActions<TValues>,
+    componentRefMap = new Map<string, unknown>(),
+  ) {
     if (!this.isMounted) {
-      Object.assign(this.form, formActions);
-      this.stateHandler.setConditionTrue();
-      this.setLatestSubmissionValues({
-        ...toRaw(this.handleRangeTimeValue(this.form.values)),
-      });
+      this.form = formActions;
+      this.wasUnmounted = false;
+      this.setLatestSubmissionValues(
+        this.toValueType(this.handleRangeTimeValue(this.form.values)),
+      );
       this.componentRefMap = componentRefMap;
       this.isMounted = true;
+      this.stateHandler.setConditionTrue();
     }
   }
 
@@ -237,28 +331,41 @@ export class FormApi {
 
   /**
    * 重置表单
+   * @param state 重置后要写回的字段值；缺省时回到初始值。
+   * @param opts vee-validate 的重置选项，例如是否保留默认值或强制触碰字段。
+   * @returns 重置完成后 resolve。
+   * @throws {Error} 表单未挂载或挂载已失效。
    */
   async resetForm(
-    state?: Partial<FormState<GenericObject>> | undefined,
+    state?: Partial<FormState<TValues>> | undefined,
     opts?: Partial<ResetFormOpts>,
   ) {
     const form = await this.getForm();
+    this.assertMountedForm(form);
     return form.resetForm(state, opts);
   }
 
+  /**
+   * 清空当前全部字段的校验错误。
+   * 只清错误不动值：schema 更新后需要重新校验，但用户已填内容必须保留。
+   * @throws {Error} 表单未挂载或挂载已失效。
+   */
   async resetValidate() {
     const form = await this.getForm();
+    this.assertMountedForm(form);
     const fields = Object.keys(form.errors.value);
-    fields.forEach((field) => {
-      form.setFieldError(field, undefined);
-    });
+    fields.forEach(
+      /** 逐个把错误置为 undefined，等价于清除该字段的校验状态。 */ (field) => {
+        form.setFieldError(field as Path<TValues>, undefined);
+      },
+    );
   }
 
   /**
    * 滚动到第一个错误字段
    * @param errors 验证错误对象
    */
-  scrollToFirstError(errors: Record<string, any> | string) {
+  scrollToFirstError(errors: FormValues | string) {
     // Handle validation reset after schema updates.
     const firstErrorFieldName =
       typeof errors === 'string' ? errors : Object.keys(errors)[0];
@@ -267,14 +374,18 @@ export class FormApi {
       return;
     }
 
-    let el = document.querySelector(
-      `[name="${firstErrorFieldName}"]`,
-    ) as HTMLElement;
+    let el = [...document.querySelectorAll<HTMLElement>('[name]')].find(
+      /** 字段名只作为属性值比较，避免拼入 CSS 选择器。 */ (element) =>
+        element.getAttribute('name') === firstErrorFieldName,
+    );
 
     // 如果通过 name 属性找不到，尝试通过组件引用查找, 正常情况下不会走到这，怕哪天 vee-validate 改了 name 属性有个兜底的
     if (!el) {
       const componentRef = this.getFieldComponentRef(firstErrorFieldName);
-      if (componentRef && componentRef.$el instanceof HTMLElement) {
+      if (
+        isValueRecord(componentRef) &&
+        componentRef.$el instanceof HTMLElement
+      ) {
         el = componentRef.$el;
       }
     }
@@ -300,13 +411,32 @@ export class FormApi {
     }));
   }
 
-  async setFieldValue(field: string, value: any, shouldValidate?: boolean) {
+  /**
+   * 写入单个字段的值。
+   * 与 `setValues` 不同，这里不限制字段名是否已存在于 schema，用于联动场景直接改写依赖字段。
+   * @param field 目标字段名。
+   * @param value 字段的新值，由控件自身的值类型解释。
+   * @param shouldValidate 写入后是否立即对该字段重新校验。
+   * @throws {Error} 表单未挂载或挂载已失效。
+   */
+  async setFieldValue(field: string, value: unknown, shouldValidate?: boolean) {
     const form = await this.getForm();
-    form.setFieldValue(field, value, shouldValidate);
+    this.assertMountedForm(form);
+    // 字段名与取值都来自调用方的动态 schema，类型系统无法在此证明其属于 TValues 的某条路径。
+    form.setFieldValue(
+      field as Path<TValues>,
+      value as PathValue<TValues, Path<TValues>>,
+      shouldValidate,
+    );
   }
 
-  setLatestSubmissionValues(values: null | Recordable<any>) {
-    this.latestSubmissionValues = { ...toRaw(values) };
+  /**
+   * 记录最近一次提交所使用的表单值。
+   * 读取时先 `toRaw`，避免把响应式代理存入实例状态而在后续读取时触发依赖收集。
+   * @param values 本次提交捕获的表单值；传 null 表示清空记录。
+   */
+  setLatestSubmissionValues(values: null | TValues) {
+    this.latestSubmissionValues = this.toValueType({ ...toRaw(values) });
   }
 
   /**
@@ -320,10 +450,16 @@ export class FormApi {
     }));
   }
 
+  /**
+   * 更新表单状态。
+   * 数组类配置（schema、按钮 options）按整体替换处理，其余键深合并，
+   * 因此调用方只写需要覆盖的字段即可，不必回传完整配置。
+   * @param stateOrFn 状态增量，或基于当前状态计算增量的函数。
+   */
   setState(
     stateOrFn:
-      | ((prev: VbenFormProps) => Partial<VbenFormProps>)
-      | Partial<VbenFormProps>,
+      | Partial<TypedFormProps<TValues, TComp>>
+      | StateUpdater<TValues, TComp>,
   ) {
     if (isFunction(stateOrFn)) {
       this.store.setState((prev) => {
@@ -336,18 +472,20 @@ export class FormApi {
 
   /**
    * 设置表单值
-   * @param fields record
+   * @param fields 要写入的字段值，形状由调用方声明的值类型决定。
    * @param filterFields 过滤不在schema中定义的字段 默认为true
-   * @param shouldValidate
+   * @param shouldValidate 写入后是否立即重新校验，默认不校验。
+   * @throws {Error} 表单未挂载或挂载已失效。
    */
   async setValues(
-    fields: Record<string, any>,
+    fields: TValues,
     filterFields: boolean = true,
     shouldValidate: boolean = false,
   ) {
     const form = await this.getForm();
+    this.assertMountedForm(form);
     if (!filterFields) {
-      form.setValues(fields, shouldValidate);
+      form.setValues(this.toSetValuesArg(fields), shouldValidate);
       return;
     }
 
@@ -357,43 +495,88 @@ export class FormApi {
      * element-plus的日期时间相关组件的值类型可能为Date对象
      * 以上两种类型需要排除深度合并
      */
-    const fieldMergeFn = createMerge((obj, key, value) => {
-      if (key in obj) {
-        obj[key] =
-          !Array.isArray(obj[key]) &&
-          isObject(obj[key]) &&
-          !isDayjsObject(obj[key]) &&
-          !isDate(obj[key])
-            ? fieldMergeFn(value, obj[key])
-            : value;
-      }
-      return true;
-    });
-    const filteredFields = fieldMergeFn(fields, form.values);
-    form.setValues(filteredFields, shouldValidate);
+    const filteredFields = this.mergeKnownFields(
+      form.values,
+      this.toValueType(fields),
+    );
+    form.setValues(this.toSetValuesArg(filteredFields), shouldValidate);
   }
 
-  async submitForm(e?: Event) {
+  /** 校验并读取当前表单或组合表单。
+   * @param needMerge 是否将多个表单字段合并为单个对象。
+   * @returns 全部有效时的值；任一校验失败则返回 undefined。
+   */
+  async submitAllForm(
+    needMerge = true,
+  ): Promise<TValues | TValues[] | undefined> {
+    const merged = await this.collectAll(
+      [
+        /** 未调用 merge 时组合只有自身，读取能力也只登记自己。 */ () =>
+          this.collectOne(this),
+      ],
+      needMerge,
+    );
+    if (merged === undefined) return undefined;
+    if (Array.isArray(merged))
+      return merged.map(
+        /** 逐个恢复为调用方声明的值类型，保持与合并顺序一致。 */ (value) =>
+          this.toValueType(value),
+      );
+    return this.toValueType(merged);
+  }
+
+  /** 验证表单并提交通过规则后的值，不把无效或旧实例数据交给业务。
+   * @param e 可选原生提交事件。
+   * @returns 提交成功的值；校验不通过时返回 undefined 且不调用 `state.handleSubmit`。
+   * @throws {Error} 挂载已失效或业务提交失败。
+   */
+  async submitForm(e?: Event): Promise<TValues | undefined> {
     e?.preventDefault();
     e?.stopPropagation();
     const form = await this.getForm();
-    await form.submitForm();
-    const rawValues = toRaw(await this.getValues());
-    await this.state?.handleSubmit?.(rawValues);
-
-    return rawValues;
+    this.assertMountedForm(form);
+    // 提交回调必须在提交瞬间读取：提交期间页面可能已经更新了回调定义。
+    const submit = this.state?.handleSubmit;
+    return form.handleSubmit(
+      /** 只有全部规则通过才会执行本回调，非法值不会进入业务。 */
+      async (validated) => {
+        this.assertMountedForm(form);
+        const values = this.handleRangeTimeValue(validated);
+        await submit?.(this.toValueType(values));
+        this.assertMountedForm(form);
+        this.setLatestSubmissionValues(this.toValueType(values));
+        return this.toValueType(values);
+      },
+      /** 校验失败只做定位提示，绝不调用业务提交回调。 */
+      (invalid) => {
+        this.assertMountedForm(form);
+        if (this.state?.scrollToFirstError)
+          this.scrollToFirstError(invalid.errors);
+      },
+    )();
   }
 
+  /** 结束实例并拒绝挂载等待，清理后的旧异步动作不能进入下次挂载。 */
   unmount() {
-    this.form?.resetForm?.();
-    // this.state = null;
+    const form = this.form;
+    this.lifecycle++;
+    this.wasUnmounted = true;
+    this.form = undefined;
     this.latestSubmissionValues = null;
     this.isMounted = false;
+    this.componentRefMap.clear();
     this.stateHandler.reset();
+    form?.resetForm();
   }
 
-  updateSchema(schema: Partial<FormSchema>[]) {
-    const updated: Partial<FormSchema>[] = [...schema];
+  /**
+   * 按字段名合并更新既有 schema，不新增字段。
+   * 数组中任何一项缺少 `fieldName` 都直接放弃本次更新并打印错误：
+   * 缺字段名无法定位合并目标，静默部分更新会让 schema 处于半新半旧的状态。
+   * @param schema 待合并的表单项局部定义，每项都必须带 `fieldName`。
+   */
+  updateSchema(schema: Partial<FormSchema<TComp>>[]) {
+    const updated: Partial<FormSchema<TComp>>[] = [...schema];
     const hasField = updated.every(
       (item) => Reflect.has(item, 'fieldName') && item.fieldName,
     );
@@ -404,32 +587,45 @@ export class FormApi {
       );
       return;
     }
-    const currentSchema = [...(this.state?.schema ?? [])];
+    const currentSchema: FormSchema<TComp>[] = [...(this.state?.schema ?? [])];
 
-    const updatedMap: Record<string, any> = {};
+    const updatedMap = new Map<string, Partial<FormSchema<TComp>>>();
 
-    updated.forEach((item) => {
-      if (item.fieldName) {
-        updatedMap[item.fieldName] = item;
-      }
-    });
+    updated.forEach(
+      /** 同名字段后出现者覆盖先出现者，与调用方书写顺序一致。 */ (item) => {
+        if (item.fieldName) {
+          updatedMap.set(item.fieldName, item);
+        }
+      },
+    );
 
-    currentSchema.forEach((schema, index) => {
-      const updatedData = updatedMap[schema.fieldName];
-      if (updatedData) {
-        currentSchema[index] = mergeWithArrayOverride(
-          updatedData,
-          schema,
-        ) as FormSchema;
-      }
-    });
+    currentSchema.forEach(
+      /** 只替换 schema 中已存在的字段，未命中的更新项被忽略。 */ (
+        schema,
+        index,
+      ) => {
+        const updatedData = updatedMap.get(schema.fieldName);
+        if (updatedData) {
+          currentSchema[index] = this.mergeSchemaItem(schema, updatedData);
+        }
+      },
+    );
     this.setState({ schema: currentSchema });
   }
 
+  /**
+   * 校验全部字段。
+   * 校验失败时按配置滚动定位到第一个错误字段，便于用户直接修正。
+   * @param opts vee-validate 的校验选项，例如只校验指定字段或跳过未触碰字段。
+   * @returns vee-validate 的校验结果，含 `valid` 与各字段错误信息。
+   * @throws {Error} 表单未挂载或挂载已失效。
+   */
   async validate(opts?: Partial<ValidationOptions>) {
     const form = await this.getForm();
+    this.assertMountedForm(form);
 
     const validateResult = await form.validate(opts);
+    this.assertMountedForm(form);
 
     if (Object.keys(validateResult?.errors ?? {}).length > 0) {
       console.error('validate error', validateResult?.errors);
@@ -441,21 +637,30 @@ export class FormApi {
     return validateResult;
   }
 
+  /**
+   * 通过统一提交入口校验一次，避免校验结果与另一次提交脱节。
+   * @returns 提交成功的表单值；校验不通过时返回 undefined。
+   */
   async validateAndSubmitForm() {
-    const form = await this.getForm();
-    const { valid, errors } = await form.validate();
-    if (!valid) {
-      if (this.state?.scrollToFirstError) {
-        this.scrollToFirstError(errors);
-      }
-      return;
-    }
-    return await this.submitForm();
+    return this.submitForm();
   }
 
+  /**
+   * 校验单个字段。
+   * 失败时按配置滚动定位到该字段，与 `validate` 定位第一个错误字段的行为一致。
+   * @param fieldName 待校验的字段名。
+   * @param opts vee-validate 的校验选项，例如是否强制重新校验。
+   * @returns 该字段的校验结果，含是否通过与错误信息。
+   * @throws {Error} 表单未挂载或挂载已失效。
+   */
   async validateField(fieldName: string, opts?: Partial<ValidationOptions>) {
     const form = await this.getForm();
-    const validateResult = await form.validateField(fieldName, opts);
+    this.assertMountedForm(form);
+    const validateResult = await form.validateField(
+      fieldName as Path<TValues>,
+      opts,
+    );
+    this.assertMountedForm(form);
 
     if (Object.keys(validateResult?.errors ?? {}).length > 0) {
       console.error('validate error', validateResult?.errors);
@@ -467,18 +672,92 @@ export class FormApi {
     return validateResult;
   }
 
-  private async getForm() {
-    if (!this.isMounted) {
-      // 等待form挂载
-      await this.stateHandler.waitForCondition();
-    }
-    if (!this.form?.meta) {
-      throw new Error('<VbenForm /> is not mounted');
-    }
-    return this.form;
+  /** 在异步边界后确认仍是原表单实例。
+   * @param form 操作开始时捕获的实例。
+   * @throws {Error} 当前实例已卸载或被替换。
+   */
+  private assertMountedForm(form: FormActions<TValues>) {
+    if (!this.isMounted || this.form !== form)
+      throw new Error('表单挂载已失效');
   }
 
-  private handleMultiFields = (originValues: Record<string, any>) => {
+  /**
+   * 依次执行全部成员的读取闭包，任一成员失败即整体无效。
+   * 组合提交必须整体成功，因此这里不做部分成功：任一成员校验不通过都返回 undefined。
+   * @param readers 组合成员登记的读取闭包，调用顺序即合并顺序。
+   * @param needMerge 是否合并为单个对象；为 false 时返回各成员值的数组。
+   * @returns 全部成员有效时的值；任一成员无效时返回 undefined。
+   */
+  private async collectAll(
+    readers: FormCollector[],
+    needMerge: boolean,
+  ): Promise<FormValues | FormValues[] | undefined> {
+    const results = await Promise.all(
+      readers.map(
+        /** 闭包已固定所属实例，这里只负责并发触发各自的校验与读取。 */ (
+          read,
+        ) => read(),
+      ),
+    );
+    if (results.includes(/** 任一成员失败使聚合结果无效。 */ undefined)) return;
+    const valid: FormValues[] = [];
+    for (const result of results) if (result) valid.push(result);
+    if (!needMerge) return valid;
+    // 按登记顺序覆盖同名字段，后登记的成员覆盖先登记的成员。
+    const merged: FormValues = {};
+    for (const values of valid) Object.assign(merged, values);
+    return merged;
+  }
+
+  /** 校验并读取单个成员，校验不通过时返回 undefined，绝不返回部分结果。 */
+  private async collectOne<
+    R extends FormValuesConstraint,
+    C extends BaseFormComponentType,
+  >(api: FormApi<R, C>): Promise<FormValues | undefined> {
+    const result = await api.validate();
+    return result.valid ? this.toValueType(await api.getValues()) : undefined;
+  }
+
+  /** 只允许日期格式化器声明的类型进入实际格式化。
+   * @param value 区间的一端。
+   * @param format 日期输出格式。
+   * @returns 格式化后的日期。
+   * @throws {TypeError} 日期值类型不受支持。
+   */
+  private formatRangeDate(value: unknown, format: string) {
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      isDate(value) ||
+      isDayjsObject(value)
+    )
+      return formatDate(value, format);
+    throw new TypeError('时间区间值必须为日期、时间戳或文本');
+  }
+
+  /** 等待首次挂载；销毁前的等待不能借用后续挂载实例。
+   * @returns 当前挂载的真实 vee-validate FormContext。
+   * @throws {Error} 表单已销毁、等待被取消或挂载代次已经变化。
+   */
+  private async getForm(): Promise<FormActions<TValues>> {
+    const lifecycle = this.lifecycle;
+    if (!this.isMounted) {
+      if (this.wasUnmounted) throw new Error('表单已卸载');
+      await this.stateHandler.waitForCondition();
+    }
+    const form = this.form;
+    if (!form || !this.isMounted || lifecycle !== this.lifecycle) {
+      throw new Error('表单挂载已失效');
+    }
+    return form;
+  }
+
+  /**
+   * 按 `arrayToStringFields` 配置把数组字段转成字符串，或把字符串字段拆回数组。
+   * 转换在传入的值对象上就地完成，调用方读到的是同一份数据的转换结果。
+   * @param originValues 待转换的表单值，会被就地改写。
+   */
+  private handleMultiFields = (originValues: FormValues) => {
     const arrayToStringFields = this.state?.arrayToStringFields;
     if (!arrayToStringFields || !Array.isArray(arrayToStringFields)) {
       return;
@@ -534,7 +813,13 @@ export class FormApi {
     });
   };
 
-  private handleRangeTimeValue = (originValues: Record<string, any>) => {
+  /**
+   * 展开时间区间字段，并把数组字段按配置转换后再交给业务。
+   * 区间字段处理后会被删除：它只是输入形态，输出形态是开始键与结束键两个字段。
+   * @param originValues 原始表单值，不会被修改。
+   * @returns 展开区间并完成数组转换后的新值对象。
+   */
+  private handleRangeTimeValue = (originValues: FormValues) => {
     const values = { ...originValues };
     const fieldMappingTime = this.state?.fieldMappingTime;
 
@@ -544,7 +829,15 @@ export class FormApi {
     }
 
     fieldMappingTime.forEach(
-      ([field, [startTimeKey, endTimeKey], format = 'YYYY-MM-DD']) => {
+      /**
+       * 把一个区间字段展开为开始与结束两个字段。
+       * 值为 null 时只清掉残留的展开键，区间字段本身已被用户清空。
+       * @param entry 区间字段声明：字段名、展开后的起止键与格式化配置。
+       * @throws {TypeError} 区间字段的值不是长度为 2 的数组，说明控件未按区间模式渲染。
+       */
+      (entry) => {
+        const [field, [startTimeKey, endTimeKey], format = 'YYYY-MM-DD'] =
+          entry;
         if (startTimeKey && endTimeKey && values[field] === null) {
           Reflect.deleteProperty(values, startTimeKey);
           Reflect.deleteProperty(values, endTimeKey);
@@ -558,7 +851,10 @@ export class FormApi {
           return;
         }
 
-        const [startTime, endTime] = values[field];
+        const range = values[field];
+        if (!Array.isArray(range) || range.length !== 2)
+          throw new TypeError(`时间区间字段 ${field} 必须包含两个值`);
+        const [startTime, endTime]: unknown[] = range;
         if (format === null) {
           values[startTimeKey] = startTime;
           values[endTimeKey] = endTime;
@@ -571,10 +867,10 @@ export class FormApi {
             : [format, format];
 
           values[startTimeKey] = startTime
-            ? formatDate(startTime, startTimeFormat)
+            ? this.formatRangeDate(startTime, startTimeFormat)
             : undefined;
           values[endTimeKey] = endTime
-            ? formatDate(endTime, endTimeFormat)
+            ? this.formatRangeDate(endTime, endTimeFormat)
             : undefined;
         }
         // delete values[field];
@@ -584,11 +880,59 @@ export class FormApi {
     return values;
   };
 
+  /** 只合并当前表单已声明的键，日期和数组作为完整字段值替换。
+   * @param current 当前字段树。
+   * @param incoming 待设置的动态值。
+   * @returns 不包含未声明键且不修改调用者数据的新对象。
+   */
+  private mergeKnownFields(
+    current: FormValues,
+    incoming: FormValues,
+  ): FormValues {
+    const merged = { ...current };
+    for (const [key, value] of Object.entries(incoming)) {
+      if (!Object.hasOwn(current, key)) continue;
+      const original = current[key];
+      merged[key] =
+        isValueRecord(original) &&
+        isValueRecord(value) &&
+        !isDate(original) &&
+        !isDayjsObject(original)
+          ? this.mergeKnownFields(original, value)
+          : value;
+    }
+    return merged;
+  }
+
+  /**
+   * 把局部表单项更新合并到既有定义。
+   * 合并语义与历史一致：数组类配置整体替换，其余键深合并。
+   * @param base 既有表单项定义。
+   * @param patch 本次更新，只包含需要覆盖的键。
+   * @returns 合并后的新对象，不修改入参。
+   */
+  private mergeSchemaItem(
+    base: FormSchema<TComp>,
+    patch: Partial<FormSchema<TComp>>,
+  ): FormSchema<TComp> {
+    // 先以既有定义建立合法表单项，再把合并结果覆盖上去：
+    // defu 对 optional 字段会推导出 null 口径，直接写回 store 会得到非法的表单项。
+    return Object.assign({ ...base }, mergeWithArrayOverride(patch, base));
+  }
+
+  /**
+   * 对指定字段逐一应用值转换。
+   * 值为空时跳过而不是写入空值：未填写的字段不应被转换成空数组或空字符串。
+   * @param fields 需要处理的字段名列表。
+   * @param separator 字符串与数组之间的分隔符。
+   * @param originValues 被就地改写的表单值对象。
+   * @param transformFn 单个字段值的转换函数，接收当前值与分隔符。
+   */
   private processFields = (
     fields: string[],
     separator: string,
-    originValues: Record<string, any>,
-    transformFn: (value: any, separator: string) => any,
+    originValues: FormValues,
+    transformFn: FieldValueTransform,
   ) => {
     fields.forEach((field) => {
       const value = originValues[field];
@@ -599,6 +943,25 @@ export class FormApi {
     });
   };
 
+  /**
+   * 交给 vee-validate 的 setValues 入参。
+   * 它的形参类型是 `TValues` 的部分深层视图，而调用方传入的是同一份完整值，这里只做入参口径转换。
+   */
+  private toSetValuesArg(raw: FormValues): SetValuesArg<TValues> {
+    return raw as SetValuesArg<TValues>;
+  }
+
+  /**
+   * 把按动态键处理的字段树还原为调用方声明的值类型。
+   * 数据始终来自同一个 `FormContext<TValues>`，此处只恢复被收窄的泛型，不做结构改写。
+   * @param raw 已完成时间区间与数组字段处理的动态键对象。
+   * @returns 与 `TValues` 同一对象的视图。
+   */
+  private toValueType(raw: FormValues): TValues {
+    return raw as TValues;
+  }
+
+  /** 删除 Schema 时清理对应字段值，保持表单与声明一致。 */
   private updateState() {
     const currentSchema = this.state?.schema ?? [];
     const prevSchema = this.prevState?.schema ?? [];
@@ -611,7 +974,10 @@ export class FormApi {
         (item) => !currentFields.has(item.fieldName),
       );
       for (const schema of deletedSchema) {
-        this.form?.setFieldValue?.(schema.fieldName, undefined);
+        this.form?.setFieldValue?.(
+          schema.fieldName as Path<TValues>,
+          undefined as PathValue<TValues, Path<TValues>>,
+        );
       }
     }
   }

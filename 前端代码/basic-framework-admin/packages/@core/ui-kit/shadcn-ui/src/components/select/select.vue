@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+/** 通用选择器：把选项数组渲染成下拉选择，并提供可清空的占位与清除行为。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { CircleX } from '@vben-core/icons';
 
 import {
@@ -11,7 +14,7 @@ import {
 
 interface Props {
   allowClear?: boolean;
-  class?: any;
+  class?: ClassValue;
   options?: Array<{ label: string; value: string }>;
   placeholder?: string;
 }

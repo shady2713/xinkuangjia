@@ -1,10 +1,13 @@
 <script lang="ts" setup>
+/** 面包屑省略项：层级被折叠时占位，提示还有未展开的层级。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { MoreHorizontal } from 'lucide-vue-next';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
 }>();
 </script>
 

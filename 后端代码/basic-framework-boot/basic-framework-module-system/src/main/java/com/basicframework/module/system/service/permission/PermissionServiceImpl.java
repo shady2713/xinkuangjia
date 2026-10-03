@@ -37,7 +37,7 @@ import java.util.function.Supplier;
 
 import static com.basicframework.framework.common.util.collection.CollectionUtils.convertSet;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 
 /**
  * 权限 Service 实现类
@@ -438,8 +438,10 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     @DataPermission(enable = false) // 关闭数据权限，不然就会出现递归获取数据权限的问题
     public DeptDataPermissionRespDTO getDeptDataPermission(Long userId) {
-        // 获得用户的角色
-        List<RoleDO> roles = getEnableUserRoleListByUserIdFromCache(userId);
+        // 历史跨平台关联不能扩大数据范围，保持与功能权限的平台边界一致。
+        String userType = userService.getUserTypeOrDefault(userId);
+        List<RoleDO> roles = getEnableUserRoleListByUserIdFromCache(userId).stream()
+                .filter(role -> AdminPlatformTypeEnum.isSame(role.getRoleType(), userType)).toList();
 
         // 如果角色为空，则只能查看自己
         DeptDataPermissionRespDTO result = new DeptDataPermissionRespDTO();
@@ -494,14 +496,16 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     /**
-     * 获得自身的代理对象，解决 AOP 生效问题
-     *
-     * @return 自己
+     * 写入菜单授权前校验角色、所有菜单存在且同属当前平台，拒绝悬空授权编号。
      */
     private void validateRoleMenuPlatform(Long roleId, Set<Long> menuIds) {
         validateRolePlatform(roleId);
         String loginUserType = userService.getLoginUserTypeOrDefault();
-        for (MenuDO menu : menuService.getMenuList(menuIds)) {
+        List<MenuDO> menus = menuService.getMenuList(menuIds);
+        if (menus.size() != CollUtil.size(menuIds)) {
+            throw exception(MENU_NOT_EXISTS);
+        }
+        for (MenuDO menu : menus) {
             // 角色只能绑定同平台菜单，防止当前平台角色拿到新管理平台菜单权限。
             if (!AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType)) {
                 throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
@@ -510,28 +514,41 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     /**
-     * 校验 validateUserRolePlatform 对应的输入与业务约束。
+     * 校验用户可见性及角色完整性，避免不可见用户或未来编号被写入授权关系。
      */
     private void validateUserRolePlatform(Long userId, Set<Long> roleIds) {
         AdminUserDO user = userService.getUser(userId);
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
         String loginUserType = userService.getLoginUserTypeOrDefault();
-        if (user != null && !AdminPlatformTypeEnum.isSame(user.getUserType(), loginUserType)) {
+        if (!AdminPlatformTypeEnum.isSame(user.getUserType(), loginUserType)) {
             throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
-        for (RoleDO role : roleService.getRoleList(roleIds)) {
+        List<RoleDO> roles = roleService.getRoleList(roleIds);
+        if (roles.size() != CollUtil.size(roleIds)) {
+            throw exception(ROLE_NOT_EXISTS);
+        }
+        for (RoleDO role : roles) {
             // 用户只能绑定同平台角色，防止当前平台账号被授予新管理平台角色。
             if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType)) {
                 throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            if (!CommonStatusEnum.ENABLE.getStatus().equals(role.getStatus())) {
+                throw exception(ROLE_IS_DISABLE, role.getName());
             }
         }
     }
 
     /**
-     * 校验 validateRolePlatform 对应的输入与业务约束。
+     * 拒绝不存在或跨平台的目标角色，不把未找到对象视为授权通过。
      */
     private void validateRolePlatform(Long roleId) {
         RoleDO role = roleService.getRole(roleId);
-        if (role != null && !AdminPlatformTypeEnum.isSame(role.getRoleType(), userService.getLoginUserTypeOrDefault())) {
+        if (role == null) {
+            throw exception(ROLE_NOT_EXISTS);
+        }
+        if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), userService.getLoginUserTypeOrDefault())) {
             throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }

@@ -29,6 +29,7 @@ public interface ErrorCodeConstants {
     ErrorCode AUTH_SHARE_LOGIN_TICKET_INVALID = new ErrorCode(1_002_000_011, "分享链接不存在或已停用");
     ErrorCode AUTH_SHARE_LOGIN_USER_INVALID = new ErrorCode(1_002_000_012, "分享链接绑定的用户不存在或已禁用");
     ErrorCode AUTH_SHARE_LOGIN_MENU_EMPTY = new ErrorCode(1_002_000_013, "分享用户暂无可访问菜单");
+    ErrorCode AUTH_SHARE_LOGIN_DISABLED = new ErrorCode(1_002_000_014, "分享登录未开放");
 
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");
@@ -120,6 +121,8 @@ public interface ErrorCodeConstants {
     ErrorCode SMS_CODE_USED = new ErrorCode(1_002_014_002, "验证码已使用");
     ErrorCode SMS_CODE_EXCEED_SEND_MAXIMUM_QUANTITY_PER_DAY = new ErrorCode(1_002_014_004, "超过每日短信发送数量");
     ErrorCode SMS_CODE_SEND_TOO_FAST = new ErrorCode(1_002_014_005, "短信发送过于频繁");
+    ErrorCode SMS_CODE_VERIFY_TOO_FAST = new ErrorCode(1_002_014_006, "验证码验证请求过于频繁");
+    ErrorCode SMS_CODE_ATTEMPTS_EXHAUSTED = new ErrorCode(1_002_014_007, "验证码尝试次数已用尽，请重新获取");
 
     // ========== 社交用户 1-002-018-000 ==========
     ErrorCode SOCIAL_USER_AUTH_FAILURE = new ErrorCode(1_002_018_000, "社交授权失败，原因是：{}");

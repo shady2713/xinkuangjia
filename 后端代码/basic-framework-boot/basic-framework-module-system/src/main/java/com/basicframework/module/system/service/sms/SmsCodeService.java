@@ -24,18 +24,18 @@ public interface SmsCodeService {
     void sendSmsCode(@Valid SmsCodeSendReqDTO reqDTO);
 
     /**
-     * 校验短信验证码并标记为已使用。
+     * 在手机、可信 IP 和单挑战错误预算内消费最新短信验证码。
      *
-     * @param reqDTO 使用请求
-     * @throws ServiceException 验证码不存在、过期、已使用或错误时抛出
+     * @param reqDTO 使用请求，IP 必须由可信调用方确定；请求及错误预算不随数据库事务回滚
+     * @throws ServiceException 验证码无效、过期、已使用、被新码替代或预算耗尽时抛出
      */
     void useSmsCode(@Valid SmsCodeUseReqDTO reqDTO);
 
     /**
-     * 校验短信验证码是否有效。
+     * 在相同请求和错误预算内校验最新验证码，但不标记消费。
      *
-     * @param reqDTO 校验请求
-     * @throws ServiceException 验证码不存在、过期、已使用或错误时抛出
+     * @param reqDTO 校验请求，必须包含可信调用方确定的 validateIp
+     * @throws ServiceException 验证码无效、过期、已使用或预算耗尽时抛出
      */
     void validateSmsCode(@Valid SmsCodeValidateReqDTO reqDTO);
 

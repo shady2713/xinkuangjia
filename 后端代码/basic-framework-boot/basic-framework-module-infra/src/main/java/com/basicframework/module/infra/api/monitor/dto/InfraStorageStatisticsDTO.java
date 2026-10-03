@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @Data
 public class InfraStorageStatisticsDTO {
 
-    /** 采集状态：complete 完成、partial 部分结果、unavailable 未取得数据。 */
+    /** 采集状态：complete 完成、partial 部分或刷新中的旧结果、unavailable 未取得数据；结合采集时间和说明判断。 */
     private String collectionStatus;
 
     /** 可公开展示的采集边界或失败说明，不含地址和凭据。 */

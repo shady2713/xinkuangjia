@@ -19,9 +19,13 @@ type FilteredSlots<T> = {
     : K]: VxeGridSlots<T>[K];
 };
 
-/** 创建 VxeGrid 表格组件及其 API 实例的 composable 函数 */
+/**
+ * 创建 VxeGrid 表格组件及其 API 实例的 composable 函数
+ * @param options 表格配置，表格行类型由 T 指定
+ * @returns 表格组件、API 实例以及默认插槽的类型声明
+ */
 export function useVbenVxeGrid<
-  T extends Record<string, any> = any,
+  T extends object = Record<string, unknown>,
   D extends BaseFormComponentType = BaseFormComponentType,
 >(options: VxeGridProps<T, D>) {
   const api = new VxeGridApi(options);

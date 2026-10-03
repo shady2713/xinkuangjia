@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -15,7 +17,7 @@ import {
 } from 'reka-ui';
 
 const props = withDefaults(
-  defineProps<DialogContentProps & { class?: any; zIndex?: number }>(),
+  defineProps<DialogContentProps & { class?: ClassValue; zIndex?: number }>(),
   { zIndex: 1000 },
 );
 const emits = defineEmits<DialogContentEmits>();

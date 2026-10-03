@@ -5,15 +5,14 @@ import type { SystemDictTypeApi } from '#/api/system/dict/type';
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteDictType,
   deleteDictTypeList,
   exportDictType,
   getDictTypePage,
 } from '#/api/system/dict/type';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useTypeGridColumns, useTypeGridFormSchema } from '../data';

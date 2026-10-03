@@ -3,7 +3,7 @@
  * Verify 验证码组件
  * @description 分发验证码使用
  */
-import type { VerificationProps } from './typing';
+import type { CaptchaVerifyPassingPayload, VerificationProps } from './typing';
 
 import { defineAsyncComponent, markRaw, ref, toRefs, watchEffect } from 'vue';
 
@@ -61,40 +61,60 @@ const show = () => {
   if (mode.value === 'pop') showBox.value = true;
 };
 
-const onError = (proxy: any) => {
+/**
+ * 转发子组件的校验失败事件并立即换一张新验证码。
+ * @param proxy 触发事件的子组件实例，原样透传给父组件
+ */
+const onError = (proxy: unknown) => {
   emit('onError', proxy);
   refresh();
 };
 
-const onReady = (proxy: any) => {
+/**
+ * 转发子组件的就绪事件；子组件完成首次尺寸换算后重新拉一张，避免首帧尺寸未定就锁死画布。
+ * @param proxy 触发事件的子组件实例，原样透传给父组件
+ */
+const onReady = (proxy: unknown) => {
   emit('onReady', proxy);
   refresh();
 };
 
+/** 转发关闭事件并收起弹层。 */
 const onClose = () => {
   emit('onClose');
   showBox.value = false;
 };
 
-const onSuccess = (data: any) => {
+/**
+ * 转发校验通过事件。
+ * @param data 后端可校验的 captchaVerification 密文
+ */
+const onSuccess = (data: CaptchaVerifyPassingPayload) => {
   emit('onSuccess', data);
 };
 
-watchEffect(() => {
-  switch (captchaType.value) {
-    case 'adminBlockPuzzle':
-    case 'blockPuzzle': {
-      verifyType.value = '2';
-      componentType.value = markRaw(VerifySlide);
-      break;
+watchEffect(
+  /**
+   * 按 captchaType 切换实际渲染的子组件。
+   * @description 滑块类走 VerifySlide 并带上内部用的 type 标记，点选文字走 VerifyPoints；
+   * 用 markRaw 避免异步组件被响应式代理而丢失组件标记。
+   */
+  () => {
+    switch (captchaType.value) {
+      case 'adminBlockPuzzle':
+      case 'blockPuzzle': {
+        verifyType.value = '2';
+        componentType.value = markRaw(VerifySlide);
+        break;
+      }
+      case 'clickWord': {
+        verifyType.value = '';
+        componentType.value = markRaw(VerifyPoints);
+        break;
+      }
     }
-    case 'clickWord': {
-      verifyType.value = '';
-      componentType.value = markRaw(VerifyPoints);
-      break;
-    }
-  }
-});
+  },
+);
 
 defineExpose({
   onClose,

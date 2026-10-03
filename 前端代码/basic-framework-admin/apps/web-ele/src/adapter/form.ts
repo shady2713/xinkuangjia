@@ -1,5 +1,8 @@
 import type {
   VbenFormSchema as FormSchema,
+  FormValues,
+  FormValuesConstraint,
+  NamedFormRule,
   VbenFormProps,
 } from '@vben/common-ui';
 
@@ -38,13 +41,6 @@ import {
   isUsernameValue,
 } from './field-rules';
 
-type RuleContext = Record<string, any>;
-type RuleHandler = (
-  value: unknown,
-  params: unknown,
-  ctx: RuleContext,
-) => boolean | string;
-
 /** 判断必填值是否为空；value 为控件值，空白文本和空列表无效，0 与 false 有效。 */
 function isEmpty(value: unknown): boolean {
   return (
@@ -52,20 +48,27 @@ function isEmpty(value: unknown): boolean {
   );
 }
 
-/** 按字段标签生成必填提示；label 为界面名称，action 为操作类型，返回统一文案。 */
+/**
+ * 按字段标签生成必填提示。
+ * @param label 界面名称；vee-validate 在字段未声明 label 时给出 undefined，此处按空名处理。
+ * @param action 操作类型，决定使用上传还是输入/选择的文案模板。
+ * @returns 拼接完成的必填提示。
+ */
 function getRequiredFieldMessage(
-  label: string,
+  label: string | undefined,
   action: 'input' | 'select' | 'upload' = 'input',
 ): string {
+  const name = label ?? '';
   // 上传控件使用上传动作；输入与选择沿用框架现有文案模板。
-  if (action === 'upload') return `请上传${label}`;
+  if (action === 'upload') return `请上传${name}`;
   return $t(
     `ui.formRules.${action === 'select' ? 'selectRequired' : 'required'}`,
-    [label],
+    [name],
   );
 }
 
-const defineRules: Record<string, RuleHandler> = {
+/** 本应用的命名规则集合：规则签名直接对齐 form-ui 的 NamedFormRule 契约。 */
+const defineRules: Record<string, NamedFormRule> = {
   /** 校验输入值；value 为控件值，ctx 提供字段标签，返回通过状态或字段错误。 */
   required: (value, _params, ctx) => {
     if (isEmpty(value)) {
@@ -184,6 +187,11 @@ const defineRules: Record<string, RuleHandler> = {
   },
 };
 
+/**
+ * 在应用启动时登记本应用的表单适配配置。
+ * 控件映射与命名规则都属于全局一次性注册，因此这里保持幂等：重复调用只会覆盖为同一份配置。
+ * @returns 注册完成后兑现的 Promise；调用方无需等待具体结果。
+ */
 async function initSetupVbenForm() {
   setupVbenForm<ComponentType>({
     config: {
@@ -192,11 +200,23 @@ async function initSetupVbenForm() {
         CheckboxGroup: 'model-value',
       },
     },
-    defineRules: defineRules as any,
+    defineRules,
   });
 }
 
-const useVbenForm = useForm<ComponentType>;
+/**
+ * 创建表单组件与操作实例。
+ * 组件集合固定为本应用注册的 Element Plus 组件，值类型由调用方声明，
+ * 因此 `formApi.getValues()` 直接返回业务 DTO，不再需要断言。
+ * @param options 表单属性。
+ * @returns `[Form, formApi]`。
+ */
+const useVbenForm = <
+  TComp extends ComponentType = ComponentType,
+  TValues extends FormValuesConstraint = FormValues,
+>(
+  options: VbenFormProps<TComp, TValues>,
+) => useForm<TComp, TValues>(options);
 
 export {
   buildLoginPasswordSchema,
@@ -233,4 +253,4 @@ export {
 };
 
 export type VbenFormSchema = FormSchema<ComponentType>;
-export type { VbenFormProps };
+export type { ComponentType, FormValues, FormValuesConstraint, VbenFormProps };

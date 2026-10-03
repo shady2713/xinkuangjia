@@ -9,7 +9,6 @@ export namespace InfraFileApi {
   /** 文件信息 */
   export interface File {
     id?: number;
-    configId?: number;
     path: string;
     name?: string;
     url?: string;
@@ -20,7 +19,7 @@ export namespace InfraFileApi {
 
   /** 文件预签名地址 */
   export interface FilePresignedUrlRespVO {
-    configId: number; // 文件配置编号
+    headers: Record<string, string>; // 签名绑定的请求头
     uploadUrl: string; // 文件上传 URL
     url: string; // 文件 URL
     path: string; // 文件路径
@@ -50,29 +49,5 @@ export function deleteFileList(ids: number[]) {
   return requestClient.delete(`/infra/file/delete-list?ids=${ids.join(',')}`);
 }
 
-/** 获取文件预签名地址 */
-export function getFilePresignedUrl(name: string, directory?: string) {
-  return requestClient.get<InfraFileApi.FilePresignedUrlRespVO>(
-    '/infra/file/presigned-url',
-    {
-      params: { name, directory },
-    },
-  );
-}
-
-/** 创建文件 */
-export function createFile(data: InfraFileApi.File) {
-  return requestClient.post('/infra/file/create', data);
-}
-
-/** 上传文件 */
-export function uploadFile(
-  data: InfraFileApi.FileUploadReqVO,
-  onUploadProgress?: AxiosProgressEvent,
-) {
-  // 特殊：由于 upload 内部封装，即使 directory 为 undefined，也会传递给后端
-  if (!data.directory) {
-    delete data.directory;
-  }
-  return requestClient.upload('/infra/file/upload', data, { onUploadProgress });
-}
+/** 统一复用核心上传协议，避免文件管理页保留不带预约大小的旧请求。 */
+export { createFile, getFilePresignedUrl, uploadFile } from '#/api/core/file';

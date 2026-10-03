@@ -106,6 +106,18 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     /**
+     * 有界读取待验证对象，超过预约大小立即失败并关闭请求资源。
+     * @param path 对象键
+     * @param maximumBytes 允许的最大字节数
+     * @return 完整且未超过限制的字节
+     * @throws Exception 对象不存在、超限或存储故障
+     */
+    @Override
+    public byte[] getContent(String path, int maximumBytes) throws Exception {
+        return fileClient.getContent(path, maximumBytes);
+    }
+
+    /**
      * 通过对象存储服务端复制对象。
      *
      * @param sourcePath 来源对象路径
@@ -148,11 +160,12 @@ public class FileStorageServiceImpl implements FileStorageService {
      * 生成对象上传预签名地址。
      *
      * @param path 对象路径
+     * @param size 签名绑定的精确字节数；上传有效期五分钟
      * @return 上传预签名地址
      */
     @Override
-    public String presignPutUrl(String path) {
-        return fileClient.presignPutUrl(path);
+    public String presignPutUrl(String path, long size) {
+        return fileClient.presignPutUrl(path, size);
     }
 
     /**

@@ -16,6 +16,15 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from scripts.common.repository_layout import JAVA_SOURCE_ROOT, is_java_source
+from scripts.common.check_protocol import emit
 
 # Windows Git Hook 可能继承非 UTF-8 控制台编码，统一输出编码以保证中文提示可读。
 if hasattr(sys.stdout, "reconfigure"):
@@ -23,7 +32,6 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 
-JAVA_SOURCE_ROOT = "后端/java服务/"
 GIT_TIMEOUT_SECONDS = 30
 HUNK_HEADER_PATTERN = re.compile(
     r"^@@ -\d+(?:,\d+)? \+(?P<line>\d+)(?:,\d+)? @@"
@@ -184,12 +192,7 @@ def _staged_java_paths() -> list[str]:
         except UnicodeDecodeError as error:
             raise RuntimeError("暂存区文件路径不是有效 UTF-8") from error
         normalized = path.replace("\\", "/")
-        if (
-            normalized.startswith(JAVA_SOURCE_ROOT)
-            and normalized.endswith(".java")
-            and "/target/" not in normalized
-            and "/generated-sources/" not in normalized
-        ):
+        if is_java_source(normalized):
             paths.append(normalized)
     return paths
 
@@ -252,20 +255,23 @@ def _added_lines(path: str) -> set[int]:
     return added
 
 
-def _mask_java(source: str) -> str:
-    """屏蔽注释和字面量内容，同时保留字符偏移与换行位置。
+@lru_cache(maxsize=2)
+def _lex_java(source: str) -> tuple[str, tuple[tuple[int, int], ...]]:
+    """屏蔽注释和字面量并记录真实块注释边界，复用同一文件的声明分析结果。
 
     Args:
         source: 原始 Java 源码。
 
     Returns:
-        与原文等长的结构化文本；注释和字面量被空格替换。
+        与原文等长的结构化文本及块注释起止偏移；最多缓存两个源码版本。
     """
 
     chars = list(source)
     masked = list(source)
     index = 0
     state = "normal"
+    comments: list[tuple[int, int]] = []
+    comment_start = 0
     while index < len(chars):
         char = chars[index]
         next_char = chars[index + 1] if index + 1 < len(chars) else ""
@@ -276,6 +282,7 @@ def _mask_java(source: str) -> str:
                 state = "line-comment"
                 continue
             if char == "/" and next_char == "*":
+                comment_start = index
                 masked[index] = masked[index + 1] = " "
                 index += 2
                 state = "block-comment"
@@ -302,6 +309,7 @@ def _mask_java(source: str) -> str:
                 masked[index] = " "
         elif state == "block-comment":
             if char == "*" and next_char == "/":
+                comments.append((comment_start, index + 2))
                 masked[index] = masked[index + 1] = " "
                 index += 2
                 state = "normal"
@@ -330,7 +338,12 @@ def _mask_java(source: str) -> str:
             if char != "\n":
                 masked[index] = " "
         index += 1
-    return "".join(masked)
+    return "".join(masked), tuple(comments)
+
+
+def _mask_java(source: str) -> str:
+    """返回屏蔽注释及字面量的等长源码，保留调用方使用的结构定位接口。"""
+    return _lex_java(source)[0]
 
 
 def _depths(masked: str, opening: str, closing: str) -> list[int]:
@@ -442,8 +455,19 @@ def _member_start(
         可能包含 JavaDoc 和注解的成员片段起始偏移。
     """
 
+    parentheses = 0
     for index in range(position - 1, -1, -1):
         char = masked[index]
+        if char == ")":
+            parentheses += 1
+            continue
+        if char == "(" and parentheses:
+            parentheses -= 1
+            continue
+        # 注解参数中的数组也有大括号，但不结束前一个类型成员。
+        # 反向匹配小括号可同时覆盖多行数组与嵌套注解，不依赖注解名称。
+        if parentheses:
+            continue
         if char == ";" and brace_depths[index] == member_depth:
             return index + 1
         if char == "}" and brace_depths[index] == member_depth + 1:
@@ -485,10 +509,12 @@ def _attached_javadoc(source: str, declaration_offset: int) -> str | None:
     prefix = source[:declaration_offset].rstrip()
     if not prefix.endswith("*/"):
         return None
-    start = prefix.rfind("/**")
-    if start < 0 or prefix.rfind("/*") != start:
-        return None
-    return prefix[start:]
+    for start, end in reversed(_lex_java(source)[1]):
+        if end == len(prefix):
+            return source[start:end] if source.startswith("/**", start) else None
+        if end < len(prefix):
+            break
+    return None
 
 
 def _strip_leading_annotations(fragment: str) -> tuple[str, int]:
@@ -1307,15 +1333,17 @@ def _new_documentation_findings(
     ]
 
 
-def _scan_staged_java_comments() -> list[Finding]:
+def _scan_staged_java_comments(paths: list[str] | None = None) -> list[Finding]:
     """扫描全部暂存 Java 文件的增量注释问题。
 
+    Args:
+        paths: 已读取的增量范围；省略时从当前索引读取，空列表不扩大扫描。
     Returns:
         本次提交中的全部注释门禁问题。
     """
 
     findings = []
-    for path in _staged_java_paths():
+    for path in _staged_java_paths() if paths is None else paths:
         source = _staged_source(path)
         findings.extend(_scan_source(path, source, _added_lines(path)))
         findings.extend(_new_documentation_findings(path, source, _previous_source(path)))
@@ -1384,7 +1412,7 @@ public class GoodDO {
 }
 """
     all_compliant_lines = set(range(1, compliant_source.count("\n") + 2))
-    if _scan_source("后端/java服务/test/GoodDO.java", compliant_source, all_compliant_lines):
+    if _scan_source("后端代码/basic-framework-boot/test/GoodDO.java", compliant_source, all_compliant_lines):
         raise AssertionError("合规 Java 样本被误报")
 
     missing_source = """public class MissingVO {
@@ -1402,7 +1430,7 @@ public class GoodDO {
     all_missing_lines = set(range(1, missing_source.count("\n") + 2))
     missing_rules = _rules(
         _scan_source(
-            "后端/java服务/test/MissingVO.java",
+            "后端代码/basic-framework-boot/test/MissingVO.java",
             missing_source,
             all_missing_lines,
         )
@@ -1416,7 +1444,7 @@ public interface MissingAuthor {
 }
 """
     author_findings = _scan_source(
-        "后端/java服务/test/MissingAuthor.java", author_source, {2}
+        "后端代码/basic-framework-boot/test/MissingAuthor.java", author_source, {2}
     )
     if "type-author" not in _rules(author_findings):
         raise AssertionError("public 类型缺少作者的样本未被拦截")
@@ -1430,7 +1458,7 @@ public interface PlaceholderAuthor {
 }
 """
     placeholder_author_findings = _scan_source(
-        "后端/java服务/test/PlaceholderAuthor.java",
+        "后端代码/basic-framework-boot/test/PlaceholderAuthor.java",
         placeholder_author_source,
         {6},
     )
@@ -1460,7 +1488,7 @@ public enum StatusEnum {
 }
 """
     enum_findings = _scan_source(
-        "后端/java服务/test/StatusEnum.java", enum_source, {9}
+        "后端代码/basic-framework-boot/test/StatusEnum.java", enum_source, {9}
     )
     if "enum-constant-javadoc" not in _rules(enum_findings):
         raise AssertionError("枚举常量缺少注释的样本未被拦截")
@@ -1482,7 +1510,7 @@ public record ResultVO(
     all_record_lines = set(range(1, record_source.count("\n") + 2))
     record_rules = _rules(
         _scan_source(
-            "后端/java服务/test/ResultVO.java",
+            "后端代码/basic-framework-boot/test/ResultVO.java",
             record_source,
             all_record_lines,
         )
@@ -1499,7 +1527,7 @@ public record ResultVO(
 }
 """
     if _scan_source(
-        "后端/java服务/test/LegacyVO.java", incremental_source, {5}
+        "后端代码/basic-framework-boot/test/LegacyVO.java", incremental_source, {5}
     ):
         raise AssertionError("仅修改方法体时不应追溯历史声明注释")
     print("Java 注释检查规则自检通过")
@@ -1514,6 +1542,7 @@ def _parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="检查 Git 暂存区 Java 增量注释")
     parser.add_argument("--self-test", action="store_true", help="运行内置规则自检")
+    parser.add_argument("--json", action="store_true", help="输出结构化计数与诊断")
     return parser.parse_args()
 
 
@@ -1529,10 +1558,20 @@ def main() -> int:
         _run_self_test()
         return 0
     try:
-        findings = _scan_staged_java_comments()
+        paths = _staged_java_paths()
+        if not paths:
+            if args.json:
+                return emit("Java 注释", 0, [])
+            print(f"Java 注释检查：不适用，暂存差异中没有 {JAVA_SOURCE_ROOT} 下的手写 Java 文件；未验证 Java 声明。")
+            return 0
+        if not args.json:
+            print(f"Java 注释检查范围：{len(paths)} 个暂存文件，根目录 {JAVA_SOURCE_ROOT}，仅检查受影响声明。")
+        findings = _scan_staged_java_comments(paths)
     except RuntimeError as error:
         print(f"Java 注释检查失败：{error}", file=sys.stderr)
         return 2
+    if args.json:
+        return emit("Java 注释", len(paths), findings)
     if not findings:
         print("Java 注释检查通过：暂存区新增或修改的声明符合要求")
         return 0

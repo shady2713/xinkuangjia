@@ -3,7 +3,8 @@ import type { BreadcrumbProps } from './types';
 
 import { VbenIcon } from '../icon';
 
-interface Props extends BreadcrumbProps {}
+/** 带背景面包屑的属性契约别名：直接复用面包屑属性，不额外声明成员。 */
+type Props = BreadcrumbProps;
 
 defineOptions({ name: 'Breadcrumb' });
 const { breadcrumbs, showIcon } = defineProps<Props>();

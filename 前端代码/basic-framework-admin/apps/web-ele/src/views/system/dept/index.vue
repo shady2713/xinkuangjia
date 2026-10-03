@@ -11,8 +11,8 @@ import { isEmpty } from '@vben/utils';
 import { ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import { deleteDept, deleteDeptList, getDeptList } from '#/api/system/dept';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns } from './data';
@@ -69,8 +69,26 @@ const {
 
 /** 直接从表格读取当前选中行，避免事件参数带缓存 */
 function handleRowCheckboxChange() {
-  const records = (gridApi.grid?.getCheckboxRecords?.() || []) as SystemDeptApi.Dept[];
-  checkedIds.value = records.map((row) => row.id!);
+  const records = (gridApi.grid?.getCheckboxRecords?.() ||
+    []) as SystemDeptApi.Dept[];
+  // 勾选结果会直接用于批量删除，缺少 id 的行无法定位目标，必须排除而不是带入
+  checkedIds.value = records
+    .map(
+      /**
+       * 取出该行的主键。
+       * @param row 表格当前勾选的行。
+       * @returns 行主键；DTO 未提供时为 undefined。
+       */
+      (row) => row.id,
+    )
+    .filter(
+      /**
+       * 剔除缺少主键的行。
+       * @param id 行主键。
+       * @returns 主键存在时返回 true。
+       */
+      (id): id is number => id !== undefined,
+    );
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({

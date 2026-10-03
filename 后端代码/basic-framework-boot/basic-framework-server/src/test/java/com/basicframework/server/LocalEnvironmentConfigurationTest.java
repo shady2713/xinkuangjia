@@ -3,6 +3,9 @@ package com.basicframework.server;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.Binder;
+import com.basicframework.framework.web.config.WebProperties;
+import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
+import org.springframework.boot.autoconfigure.web.servlet.MultipartProperties;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
@@ -57,6 +60,49 @@ class LocalEnvironmentConfigurationTest {
         values.put("ADMIN_UI_URL", "https://admin.example.com");
         assertEquals("https://admin.example.com",
                 environment(values).getProperty("basic-framework.web.admin-ui.url"));
+    }
+
+    /** 当前 YAML 绑定跨域环境变量，缺省关闭；列表中的源不隐式扩大到其他端口。 */
+    @Test
+    void corsEnvironmentUsesExplicitOriginsAndClosedDefault() throws IOException {
+        Map<String, Object> values = localValues();
+        assertEquals(java.util.List.of(), Binder.get(environment(values))
+                .bind("basic-framework.web", WebProperties.class).get().getCorsAllowedOrigins());
+        values.put("CORS_ALLOWED_ORIGIN", "http://localhost:5175,https://admin.example.com");
+        assertEquals(java.util.List.of("http://localhost:5175", "https://admin.example.com"),
+                Binder.get(environment(values)).bind("basic-framework.web", WebProperties.class).get().getCorsAllowedOrigins());
+    }
+
+    /** 文件限制同时控制应用与 Multipart 层，环境覆盖不能让两者的文件大小口径分离。 */
+    @Test
+    void fileBudgetsAndMultipartUseConsistentEnvironmentValues() throws IOException {
+        Map<String, Object> values = localValues();
+        Binder defaults = Binder.get(environment(values));
+        FileUploadProperties upload = defaults.bind("basic-framework.file.upload", FileUploadProperties.class).get();
+        MultipartProperties multipart = defaults.bind("spring.servlet.multipart", MultipartProperties.class).get();
+        assertEquals(10 * 1024 * 1024, upload.getMaxBytes());
+        assertEquals(upload.getMaxBytes(), multipart.getMaxFileSize().toBytes());
+        assertEquals(33L * 1024 * 1024, multipart.getMaxRequestSize().toBytes());
+        values.put("FILE_UPLOAD_MAX_BYTES", "33554432");
+        values.put("FILE_UPLOAD_DAILY_BYTES", "67108864");
+        values.put("FILE_UPLOAD_DAILY_REQUESTS", "7");
+        Binder configured = Binder.get(environment(values));
+        FileUploadProperties overridden = configured.bind("basic-framework.file.upload", FileUploadProperties.class).get();
+        assertEquals(33554432, overridden.getMaxBytes());
+        assertEquals(67108864, overridden.getDailyBytes());
+        assertEquals(7, overridden.getDailyRequests());
+        assertEquals(overridden.getMaxBytes(), configured.bind("spring.servlet.multipart", MultipartProperties.class)
+                .get().getMaxFileSize().toBytes());
+    }
+
+    /** 数据库和存储凭据没有源码缺省值，环境缺失时无法解析为有效凭据。 */
+    @Test
+    void databaseAndStorageSecretsRequireEnvironmentInjection() throws IOException {
+        StandardEnvironment environment = environment(Map.of());
+        assertThrows(IllegalArgumentException.class,
+                () -> environment.getProperty("spring.datasource.dynamic.datasource.master.password"));
+        assertThrows(IllegalArgumentException.class,
+                () -> environment.getProperty("basic-framework.file.minio.secret-key"));
     }
 
     /** MinIO 的安全协议配置缺失时保持启动失败，防止以错误存储配置运行。 */

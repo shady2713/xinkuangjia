@@ -5,7 +5,7 @@ interface UserInfo extends BasicUserInfo {
   /**
    * 首页地址
    */
-  homePath: string;
+  homePath?: string;
 }
 
 /** 认证权限信息，包含用户、角色、权限码和菜单 */

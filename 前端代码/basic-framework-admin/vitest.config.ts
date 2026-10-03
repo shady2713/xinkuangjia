@@ -1,21 +1,26 @@
+/** 统一单元测试与完整源码覆盖率采集，最终百分比由独立逐文件门禁裁决。 */
 import Vue from '@vitejs/plugin-vue';
 import VueJsx from '@vitejs/plugin-vue-jsx';
-import {
-  configDefaults,
-  coverageConfigDefaults,
-  defineConfig,
-} from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [Vue(), VueJsx()],
   test: {
-    // 明确统计应用与共享包源码；失败时仍输出报告，但不改变真实测试退出码。
+    // Vitest 3.2 的 all 纳入未导入源码；专项收集与最终百分比验收使用不同入口。
     coverage: {
       all: true,
-      exclude: [...coverageConfigDefaults.exclude, '**/e2e/**', '**/*.d.ts'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/e2e/**',
+        '**/__tests__/**',
+        '**/*.d.{ts,mts,cts}',
+        '**/*{.,-}{test,spec,bench,benchmark}{,-d}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}',
+      ],
       include: [
-        'apps/*/src/**/*.{ts,tsx,js,jsx,vue}',
-        'packages/**/src/**/*.{ts,tsx,js,jsx,vue}',
+        'apps/*/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue}',
+        'packages/**/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue}',
+        'internal/**/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue}',
       ],
       provider: 'v8',
       reportOnFailure: true,

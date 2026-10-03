@@ -21,7 +21,7 @@ import jakarta.validation.Valid;
 public interface AdminAuthService {
 
     /**
-     * 验证账号 + 密码。如果通过，则返回用户
+     * 在调用方事务内锁定用户并验证账号密码，成功后由同一事务完成会话签发。
      *
      * @param username 账号
      * @param password 密码
@@ -30,7 +30,7 @@ public interface AdminAuthService {
     AdminUserDO authenticate(String username, String password);
 
     /**
-     * 验证指定平台类型的账号 + 密码。如果通过，则返回用户。
+     * 在调用方事务内锁定指定平台用户并验证密码，锁保持到会话签发事务结束。
      *
      * @param username 账号
      * @param password 密码
@@ -56,10 +56,10 @@ public interface AdminAuthService {
     AuthLoginRespVO superAdminLogin(@Valid AuthLoginReqVO reqVO);
 
     /**
-     * 固定分享码自动登录
+     * 拒绝已停用的长期分享码登录，不提供配置重开能力。
      *
      * @param ticket 分享码
-     * @return 登录结果和首个可访问菜单地址
+     * @return 此兼容入口始终抛出分享登录未开放的业务异常
      */
     AuthShareLoginRespVO shareLogin(String ticket);
 
@@ -82,7 +82,7 @@ public interface AdminAuthService {
      * 短信登录
      *
      * @param reqVO 登录信息
-     * @return 登录结果
+     * @return 业务管理平台的登录结果
      */
     AuthLoginRespVO smsLogin(AuthSmsLoginReqVO reqVO);
 

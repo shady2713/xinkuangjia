@@ -1,10 +1,12 @@
 package com.basicframework.module.system.service.sms;
 
+import cn.hutool.core.util.StrUtil;
 import com.basicframework.module.system.dal.dataobject.sms.SmsLogDO;
 import com.basicframework.module.system.dal.dataobject.sms.SmsTemplateDO;
 import com.basicframework.module.system.dal.mysql.sms.SmsLogMapper;
 import com.basicframework.module.system.enums.sms.SmsReceiveStatusEnum;
 import com.basicframework.module.system.enums.sms.SmsSendStatusEnum;
+import com.basicframework.module.system.framework.sms.core.client.SmsReceiptException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -85,35 +87,40 @@ public class SmsLogServiceImpl implements SmsLogService {
     }
 
     /**
-     * 根据回执中的内部编号、供应商流水号和手机号更新接收结果。
+     * 根据渠道、供应商流水号和手机号将匹配日志推进到首次接收终态。
      *
-     * <p>腾讯云不返回内部日志编号，因此必须使用发送时保存的流水号关联；未匹配时抛出异常，
-     * 由回调入口返回 HTTP 50X 触发供应商重试。</p>
+     * <p>匿名回执只能更新已有发送日志，内部编号不能替代三项关联条件。
+     * 接收状态条件与数据写入在同一条 UPDATE 中完成，避免并发、重复或乱序回执覆盖终态。</p>
      *
+     * @param channelCode 回调入口对应的供应商渠道编码，不可为空
      * @param id 短信日志编号，可为空
-     * @param apiSerialNo 平台流水号
-     * @param mobile 手机号
-     * @param success 是否接收成功
-     * @param receiveTime 接收时间
+     * @param apiSerialNo 平台流水号，不可为空
+     * @param mobile 发送时保存的手机号，不可为空
+     * @param success 是否接收成功，不可为 {@code null}
+     * @param receiveTime 供应商报告的接收时间，不可为 {@code null}
      * @param apiErrorCode 平台错误编码
      * @param apiErrorMsg 平台错误描述
+     * @throws SmsReceiptException 回执必要字段不完整或未匹配已有日志，异常仅携带固定原因分类
      */
     @Override
-    public void updateSmsReceiveResult(Long id, String apiSerialNo, String mobile,
+    public void updateSmsReceiveResult(String channelCode, Long id, String apiSerialNo, String mobile,
                                        Boolean success, LocalDateTime receiveTime,
                                        String apiErrorCode, String apiErrorMsg) {
-        SmsLogDO smsLog = smsLogMapper.selectByReceiveCallback(id, apiSerialNo, mobile);
+        if (StrUtil.isBlank(channelCode) || StrUtil.isBlank(apiSerialNo) || StrUtil.isBlank(mobile)
+                || success == null || receiveTime == null) {
+            throw new SmsReceiptException("invalid_identifiers");
+        }
+        SmsLogDO smsLog = smsLogMapper.selectByReceiveCallback(channelCode, id, apiSerialNo, mobile);
         if (smsLog == null) {
-            throw new IllegalStateException("短信回执无法匹配发送日志");
+            throw new SmsReceiptException("unmatched_receipt");
         }
         SmsLogDO updateObj = new SmsLogDO();
-        updateObj.setId(smsLog.getId());
         updateObj.setReceiveStatus(success ? SmsReceiveStatusEnum.SUCCESS.getStatus() : SmsReceiveStatusEnum.FAILURE.getStatus());
         updateObj.setReceiveTime(receiveTime);
-        updateObj.setApiSerialNo(apiSerialNo);
         updateObj.setApiReceiveCode(apiErrorCode);
         updateObj.setApiReceiveMsg(apiErrorMsg);
-        smsLogMapper.updateById(updateObj);
+        // 首次终态后更新行数为零仍属于已处理的合法回执，供应商重投不能改写已确认结果。
+        smsLogMapper.updateReceiveResultIfInitial(smsLog.getId(), channelCode, apiSerialNo, mobile, updateObj);
     }
 
 }

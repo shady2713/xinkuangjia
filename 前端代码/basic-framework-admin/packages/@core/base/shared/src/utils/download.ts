@@ -42,11 +42,12 @@ export async function downloadFileFromUrl({
 
 /**
  * 下载图片（允许跨域）
- * @param url - 图片 URL
- * @param canvasWidth - 画布宽度
- * @param canvasHeight - 画布高度
- * @param drawWithImageSize - 将图片绘制在画布上时带上图片的宽高值, 默认是要带上的
- * @returns
+ * @param options 下载参数
+ * @param options.url 图片 URL
+ * @param options.canvasWidth 画布宽度
+ * @param options.canvasHeight 画布高度
+ * @param options.drawWithImageSize 将图片绘制在画布上时带上图片的宽高值，默认是要带上的
+ * @throws {Error} 图片地址跨域、被防盗链拦截时，绘制失败会按原始错误抛出。
  */
 export function downloadImageByCanvas({
   url,

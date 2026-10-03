@@ -26,7 +26,7 @@ export interface StringDictDataType extends DictDataType {
  * @param value 字典值
  * @returns 字典标签
  */
-export function getDictLabel(dictType: string, value: any) {
+export function getDictLabel(dictType: string, value: unknown) {
   const dictStore = useDictStore();
   const dictObj = dictStore.getDictData(dictType, value);
   return isObject(dictObj) ? dictObj.label : '';
@@ -39,7 +39,7 @@ export function getDictLabel(dictType: string, value: any) {
  * @param value 字典值
  * @returns 字典对象
  */
-export function getDictObj(dictType: string, value: any) {
+export function getDictObj(dictType: string, value: unknown) {
   const dictStore = useDictStore();
   const dictObj = dictStore.getDictData(dictType, value);
   return isObject(dictObj) ? dictObj : null;

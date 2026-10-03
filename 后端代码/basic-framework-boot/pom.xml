@@ -24,16 +24,14 @@
         <revision>2026.01-SNAPSHOT</revision>
         <!-- Maven 相关 -->
         <java.version>17</java.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
-        <maven.compiler.target>${java.version}</maven.compiler.target>
+        <!-- 同时约束语法、字节码和 JDK API，防止高版本 JDK 编译出 Java 17 无法运行的调用。 -->
+        <maven.compiler.release>${java.version}</maven.compiler.release>
         <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
         <flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
-        <!-- 各模块按实测覆盖率覆盖该基线；父级先允许无源码或暂无测试的聚合/基础模块生成完整报告。 -->
-        <quality.coverage.minimum>0.00</quality.coverage.minimum>
         <!-- maven-surefire-plugin 暂时无法通过 bom 的依赖查找（兼容老版本 IDEA 2024 及以前版本） -->
         <lombok.version>1.18.46</lombok.version>
         <spring.boot.version>3.5.16</spring.boot.version>
@@ -95,7 +93,8 @@
                             </path>
                         </annotationProcessorPaths>
                         <!-- 编译参数写在 arg 内，解决 Spring Boot 3.2 的 Parameter Name Discovery 问题 -->
-                        <debug>false</debug>
+                        <!-- 保留源码行号，支持故障定位和逐行覆盖率报告。 -->
+                        <debug>true</debug>
                         <compilerArgs>
                             <arg>-parameters</arg>
                         </compilerArgs>
@@ -104,6 +103,93 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>flatten-maven-plugin</artifactId>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>${maven-dependency-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>prepare-quality-coverage-agent</id>
+                            <phase>process-test-classes</phase>
+                            <goals>
+                                <goal>copy</goal>
+                            </goals>
+                            <configuration>
+                                <artifactItems>
+                                    <artifactItem>
+                                        <groupId>org.jacoco</groupId>
+                                        <artifactId>org.jacoco.agent</artifactId>
+                                        <version>${jacoco-maven-plugin.version}</version>
+                                        <classifier>runtime</classifier>
+                                        <destFileName>jacoco-agent.jar</destFileName>
+                                    </artifactItem>
+                                </artifactItems>
+                                <outputDirectory>${project.build.directory}/quality-agent</outputDirectory>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco-maven-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>quality-coverage-report</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>report</goal>
+                            </goals>
+                        </execution>
+
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-pmd-plugin</artifactId>
+                    <version>${maven-pmd-plugin.version}</version>
+                    <configuration>
+                        <failOnViolation>true</failOnViolation>
+                        <printFailingErrors>true</printFailingErrors>
+                        <targetJdk>${java.version}</targetJdk>
+                        <rulesets>
+                            <ruleset>${maven.multiModuleProjectDirectory}/config/pmd/basic-framework-ruleset.xml</ruleset>
+                        </rulesets>
+                        <!-- MapStruct 等注解处理器生成的源码由模板治理，不纳入手写源码静态分析。 -->
+                        <excludeRoots>
+                            <excludeRoot>${project.build.directory}/generated-sources</excludeRoot>
+                        </excludeRoots>
+                        <!-- 扫描全部生产源码；历史问题通过明确排除清单治理，不再用单文件 includes 制造假绿。 -->
+                    </configuration>
+
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.6.3</version>
+                    <executions>
+                        <execution>
+                            <id>quality-source-coverage-prepare</id>
+                            <phase>process-test-classes</phase>
+                            <goals><goal>exec</goal></goals>
+                            <configuration>
+                                <executable>python</executable>
+                                <arguments>
+                                    <argument>-B</argument>
+                                    <argument>-X</argument>
+                                    <argument>utf8</argument>
+                                    <argument>${maven.multiModuleProjectDirectory}/../../scripts/workflow/coverage_gate.py</argument>
+                                    <argument>--root</argument>
+                                    <argument>${maven.multiModuleProjectDirectory}/../..</argument>
+                                    <argument>--kind</argument><argument>backend</argument>
+                                    <argument>--stage</argument><argument>audit</argument>
+                                    <argument>--module</argument><argument>${project.basedir}</argument>
+                                    <argument>--prepare</argument>
+                                </arguments>
+                            </configuration>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -140,16 +226,14 @@
 
     <profiles>
         <profile>
-            <id>quality-gate</id>
+            <id>quality-audit</id>
             <build>
                 <plugins>
-                    <!-- 质量门禁显式固定测试运行器，保证 CI 与本地执行口径一致。 -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-surefire-plugin</artifactId>
-                        <version>${maven-surefire-plugin.version}</version>
                         <configuration>
-                            <!-- 使用模块相对路径，避免 Windows GBK Maven 对中文绝对路径的误转码。 -->
+                            <!-- 仅质量阶段附加代理；普通专项 test 不依赖覆盖率输出。 -->
                             <workingDirectory>${project.basedir}</workingDirectory>
                             <argLine>-javaagent:target/quality-agent/jacoco-agent.jar=destfile=target/jacoco.exec</argLine>
                         </configuration>
@@ -157,88 +241,84 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-dependency-plugin</artifactId>
-                        <version>${maven-dependency-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>prepare-quality-coverage-agent</id>
-                                <phase>process-test-classes</phase>
-                                <goals>
-                                    <goal>copy</goal>
-                                </goals>
-                                <configuration>
-                                    <artifactItems>
-                                        <artifactItem>
-                                            <groupId>org.jacoco</groupId>
-                                            <artifactId>org.jacoco.agent</artifactId>
-                                            <version>${jacoco-maven-plugin.version}</version>
-                                            <classifier>runtime</classifier>
-                                            <destFileName>jacoco-agent.jar</destFileName>
-                                        </artifactItem>
-                                    </artifactItems>
-                                    <outputDirectory>${project.build.directory}/quality-agent</outputDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.jacoco</groupId>
                         <artifactId>jacoco-maven-plugin</artifactId>
-                        <version>${jacoco-maven-plugin.version}</version>
-                        <executions>
-                            <execution>
-                                <id>quality-coverage-report</id>
-                                <phase>verify</phase>
-                                <goals>
-                                    <goal>report</goal>
-                                </goals>
-                            </execution>
-                            <execution>
-                                <id>quality-coverage-check</id>
-                                <phase>verify</phase>
-                                <goals>
-                                    <goal>check</goal>
-                                </goals>
-                                <configuration>
-                                    <rules>
-                                        <rule>
-                                            <element>BUNDLE</element>
-                                            <limits>
-                                                <limit>
-                                                    <counter>LINE</counter>
-                                                    <value>COVEREDRATIO</value>
-                                                    <minimum>${quality.coverage.minimum}</minimum>
-                                                </limit>
-                                            </limits>
-                                        </rule>
-                                    </rules>
-                                </configuration>
-                            </execution>
-                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-pmd-plugin</artifactId>
-                        <version>${maven-pmd-plugin.version}</version>
-                        <configuration>
-                            <failOnViolation>true</failOnViolation>
-                            <printFailingErrors>true</printFailingErrors>
-                            <targetJdk>${java.version}</targetJdk>
-                            <rulesets>
-                                <ruleset>${maven.multiModuleProjectDirectory}/config/pmd/basic-framework-ruleset.xml</ruleset>
-                            </rulesets>
-                            <!-- MapStruct 等注解处理器生成的源码由模板治理，不纳入手写源码静态分析。 -->
-                            <excludeRoots>
-                                <excludeRoot>${project.build.directory}/generated-sources</excludeRoot>
-                            </excludeRoots>
-                            <!-- 扫描全部生产源码；历史问题通过明确排除清单治理，不再用单文件 includes 制造假绿。 -->
-                        </configuration>
                         <executions>
                             <execution>
                                 <id>quality-static-analysis</id>
                                 <phase>verify</phase>
-                                <goals>
-                                    <goal>check</goal>
-                                </goals>
+                                <goals><goal>pmd</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>quality-gate</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- 仅质量阶段附加代理；普通专项 test 不依赖覆盖率输出。 -->
+                            <workingDirectory>${project.basedir}</workingDirectory>
+                            <argLine>-javaagent:target/quality-agent/jacoco-agent.jar=destfile=target/jacoco.exec</argLine>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-pmd-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>quality-static-analysis</id>
+                                <phase>verify</phase>
+                                <goals><goal>check</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>quality-source-coverage-gate</id>
+                                <phase>verify</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>python</executable>
+                                    <arguments>
+                                        <argument>-B</argument>
+                                        <argument>-X</argument>
+                                        <argument>utf8</argument>
+                                        <argument>${maven.multiModuleProjectDirectory}/../../scripts/workflow/coverage_gate.py</argument>
+                                        <argument>--root</argument>
+                                        <argument>${maven.multiModuleProjectDirectory}/../..</argument>
+                                        <argument>--kind</argument><argument>backend</argument>
+                                        <argument>--stage</argument><argument>full</argument>
+                                        <argument>--module</argument><argument>${project.basedir}</argument>
+                                        <argument>--require-prepared</argument>
+                                    </arguments>
+                                </configuration>
                             </execution>
                         </executions>
                     </plugin>

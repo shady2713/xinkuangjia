@@ -1,5 +1,7 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { SystemPostApi } from '#/api/system/post';
+import type { SystemRoleApi } from '#/api/system/role';
 import type { SystemUserApi } from '#/api/system/user';
 
 import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
@@ -13,7 +15,10 @@ import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 新增/修改的表单 */
+/**
+ * 新增/修改用户时使用的表单字段定义。
+ * @returns 表单 schema 数组，字段与用户接口的读写模型一一对应。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -84,7 +89,8 @@ export function useFormSchema(): VbenFormSchema[] {
         valueField: 'id',
         multiple: true,
         placeholder: '请选择岗位',
-        afterFetch: async (res: any[]) =>
+        // 按岗位状态置灰不可选项，其余字段原样透传。
+        afterFetch: async (res: SystemPostApi.Post[]) =>
           res.map((item) => ({
             ...item,
             disabled: item.status === CommonStatusEnum.DISABLE,
@@ -202,7 +208,10 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 分配角色的表单 */
+/**
+ * 为已有用户分配角色时使用的表单字段定义。
+ * @returns 表单 schema 数组，岗位与角色均以多选下拉呈现。
+ */
 export function useAssignRoleFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -239,7 +248,8 @@ export function useAssignRoleFormSchema(): VbenFormSchema[] {
         valueField: 'id',
         multiple: true,
         placeholder: '请选择角色',
-        afterFetch: async (res: any[]) =>
+        // 按角色状态置灰不可选项，其余字段原样透传。
+        afterFetch: async (res: SystemRoleApi.Role[]) =>
           res.map((item) => ({
             ...item,
             disabled: item.status === CommonStatusEnum.DISABLE,

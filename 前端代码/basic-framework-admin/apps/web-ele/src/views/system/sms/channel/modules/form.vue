@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 短信渠道新增/修改弹窗：按是否已存在主键决定走新增还是修改接口。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemSmsChannelApi } from '#/api/system/sms/channel';
 
 import { ref } from 'vue';
@@ -20,28 +24,33 @@ import { useFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const formData = ref<SystemSmsChannelApi.Channel>();
 
-const [Form, formApi] = useVbenForm({
-  commonConfig: {
-    componentProps: {
-      class: 'w-full',
+const [Form, formApi] = useVbenForm<ComponentType, SystemSmsChannelApi.Channel>(
+  {
+    commonConfig: {
+      componentProps: {
+        class: 'w-full',
+      },
+      formItemClass: 'col-span-2',
+      labelWidth: 100,
     },
-    formItemClass: 'col-span-2',
-    labelWidth: 100,
+    layout: 'horizontal',
+    schema: useFormSchema(),
+    showDefaultActions: false,
   },
-  layout: 'horizontal',
-  schema: useFormSchema(),
-  showDefaultActions: false,
-});
+);
 
 const [Modal, modalApi] = useVbenModal({
   /** 校验并保存短信渠道，成功后关闭弹窗并通知列表刷新；失败时释放弹窗锁。 */
+  /**
+   * 提交弹窗表单：校验通过后按是否存在主键选择新增还是修改，并在结束时释放弹窗锁。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    const data = (await formApi.getValues()) as SystemSmsChannelApi.Channel;
+    const data = await formApi.getValues();
     try {
       await (formData.value?.id
         ? updateSmsChannel(data)

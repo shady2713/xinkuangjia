@@ -16,6 +16,7 @@
         <module>basic-framework-spring-boot-starter-web</module>
         <module>basic-framework-spring-boot-starter-security</module>
 
+        <module>basic-framework-spring-boot-starter-mq</module>
         <module>basic-framework-spring-boot-starter-protection</module>
         <module>basic-framework-spring-boot-starter-job</module>
 

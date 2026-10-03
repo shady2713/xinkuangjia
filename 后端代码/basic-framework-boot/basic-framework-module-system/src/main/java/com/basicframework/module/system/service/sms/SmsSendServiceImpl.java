@@ -9,6 +9,7 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.datapermission.core.annotation.DataPermission;
 import com.basicframework.module.system.framework.sms.core.client.SmsClient;
+import com.basicframework.module.system.framework.sms.core.client.SmsReceiptException;
 import com.basicframework.module.system.framework.sms.core.client.dto.SmsReceiveRespDTO;
 import com.basicframework.module.system.framework.sms.core.client.dto.SmsSendRespDTO;
 import com.basicframework.module.system.dal.dataobject.sms.SmsChannelDO;
@@ -20,6 +21,7 @@ import com.basicframework.module.system.service.user.AdminUserService;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.List;
@@ -212,24 +214,38 @@ public class SmsSendServiceImpl implements SmsSendService {
     }
 
     /**
-     * 解析供应商回执并逐条更新对应短信日志。
+     * 整批校验供应商回执后更新已有短信日志，任一匹配失败时回滚本批更新。
      *
      * @param channelCode 渠道编码
-     * @param text 回执 JSON
+     * @param text 回执 JSON，不得为空或解析为空集合
+     * @throws SmsReceiptException 回执无法解析或缺少匹配标识；异常不携带原文
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void receiveSmsStatus(String channelCode, String text) {
         // 获得渠道对应的 SmsClient 客户端
         SmsClient smsClient = smsChannelService.getSmsClient(channelCode);
         Assert.notNull(smsClient, "短信客户端({}) 不存在", channelCode);
         // 解析内容
-        List<SmsReceiveRespDTO> receiveResults = smsClient.parseSmsReceiveStatus(text);
+        List<SmsReceiveRespDTO> receiveResults;
+        try {
+            receiveResults = smsClient.parseSmsReceiveStatus(text);
+        } catch (RuntimeException ex) {
+            throw new SmsReceiptException("invalid_fields");
+        }
         if (CollUtil.isEmpty(receiveResults)) {
-            return;
+            throw new SmsReceiptException("empty_receipt");
+        }
+        // 先校验整批结果，避免把缺失状态误当失败终态，并阻止不完整标识进入数据库匹配。
+        for (SmsReceiveRespDTO result : receiveResults) {
+            if (result == null || StrUtil.isBlank(result.getSerialNo()) || StrUtil.isBlank(result.getMobile())
+                    || result.getSuccess() == null || result.getReceiveTime() == null) {
+                throw new SmsReceiptException("invalid_fields");
+            }
         }
         // 更新短信日志的接收结果. 因为量一般不大，所以先使用 for 循环更新
         receiveResults.forEach(result -> smsLogService.updateSmsReceiveResult(
-                result.getLogId(), result.getSerialNo(), result.getMobile(),
+                channelCode, result.getLogId(), result.getSerialNo(), result.getMobile(),
                 result.getSuccess(), result.getReceiveTime(), result.getErrorCode(), result.getErrorMsg()));
     }
 

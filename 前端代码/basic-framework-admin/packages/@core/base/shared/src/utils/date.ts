@@ -49,23 +49,56 @@ export function formatDate2(date: Date, format?: string): string {
   return date ? dayjs(date).format(format ?? 'YYYY-MM-DD HH:mm:ss') : '';
 }
 
-export function isDate(value: any): value is Date {
+/**
+ * 判断传入值是否为原生 Date 实例。
+ * @param value 待判断的值，允许任意类型，便于在未收窄的入参上直接使用。
+ * @returns 是 Date 实例时返回 true。
+ */
+export function isDate(value: unknown): value is Date {
   return value instanceof Date;
 }
 
-export function isDayjsObject(value: any): value is dayjs.Dayjs {
+/**
+ * 判断传入值是否为 dayjs 对象。
+ * @param value 待判断的值，允许任意类型，便于在未收窄的入参上直接使用。
+ * @returns 是 dayjs 对象时返回 true。
+ */
+export function isDayjsObject(value: unknown): value is dayjs.Dayjs {
   return dayjs.isDayjs(value);
+}
+
+/**
+ * 把表格单元格的任意取值收窄为可格式化的日期类型。
+ * vxe / element-plus 的列 formatter 拿到的字段值是 unknown，
+ * 而日期列的真实取值只可能是时间戳、时间字符串或 Date；
+ * 其余取值按「无法格式化」处理，避免把布尔或对象当成时间戳产生误导性输出。
+ * @param value 单元格取值。
+ * @returns 可交给 formatDate 的值；不是日期类型时返回 undefined，由 formatDate 输出空串。
+ */
+export function toFormatDateValue(value: unknown): FormatDate | undefined {
+  if (isDate(value) || isDayjsObject(value)) {
+    return value;
+  }
+  return typeof value === 'number' || typeof value === 'string'
+    ? value
+    : undefined;
 }
 
 /**
  * element plus 的时间 Formatter 实现，使用 YYYY-MM-DD HH:mm:ss 格式
  *
- * @param _row
- * @param _column
- * @param cellValue 字段值
+ * @param _row 行数据，Element Plus 固定传入，此处不使用
+ * @param _column 列定义，Element Plus 固定传入，此处不使用
+ * @param cellValue 字段值，按 unknown 接收后收窄为日期类型，非法值一律渲染为空串
+ * @returns 格式化后的时间文本；cellValue 为空或不是日期类型时返回空串
  */
-export function dateFormatter(_row: any, _column: any, cellValue: any): string {
-  return cellValue ? formatDate(cellValue)?.toString() || '' : '';
+export function dateFormatter(
+  _row: unknown,
+  _column: unknown,
+  cellValue: unknown,
+): string {
+  const date = toFormatDateValue(cellValue);
+  return date ? formatDate(date)?.toString() || '' : '';
 }
 
 /**

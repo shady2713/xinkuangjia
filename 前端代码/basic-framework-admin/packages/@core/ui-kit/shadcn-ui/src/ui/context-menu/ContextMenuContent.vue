@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ContextMenuContentEmits, ContextMenuContentProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -11,7 +13,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 
-const props = defineProps<ContextMenuContentProps & { class?: any }>();
+const props = defineProps<ContextMenuContentProps & { class?: ClassValue }>();
 const emits = defineEmits<ContextMenuContentEmits>();
 
 const delegatedProps = computed(() => {

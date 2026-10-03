@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/** 密码输入框：在普通输入框上增加明文切换按钮，并可按需展示密码强度提示。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { ref, useSlots } from 'vue';
 
 import { Eye, EyeOff } from '@vben-core/icons';
@@ -8,7 +11,7 @@ import { Input } from '../../ui';
 import PasswordStrength from './password-strength.vue';
 
 interface Props {
-  class?: any;
+  class?: ClassValue;
   /**
    * 是否显示密码强度
    */

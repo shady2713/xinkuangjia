@@ -8,6 +8,9 @@ import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.dal.mysql.logger.LoginLogMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
 
 import jakarta.annotation.Resource;
 
@@ -21,6 +24,21 @@ import jakarta.annotation.Resource;
 @Service
 @Validated
 public class LoginLogServiceImpl implements LoginLogService {
+
+    /**
+     * 独立提交失败审计，成功事件仍由签发会话的事务负责提交。
+     *
+     * @param reqDTO 非成功的认证结果；误传成功结果时拒绝写入
+     * @throws IllegalArgumentException 传入成功事件时抛出
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public void createLoginFailureLog(LoginLogCreateReqDTO reqDTO) {
+        if (LoginResultEnum.SUCCESS.getResult().equals(reqDTO.getResult())) {
+            throw new IllegalArgumentException("成功审计必须与会话事务共同提交");
+        }
+        createLoginLog(reqDTO);
+    }
 
     @Resource
     private LoginLogMapper loginLogMapper;

@@ -7,15 +7,14 @@ import { watch } from 'vue';
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteDictData,
   deleteDictDataList,
   exportDictData,
   getDictDataPage,
 } from '#/api/system/dict/data';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useDataGridColumns, useDataGridFormSchema } from '../data';
@@ -55,8 +54,18 @@ const {
   handleEdit,
 } = useCrudActions<SystemDictDataApi.DictData>({
   batchDeleteApi: deleteDictDataList,
-  createData: () => ({ dictType: props.dictType }) as SystemDictDataApi.DictData,
+  /**
+   * 新增时的初始值：字典类型由父组件通过 props 指定，其余字段留给表单填写。
+   * @returns 带字典类型的空字典项。
+   */
+  createData: () =>
+    ({ dictType: props.dictType }) as SystemDictDataApi.DictData,
   deleteApi: deleteDictData,
+  /**
+   * 删除确认框里展示的名称，优先用字典标签，标签为空时退回空串而不是显示 undefined。
+   * @param row 当前行的字典项数据。
+   * @returns 用于二次确认提示的名称。
+   */
   getDeleteName: (row) => row.label || '',
   modalApi: dataFormModalApi,
   refresh: handleRefresh,

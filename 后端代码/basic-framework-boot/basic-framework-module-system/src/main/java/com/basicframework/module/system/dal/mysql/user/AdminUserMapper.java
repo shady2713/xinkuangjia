@@ -20,6 +20,17 @@ import java.util.List;
 public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
 
     /**
+     * 在调用方事务中锁定用户，以当前读串行化密码变更和会话签发。
+     *
+     * @param id 用户编号
+     * @return 当前未删除用户；不存在时返回 {@code null}；行锁持续到事务结束
+     */
+    default AdminUserDO selectByIdForUpdate(Long id) {
+        return selectOne(new LambdaQueryWrapperX<AdminUserDO>()
+                .eq(AdminUserDO::getId, id).last("FOR UPDATE"));
+    }
+
+    /**
      * 查询By用户名。
      *
      * @param username 用户名参数
@@ -61,6 +72,18 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
      */
     default AdminUserDO selectByMobile(String mobile) {
         return selectOne(AdminUserDO::getMobile, mobile);
+    }
+
+    /**
+     * 按手机号和可信平台查询认证目标，避免短信入口跨平台选中身份。
+     *
+     * @param mobile 手机号
+     * @param userType 入口固定的平台类型
+     * @return 当前平台账号，不存在时返回 {@code null}
+     */
+    default AdminUserDO selectByMobileAndUserType(String mobile, String userType) {
+        return selectOne(new LambdaQueryWrapperX<AdminUserDO>()
+                .eq(AdminUserDO::getMobile, mobile).eq(AdminUserDO::getUserType, userType));
     }
 
     /**

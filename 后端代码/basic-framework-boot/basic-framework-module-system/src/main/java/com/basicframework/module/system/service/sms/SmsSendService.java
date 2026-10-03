@@ -79,10 +79,11 @@ public interface SmsSendService {
     void doSendSms(SmsSendMessage message);
 
     /**
-     * 接收短信平台回执结果。
+     * 校验并接收短信平台回执，只更新匹配渠道、流水号和手机号的已有日志。
      *
      * @param channelCode 渠道编码
-     * @param text        回执内容
+     * @param text        非空 JSON 回执内容；批内任一校验或匹配失败时回滚整批更新
+     * @throws com.basicframework.module.system.framework.sms.core.client.SmsReceiptException 回执无效或无法匹配
      */
     void receiveSmsStatus(String channelCode, String text);
 

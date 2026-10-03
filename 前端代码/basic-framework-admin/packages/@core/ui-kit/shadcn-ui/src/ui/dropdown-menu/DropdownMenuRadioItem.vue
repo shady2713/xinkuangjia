@@ -4,6 +4,8 @@ import type {
   DropdownMenuRadioItemProps,
 } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -15,7 +17,9 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 
-const props = defineProps<DropdownMenuRadioItemProps & { class?: any }>();
+const props = defineProps<
+  DropdownMenuRadioItemProps & { class?: ClassValue }
+>();
 
 const emits = defineEmits<DropdownMenuRadioItemEmits>();
 

@@ -14,8 +14,14 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Sequence
+
+if __package__ in (None, ""):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from scripts.common.check_protocol import emit
 
 CHINESE_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 # 兼容普通空白和 Docstring 中可能出现的 HTML 空格实体。
@@ -466,12 +472,12 @@ def _new_documentation_findings(
     ]
 
 
-def _scan_staged_python_comments() -> list[Finding]:
+def _scan_staged_python_comments(paths: list[str] | None = None) -> list[Finding]:
     """汇总暂存区全部相关 Python 文件的注释质量问题。"""
 
     added_paths = _staged_added_paths()
     findings: list[Finding] = []
-    for path in _staged_python_paths():
+    for path in _staged_python_paths() if paths is None else paths:
         try:
             source = _staged_source(path)
             previous_source = None if path in added_paths else _previous_source(path)
@@ -604,6 +610,7 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="运行内置回归测试")
+    parser.add_argument("--json", action="store_true", help="输出结构化计数与诊断")
     return parser.parse_args(argv)
 
 
@@ -619,10 +626,17 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         os.chdir(_repo_root())
-        findings = _scan_staged_python_comments()
+        paths = _staged_python_paths()
+        findings = _scan_staged_python_comments(paths)
     except RuntimeError as exc:
         print(f"Python 注释检查无法执行：{exc}", file=sys.stderr)
         return 2
+
+    if args.json:
+        return emit("Python 注释", len(paths), findings)
+    if not paths:
+        print("Python 注释检查：不适用，没有暂存 Python 文件；未验证 Python 声明。")
+        return 0
 
     if not findings:
         print("Python 暂存区注释检查通过。")

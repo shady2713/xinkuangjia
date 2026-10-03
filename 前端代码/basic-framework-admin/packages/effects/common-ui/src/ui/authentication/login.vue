@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Recordable } from '@vben/types';
 
-import type { VbenFormSchema } from '@vben-core/form-ui';
+import type { BaseFormComponentType, VbenFormSchema } from '@vben-core/form-ui';
 
 import type { AuthenticationProps } from './types';
 
@@ -18,6 +18,18 @@ import Title from './auth-title.vue';
 interface Props extends AuthenticationProps {
   formSchema?: VbenFormSchema[];
 }
+
+/**
+ * 登录表单值。
+ * 组件本身是通用的登录容器，这里只声明它自己直接使用的“记住用户名”字段；
+ * 其余字段由调用方传入的 formSchema 决定，账号与密码保持开放键值。
+ */
+type LoginForm = {
+  [key: string]: unknown;
+  password?: string;
+  rememberMe?: boolean;
+  username?: string;
+};
 
 defineOptions({
   name: 'AuthenticationLogin',
@@ -40,10 +52,10 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  submit: [Recordable<any>];
+  submit: [Recordable<unknown>];
 }>();
 
-const [Form, formApi] = useVbenForm(
+const [Form, formApi] = useVbenForm<BaseFormComponentType, LoginForm>(
   reactive({
     commonConfig: {
       hideLabel: true,
@@ -61,13 +73,17 @@ const localUsername = localStorage.getItem(REMEMBER_ME_KEY) || '';
 
 const rememberMe = ref(!!localUsername);
 
+/**
+ * 提交登录表单。
+ * 校验不通过时直接返回，不记忆用户名也不通知上层，避免把非法值带进登录请求。
+ */
 async function handleSubmit() {
   const { valid } = await formApi.validate();
   const values = await formApi.getValues();
   if (valid) {
     localStorage.setItem(
       REMEMBER_ME_KEY,
-      rememberMe.value ? values?.username : '',
+      rememberMe.value ? (values.username ?? '') : '',
     );
     emit('submit', values);
   }

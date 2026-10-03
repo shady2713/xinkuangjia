@@ -5,7 +5,8 @@
  * @returns 去重后的对象数组
  */
 function uniqueByField<T>(arr: T[], key: keyof T): T[] {
-  const seen = new Map<any, T>();
+  // 去重键就是该字段的取值本身，类型为 T[keyof T]，无需再放宽
+  const seen = new Map<T[keyof T], T>();
   return arr.filter((item) => {
     const value = item[key];
     return seen.has(value) ? false : (seen.set(value, item), true);

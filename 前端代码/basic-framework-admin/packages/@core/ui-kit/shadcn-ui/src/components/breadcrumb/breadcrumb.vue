@@ -17,7 +17,8 @@ import {
 } from '../../ui';
 import { VbenIcon } from '../icon';
 
-interface Props extends BreadcrumbProps {}
+/** 面包屑容器的属性契约别名：直接复用面包屑属性，不额外声明成员。 */
+type Props = BreadcrumbProps;
 
 defineOptions({ name: 'Breadcrumb' });
 withDefaults(defineProps<Props>(), {

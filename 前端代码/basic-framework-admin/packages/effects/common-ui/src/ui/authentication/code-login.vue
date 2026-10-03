@@ -55,7 +55,7 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  submit: [Recordable<any>];
+  submit: [Recordable<unknown>];
 }>();
 
 const router = useRouter();

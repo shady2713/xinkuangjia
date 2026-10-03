@@ -20,6 +20,7 @@ export {
 };
 export {
   type ImportLocaleFn,
+  type LocaleMessagesRecord,
   type LocaleSetupOptions,
   type SupportedLanguagesType,
 } from './typing';

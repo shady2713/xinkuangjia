@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ScrollAreaScrollbarProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -8,7 +10,7 @@ import { cn } from '@vben-core/shared/utils';
 import { ScrollAreaScrollbar, ScrollAreaThumb } from 'reka-ui';
 
 const props = withDefaults(
-  defineProps<ScrollAreaScrollbarProps & { class?: any }>(),
+  defineProps<ScrollAreaScrollbarProps & { class?: ClassValue }>(),
   {
     orientation: 'vertical',
   },

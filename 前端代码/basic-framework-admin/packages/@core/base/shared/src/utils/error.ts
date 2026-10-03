@@ -1,4 +1,4 @@
-﻿type ErrorLike = {
+type ErrorLike = {
   code?: number | string;
   message?: string;
   name?: string;
@@ -67,13 +67,22 @@ function getErrorMeta(error: unknown) {
   return meta;
 }
 
+/**
+ * 按级别把错误输出到控制台，并在同一条日志里附上可定位的业务元数据。
+ * 错误缺省时只输出作用域，不伪造错误对象，避免把"没有错误"记成一次异常。
+ * @param level 输出级别，warn 走 console.warn，其余走 console.error。
+ * @param scope 出错的作用域名，用于在控制台中区分来源。
+ * @param error 原始错误；为空时视为没有可提取的信息。
+ */
 function formatLogMessage(
   level: 'error' | 'warn',
   scope: string,
   error?: unknown,
 ) {
-  const message = error == null ? '' : getErrorMessage(error, 'Unknown error');
-  const meta = error == null ? {} : getErrorMeta(error);
+  // 错误缺省时给出占位文案与空元数据：空值不是错误对象，交由兜底分支处理。
+  const absent = error === null || error === undefined;
+  const message = absent ? '' : getErrorMessage(error, 'Unknown error');
+  const meta = absent ? {} : getErrorMeta(error);
   const suffix = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
   const base = `[${scope}]${message ? ` ${message}` : ''}${suffix}`;
   if (level === 'warn') {

@@ -17,12 +17,33 @@ import VbenModal from './modal.vue';
 
 const USER_MODAL_INJECT_KEY = Symbol('VBEN_MODAL_INJECT');
 
+/** connectedComponent 模式下由父组件 provide、内层弹窗 inject 的连接信息。 */
+interface UserModalInjectData {
+  /** 本次注入是否已被内层弹窗消费；已消费说明当前是嵌套弹窗，不再合并上层配置。 */
+  consumed: boolean;
+  /** 内层弹窗创建时用来接管 api 原型的方法。 */
+  extendApi?: (api: ExtendedModalApi) => void;
+  /** 父组件为该弹窗声明的默认配置，会被内层自己的 options 覆盖。 */
+  options: ModalApiOptions;
+  /** 强制卸载并重建内层弹窗组件，用于 destroyOnClose 后清空内部状态。 */
+  reCreateModal?: () => Promise<void>;
+}
+
 const DEFAULT_MODAL_PROPS: Partial<ModalProps> = {};
 
 export function setDefaultModalProps(props: Partial<ModalProps>) {
   Object.assign(DEFAULT_MODAL_PROPS, props);
 }
 
+/**
+ * 声明一个受控弹窗组件及其命令式 API。
+ *
+ * 传入 connectedComponent 表示弹窗被抽离为独立组件，此时由外层通过 provide/inject
+ * 把 API 交接给内层弹窗；否则在本组件内直接创建 API。嵌套弹窗不会继承上层配置。
+ *
+ * @param options 弹窗初始状态与各类生命周期回调
+ * @returns 弹窗组件与对应 API 的二元组，可在模板中解构使用
+ */
 export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
   options: ModalApiOptions = {},
 ) {
@@ -74,10 +95,13 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
     return [Modal, extendedApi as ExtendedModalApi] as const;
   }
 
-  let injectData = inject<any>(USER_MODAL_INJECT_KEY, {});
+  let injectData: UserModalInjectData = inject<UserModalInjectData>(
+    USER_MODAL_INJECT_KEY,
+    { consumed: false, options: {} },
+  );
   // 这个数据已经被使用了，说明这个弹窗是嵌套的弹窗，不应该merge上层的配置
   if (injectData.consumed) {
-    injectData = {};
+    injectData = { consumed: false, options: {} };
   } else {
     injectData.consumed = true;
   }
@@ -130,7 +154,19 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
   return [Modal, extendedApi] as const;
 }
 
-async function checkProps(api: ExtendedModalApi, attrs: Record<string, any>) {
+/**
+ * 校验 connectedComponent 模式下外部传入的 props 是否与弹窗状态键冲突。
+ *
+ * props、attrs 与 slots 会被合并后透传给内部弹窗，若其中包含状态字段会绕过 api 直接改状态，
+ * 导致回调与状态不同步，因此这里逐个比对并告警。只提示不阻断，保持向后兼容。
+ *
+ * @param api 内层弹窗暴露的 api，用于读取当前状态键集合
+ * @param attrs 外部组件实际传入的 props、attrs 与 slots 合并结果
+ */
+async function checkProps(
+  api: ExtendedModalApi,
+  attrs: Record<string, unknown>,
+) {
   if (!attrs || Object.keys(attrs).length === 0) {
     return;
   }

@@ -17,7 +17,13 @@ import subprocess
 import sys
 import warnings
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+
+if __package__ in (None, ""):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.security.sql_credentials import inspect_insert_credentials
 
 # Windows 的 Git Hook 可能继承非 UTF-8 控制台编码；统一输出编码，避免中文提示乱码。
 if hasattr(sys.stdout, "reconfigure"):
@@ -28,7 +34,7 @@ if hasattr(sys.stdout, "reconfigure"):
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)(?P<key>[a-z0-9_.-]*(?:password|passwd|passphrase|secret|token|"
     r"api[_-]?key|access[_-]?key|private[_-]?key|credential)[a-z0-9_.-]*)"
-    r"[\"'`]?\s*(?P<operator>[:=])\s*(?P<value>.+)$"
+    r"[\"'`]?\s*(?P<operator>:(?!:)|=(?!=|>))\s*(?P<value>.+)$"
 )
 NON_CREDENTIAL_TOKEN_MEASUREMENT_PATTERN = re.compile(
     r"(?i)(?:^|[._-])(?:max|min|num|number|count|limit|length|budget|usage|"
@@ -154,7 +160,7 @@ def _is_forbidden_env_path(path: str) -> bool:
         return False
     if name == ".env.local" or re.fullmatch(r"\.env\..+\.local", name):
         return True
-    return name == ".env" and normalized.startswith(("部署/", "后端/"))
+    return name == ".env" and normalized.startswith(("部署/", "后端/", "后端代码/", "docs/部署/"))
 
 
 def _is_config_path(path: str) -> bool:
@@ -184,6 +190,8 @@ def _normalized_literal(raw_value: str) -> tuple[str, bool]:
     """
 
     value = raw_value.strip().rstrip(",;").strip()
+    if re.fullmatch(r"\$\{[^{}\r\n]+\}", value):
+        return value, False
     # 新增行通常是函数调用的一部分；先移除调用或容器的闭合符号，才能准确
     # 区分 ``api_key=self.api_key`` 变量引用与 ``api_key="literal"`` 字面量。
     value = value.rstrip(")]}").rstrip()
@@ -224,6 +232,15 @@ def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool
     )
 
 
+def _is_typescript_type_annotation(path: str, operator: str, raw_value: str) -> bool:
+    """识别无字符串字面量的基础 TS 类型联合，固定值和其他语法仍继续扫描。"""
+    if PurePosixPath(path).suffix.lower() not in {".ts", ".tsx", ".vue"} or operator != ":":
+        return False
+    primitive = r"(?:string|number|boolean|unknown|any|never|undefined|null)"
+    pattern = rf"\s*{primitive}(?:\[\])?(?:\s*[|&]\s*{primitive}(?:\[\])?)*\s*[,;]?\s*"
+    return re.fullmatch(pattern, raw_value) is not None
+
+
 def _is_noncredential_token_measurement(key: str) -> bool:
     """判断字段是否表示 Token 数量或配额而不是认证凭据。
 
@@ -255,7 +272,9 @@ def _is_safe_placeholder(value: str) -> bool:
     upper = stripped.upper()
     if not stripped or upper in {"NULL", "NONE", "FALSE"}:
         return True
-    if stripped.startswith(("$", "{{", "%")):
+    if re.fullmatch(r"\$(?:[A-Za-z_][\w.:]*|\{[^{}\r\n]+\}|\([^()\r\n]+\))", stripped):
+        return True
+    if stripped.startswith(("{{", "%")):
         return True
     placeholder_markers = (
         "CHANGE_ME",
@@ -677,12 +696,18 @@ def _scan_added_line(
         raw_value=assignment.group("value"),
     ):
         return findings
+    if not literal_text and _is_typescript_type_annotation(
+        syntax_path, assignment.group("operator"), assignment.group("value")
+    ):
+        return findings
     key = assignment.group("key")
     raw_value = assignment.group("value")
     if syntax_path.lower().endswith(".py"):
         parsed_value = _python_assignment_value(line, key)
         if parsed_value is not None:
             raw_value = parsed_value
+    if re.fullmatch(r"\[\s*]|\{\s*}|\(\s*\)", raw_value.strip().rstrip(",;")):
+        return findings
     value, quoted = _normalized_literal(raw_value)
     if _is_noncredential_setting(key, value, quoted=quoted):
         return findings
@@ -754,6 +779,10 @@ def _python_assignment_candidates(source: str) -> list[tuple[int, int, str, bool
         name = key if key is not None else ast.unparse(target)
         if not SENSITIVE_ASSIGNMENT_PATTERN.search(f"{name} = value"):
             return
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)) and not value.elts:
+            return
+        if isinstance(value, ast.Dict) and not value.keys:
+            return
         # 调用或引用并非固定赋值；其内部的关键字、字典和强信号仍独立检查。
         if isinstance(value, (ast.Call, ast.Name, ast.Attribute, ast.Subscript)):
             return
@@ -787,16 +816,18 @@ def _python_assignment_candidates(source: str) -> list[tuple[int, int, str, bool
     return candidates
 
 
-def _scan_staged_diff() -> list[Finding]:
+def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
     """扫描暂存区新增行及禁止提交的环境文件。
 
+    Args:
+        paths: 已读取的适用暂存文件；省略时从当前索引查询。
     Returns:
         全部安全问题列表；删除行不会重复报告历史中已经存在的凭据。
     """
 
     findings = [
         Finding(path, 0, "forbidden-env-file", "真实环境文件不得提交")
-        for path in _staged_paths()
+        for path in (_staged_paths() if paths is None else paths)
         if _is_forbidden_env_path(path)
     ]
     output = _run_git(
@@ -809,6 +840,7 @@ def _scan_staged_diff() -> list[Finding]:
     python_code_lines: set[int] = set()
     added_lines_by_path: dict[str, list[tuple[int, str]]] = {}
     python_candidates: dict[str, list[tuple[int, int, str, bool]] | None] = {}
+    sql_sources: dict[str, str] = {}
     for diff_line in output.splitlines():
         if diff_line.startswith("+++ b/"):
             current_path = diff_line[6:]
@@ -825,6 +857,10 @@ def _scan_staged_diff() -> list[Finding]:
                 source = _run_git(["show", f":{current_path}"])
                 assert isinstance(source, str)
                 python_code_lines = _markdown_python_lines(source)
+            elif current_path.lower().endswith(".sql"):
+                source = _run_git(["show", f":{current_path}"])
+                assert isinstance(source, str)
+                sql_sources[current_path] = source
             continue
         hunk = HUNK_HEADER_PATTERN.match(diff_line)
         if hunk:
@@ -849,6 +885,16 @@ def _scan_staged_diff() -> list[Finding]:
         elif diff_line.startswith(" "):
             current_line += 1
     for path, added_lines in added_lines_by_path.items():
+        if path in sql_sources:
+            findings.extend(
+                Finding(path, item.line, item.rule, item.detail)
+                for item in inspect_insert_credentials(
+                    sql_sources[path], {line for line, _ in added_lines},
+                    lambda key: bool(SENSITIVE_ASSIGNMENT_PATTERN.fullmatch(key + "=value")) and _is_credential_field(key),
+                    _is_safe_placeholder,
+                    lambda key, value, quoted: _is_noncredential_setting(key, value, quoted=quoted),
+                )
+            )
         for start, end, text, literal_text in python_candidates.get(path) or []:
             changed = [
                 number for number, original in added_lines
@@ -1160,7 +1206,12 @@ def main() -> int:
         _run_self_test()
         return 0
     try:
-        findings = _scan_staged_diff()
+        paths = _staged_paths()
+        if not paths:
+            print("密钥扫描：不适用，没有新增或修改的暂存文件；未验证任何文件内容。")
+            return 0
+        print(f"密钥扫描范围：{len(paths)} 个暂存文件，检查新增内容与环境文件路径。")
+        findings = _scan_staged_diff(paths)
     except RuntimeError as error:
         print(f"密钥扫描失败：{error}", file=sys.stderr)
         return 2

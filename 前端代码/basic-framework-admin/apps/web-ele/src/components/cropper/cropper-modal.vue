@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import type { CropendResult, CropperModalProps, CropperType } from './typing';
 
 import { ref } from 'vue';
@@ -10,8 +10,9 @@ import { dataURLtoBlob, isFunction } from '@vben/utils';
 
 import { ElAvatar, ElButton, ElSpace, ElTooltip, ElUpload } from 'element-plus';
 
-import CropperImage from './cropper.vue';
 import { showWarningMessage } from '#/utils/feedback';
+
+import CropperImage from './cropper.vue';
 
 defineOptions({ name: 'CropperModal' });
 
@@ -23,7 +24,8 @@ const props = withDefaults(defineProps<CropperModalProps>(), {
   circled: true,
   size: 0,
   src: '',
-  uploadApi: () => Promise.resolve(),
+  // 未传 uploadApi 时不做真实上传，返回空串让弹窗保持在当前预览态。
+  uploadApi: () => Promise.resolve(''),
 });
 
 /**
@@ -85,6 +87,14 @@ function handleReady(cropperInstance: CropperType) {
   modalLoading(false);
 }
 
+/**
+ * 响应工具栏按钮，把 scaleX / scaleY 等 cropperjs 方法转发给当前实例。
+ * cropperjs 的实例方法不在事件名联合类型里，这里按方法名取实例上的同名函数再调用；
+ * 实例未就绪时静默跳过，工具栏点击不会抛错。
+ *
+ * @param event cropperjs 的方法名
+ * @param arg 方法入参，scaleX / scaleY 为 -1 或 1
+ */
 function handlerToolbar(event: string, arg?: number) {
   if (event === 'scaleX') {
     scaleX = arg = scaleX === -1 ? 1 : -1;
@@ -92,7 +102,15 @@ function handlerToolbar(event: string, arg?: number) {
   if (event === 'scaleY') {
     scaleY = arg = scaleY === -1 ? 1 : -1;
   }
-  (cropper?.value as any)?.[event]?.(arg);
+  /**
+   * cropperjs 缩放方法的统一签名：接收目标比例，缺省表示由 cropperjs 沿用当前值。
+   * @param value 目标缩放比例。
+   */
+  type CropperScaleMethod = (value?: number) => void;
+  /** cropperjs 实例上按名调用的方法表，取值时才收窄，避免整体断言成 any。 */
+  type CropperInstanceMethods = Record<string, CropperScaleMethod | undefined>;
+  const instance = cropper.value as CropperInstanceMethods | undefined;
+  instance?.[event]?.(arg);
 }
 
 async function handleOk() {

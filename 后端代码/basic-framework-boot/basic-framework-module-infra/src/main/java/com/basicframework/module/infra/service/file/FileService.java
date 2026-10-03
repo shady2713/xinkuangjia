@@ -43,10 +43,11 @@ public interface FileService {
      *
      * @param name      文件名
      * @param directory 目录
+     * @param size 精确上传字节数；最终登记由服务端核实内容与大小
      * @return 预签名地址信息
      */
     FilePresignedUrlRespVO presignPutUrl(@NotEmpty(message = "文件名不能为空") String name,
-                                         String directory);
+                                         String directory, long size);
 
     /**
      * 生成文件预签名地址信息，用于读取
@@ -82,10 +83,10 @@ public interface FileService {
     void deleteFile(Long id) throws Exception;
 
     /**
-     * 批量删除文件
+     * 逐项删除文件；后续失败时保留先前已完成项的删除结果。
      *
      * @param ids 编号列表
-     * @throws Exception 存储客户端删除失败时抛出
+     * @throws Exception 任一存储或元数据删除失败时停止，调用方可刷新列表后重试剩余项
      */
     void deleteFileList(List<Long> ids) throws Exception;
 

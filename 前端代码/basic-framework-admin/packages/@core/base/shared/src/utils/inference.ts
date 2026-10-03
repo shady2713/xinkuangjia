@@ -72,12 +72,18 @@ function isHttpUrl(url?: string): boolean {
 /**
  * 检查传入的值是否为window对象。
  *
- * @param {any} value 要检查的值。
+ * 通过判断值是否持有指向自身的 window 引用来识别 window，
+ * 这样可以区分真正的 window 与普通对象。
+ *
+ * @param {unknown} value 要检查的值。
  * @returns {boolean} 如果值是window对象，返回true，否则返回false。
  */
-function isWindow(value: any): value is Window {
+function isWindow(value: unknown): value is Window {
   return (
-    typeof window !== 'undefined' && value !== null && value === value.window
+    typeof window !== 'undefined' &&
+    value !== null &&
+    typeof value === 'object' &&
+    (value as Window).window === value
   );
 }
 
@@ -109,9 +115,10 @@ function isWindowsOs(): boolean {
 
 /**
  * 检查传入的值是否为数字
- * @param value
+ * @param value 待检查的值，允许任意类型，便于在未收窄的入参上直接使用。
+ * @returns 是有限数值（不含 NaN、Infinity）时返回 true。
  */
-function isNumber(value: any): value is number {
+function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 

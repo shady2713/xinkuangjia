@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 部门新增/修改弹窗：按是否已存在主键决定走新增还是修改接口。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { ref } from 'vue';
@@ -16,7 +20,7 @@ import { useFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const formData = ref<SystemDeptApi.Dept>();
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, SystemDeptApi.Dept>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -31,6 +35,9 @@ const [Form, formApi] = useVbenForm({
 
 const [Modal, modalApi] = useVbenModal({
   /** 校验部门表单并归一化空负责人后提交；失败时仍释放弹窗锁。 */
+  /**
+   * 提交弹窗表单：校验通过后按是否存在主键选择新增或修改，并在结束时释放弹窗锁。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -38,7 +45,7 @@ const [Modal, modalApi] = useVbenModal({
     }
     modalApi.lock();
     // 提交表单
-    const data = (await formApi.getValues()) as SystemDeptApi.Dept;
+    const data = await formApi.getValues();
     // 表单清空选择器时可能返回空字符串，先按外部输入收窄后统一为 null。
     const leaderUserId: unknown = data.leaderUserId;
     if (

@@ -7,7 +7,8 @@ import { VbenRenderContent } from '@vben-core/shadcn-ui';
 
 import { Page } from '../../components';
 
-interface Props extends AboutProps {}
+/** 关于页的属性契约别名：直接复用关于页属性，不额外声明成员。 */
+type Props = AboutProps;
 
 defineOptions({
   name: 'AboutUI',
@@ -77,15 +78,14 @@ if (homepage) {
 }
 
 if (authorName || authorEmail) {
-  const authorContent: Array<string | ReturnType<typeof h>> = [];
+  const authorContent: Array<ReturnType<typeof h> | string> = [];
   if (authorName && authorUrl) {
     authorContent.push(renderLink(authorUrl, `${authorName} `));
   } else if (authorName) {
     authorContent.push(authorName);
   }
   if (authorEmail) {
-    authorContent.push(' ');
-    authorContent.push(renderLink(`mailto:${authorEmail}`, authorEmail));
+    authorContent.push(' ', renderLink(`mailto:${authorEmail}`, authorEmail));
   }
   descriptionItems.push({
     content: h('div', authorContent),

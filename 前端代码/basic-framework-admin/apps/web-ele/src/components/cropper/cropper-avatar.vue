@@ -23,9 +23,11 @@ const props = withDefaults(defineProps<CropperAvatarProps>(), {
   width: 200,
   value: '',
   showBtn: true,
-  btnProps: () => ({}) as any,
+  /** 按钮属性的默认值必须是工厂函数，返回每次渲染都独立的新对象。 */
+  btnProps: () => ({}),
   btnText: '',
-  uploadApi: () => Promise.resolve(),
+  // 未传 uploadApi 时不做真实上传，返回空串让组件保持可渲染的空态。
+  uploadApi: () => Promise.resolve(''),
   size: 5,
 });
 

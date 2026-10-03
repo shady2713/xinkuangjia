@@ -1,3 +1,6 @@
+/**
+ * OAuth2 客户端的表单与列表定义：客户端主键隐藏回填，授权范围按已选范围联动。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
@@ -6,7 +9,10 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * OAuth2 客户端新增/修改的表单定义。
+ * @returns 客户端表单的表单项列表。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -14,6 +20,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** 隐藏字段不渲染：主键只在提交时回填，不允许用户编辑。 */
         show: () => false,
       },
     },
@@ -121,14 +128,24 @@ export function useFormSchema(): VbenFormSchema[] {
       },
       dependencies: {
         triggerFields: ['scopes'],
-        componentProps: (values) => ({
-          options: values.scopes
-            ? values.scopes.map((scope: string) => ({
-                label: scope,
-                value: scope,
-              }))
-            : [],
-        }),
+        /**
+         * 授权范围的可选项与已选范围保持一致。
+         * @param values 联动时刻的表单值。
+         * @returns 与已选范围一一对应的选项列表。
+         */
+        componentProps: (values) => {
+          // 授权范围是字符串列表；联动期间可能尚未选择，这里只处理数组形态。
+          const scopes = Array.isArray(values.scopes) ? values.scopes : [];
+          return {
+            options: scopes.map(
+              /** 每个范围同时作为标签与取值，避免用户填入范围外的值。 */
+              (scope) => ({
+                label: String(scope),
+                value: String(scope),
+              }),
+            ),
+          };
+        },
       },
     },
     {
@@ -167,7 +184,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 客户端列表的搜索表单。
+ * @returns 列表搜索用的表单项列表。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -192,7 +212,19 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 把后端以秒为单位的有效期展示为带单位的文本。
+ * @param cellValue 表格单元格的原始值，单位为秒。
+ * @returns 形如“3600 秒”的展示文本。
+ */
+function formatSeconds(cellValue: unknown) {
+  return `${cellValue as number} 秒`;
+}
+
+/**
+ * 客户端列表的表格列定义。
+ * @returns 与客户端数据类型匹配的列配置。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
@@ -232,13 +264,13 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'accessTokenValiditySeconds',
       title: '访问令牌的有效期',
       minWidth: 150,
-      formatter: ({ cellValue }) => `${cellValue} 秒`,
+      formatter: formatSeconds,
     },
     {
       field: 'refreshTokenValiditySeconds',
       title: '刷新令牌的有效期',
       minWidth: 150,
-      formatter: ({ cellValue }) => `${cellValue} 秒`,
+      formatter: formatSeconds,
     },
     {
       field: 'authorizedGrantTypes',

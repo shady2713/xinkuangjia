@@ -26,7 +26,7 @@ public final class FileTypeUtils {
     private static final Tika TIKA = new Tika();
 
     /**
-     * 图片后缀集合，图片统一按 image/* 的 MIME 规则校验。
+     * 栅格图片后缀集合，内容必须匹配明确的栅格 MIME 白名单。
      */
     private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "bmp", "webp");
     /**
@@ -132,9 +132,9 @@ public final class FileTypeUtils {
             return false;
         }
         String mineType = StrUtil.nullToDefault(getMineType(data, fileName), "").toLowerCase(Locale.ROOT);
-        // 图片统一按 image/* 校验，兼容 jpeg、png 等具体子类型。
+        // 仅接受栅格图片 MIME，拒绝改后缀的 SVG 等可执行标记内容。
         if (IMAGE_EXTENSIONS.contains(extension)) {
-            return isImage(mineType);
+            return Set.of("image/jpeg", "image/png", "image/gif", "image/bmp", "image/x-ms-bmp", "image/webp").contains(mineType);
         }
         // 视频文件仍然要求内容 MIME 与视频容器匹配，避免单纯改后缀绕过白名单。
         if (VIDEO_EXTENSIONS.contains(extension)) {
@@ -148,7 +148,7 @@ public final class FileTypeUtils {
             case "xlsx" -> XLSX_MIME_TYPES.contains(mineType);
             case "ppt" -> PPT_MIME_TYPES.contains(mineType);
             case "pptx" -> PPTX_MIME_TYPES.contains(mineType);
-            case "txt" -> StrUtil.startWith(mineType, "text/");
+            case "txt" -> StrUtil.equals(mineType, "text/plain");
             case "zip" -> ZIP_MIME_TYPES.contains(mineType);
             default -> false;
         };

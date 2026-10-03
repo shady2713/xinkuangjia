@@ -1,136 +1,102 @@
-import type { AxiosRequestHeaders, InternalAxiosRequestConfig } from 'axios';
-
+/** SSE 复用公开请求入口及 Fetch 适配器，不读取 Axios 内部拦截器。 */
 import type { RequestClient } from '../request-client';
 import type { SseRequestOptions } from '../types';
 
-/**
- * SSE模块
- */
+import { requireResponse } from '../response';
+
+/** 按 UTF-8 传输块交付流内容，并在错误、取消和身份切换时释放读取器。 */
 class SSE {
   private client: RequestClient;
 
+  /** 使用所属客户端的身份、请求头和响应处理链。
+   * @param client 负责统一发送及身份管理的客户端。
+   */
   constructor(client: RequestClient) {
     this.client = client;
   }
 
+  /** 以 POST 方法建立文本流。
+   * @param url 相对于客户端根地址的流接口。
+   * @param data 由 Axios 根据 Content-Type 序列化的请求体。
+   * @param requestOptions Fetch 选项及分块回调。
+   * @returns 流消费结束后的完成通知。
+   */
   public async postSSE(
     url: string,
-    data?: any,
+    data?: unknown,
     requestOptions?: SseRequestOptions,
   ) {
-    return this.requestSSE(url, data, {
-      ...requestOptions,
-      method: 'POST',
-    });
+    return this.requestSSE(url, data, { ...requestOptions, method: 'POST' });
   }
 
-  /**
-   * SSE请求方法
-   * @param url - 请求URL
-   * @param data - 请求数据
-   * @param requestOptions - SSE请求选项
+  /** 通过公开 Fetch 适配器建立流，整个消费期间维持发起身份。
+   * @param url 相对于客户端根地址或明确指定的流接口。
+   * @param data 请求数据；显式 body 优先于该值。
+   * @param requestOptions 请求参数、分块通知及正常结束通知。
+   * @returns 流正常结束时完成，取消或失败时拒绝。
+   * @throws {Error} 传输失败、非字节流、身份变化或消费回调失败。
    */
   public async requestSSE(
     url: string,
-    data?: any,
-    requestOptions?: SseRequestOptions,
+    data?: unknown,
+    requestOptions: SseRequestOptions = {},
   ) {
-    const baseUrl = this.client.getBaseUrl() || '';
-
-    let axiosConfig: InternalAxiosRequestConfig<any> = {
-      url,
-      method: (requestOptions?.method as any) ?? 'GET',
-      headers: {} as AxiosRequestHeaders,
-    };
-    const requestInterceptors = this.client.instance.interceptors
-      .request as any;
-    if (
-      requestInterceptors.handlers &&
-      requestInterceptors.handlers.length > 0
-    ) {
-      for (const handler of requestInterceptors.handlers) {
-        if (typeof handler?.fulfilled === 'function') {
-          const next = await handler.fulfilled(axiosConfig as any);
-          if (next) axiosConfig = next as InternalAxiosRequestConfig<any>;
-        }
-      }
-    }
-
-    const merged = new Headers();
-    Object.entries(
-      (axiosConfig.headers ?? {}) as Record<string, string>,
-    ).forEach(([k, v]) => merged.set(k, String(v)));
-    if (requestOptions?.headers) {
-      new Headers(requestOptions.headers).forEach((v, k) => merged.set(k, v));
-    }
-    if (!merged.has('accept')) {
-      merged.set('accept', 'text/event-stream');
-    }
-
-    let bodyInit = requestOptions?.body ?? data;
-    const ct = (merged.get('content-type') || '').toLowerCase();
-    if (
-      bodyInit &&
-      typeof bodyInit === 'object' &&
-      !ArrayBuffer.isView(bodyInit as any) &&
-      !(bodyInit instanceof ArrayBuffer) &&
-      !(bodyInit instanceof Blob) &&
-      !(bodyInit instanceof FormData) &&
-      ct.includes('application/json')
-    ) {
-      bodyInit = JSON.stringify(bodyInit);
-    }
-    const requestInit: RequestInit = {
-      ...requestOptions,
-      method: axiosConfig.method,
-      headers: merged,
-      body: bodyInit,
-    };
-
-    const response = await fetch(safeJoinUrl(baseUrl, url), requestInit);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body?.getReader();
+    const { body, headers, method, onMessage, onEnd, signal, ...fetchOptions } =
+      requestOptions;
+    const requestHeaders: Record<string, string> = {};
+    new Headers(headers).forEach(
+      /** 显式转成 Axios 接受的字符串头，不断言 Headers 为普通对象。 */ (
+        value,
+        key,
+      ) => {
+        requestHeaders[key] = value;
+      },
+    );
+    requestHeaders.Accept ??= requestHeaders.accept ?? 'text/event-stream';
+    const response = requireResponse(
+      await this.client.request<unknown>(url, {
+        adapter: 'fetch',
+        data: body ?? data,
+        fetchOptions,
+        headers: requestHeaders,
+        method: method ?? 'GET',
+        responseReturn: 'raw',
+        responseType: 'stream',
+        signal: signal ?? undefined,
+        timeout: 0,
+      }),
+    );
+    if (!(response.data instanceof ReadableStream))
+      throw new TypeError('响应不是可读取的字节流');
+    const reader = response.data.getReader();
     const decoder = new TextDecoder();
-
-    if (!reader) {
-      throw new Error('No reader');
-    }
-    let isEnd = false;
-    while (!isEnd) {
-      const { done, value } = await reader.read();
-      if (done) {
-        isEnd = true;
-        decoder.decode(new Uint8Array(0), { stream: false });
-        requestOptions?.onEnd?.();
-        reader.releaseLock?.();
-        break;
+    let completed = false;
+    try {
+      this.client.assertRequestSession(response.config.sessionEpoch);
+      while (true) {
+        const { done, value } = await reader.read();
+        this.client.assertRequestSession(response.config.sessionEpoch);
+        if (done) {
+          const tail = decoder.decode();
+          if (tail) onMessage?.(tail);
+          this.client.assertRequestSession(response.config.sessionEpoch);
+          completed = true;
+          onEnd?.();
+          return;
+        }
+        if (!(value instanceof Uint8Array))
+          throw new TypeError('流数据必须是 UTF-8 字节');
+        const content = decoder.decode(value, { stream: true });
+        if (content) onMessage?.(content);
       }
-      const content = decoder.decode(value, { stream: true });
-      requestOptions?.onMessage?.(content);
+    } finally {
+      if (!completed)
+        await reader
+          .cancel()
+          .catch(/** 清理失败不得覆盖身份取消或原消费异常。 */ () => undefined);
+      reader.releaseLock();
     }
   }
-}
-
-function safeJoinUrl(baseUrl: string | undefined, url: string): string {
-  if (!baseUrl) {
-    return url; // 没有 baseUrl，直接返回 url
-  }
-
-  // 如果 url 本身就是绝对地址，直接返回
-  if (/^https?:\/\//i.test(url)) {
-    return url;
-  }
-
-  // 如果 baseUrl 是完整 URL，就用 new URL
-  if (/^https?:\/\//i.test(baseUrl)) {
-    return new URL(url, baseUrl).toString();
-  }
-
-  // 否则，当作路径拼接
-  return `${baseUrl.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`;
 }
 
 export { SSE };

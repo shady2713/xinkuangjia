@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ToggleEmits, ToggleProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import type { ToggleVariants } from './toggle';
 
 import { computed } from 'vue';
@@ -14,7 +16,7 @@ import { toggleVariants } from './toggle';
 const props = withDefaults(
   defineProps<
     ToggleProps & {
-      class?: any;
+      class?: ClassValue;
       size?: ToggleVariants['size'];
       variant?: ToggleVariants['variant'];
     }

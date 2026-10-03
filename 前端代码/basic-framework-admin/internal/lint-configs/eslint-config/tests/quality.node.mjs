@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import vueParser from 'vue-eslint-parser';
 
 import tsParser from '@typescript-eslint/parser';
-import { Linter } from 'eslint';
+import { ESLint, Linter } from 'eslint';
 
 import plugin from '../src/rules/chinese-comments.mjs';
 import {
@@ -23,6 +23,23 @@ import { checkWebFile } from '../src/rules/web-comments.mjs';
 
 const frontend = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = join(frontend, 'scripts/check-quality.mjs');
+
+test('实际 ESLint 配置允许应用别名并拒绝共享包反向依赖', /** 使用项目配置验证规则落点，避免只测复制的配置片段。 */ async () => {
+  const eslint = new ESLint({ cwd: frontend });
+  for (const [filePath, source, expected] of [
+    ['apps/web-ele/src/router/access.ts', "import '#/api/core';", 0],
+    ['packages/utils/src/index.ts', "import '#/api/core';", 1],
+    ['packages/effects/request/src/index.ts', "import '@vben/web-ele';", 1],
+  ]) {
+    const [result] = await eslint.lintText(source, { filePath });
+    const findings = result.messages.filter(
+      /** 仅收集此处要验证的依赖方向诊断。 */ (message) =>
+        message.ruleId === 'no-restricted-imports',
+    );
+    assert.equal(result.fatalErrorCount, 0);
+    assert.equal(findings.length, expected, filePath);
+  }
+});
 
 test('历史编码无效时完整检查当前声明，合法历史仍按增量处理', /** 不把编码修复当成跳过整个文件的理由。 */ () => {
   const source =

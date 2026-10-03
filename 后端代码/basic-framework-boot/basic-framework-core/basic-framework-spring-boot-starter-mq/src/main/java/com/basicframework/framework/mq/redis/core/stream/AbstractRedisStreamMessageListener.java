@@ -98,15 +98,20 @@ public abstract class AbstractRedisStreamMessageListener<T extends AbstractRedis
     public abstract void onMessage(T message);
 
     /**
-     * 通过解析类上的泛型，获得消息类型
+     * 解析并校验监听器声明的泛型消息类型。
      *
-     * @return 消息类型
+     * <p>漏写消息泛型时，Hutool 会从已实现的 {@code StreamListener} 接口解析出非空的 {@code String.class}，
+     * 因此仅判空无法识别配置错误，必须确认解析结果是可赋值给 {@link AbstractRedisStreamMessage} 的类。</p>
+     *
+     * @return 可赋值给 AbstractRedisStreamMessage 的消息类
+     * @throws IllegalStateException 未声明有效消息类型时抛出，包含监听器类名及实际解析类型
      */
     @SuppressWarnings("unchecked")
     private Class<T> getMessageClass() {
         Type type = TypeUtil.getTypeArgument(getClass(), 0);
-        if (type == null) {
-            throw new IllegalStateException(String.format("类型(%s) 需要设置消息类型", getClass().getName()));
+        if (!(type instanceof Class<?>) || !AbstractRedisStreamMessage.class.isAssignableFrom((Class<?>) type)) {
+            throw new IllegalStateException(String.format("类型(%s) 需要设置消息类型，实际解析到的类型(%s)",
+                    getClass().getName(), type));
         }
         return (Class<T>) type;
     }

@@ -1,3 +1,4 @@
+/** 定义当前工作区的依赖方向及各类源码适用的 ESLint 规则。 */
 import type { Linter } from 'eslint';
 
 const restrictedImportIgnores = [
@@ -5,6 +6,12 @@ const restrictedImportIgnores = [
   '**/tailwind.config.mjs',
   '**/postcss.config.mjs',
 ];
+
+// #/ 属于应用源码；gitignore 风格匹配必须转义 #，否则它会被当作注释。
+const applicationImportRestriction = {
+  group: [String.raw`\#/**`, '@vben/web-ele', '@vben/web-ele/**'],
+  message: '共享包不能依赖应用源码；请通过参数或共享契约由应用注入。',
+};
 
 const customConfig: Linter.Config[] = [
   // shadcn-ui 内部组件是自动生成的，不做太多限制
@@ -36,38 +43,15 @@ const customConfig: Linter.Config[] = [
     },
   },
   {
-    // apps内部的一些基础规则
-    files: ['apps/**/**'],
+    files: ['packages/**/**'],
     ignores: restrictedImportIgnores,
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: ['#/api/*'],
-              message:
-                'The #/api package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/layouts/*'],
-              message:
-                'The #/layouts package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/locales/*'],
-              message:
-                'The #/locales package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/stores/*'],
-              message:
-                'The #/stores package cannot be imported, please use the @core package itself',
-            },
-          ],
+          patterns: [applicationImportRestriction],
         },
       ],
-      'perfectionist/sort-interfaces': 'off',
     },
   },
   {
@@ -78,6 +62,7 @@ const customConfig: Linter.Config[] = [
         'error',
         {
           patterns: [
+            applicationImportRestriction,
             {
               group: ['@vben/*'],
               message:
@@ -96,6 +81,7 @@ const customConfig: Linter.Config[] = [
         'error',
         {
           patterns: [
+            applicationImportRestriction,
             {
               group: ['@vben/*', '@vben-core/*'],
               message:
@@ -124,6 +110,7 @@ const customConfig: Linter.Config[] = [
         'error',
         {
           patterns: [
+            applicationImportRestriction,
             {
               group: ['@vben/*'],
               message:

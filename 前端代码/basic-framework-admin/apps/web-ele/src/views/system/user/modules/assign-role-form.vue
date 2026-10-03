@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 用户角色分配弹窗：只提交勾选的角色编号集合。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemUserApi } from '#/api/system/user';
 
 import { useVbenModal } from '@vben/common-ui';
@@ -11,8 +15,14 @@ import { $t } from '#/locales';
 
 import { useAssignRoleFormSchema } from '../data';
 
+/** 分配角色表单值：用户编号与勾选的角色编号。 */
+type AssignRoleForm = {
+  id: number;
+  roleIds: number[];
+};
+
 const emit = defineEmits(['success']);
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, AssignRoleForm>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -26,6 +36,9 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 提交角色勾选结果：未勾选任何角色时直接返回，避免提交空集合覆盖已有分配。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -47,6 +60,10 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 打开弹窗时加载该用户已分配的角色；关闭时不做任何事，保留未提交的勾选。
+   * @param isOpen 当前弹窗是否打开。
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
@@ -59,11 +76,8 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       const roleIds = await getUserRoleList(data.id);
-      // 设置到 values
-      await formApi.setValues({
-        ...data,
-        roleIds,
-      });
+      // 弹窗只回填用户编号，角色勾选状态由已授权角色列表设置。
+      await formApi.setValues({ id: data.id, roleIds: roleIds ?? [] });
     } finally {
       modalApi.unlock();
     }

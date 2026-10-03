@@ -3,14 +3,18 @@ import type { Ref } from 'vue';
 import { computed, ref, unref, watch } from 'vue';
 
 /**
- * Paginates an array of items
- * @param list The array to paginate
- * @param pageNo The current page number (1-based)
- * @param pageSize Number of items per page
- * @returns Paginated array slice
- * @throws {Error} If pageNo or pageSize are invalid
+ * 对数组按页码和每页条数做切片。
+ * @param list 待切片的数组。
+ * @param pageNo 当前页码，从 1 开始。
+ * @param pageSize 每页条数。
+ * @returns 当前页对应的数组切片；页码或每页条数非法时抛出 Error。
+ * @throws 页码小于 1 或每页条数小于 1 时抛出 Error，避免静默返回空数组掩盖调用方错误。
  */
-function pagination<T = any>(list: T[], pageNo: number, pageSize: number): T[] {
+function pagination<T = unknown>(
+  list: T[],
+  pageNo: number,
+  pageSize: number,
+): T[] {
   if (pageNo < 1) throw new Error('Page number must be positive');
   if (pageSize < 1) throw new Error('Page size must be positive');
 
@@ -22,7 +26,15 @@ function pagination<T = any>(list: T[], pageNo: number, pageSize: number): T[] {
   return ret;
 }
 
-export function usePagination<T = any>(
+/**
+ * 对列表做前端分页，并暴露翻页所需的响应式状态。
+ * 分页结果只做切片，不解释元素含义，因此元素类型未指定时按 unknown 占位。
+ * @param list 待分页的响应式列表。
+ * @param pageSize 每页条数，初始值。
+ * @param totalChangeToFirstPage 列表总数变化时是否回到第一页。
+ * @returns 当前页、每页条数、总数、当前页切片以及翻页方法。
+ */
+export function usePagination<T = unknown>(
   list: Ref<T[]>,
   pageSize: number,
   totalChangeToFirstPage = true,

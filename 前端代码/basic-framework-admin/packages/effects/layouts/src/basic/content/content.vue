@@ -56,8 +56,11 @@ function getTransitionName(_route: RouteLocationNormalizedLoaded) {
 }
 
 /**
- * 转换组件，自动添加 name
- * @param component
+ * 为路由视图组件补上 name，供 keep-alive 与标签页缓存按名称索引。
+ * 组件自身已声明 name 时保持原样；路由无名时不做处理。
+ * @param component RouterView 渲染出的组件节点
+ * @param route 当前路由，用于取路由名作为组件名
+ * @returns 补名后的组件节点；组件缺失或路由无名时原样返回
  */
 function transformComponent(
   component: VNode,
@@ -76,7 +79,9 @@ function transformComponent(
   if (!routeName) {
     return component;
   }
-  const componentName = (component?.type as any)?.name;
+  // 视图组件的 type 可能是组件对象，也可能还没挂载；先取一次 name 判断是否已命名。
+  const componentType = component.type as undefined | { name?: string };
+  const componentName = componentType?.name;
 
   // 已经设置过 name，则直接返回
   if (componentName) {
@@ -90,7 +95,7 @@ function transformComponent(
 
   // 设置 name
   component.type ||= {};
-  (component.type as any).name = routeName;
+  (component.type as { name?: string }).name = routeName;
 
   return component;
 }

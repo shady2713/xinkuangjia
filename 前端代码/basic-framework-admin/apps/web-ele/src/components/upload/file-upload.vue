@@ -7,23 +7,24 @@ import { computed, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
-import { logError } from '@vben/utils';
-import { checkFileType, isObject, isString } from '@vben/utils';
+import { checkFileType, isObject, isString, logError } from '@vben/utils';
 
 import { ElButton, ElUpload } from 'element-plus';
 
-import { UploadResultStatus } from './typing';
-import {
-  requestUpload,
-  resolveUploadUrl,
-  resolveUploadValue,
-} from './use-upload-core';
-import { useUploadType } from './use-upload';
 import {
   showError,
   showErrorMessage,
   showSuccessMessage,
 } from '#/utils/feedback';
+
+import { UploadResultStatus } from './typing';
+import { useUploadType } from './use-upload';
+import {
+  requestUpload,
+  resolveUploadUrl,
+  resolveUploadValue,
+  toUploadAjaxError,
+} from './use-upload-core';
 
 defineOptions({ name: 'FileUpload', inheritAttrs: false });
 
@@ -81,10 +82,17 @@ const isLtMsg = ref<boolean>(true); // 文件大小错误提示
 const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
 const uploadNumber = ref<number>(0); // 上传文件计数器
-const uploadList = ref<any[]>([]); // 临时上传列表
+// 临时上传列表：等待本批次全部上传成功后并入 fileList
+const uploadList = ref<UploadFile[]>([]); // 临时上传列表
 
 watch(
   currentValue,
+  /**
+   * 外部绑定值变化时按新值重建文件列表。
+   * 组件自身触发的变更（删除、上传完成）只复位内部标记后直接返回，避免与 emit 形成回环；
+   * 首次渲染不向外发 change 事件，值被清空时清空列表。
+   * @param v 变化后的绑定值，可能是字符串、字符串数组或已上传文件对象数组。
+   */
   (v) => {
     if (isInnerOperate.value) {
       isInnerOperate.value = false;
@@ -98,25 +106,35 @@ watch(
         value.push(v);
       }
       fileList.value = value
-        .map((item, i) => {
-          if (item && isString(item)) {
-            return {
-              uid: -i,
-              name: item.slice(Math.max(0, item.lastIndexOf('/') + 1)),
-              status: UploadResultStatus.SUCCESS,
-              url: item,
-            } as UploadFile;
-          } else if (item && isObject(item)) {
-            const file = item as unknown as Record<string, any>;
-            return {
-              uid: file.uid ?? -i,
-              name: file.name ?? '',
-              status: file.status ?? UploadResultStatus.SUCCESS,
-              url: file.url,
-            } as UploadFile;
-          }
-          return null;
-        })
+        .map(
+          /**
+           * 把绑定值中的每一项转换为 ElUpload 的文件项：字符串按地址解析出文件名，
+           * 对象按其既有字段透传；无法识别的项返回 null，随后由 filter 统一剔除。
+           * @param item 当前待转换的绑定值元素。
+           * @param i 元素在数组中的下标，用于缺少 uid 时生成稳定的负数标识。
+           * @returns 转换后的文件项；无法识别时返回 null。
+           */
+          (item, i) => {
+            if (item && isString(item)) {
+              return {
+                uid: -i,
+                name: item.slice(Math.max(0, item.lastIndexOf('/') + 1)),
+                status: UploadResultStatus.SUCCESS,
+                url: item,
+              } as UploadFile;
+            } else if (item && isObject(item)) {
+              // isObject 已把 item 收窄为记录视图，字段取值按 unknown 语义直接透传
+              const file = item;
+              return {
+                uid: file.uid ?? -i,
+                name: file.name ?? '',
+                status: file.status ?? UploadResultStatus.SUCCESS,
+                url: file.url,
+              } as UploadFile;
+            }
+            return null;
+          },
+        )
         .filter(Boolean) as UploadFile[];
     } else {
       // 值为空时清空文件列表
@@ -222,11 +240,12 @@ async function customRequest(options: UploadRequestOptions) {
     // 处理上传成功后的逻辑
     handleUploadSuccess(res, options.file as File);
 
-    options.onSuccess!(res);
+    options.onSuccess(res);
     showSuccessMessage($t('ui.upload.uploadSuccess'));
   } catch (error: unknown) {
     logError('upload:file:request', error);
-    options.onError!(error as never);
+    // onError 需要带 status/method/url 的错误对象，补齐后再交给 Element Plus
+    options.onError(toUploadAjaxError(error, options));
     handleUploadError(error);
   }
 }
@@ -237,10 +256,14 @@ async function customRequest(options: UploadRequestOptions) {
  * @param file 上传的文件
  */
 function handleUploadSuccess(res: UploadApiResult, file: File) {
-  // 删除临时文件
-  const index = fileList.value?.findIndex((item) => item.name === file.name);
+  // 删除临时文件；fileList 始终是数组，findIndex 不会返回 undefined，
+  // 必须同时排除 -1，否则 splice(-1) 会误删最后一项
+  const index = fileList.value.findIndex(
+    /** 按文件名匹配本次要清理的同名占位项。 */
+    (item) => item.name === file.name,
+  );
   if (index !== -1) {
-    fileList.value?.splice(index!, 1);
+    fileList.value.splice(index, 1);
   }
 
   // 添加到临时上传列表
@@ -249,12 +272,14 @@ function handleUploadSuccess(res: UploadApiResult, file: File) {
     name: file.name,
     url: fileUrl,
     status: UploadResultStatus.SUCCESS,
-    uid: file.name + Date.now(),
+    // UploadFile.uid 按 Element Plus 契约是 number；同一批次的同名占位项
+    // 已在上面被移除，剩余条目按上传完成时刻取值即可保持唯一
+    uid: Date.now(),
   });
 
   // 检查是否所有文件都上传完成
   if (uploadList.value.length >= uploadNumber.value) {
-    fileList.value?.push(...uploadList.value);
+    fileList.value.push(...uploadList.value);
     uploadList.value = [];
     uploadNumber.value = 0;
 

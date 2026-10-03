@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { CheckboxRootEmits, CheckboxRootProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -9,7 +11,7 @@ import { Check, Minus } from 'lucide-vue-next';
 import { CheckboxIndicator, CheckboxRoot, useForwardPropsEmits } from 'reka-ui';
 
 const props = defineProps<
-  CheckboxRootProps & { class?: any; indeterminate?: boolean }
+  CheckboxRootProps & { class?: ClassValue; indeterminate?: boolean }
 >();
 const emits = defineEmits<CheckboxRootEmits>();
 

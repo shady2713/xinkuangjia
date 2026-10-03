@@ -52,12 +52,22 @@ function handleClose() {
 }
 
 const keys = useMagicKeys();
+// useMagicKeys 以 Proxy 惰性创建组合键，索引结果在类型上仍是可选的；
+// 缺失时跳过注册即可，运行时该组合键始终由 useMagicKeys 提供
 const cmd = isWindowsOs() ? keys['ctrl+k'] : keys['cmd+k'];
-whenever(cmd!, () => {
-  if (props.enableShortcutKey) {
-    modalApi.open();
-  }
-});
+if (cmd) {
+  whenever(
+    cmd,
+    /**
+     * 快捷键命中后按开关决定是否打开全局搜索弹窗。
+     */
+    () => {
+      if (props.enableShortcutKey) {
+        modalApi.open();
+      }
+    },
+  );
+}
 
 whenever(open, () => {
   nextTick(() => {

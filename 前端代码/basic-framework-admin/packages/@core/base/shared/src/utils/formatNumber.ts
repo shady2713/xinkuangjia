@@ -75,8 +75,22 @@ export function fenToYuan(price: number | string): string {
   return formatToFraction(price);
 }
 
-// 格式化金额【分转元】
-export const fenToYuanFormat = (_: any, __: any, cellValue: any, ___: any) => {
+/**
+ * 格式化金额【分转元】。
+ * @description 作为 vxe-table 的 cellFormatter 使用，签名由 vxe-table 决定：
+ * 依次是列对象、行对象、单元格值、表格实例；前两个参数本格式化用不到但必须占位。
+ * @param _column 列对象，本格式化不使用
+ * @param _row 行对象，本格式化不使用
+ * @param cellValue 单元格内的分值
+ * @param _instance 表格实例，本格式化不使用
+ * @returns 带人民币符号的元金额；cellValue 为空时返回 ￥0.00
+ */
+export const fenToYuanFormat = (
+  _column: unknown,
+  _row: unknown,
+  cellValue: number | string | undefined,
+  _instance: unknown,
+) => {
   return `￥${floatToFixed2(cellValue)}`;
 };
 
@@ -147,7 +161,9 @@ export function erpCountInputFormatter(num: number | string | undefined) {
  * @param cellValue 数量
  * @return 格式化后的数量
  */
-export function erpCountTableColumnFormatter(cellValue: any) {
+export function erpCountTableColumnFormatter(
+  cellValue: number | string | undefined,
+) {
   return erpNumberFormatter(cellValue, ERP_COUNT_DIGIT);
 }
 
@@ -169,7 +185,9 @@ export function erpPriceInputFormatter(num: number | string | undefined) {
  * @param cellValue 数量
  * @return 格式化后的数量
  */
-export function erpPriceTableColumnFormatter(cellValue: any) {
+export function erpPriceTableColumnFormatter(
+  cellValue: number | string | undefined,
+) {
   return erpNumberFormatter(cellValue, ERP_PRICE_DIGIT);
 }
 

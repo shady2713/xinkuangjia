@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { SelectLabelProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { SelectLabel } from 'reka-ui';
 
-const props = defineProps<SelectLabelProps & { class?: any }>();
+const props = defineProps<SelectLabelProps & { class?: ClassValue }>();
 </script>
 
 <template>

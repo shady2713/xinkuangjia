@@ -1,4 +1,7 @@
 <script setup lang="ts">
+/** 忘记密码表单：只负责收集与校验输入，提交动作通过 submit 事件交给调用方。 */
+import type { Recordable } from '@vben/types';
+
 import type { VbenFormSchema } from '@vben-core/form-ui';
 
 import { computed, reactive } from 'vue';
@@ -48,7 +51,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const emit = defineEmits<{
-  submit: [Record<string, any>];
+  /** 校验通过后回传整表值；字段集合由 formSchema 决定，组件本身不做约束。 */
+  submit: [Recordable<unknown>];
 }>();
 
 const [Form, formApi] = useVbenForm(

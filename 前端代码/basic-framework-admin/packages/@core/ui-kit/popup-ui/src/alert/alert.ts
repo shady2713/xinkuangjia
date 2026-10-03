@@ -50,8 +50,25 @@ export type AlertProps = {
   title?: string;
 };
 
-/** Prompt属性 */
-export type PromptProps<T = any> = {
+/** 渲染函数形态的插槽内容：调用后得到要挂到输入组件上的节点。 */
+type PromptSlotsRenderer = () => unknown;
+
+/**
+ * 输入组件的插槽内容。可传渲染函数、插槽对象或已创建的 VNode；
+ * 具体形态由输入组件决定，这里按不透明值透传。
+ */
+type PromptComponentSlots =
+  | PromptSlotsRenderer
+  | Recordable<unknown>
+  | VNode
+  | VNodeArrayChildren;
+
+/**
+ * Prompt 属性
+ *
+ * @typeParam T 输入值与返回值的类型；不指定时按 unknown 处理，由调用方在使用处收窄
+ */
+export type PromptProps<T = unknown> = {
   /** 关闭前的回调，如果返回false，则终止关闭 */
   beforeClose?: (scope: {
     isConfirm: boolean;
@@ -60,13 +77,9 @@ export type PromptProps<T = any> = {
   /** 用于接受用户输入的组件 */
   component?: Component;
   /** 输入组件的属性 */
-  componentProps?: Recordable<any>;
+  componentProps?: Recordable<unknown>;
   /** 输入组件的插槽 */
-  componentSlots?:
-    | (() => any)
-    | Recordable<unknown>
-    | VNode
-    | VNodeArrayChildren;
+  componentSlots?: PromptComponentSlots;
   /** 默认值 */
   defaultValue?: T;
   /** 输入组件的值属性名 */

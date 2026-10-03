@@ -4,34 +4,66 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DrawerApi } from '../drawer-api';
 
-// 模拟 Store 类
-vi.mock('@vben-core/shared/store', () => {
-  return {
-    isFunction: (fn: any) => typeof fn === 'function',
-    Store: class {
-      get state() {
-        return this._state;
-      }
-      private _state: DrawerState;
+/** 被测代码只用到 onUpdate，这里按实际依赖收窄 mock 的选项形状。 */
+interface MockStoreOptions {
+  /** 每次 setState 之后由替身触发，用例据此确认状态确实被写入。 */
+  onUpdate: () => void;
+}
 
-      private options: any;
+vi.mock(
+  '@vben-core/shared/store',
+  /** 用最小实现替换真实 Store，使被测 API 能在无浏览器环境下运行。 */ () => {
+    return {
+      /** 沿用真实实现的函数判定口径，供被测 API 复用。 */
+      isFunction: (fn: unknown) => typeof fn === 'function',
+      Store: class {
+        /**
+         * 暴露当前抽屉状态，供被测 API 与用例直接读取。
+         * @returns 替身当前持有的抽屉状态对象。
+         */
+        get state() {
+          return this._state;
+        }
+        private _state: DrawerState;
 
-      constructor(initialState: DrawerState, options: any) {
-        this._state = initialState;
-        this.options = options;
-      }
+        private options: MockStoreOptions;
 
-      batch(cb: () => void) {
-        cb();
-      }
+        /**
+         * 替身 Store 的构造入口，只把初始状态与选项存起来，不注册任何外部监听。
+         * @param initialState 抽屉的初始状态，作为替身内部状态的起点。
+         * @param options 替身选项，本实现只读取其中的 onUpdate 回调。
+         */
+        constructor(initialState: DrawerState, options: MockStoreOptions) {
+          this._state = initialState;
+          this.options = options;
+        }
 
-      setState(fn: (prev: DrawerState) => DrawerState) {
-        this._state = fn(this._state);
-        this.options.onUpdate();
-      }
-    },
-  };
-});
+        /**
+         * 替身只做同步执行，不提供真实 Store 的批处理合并语义。
+         * @param cb 批处理回调，本替身立即同步调用一次。
+         */
+        batch(
+          cb: /** 立即同步执行的批处理回调，用于跑完一次状态更新。 */ () => void,
+        ) {
+          cb();
+        }
+
+        /**
+         * 用计算结果覆盖内部状态，并触发一次 onUpdate 让用例观察到写入。
+         * @param fn 由旧状态推算新状态的函数，返回值直接成为新的内部状态。
+         */
+        setState(
+          fn: /** 计算新状态的函数，返回值会覆盖替身内部状态。 */ (
+            prev: DrawerState,
+          ) => DrawerState,
+        ) {
+          this._state = fn(this._state);
+          this.options.onUpdate();
+        }
+      },
+    };
+  },
+);
 
 describe('drawerApi', () => {
   let drawerApi: DrawerApi;

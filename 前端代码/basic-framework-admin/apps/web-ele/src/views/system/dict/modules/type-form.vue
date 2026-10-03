@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 字典类型新增/修改弹窗：按是否已存在主键决定走新增还是修改接口。
+ */
+import type { ComponentType } from '#/adapter/component';
 import type { SystemDictTypeApi } from '#/api/system/dict/type';
 
 import { ref } from 'vue';
@@ -20,7 +24,7 @@ import { useTypeFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const formData = ref<SystemDictTypeApi.DictType>();
 
-const [Form, formApi] = useVbenForm({
+const [Form, formApi] = useVbenForm<ComponentType, SystemDictTypeApi.DictType>({
   commonConfig: {
     componentProps: {
       class: 'w-full',
@@ -34,6 +38,9 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 提交弹窗表单：校验通过后按是否存在主键选择新增或修改，并在结束时释放弹窗锁。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -41,7 +48,7 @@ const [Modal, modalApi] = useVbenModal({
     }
     modalApi.lock();
     // 提交表单
-    const data = (await formApi.getValues()) as SystemDictTypeApi.DictType;
+    const data = await formApi.getValues();
     try {
       await (formData.value?.id ? updateDictType(data) : createDictType(data));
       // 关闭并提示

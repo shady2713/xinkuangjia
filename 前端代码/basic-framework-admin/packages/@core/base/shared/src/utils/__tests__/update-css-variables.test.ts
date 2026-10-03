@@ -28,3 +28,16 @@ it('updateCSSVariables should update CSS variables in :root selector', () => {
       updatedStyleContent?.includes('fontSize: 16px;'),
   ).toBe(true);
 });
+
+it('updateCSSVariables should mount a newly created style element synchronously', /** 目标 id 尚不存在，本次调用必须新建样式表并直接挂进 head。 */ () => {
+  document.head.innerHTML = '';
+
+  updateCSSVariables({ primaryColor: 'teal' }, 'fresh-styles');
+
+  // 同步可见：调用返回时样式表已经在文档里。
+  // 若实现把挂载推迟到无延迟 setTimeout，此刻查询必然为 null，本用例随即失败。
+  const styleElement = document.querySelector('#fresh-styles');
+  expect(styleElement).not.toBeNull();
+  expect(styleElement?.parentElement).toBe(document.head);
+  expect(styleElement?.textContent).toContain('primaryColor: teal;');
+});

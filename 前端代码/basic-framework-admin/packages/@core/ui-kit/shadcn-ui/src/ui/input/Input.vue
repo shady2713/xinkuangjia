@@ -1,10 +1,13 @@
 <script setup lang="ts">
+/** 文本输入框：渲染单行输入控件，并透传双向绑定值。 */
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { cn } from '@vben-core/shared/utils';
 
 import { useVModel } from '@vueuse/core';
 
 const props = defineProps<{
-  class?: any;
+  class?: ClassValue;
   defaultValue?: number | string;
   modelValue?: number | string;
 }>();

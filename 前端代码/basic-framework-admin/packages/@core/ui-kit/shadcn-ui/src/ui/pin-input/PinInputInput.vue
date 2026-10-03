@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { PinInputInputProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { PinInputInput, useForwardProps } from 'reka-ui';
 
-const props = defineProps<PinInputInputProps & { class?: any }>();
+const props = defineProps<PinInputInputProps & { class?: ClassValue }>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

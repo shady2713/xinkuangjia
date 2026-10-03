@@ -11,7 +11,7 @@ import { useDescription } from '#/components/description';
 import { useDetailSchema } from '../data';
 
 const formData = ref<InfraJobApi.Job>(); // 任务详情
-const nextTimes = ref<Date[]>([]); // 下一次执行时间
+const nextTimes = ref<number[]>([]); // 后端序列化的下次执行毫秒时间
 
 const [Descriptions] = useDescription({
   border: true,

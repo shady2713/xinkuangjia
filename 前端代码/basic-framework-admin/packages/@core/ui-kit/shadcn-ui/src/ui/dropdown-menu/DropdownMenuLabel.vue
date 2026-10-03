@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { DropdownMenuLabelProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -8,7 +10,7 @@ import { cn } from '@vben-core/shared/utils';
 import { DropdownMenuLabel, useForwardProps } from 'reka-ui';
 
 const props = defineProps<
-  DropdownMenuLabelProps & { class?: any; inset?: boolean }
+  DropdownMenuLabelProps & { class?: ClassValue; inset?: boolean }
 >();
 
 const delegatedProps = computed(() => {

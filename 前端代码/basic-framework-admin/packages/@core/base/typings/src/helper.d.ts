@@ -38,19 +38,19 @@ type DeepReadonly<
  * 任意类型的异步函数
  */
 
-type AnyPromiseFunction<T extends any[] = any[], R = void> = (
+type AnyPromiseFunction<T extends unknown[] = [], R = void> = (
   ...arg: T
 ) => PromiseLike<R>;
 
 /**
  * 任意类型的普通函数
  */
-type AnyNormalFunction<T extends any[] = any[], R = void> = (...arg: T) => R;
+type AnyNormalFunction<T extends unknown[] = [], R = void> = (...arg: T) => R;
 
 /**
  * 任意类型的函数
  */
-type AnyFunction<T extends any[] = any[], R = void> =
+type AnyFunction<T extends unknown[] = [], R = void> =
   | AnyNormalFunction<T, R>
   | AnyPromiseFunction<T, R>;
 
@@ -72,7 +72,7 @@ type Recordable<T> = Record<string, T>;
 /**
  * 字符串类型对象（只读）
  */
-interface ReadonlyRecordable<T = any> {
+interface ReadonlyRecordable<T = unknown> {
   readonly [key: string]: T;
 }
 
@@ -120,12 +120,16 @@ type Merge<O extends object, T extends object> = {
  */
 type MergeAll<
   T extends object[],
-  R extends object = Record<string, any>,
+  R extends object = Record<never, never>,
 > = T extends [infer F extends object, ...infer Rest extends object[]]
   ? MergeAll<Rest, Merge<R, F>>
   : R;
 
-type EmitType = (name: Name, ...args: any[]) => void;
+/** 事件名称与参数元组必须由调用方声明，不接受未声明的事件载荷。 */
+type EmitType<TName extends string, TArgs extends unknown[]> = (
+  name: TName,
+  ...args: TArgs
+) => void;
 
 type MaybePromise<T> = Promise<T> | T;
 

@@ -2,6 +2,8 @@
 import type { VariantProps } from 'class-variance-authority';
 import type { ToggleGroupItemProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed, inject } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -14,7 +16,7 @@ type ToggleGroupVariants = VariantProps<typeof toggleVariants>;
 
 const props = defineProps<
   ToggleGroupItemProps & {
-    class?: any;
+    class?: ClassValue;
     size?: ToggleGroupVariants['size'];
     variant?: ToggleGroupVariants['variant'];
   }

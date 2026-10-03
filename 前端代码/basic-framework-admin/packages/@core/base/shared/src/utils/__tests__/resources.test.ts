@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { loadScript } from '../resources';
 
 const testJsPath = 'data:text/javascript,window.__load_script_test__=true;';
-const duplicateJsPath = 'data:text/javascript,window.__duplicate_script_test__=true;';
+const duplicateJsPath =
+  'data:text/javascript,window.__duplicate_script_test__=true;';
 const errorJsPath = '';
 
 describe('loadScript', () => {

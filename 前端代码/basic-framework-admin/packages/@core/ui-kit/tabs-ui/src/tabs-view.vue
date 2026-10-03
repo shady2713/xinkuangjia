@@ -9,7 +9,8 @@ import { Tabs, TabsChrome } from './components';
 import { useTabsDrag } from './use-tabs-drag';
 import { useTabsViewScroll } from './use-tabs-view-scroll';
 
-interface Props extends TabsProps {}
+/** 标签页视图的属性契约别名：直接复用标签页属性，不额外声明成员。 */
+type Props = TabsProps;
 
 defineOptions({
   name: 'TabsView',

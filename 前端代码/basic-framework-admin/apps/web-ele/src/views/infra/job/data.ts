@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -13,8 +13,11 @@ import { ElTimeline, ElTimelineItem } from 'element-plus';
 import { CronTab } from '#/components/cron-tab';
 import { DictTag } from '#/components/dict-tag';
 
-
 /** 新增/修改的表单 */
+/**
+ * 构造定时任务的新增与编辑表单 schema。
+ * @returns 任务表单的字段定义数组。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -184,6 +187,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
 }
 
 /** 详情页的字段 */
+/**
+ * 构造定时任务详情的描述项。
+ * @returns 详情页的描述项定义数组。
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -197,10 +204,15 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'status',
       label: '任务状态',
+      /**
+       * 任务状态是字典值，运行中与已停止需要用颜色区分。
+       * @param val 当前单元格的字典值。
+       * @returns 字典标签节点。
+       */
       render: (val) => {
         return h(DictTag, {
           type: DICT_TYPE.INFRA_JOB_STATUS,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         });
       },
     },
@@ -253,4 +265,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

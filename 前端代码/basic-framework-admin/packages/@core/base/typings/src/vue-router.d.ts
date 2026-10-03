@@ -123,10 +123,10 @@ interface RouteMeta {
   title: string;
 }
 
-// 定义递归类型以将 RouteRecordRaw 的 component 属性更改为 string
+/** 后端路由描述只携带单视图标识，不能同时夹带前端命名视图组件。 */
 type RouteRecordStringComponent<T = string> = Omit<
   RouteRecordRaw,
-  'children' | 'component'
+  'children' | 'component' | 'components'
 > & {
   children?: RouteRecordStringComponent<T>[];
   component: T;

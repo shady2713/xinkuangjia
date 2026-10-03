@@ -33,6 +33,8 @@ public class DeptDO extends BaseDO {
      * 部门名称。
      */
     private String name;
+    /** 所属管理平台，映射既有 role_type 列；由服务端登录上下文确定，创建后不可跨平台迁移。 */
+    private String roleType;
     /**
      * 父部门 ID
      *

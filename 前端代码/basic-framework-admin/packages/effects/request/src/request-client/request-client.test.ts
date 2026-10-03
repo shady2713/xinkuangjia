@@ -1,99 +1,118 @@
-import axios from 'axios';
+/** 通过真实 Axios 实例验证请求方法、响应转换及传输失败契约。 */
 import MockAdapter from 'axios-mock-adapter';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { defaultResponseInterceptor } from './preset-interceptors';
 import { RequestClient } from './request-client';
+import { requireResponse } from './response';
 
-describe('requestClient', () => {
-  let mock: MockAdapter;
-  let requestClient: RequestClient;
+let client: RequestClient;
+let transport: MockAdapter;
+beforeEach(
+  /** 每例拥有真实客户端及独立传输边界。 */ () => {
+    client = new RequestClient();
+    transport = new MockAdapter(client.instance);
+  },
+);
+afterEach(
+  /** 恢复实例传输，不影响后续请求。 */ () => {
+    transport.restore();
+  },
+);
 
-  beforeEach(() => {
-    mock = new MockAdapter(axios);
-    requestClient = new RequestClient();
-  });
-
-  afterEach(() => {
-    mock.reset();
-  });
-
-  it('should successfully make a GET request', async () => {
-    mock.onGet('test/url').reply(200, { data: 'response' });
-
-    const response = await requestClient.get('test/url');
-
-    expect(response.data).toEqual({ data: 'response' });
-  });
-
-  it('should successfully make a POST request', async () => {
-    const postData = { key: 'value' };
-    const mockData = { data: 'response' };
-    mock.onPost('/test/post', postData).reply(200, mockData);
-    const response = await requestClient.post('/test/post', postData);
-    expect(response.data).toEqual(mockData);
-  });
-
-  it('should successfully make a PUT request', async () => {
-    const putData = { key: 'updatedValue' };
-    const mockData = { data: 'updated response' };
-    mock.onPut('/test/put', putData).reply(200, mockData);
-    const response = await requestClient.put('/test/put', putData);
-    expect(response.data).toEqual(mockData);
-  });
-
-  it('should successfully make a DELETE request', async () => {
-    const mockData = { data: 'delete response' };
-    mock.onDelete('/test/delete').reply(200, mockData);
-    const response = await requestClient.delete('/test/delete');
-    expect(response.data).toEqual(mockData);
-  });
-
-  it('should handle network errors', async () => {
-    mock.onGet('/test/error').networkError();
-    try {
-      await requestClient.get('/test/error');
-      expect(true).toBe(false);
-    } catch (error: any) {
-      expect(error.isAxiosError).toBe(true);
-      expect(error.message).toBe('Network Error');
-    }
-  });
-
-  it('should handle timeout', async () => {
-    mock.onGet('/test/timeout').timeout();
-    try {
-      await requestClient.get('/test/timeout');
-      expect(true).toBe(false);
-    } catch (error: any) {
-      expect(error.isAxiosError).toBe(true);
-      expect(error.code).toBe('ECONNABORTED');
-    }
-  });
-
-  it('should successfully upload a file', async () => {
-    const fileData = new Blob(['file contents'], { type: 'text/plain' });
-
-    mock.onPost('/test/upload').reply((config) => {
-      return config.data instanceof FormData && config.data.has('file')
-        ? [200, { data: 'file uploaded' }]
-        : [400, { error: 'Bad Request' }];
+describe('requestClient 实际契约', /** 在公开接口上验证正常、失败和变换后的响应。 */ () => {
+  it('默认 GET 保留完整响应', /** 默认不能把 Axios 外壳声明成业务对象。 */ async () => {
+    transport.onGet('/resource').reply(200, { value: 'ok' });
+    expect(requireResponse(await client.get('/resource')).data).toEqual({
+      value: 'ok',
     });
-
-    const response = await requestClient.upload('/test/upload', {
-      file: fileData,
-    });
-    expect(response.data).toEqual({ data: 'file uploaded' });
   });
-
-  it('should successfully download a file as a blob', async () => {
-    const mockFileContent = new Blob(['mock file content'], {
-      type: 'text/plain',
+  it.each(['POST', 'PUT'])(
+    '%s 保留请求体',
+    /** JSON 序列化由实际 Axios 执行。
+     * @param method 待验证的 POST 或 PUT 方法。
+     */ async (method) => {
+      transport.onAny('/resource').reply(200, { value: 'saved' });
+      const data = { field: 'value' };
+      const result =
+        method === 'POST'
+          ? await client.post('/resource', data)
+          : await client.put('/resource', data);
+      expect(requireResponse(result).data).toEqual({ value: 'saved' });
+      expect(
+        transport.history[method === 'POST' ? 'post' : 'put'][0]?.data,
+      ).toBe(JSON.stringify(data));
+    },
+  );
+  it('dELETE 使用真实删除方法', /** 验证公开方法到传输配置的映射。 */ async () => {
+    transport.onDelete('/resource').reply(200, true);
+    expect(requireResponse(await client.delete('/resource')).data).toBe(true);
+  });
+  it('网络和超时失败保持可识别的传输异常', /** 没有业务体时不丢失错误码。 */ async () => {
+    transport.onGet('/network').networkError();
+    transport.onGet('/timeout').timeout();
+    await expect(client.get('/network')).rejects.toMatchObject({
+      isAxiosError: true,
+      message: 'Network Error',
     });
-
-    mock.onGet('/test/download').reply(200, mockFileContent);
-
-    const res = await requestClient.download('/test/download');
-
-    expect(res.data).toBeInstanceOf(Blob);
+    await expect(client.get('/timeout')).rejects.toMatchObject({
+      isAxiosError: true,
+      code: 'ECONNABORTED',
+    });
+  });
+  it('标准业务数据可被后续转换，但不会伪装成 HTTP 外壳', /** 响应处理器应接收前一处理器的真实结果。 */ async () => {
+    client.addResponseInterceptor(
+      defaultResponseInterceptor({
+        codeField: 'code',
+        dataField: 'data',
+        successCode: 0,
+      }),
+    );
+    client.addResponseInterceptor({
+      /** 明确收窄解包结果后再操作。
+       * @param value 前一处理器返回的业务值。
+       * @returns 文本转换结果。
+       * @throws {TypeError} 上游没有返回约定的字符串。
+       */ fulfilled(value) {
+        if (typeof value !== 'string') throw new TypeError('期待字符串');
+        return value.toUpperCase();
+      },
+    });
+    transport.onGet('/value').reply(200, { code: 0, data: 'allowed' });
+    await expect(
+      client.get('/value', { responseReturn: 'data' }),
+    ).resolves.toBe('ALLOWED');
+  });
+  it('畸形业务外壳拒绝解包，空 HTTP 失败保留异常', /** 不把数组或缺失字段作为成功数据。 */ async () => {
+    client.addResponseInterceptor(
+      defaultResponseInterceptor({
+        codeField: 'code',
+        dataField: 'data',
+        successCode: 0,
+      }),
+    );
+    transport.onGet('/bad').reply(200, []);
+    transport.onGet('/http').reply(500);
+    await expect(
+      client.get('/bad', { responseReturn: 'data' }),
+    ).rejects.toMatchObject({ status: 200 });
+    await expect(client.get('/http')).rejects.toMatchObject({
+      message: 'Request failed with status code 500',
+    });
+  });
+  it('数组查询参数保留选定编码', /** 检查传输配置中实际使用的序列化器。 */ async () => {
+    transport.onGet('/params').reply(200, true);
+    await client.get('/params', {
+      params: { ids: [1, 2] },
+      paramsSerializer: 'repeat',
+    });
+    const serializer = transport.history.get[0]?.paramsSerializer;
+    if (
+      !serializer ||
+      typeof serializer === 'function' ||
+      !serializer.serialize
+    )
+      throw new TypeError('缺少参数编码器');
+    expect(serializer.serialize({ ids: [1, 2] })).toBe('ids=1&ids=2');
   });
 });

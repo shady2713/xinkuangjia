@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { AccordionContentProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
 import { AccordionContent } from 'reka-ui';
 
-const props = defineProps<AccordionContentProps & { class?: any }>();
+const props = defineProps<AccordionContentProps & { class?: ClassValue }>();
 
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { SelectContentEmits, SelectContentProps } from 'reka-ui';
 
+import type { ClassValue } from '@vben-core/shared/utils';
+
 import { computed } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
@@ -20,7 +22,7 @@ defineOptions({
 });
 
 const props = withDefaults(
-  defineProps<SelectContentProps & { class?: any }>(),
+  defineProps<SelectContentProps & { class?: ClassValue }>(),
   {
     position: 'popper',
   },

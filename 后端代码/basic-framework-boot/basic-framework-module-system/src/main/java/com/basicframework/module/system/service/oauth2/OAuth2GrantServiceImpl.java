@@ -7,6 +7,7 @@ import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenD
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.service.auth.AdminAuthService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.util.List;
@@ -52,6 +53,7 @@ public class OAuth2GrantServiceImpl implements OAuth2GrantService {
      * @return 方法处理结果
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public OAuth2AccessTokenDO grantPassword(String username, String password,
                                              String clientId, List<String> scopes) {
         // 使用账号 + 密码进行登录

@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import type { PropType } from 'vue';
 
 import type { CronData, CronValue, ShortcutsType } from './types';
@@ -11,7 +11,8 @@ import {
   ElForm,
   ElFormItem,
   ElInput,
-  ElInputNumber,  ElOption,
+  ElInputNumber,
+  ElOption,
   ElRadioButton,
   ElRadioGroup,
   ElSelect,
@@ -19,8 +20,9 @@ import {
   ElTabs,
 } from 'element-plus';
 
-import { CronDataDefault, CronValueDefault } from './types';
 import { showWarningMessage } from '#/utils/feedback';
+
+import { CronDataDefault, CronValueDefault } from './types';
 
 defineOptions({ name: 'Crontab' });
 
@@ -956,7 +958,3 @@ function inputChange() {
   background-color: var(--el-fill-color-blank);
 }
 </style>
-
-
-
-

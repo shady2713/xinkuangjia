@@ -6,6 +6,7 @@ import com.basicframework.framework.common.util.http.HttpUtils;
 import com.basicframework.module.system.controller.open.oauth2.vo.OAuth2OpenTokenRespVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.enums.oauth2.OAuth2GrantTypeEnum;
+import com.basicframework.module.system.enums.oauth2.OAuth2MachineToken;
 import com.basicframework.module.system.service.oauth2.OAuth2ClientService;
 import com.basicframework.module.system.service.oauth2.OAuth2GrantService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -82,8 +83,22 @@ public class OAuth2OpenController {
 
         long expiresIn = Math.max(0, ChronoUnit.SECONDS.between(LocalDateTime.now(), accessToken.getExpiresTime()));
         return success(new OAuth2OpenTokenRespVO(
-                accessToken.getAccessToken(), accessToken.getRefreshToken(), "Bearer", expiresIn,
-                String.join(" ", scopes)));
+                accessToken.getAccessToken(), toResponseRefreshToken(accessToken.getRefreshToken()),
+                "Bearer", expiresIn, String.join(" ", scopes)));
+    }
+
+    /**
+     * 把内部刷新令牌列值转换为对外响应值。
+     *
+     * <p>机器主体不签发刷新令牌，库内使用哨兵值满足 NOT NULL 约束；
+     * 哨兵值不是可用凭据，若原样返回会诱导第三方当成可续期凭据长期保存。
+     * 这里统一映射为 {@code null}，响应结构保持不变。</p>
+     *
+     * @param refreshToken 库内刷新令牌列值
+     * @return 真实刷新令牌；机器主体返回 {@code null}
+     */
+    private String toResponseRefreshToken(String refreshToken) {
+        return OAuth2MachineToken.MACHINE_NO_REFRESH_TOKEN.equals(refreshToken) ? null : refreshToken;
     }
 
     /**

@@ -3,10 +3,10 @@ import type { Component } from 'vue';
 interface VbenDropdownMenuItem {
   disabled?: boolean;
   /**
-   * @zh_CN 点击事件处理
-   * @param data
+   * 点击事件处理
+   * @param data 使用方在菜单项上挂载的业务数据，组件只做透传，形状由使用方决定
    */
-  handler?: (data: any) => void;
+  handler?(data: object): void;
   /**
    * @zh_CN 图标
    */

@@ -148,7 +148,7 @@ export interface ModalState extends ModalProps {
   /**
    * 共享数据
    */
-  sharedData?: Record<string, any>;
+  sharedData?: Record<string, unknown>;
 }
 
 export type ExtendedModalApi = ModalApi & {

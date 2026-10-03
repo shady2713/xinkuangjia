@@ -52,7 +52,9 @@ kind: "package-reference"
 bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
 ```
 
-脚本检查必需文件、相对导入与明显 `any` 使用，并定位所属应用进行类型检查。若依赖或应用配置缺失导致类型检查跳过，不能把末尾成功提示当作类型验证通过，需补齐环境并执行应用实际类型命令。
+脚本调用前端的 [CRUD 检查器](../../../前端代码/basic-framework-admin/scripts/quality/check_crud.py)，通过语法树检查必需文件及导入边界。允许各 API、页面模块内部的相对引用（例如 `modules/form.vue` 导入 `../data`），跨模块引用使用应用别名。随后执行所属应用类型检查和模块 ESLint，显式 `any` 作为错误处理。缺少配置、依赖、解析失败或检查失败均返回非零，不再跳过后输出成功。
+
+Windows 也可直接在前端根运行 `python -B -X utf8 scripts/quality/check_crud.py <api-path> <views-path>`，无需 Bash。检查只读源码，不修复或暂存文件。
 
 然后按[专项流程](references/crud-workflow.md#4-代码质量检查必须在输出总结前完成不得跳过)核对组件 API、请求参数和跨文件类型；相关 lint、注释、类型与测试命令以工程配置和[脚本索引](../../../docs/开发指南/脚本使用索引.md)为准。列表、新增、编辑、取消、校验失败、删除确认及权限边界需有适用的业务证据，脚本通过不能替代它们。
 

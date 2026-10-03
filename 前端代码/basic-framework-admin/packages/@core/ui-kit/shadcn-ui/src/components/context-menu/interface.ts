@@ -1,15 +1,22 @@
 import type { Component } from 'vue';
 
+/**
+ * 右键菜单宿主传入的数据包。
+ * 标签页等使用方传入自己的实体（如 TabDefinition），菜单构建函数与点击回调都只做透传，
+ * 组件本身不解释其结构，因此按 object 暴露；使用方在回调内部自行收窄。
+ */
+export type ContextMenuHandlerData = object;
+
 interface IContextMenuItem {
   /**
-   * @zh_CN 是否禁用
+   * 是否禁用
    */
   disabled?: boolean;
   /**
-   * @zh_CN 点击事件处理
-   * @param data
+   * 点击事件处理
+   * @param data 宿主传入的数据包，即触发菜单时所在实体的快照
    */
-  handler?: (data: any) => void;
+  handler?(data: ContextMenuHandlerData): void;
   /**
    * @zh_CN 是否隐藏
    */

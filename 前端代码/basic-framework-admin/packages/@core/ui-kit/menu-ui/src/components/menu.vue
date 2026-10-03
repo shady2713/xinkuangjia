@@ -35,7 +35,8 @@ import { useMenuScroll } from '../hooks/use-menu-scroll';
 import { flattedChildren } from '../utils';
 import SubMenu from './sub-menu.vue';
 
-interface Props extends MenuProps {}
+/** 菜单容器的属性契约别名：直接复用菜单属性，不额外声明成员。 */
+type Props = MenuProps;
 
 defineOptions({ name: 'Menu' });
 
@@ -430,8 +431,8 @@ $namespace: vben;
 }
 
 @mixin menu-title {
-  flex: 1 1 auto;
   display: inline-block;
+  flex: 1 1 auto;
   min-width: 0;
   max-width: var(--menu-title-width);
   overflow: hidden;
@@ -755,8 +756,8 @@ $namespace: vben;
     display: inline-flex;
     align-items: center;
     width: 100%;
-    height: var(--menu-item-height);
     min-width: 0;
+    height: var(--menu-item-height);
 
     span {
       @include menu-title;
@@ -844,8 +845,8 @@ $namespace: vben;
     // 箭头参与 flex 排版并固定在右侧，避免窄侧栏下与标题互相覆盖。
     position: static;
     flex-shrink: 0;
-    margin-left: auto;
     margin-right: 0;
+    margin-left: auto;
     // font-size: 16px;
     font-weight: normal;
     opacity: 1;

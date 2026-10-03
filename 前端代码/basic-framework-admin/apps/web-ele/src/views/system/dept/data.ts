@@ -7,13 +7,20 @@ import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { handleTree } from '@vben/utils';
 
-import { buildOptionalEmailSchema, buildOptionalMobileSchema, z } from '#/adapter/form';
+import {
+  buildOptionalEmailSchema,
+  buildOptionalMobileSchema,
+  z,
+} from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 
 let userList: SystemUserApi.User[] = [];
 getSimpleUserList().then((data) => (userList = data));
 
+/** 配置部门编辑字段及上级部门选择器。
+ * @returns 使用真实部门列表及独立虚拟根的表单定义。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -30,13 +37,11 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'ApiTreeSelect',
       componentProps: {
         clearable: true,
+        /** 加载已校验部门并添加选择器专用虚拟根。 */
         api: async () => {
           const data = await getDeptList();
-          data.unshift({
-            id: 0,
-            name: '顶级部门',
-          });
-          return handleTree(data);
+          // 选择器的虚拟根只需编号与名称，不伪装成完整部门响应。
+          return handleTree([{ id: 0, name: '顶级部门' }, ...data]);
         },
         labelField: 'name',
         valueField: 'id',
@@ -112,6 +117,9 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/** 定义部门列表字段及负责人展示规则。
+ * @returns 绑定完整部门响应模型的表格列。
+ */
 export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['columns'] {
   return [
     { type: 'checkbox', width: 40, fixed: 'left' },
@@ -126,8 +134,12 @@ export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['colum
       field: 'leaderUserId',
       title: '负责人',
       minWidth: 150,
+      /** 用已加载的用户列表显示负责人昵称。 */
       formatter: ({ cellValue }) =>
-        userList.find((user) => String(user.id) === String(cellValue))?.nickname || '-',
+        userList.find(
+          /** 按后端用户编号匹配当前部门负责人。 */ (user) =>
+            String(user.id) === String(cellValue),
+        )?.nickname || '-',
     },
     {
       field: 'sort',
