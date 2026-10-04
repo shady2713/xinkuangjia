@@ -427,7 +427,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
         if (host.contains("amazonaws.com")) {
             // 匹配 s3.{region}.amazonaws.com 格式
             if (host.startsWith("s3.") && host.contains(".amazonaws.com")) {
-                String regionPart = host.substring(3, host.indexOf(".amazonaws.com"));
+                String regionPart = regionSegment(host, "s3.".length(), ".amazonaws.com");
                 if (StrUtil.isNotEmpty(regionPart) && !regionPart.equals("accelerate")) {
                     return regionPart;
                 }
@@ -440,7 +440,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
         if (host.contains(S3FileClientConfig.ENDPOINT_ALIYUN)
                 && host.startsWith("oss-")
                 && host.contains("." + S3FileClientConfig.ENDPOINT_ALIYUN)) {
-            String regionPart = host.substring(4, host.indexOf("." + S3FileClientConfig.ENDPOINT_ALIYUN));
+            String regionPart = regionSegment(host, "oss-".length(), "." + S3FileClientConfig.ENDPOINT_ALIYUN);
             if (StrUtil.isNotEmpty(regionPart)) {
                 return regionPart;
             }
@@ -450,7 +450,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
         if (host.contains(S3FileClientConfig.ENDPOINT_TENCENT)
                 && host.startsWith("cos.")
                 && host.contains("." + S3FileClientConfig.ENDPOINT_TENCENT)) {
-            String regionPart = host.substring(4, host.indexOf("." + S3FileClientConfig.ENDPOINT_TENCENT));
+            String regionPart = regionSegment(host, "cos.".length(), "." + S3FileClientConfig.ENDPOINT_TENCENT);
             if (StrUtil.isNotEmpty(regionPart)) {
                 return regionPart;
             }
@@ -458,6 +458,26 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 
         // 3.4 其他情况（MinIO、七牛云等）使用默认值
         return "us-east-1";
+    }
+
+    /**
+     * 截取主机名中位于固定前缀与固定后缀之间的区域段。
+     *
+     * <p>标准域名（如 {@code s3.amazonaws.com}、{@code cos.myqcloud.com}）不含区域段，
+     * 直接 {@code substring} 会因区间倒置抛 {@link StringIndexOutOfBoundsException}；
+     * 本方法在区间非法时返回空串，交由调用方走默认区域回退。</p>
+     *
+     * @param host 主机名
+     * @param prefixLength 前缀长度（如 {@code "s3."} 为 3）
+     * @param suffix 后缀（含前导点，如 {@code ".amazonaws.com"}）
+     * @return 区域段；域名不含区域段时返回空串
+     */
+    private static String regionSegment(String host, int prefixLength, String suffix) {
+        int suffixIndex = host.indexOf(suffix);
+        if (suffixIndex <= prefixLength) {
+            return "";
+        }
+        return host.substring(prefixLength, suffixIndex);
     }
 
 }
