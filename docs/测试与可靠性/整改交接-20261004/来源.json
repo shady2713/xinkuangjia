@@ -1,0 +1,31 @@
+{
+  "export_date": "2026-10-04",
+  "reviewed_commit": "36da1d3e4e17db059c37822aa68994e47c533dba",
+  "sources": [
+    {
+      "file": "R01-R17-原始方案V2.txt",
+      "thread_id": "01a0f9eb-50c1-7433-9c83-89637dfbe6ce",
+      "item_id": "msg_0388f65a255e7f5d016abf4754b98087d09a20d71023e6ac15",
+      "rollout_ordinal": 1253,
+      "sha256": "71686e9e442f844e0524bc8e143e6b38e527c95b2d15c9392ae1be5ca780f23d",
+      "bytes": 29302
+    },
+    {
+      "file": "R01-R17-评审补充.txt",
+      "thread_id": "01a0f9eb-50c1-7433-9c83-89637dfbe6ce",
+      "item_id": "msg_0388f65a255e7f5d016abf526191a087d0968b8c714a4c4831",
+      "rollout_ordinal": 1390,
+      "sha256": "e8482b02c7b82f37586a0c484b7b8f45db3041bf909532a19e32123106db536c",
+      "bytes": 10367
+    },
+    {
+      "file": "已确认的认证策略.txt",
+      "thread_id": "01a0f9eb-50c1-7433-9c83-89637dfbe6ce",
+      "item_id": "01a0fb5d-bbcf-7150-9725-230baa3040ff",
+      "rollout_ordinal": 1429,
+      "sha256": "853e26a00740dddece594ec900557705eb5d061773c972a90e0cc7cca49ded4e",
+      "bytes": 392,
+      "extraction": "仅保留原问题和用户回答；移除客户端回调标记。"
+    }
+  ]
+}
