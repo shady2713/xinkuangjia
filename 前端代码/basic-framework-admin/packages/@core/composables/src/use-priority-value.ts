@@ -17,16 +17,21 @@ import {
 /**
  * 按字段名从外部状态中读取值。
  * @description state 的实际类型与 props 无关，两个泛型之间无法直接互转键名，
- * 因此这里按字符串键只读自有属性，字段不存在时返回 undefined。
+ * 因此这里按字符串键读取，并只认自有属性。
+ * 取值必须经由响应式代理的属性读取：Vue 3.5 的可变代理没有 `getOwnPropertyDescriptor` 拦截，
+ * 只取属性描述符既不会订阅该字段，也不会把内层对象包成代理，
+ * 于是 state 就地更新后 computed 不失效、深层变化也观察不到，读到的仍是旧值。
  * @param source 外部状态对象，可为空
  * @param key 字段名
  * @returns 字段值；对象为空或字段不存在时为 undefined
  */
 function readStateValue(source: object | undefined, key: string): unknown {
-  if (!source || !Object.hasOwn(source, key)) {
+  if (!source) {
     return undefined;
   }
-  return Object.getOwnPropertyDescriptor(source, key)?.value;
+  // 先读取一次建立依赖：字段暂时不存在时也要订阅，之后新增该字段才会重新解析。
+  const tracked = Reflect.get(source, key);
+  return Object.hasOwn(source, key) ? tracked : undefined;
 }
 
 /**

@@ -9,7 +9,7 @@
 import type { Ref } from 'vue';
 
 import { mount } from '@vue/test-utils';
-import { defineComponent, h, nextTick, ref } from 'vue';
+import { computed, defineComponent, h, nextTick, ref } from 'vue';
 
 import { describe, expect, it } from 'vitest';
 
@@ -26,14 +26,14 @@ const HARNESS_PROPS = {
  * 复现弹窗 Escape、焦点、点击外部回调的调用时机；观察值通过外部数组回传，
  * 避免依赖组件实例代理暴露内部状态。
  * @param props 传给 composable 的 props 对象，键集合决定生成哪些 computed。
- * @param state 外部状态引用，用于验证状态更新后的重新解析。
+ * @param state 外部状态引用；传 undefined 表示调用方没有外部状态，此时字段值只来自 props。
  * @param observed 事件回调读取到的值，按点击顺序记录。
  * @param key 事件回调里读取的字段名。
  * @returns 可挂载的消费组件。
  */
 function createHarness(
   props: Record<string, unknown>,
-  state: Ref<Record<string, unknown>>,
+  state: Ref<Record<string, unknown>> | undefined,
   observed: unknown[],
   key: string,
 ) {
@@ -84,6 +84,21 @@ describe('usePriorityValue 求值时机', /** 覆盖来源优先级与"事件回
     );
 
     expect(value.value).toBe('state-value');
+  });
+
+  it('state 未提供时按 props 解析且不抛错', /** state 是可选入参：表单未装配时字段值必须完全由 props 提供。 */ async () => {
+    const observed: unknown[] = [];
+    const Harness = createHarness(
+      { title: 'composable-prop' },
+      undefined,
+      observed,
+      'title',
+    );
+
+    const wrapper = mount(Harness, { props: { title: 'passed' } });
+
+    // props 被显式传入时以 composable 收到的 props 对象取值为准，缺少 state 不影响解析。
+    expect(await readInHandler(wrapper, observed)).toBe('composable-prop');
   });
 
   it('事件回调里读取 props 值时优先于 state', /** 显式传入的 props 必须压过 state 回退值。 */ async () => {
@@ -202,6 +217,146 @@ describe('usePriorityValue 求值时机', /** 覆盖来源优先级与"事件回
     await nextTick();
 
     expect(await readInHandler(wrapper, observed)).toBe('second-attr');
+  });
+
+  it('state 字段就地更新后事件回调读到新值', /** 只替换 state 容器才失效会让就地重写的字段永远停在旧值。 */ async () => {
+    const observed: unknown[] = [];
+    const state = ref<Record<string, unknown>>({ title: 'before' });
+    const Harness = createHarness(
+      { title: 'composable-prop' },
+      state,
+      observed,
+      'title',
+    );
+
+    const wrapper = mount(Harness);
+    expect(await readInHandler(wrapper, observed)).toBe('before');
+
+    // 就地改写字段而不是替换整个 state 对象：这是 store 之外调用方最自然的写法。
+    state.value.title = 'after';
+    await nextTick();
+
+    expect(await readInHandler(wrapper, observed)).toBe('after');
+  });
+
+  it('state 内层对象与数组的深层变化经派生 computed 可见', /** 透传出的内层结构必须保持深层响应性，否则引用没换、内容变了却读不到。 */ async () => {
+    const observed: unknown[] = [];
+    const state = ref<{ cfg: { list: string[]; title: string } }>({
+      cfg: { list: ['first'], title: 'before' },
+    });
+    const Harness = defineComponent({
+      name: 'PriorityValueDeepHarness',
+      props: HARNESS_PROPS,
+      /**
+       * 由透传出的内层结构派生一个原始值，深层变化必须让该派生结果失效。
+       * @returns 渲染按钮的渲染函数。
+       */
+      setup() {
+        // props 的字段类型与 state 一致，raw props 未传入时仍由 state 提供值。
+        const values = usePriorityValues(
+          { cfg: { list: [] as string[], title: '' } },
+          state,
+        );
+        const summary = computed(
+          /** 组合内层字段与数组长度，只有深层依赖被追踪到时才会重算。 */
+          () => {
+            const cfg = values.cfg?.value;
+            return cfg ? `${cfg.title}:${cfg.list.length}` : 'empty';
+          },
+        );
+        /** DOM 事件回调：此时没有 active instance，只能依赖派生 computed 已失效。 */
+        const handleClick = () => {
+          observed.push(summary.value);
+        };
+        /** 渲染只用于触发事件回调的按钮。 */
+        const renderButton = () =>
+          h('button', { onClick: handleClick }, 'read');
+        return renderButton;
+      },
+    });
+
+    const wrapper = mount(Harness);
+    expect(await readInHandler(wrapper, observed)).toBe('before:1');
+
+    state.value.cfg.title = 'after';
+    state.value.cfg.list.push('second');
+    await nextTick();
+
+    expect(await readInHandler(wrapper, observed)).toBe('after:2');
+  });
+
+  it('数组字段就地变化后重新解析', /** 透传出的数组必须保持响应式，否则 push 之后按长度派生的结果不会变化。 */ async () => {
+    const observed: unknown[] = [];
+    const state = ref<{ rows: string[] }>({ rows: ['first'] });
+    const Harness = defineComponent({
+      name: 'PriorityValueArrayHarness',
+      props: HARNESS_PROPS,
+      /**
+       * 由透传出的数组派生长度，数组就地变化必须让该派生结果失效。
+       * @returns 渲染按钮的渲染函数。
+       */
+      setup() {
+        // props 的字段类型与 state 一致，raw props 未传入时仍由 state 提供值。
+        const values = usePriorityValues({ rows: [] as string[] }, state);
+        const rowCount = computed(
+          /** 数组长度是原始值：只有数组本身被代理追踪到，push 才会让这里重算。 */
+          () => values.rows?.value.length,
+        );
+        /** DOM 事件回调：此时没有 active instance，只能依赖派生 computed 已失效。 */
+        const handleClick = () => {
+          observed.push(rowCount.value);
+        };
+        /** 渲染只用于触发事件回调的按钮。 */
+        const renderButton = () =>
+          h('button', { onClick: handleClick }, 'read');
+        return renderButton;
+      },
+    });
+
+    const wrapper = mount(Harness);
+    expect(await readInHandler(wrapper, observed)).toBe(1);
+
+    state.value.rows.push('second');
+    await nextTick();
+
+    expect(await readInHandler(wrapper, observed)).toBe(2);
+  });
+
+  it('消费方派生 computed 能看到 state 就地更新', /** 弹窗的 shouldDraggable 一类派生 computed 不得因为底层未失效而停在旧结果。 */ async () => {
+    const observed: unknown[] = [];
+    const state = ref<{ draggable: boolean }>({ draggable: false });
+    const Harness = defineComponent({
+      name: 'PriorityValueDerivedHarness',
+      props: HARNESS_PROPS,
+      /**
+       * 按业务侧形态创建派生 computed，并在事件回调里读取派生结果。
+       * @returns 渲染按钮的渲染函数。
+       */
+      setup() {
+        // props 的字段类型与 state 一致，raw props 未传入时仍由 state 提供值。
+        const values = usePriorityValues({ draggable: false }, state);
+        const shouldDraggable = computed(
+          /** 派生结果，等价于弹窗里 `draggable && !fullscreen && header` 的用法。 */
+          () => values.draggable?.value === true,
+        );
+        /** DOM 事件回调：此时没有 active instance，只能依赖 computed 已失效。 */
+        const handleClick = () => {
+          observed.push(shouldDraggable.value);
+        };
+        /** 渲染只用于触发事件回调的按钮。 */
+        const renderButton = () =>
+          h('button', { onClick: handleClick }, 'read');
+        return renderButton;
+      },
+    });
+
+    const wrapper = mount(Harness);
+    expect(await readInHandler(wrapper, observed)).toBe(false);
+
+    state.value.draggable = true;
+    await nextTick();
+
+    expect(await readInHandler(wrapper, observed)).toBe(true);
   });
 
   it('同一批 computed 在事件回调中逐个读取都保持各自来源', /** 批量创建时各字段不能串值。 */ async () => {
