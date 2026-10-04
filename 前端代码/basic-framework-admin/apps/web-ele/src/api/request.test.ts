@@ -147,8 +147,8 @@ describe('应用请求身份隔离', /** 通过真实拦截器拒绝过期会话
     useAccessStore().setAccessToken('test-session-B');
     useAccessStore().setRefreshToken('test-refresh-B');
     refresh.resolve({
-      accessToken: 'late-A',
-      refreshToken: 'late-refresh-A',
+      accessToken: 'DUMMY-late-A',
+      refreshToken: 'DUMMY-late-refresh-A',
       userId: 1,
       expiresTime: 1_900_000_000_000,
     });
@@ -160,8 +160,8 @@ describe('应用请求身份隔离', /** 通过真实拦截器拒绝过期会话
 
   it('当前身份刷新成功会更新轮换令牌并仅重试原请求一次', /** 对比两次传输所用的认证头，验证正常刷新仍可用。 */ async () => {
     vi.mocked(refreshTokenApi).mockResolvedValue({
-      accessToken: 'renewed-A',
-      refreshToken: 'renewed-refresh-A',
+      accessToken: 'DUMMY-renewed-A',
+      refreshToken: 'DUMMY-renewed-refresh-A',
       userId: 1,
       expiresTime: 1_900_000_000_000,
     });
@@ -181,9 +181,9 @@ describe('应用请求身份隔离', /** 通过真实拦截器拒绝过期会话
     await expect(requestClient.get('/private')).resolves.toBe('allowed');
     expect(authorizations).toEqual([
       'Bearer test-session-A',
-      'Bearer renewed-A',
+      'Bearer DUMMY-renewed-A',
     ]);
-    expect(useAccessStore().refreshToken).toBe('renewed-refresh-A');
+    expect(useAccessStore().refreshToken).toBe('DUMMY-renewed-refresh-A');
     expect(refreshTokenApi).toHaveBeenCalledTimes(1);
   });
 });

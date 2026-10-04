@@ -15,6 +15,8 @@ import {
 
 const KEY = '1234567890abcdef';
 const PLAIN_TEXT = JSON.stringify({ username: 'admin', password: 'Abcd12' });
+/** 已知载荷的明文对象；解密断言复用加密输入，避免重复固定凭据字面量。 */
+const PLAIN_OBJECT = JSON.parse(PLAIN_TEXT);
 const KNOWN_AES_CBC_PAYLOAD =
   'AAAAAAAAAAAAAAAAAAAAAMndqyRAbvt2NUrQYOSZ2W7/0Fv1ZQF7tHxJ0wLA8RB8I4QcL7tokfrda9W3GEaxjA==';
 
@@ -288,10 +290,9 @@ describe('aPI 加解密实例', /** 覆盖启用开关、两种算法、JSON 解
     const instance = new ApiEncrypt(apiConfig());
     const encrypted = AES.encrypt(PLAIN_TEXT, KEY);
 
-    expect(instance.decryptResponse(encrypted)).toEqual({
-      password: 'Abcd12',
-      username: 'admin',
-    });
+    expect(instance.decryptResponse(requireString(encrypted))).toEqual(
+      PLAIN_OBJECT,
+    );
   });
 
   it('aES 响应不是 JSON 时返回原始字符串', /** 纯文本响应不能因解析失败而丢失。 */ () => {
@@ -346,10 +347,9 @@ describe('aPI 加解密实例', /** 覆盖启用开关、两种算法、JSON 解
     );
     const encrypted = RSA.encrypt(PLAIN_TEXT, rsaKeyPair.publicKey);
 
-    expect(instance.decryptResponse(encrypted)).toEqual({
-      password: 'Abcd12',
-      username: 'admin',
-    });
+    expect(instance.decryptResponse(requireString(encrypted))).toEqual(
+      PLAIN_OBJECT,
+    );
   });
 
   it('rSA 响应缺少私钥时报错', /** 私钥未配置时不能继续解密。 */ () => {

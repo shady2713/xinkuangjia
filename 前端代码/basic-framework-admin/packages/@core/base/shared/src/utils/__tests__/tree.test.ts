@@ -314,6 +314,46 @@ describe('treeToString', /** 在树里定位节点并返回其名称或祖先路
     expect(treeToString([], 1)).toBe('');
     expect(warn).toHaveBeenCalledWith('tree must be an array');
   });
+
+  it('returns the root name when the target is absent and the root has no children', /** 只有根节点且 id 不匹配时没有更深层可搜索，返回根名称而不是空串。 */ () => {
+    expect(treeToString([{ id: 1, name: '一级' }], 99)).toBe('一级');
+  });
+
+  it('returns the last root name when the target is absent in a nested tree', /** 每个根节点都会重置路径累加器，全部未命中时留下的是最后一个根名称。 */ () => {
+    const missed = [
+      {
+        children: [{ id: 2, name: '二级' }],
+        id: 1,
+        name: '一级',
+      },
+      { children: [{ id: 4, name: '另一支' }], id: 3, name: '另一根' },
+    ];
+
+    expect(treeToString(missed, 99)).toBe('另一根');
+  });
+
+  it('stops at the first root branch that contains the target', /** 目标节点在第一个根分支命中后不能继续覆盖路径。 */ () => {
+    const twoRoots = [
+      { children: [{ id: 2, name: '二级' }], id: 1, name: '一级' },
+      { children: [{ id: 4, name: '另一支' }], id: 3, name: '另一根' },
+    ];
+
+    expect(treeToString(twoRoots, 2)).toBe('一级 / 二级');
+  });
+
+  it('returns the deepest reachable path when the target is missing', /** 三层结构全部未命中时保留遍历到的最深一条已访问路径。 */ () => {
+    const threeLevels = [
+      {
+        children: [
+          { children: [{ id: 3, name: '三级' }], id: 2, name: '二级' },
+        ],
+        id: 1,
+        name: '一级',
+      },
+    ];
+
+    expect(treeToString(threeLevels, 99)).toBe('一级 / 二级');
+  });
 });
 
 describe('sortTree', /** 递归排序：当前层排好后再对子节点执行同一套排序。 */ () => {

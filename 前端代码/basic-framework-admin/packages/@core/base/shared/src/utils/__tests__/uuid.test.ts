@@ -31,7 +31,7 @@ describe('buildUUID', /** 生成 32 位十六进制标识，占位符字符与�
     let cursor = 0;
     vi.spyOn(Math, 'random').mockImplementation(
       /** 按游标循环给出固定随机序列。 */ () => {
-        const value = samples[cursor % samples.length];
+        const value = samples[cursor % samples.length] ?? 0;
         cursor += 1;
         return value;
       },

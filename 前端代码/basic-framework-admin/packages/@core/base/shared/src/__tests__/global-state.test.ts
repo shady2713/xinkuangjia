@@ -29,9 +29,9 @@ describe('globalShareState', /** 单例在同一次页面生命周期内共享�
     globalShareState.defineMessage({ copyPreferencesSuccess: firstPrompt });
     globalShareState.defineMessage({ copyPreferencesSuccess: secondPrompt });
 
-    expect(globalShareState.getMessage().copyPreferencesSuccess?.()).toBe(
-      '第二次',
-    );
+    expect(
+      globalShareState.getMessage().copyPreferencesSuccess?.('复制成功'),
+    ).toBe('第二次');
   });
 
   it('组件表初始为空对象', /** 尚未注册组件时返回空表，业务侧遍历不会报错。 */ () => {

@@ -2,11 +2,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  checkCaptcha,
   getAuthPermissionInfoApi,
+  getCaptcha,
   loginApi,
+  logoutApi,
   refreshTokenApi,
   register,
+  sendSmsCode,
   smsLogin,
+  smsResetPassword,
 } from './auth';
 
 const transport = vi.hoisted(
@@ -28,8 +33,8 @@ vi.mock(
 /** 服务端 LocalDateTime 的 Jackson 序列化契约为毫秒整数。 */
 function login() {
   return {
-    accessToken: 'test-access',
-    refreshToken: 'test-refresh',
+    accessToken: 'DUMMY-test-access',
+    refreshToken: 'DUMMY-test-refresh',
     userId: 1,
     expiresTime: 1_900_000_000_000,
   };
@@ -76,11 +81,11 @@ describe('认证响应契约', /** 验证正常数据、边界值及拒绝错误
   it('普通登录只返回已验证凭据字段', /** 多余传输字段不能扩散到状态。 */ async () => {
     transport.post.mockResolvedValue({ ...login(), unexpected: 'ignored' });
     await expect(
-      loginApi({ username: 'admin', password: 'test-input' }),
+      loginApi({ username: 'admin', password: 'DUMMY-test-input' }),
     ).resolves.toEqual(login());
     expect(transport.post).toHaveBeenCalledWith(
       '/system/auth/super-admin-login',
-      { username: 'admin', password: 'test-input' },
+      { username: 'admin', password: 'DUMMY-test-input' },
       { headers: { isEncrypt: false } },
     );
   });
@@ -88,7 +93,7 @@ describe('认证响应契约', /** 验证正常数据、边界值及拒绝错误
   it.each([
     ['缺失访问令牌', { ...login(), accessToken: undefined }],
     ['空刷新令牌', { ...login(), refreshToken: ' ' }],
-    ['换行令牌', { ...login(), accessToken: 'test\nvalue' }],
+    ['换行令牌', { ...login(), accessToken: 'DUMMY-test\nvalue' }],
     ['丢失精度的编号', { ...login(), userId: Number.MAX_SAFE_INTEGER + 1 }],
     ['字符串时间', { ...login(), expiresTime: '1900000000000' }],
     ['非对象结果', []],
@@ -100,20 +105,20 @@ describe('认证响应契约', /** 验证正常数据、边界值及拒绝错误
     ) => {
       transport.post.mockResolvedValue(value);
       await expect(
-        loginApi({ username: 'admin', password: 'test-input' }),
+        loginApi({ username: 'admin', password: 'DUMMY-test-input' }),
       ).rejects.toBeInstanceOf(TypeError);
     },
   );
 
   it('短信与注册入口同样校验凭据', /** 辅助登录方式不能绕过主入口边界。 */ async () => {
-    transport.post.mockResolvedValue({ accessToken: 'test-only' });
+    transport.post.mockResolvedValue({ accessToken: 'DUMMY-test-only' });
     await expect(
       smsLogin({ mobile: 'test-mobile', code: 'test-code' }),
     ).rejects.toThrow('refreshToken');
     await expect(
       register({
         username: 'test-user',
-        password: 'test-input',
+        password: 'DUMMY-test-input',
         captchaVerification: 'test-captcha',
       }),
     ).rejects.toThrow('refreshToken');
@@ -123,15 +128,19 @@ describe('认证响应契约', /** 验证正常数据、边界值及拒绝错误
     transport.rawPost.mockResolvedValueOnce({
       data: { code: 0, data: login() },
     });
-    await expect(refreshTokenApi('test-refresh')).resolves.toEqual(login());
+    await expect(refreshTokenApi('DUMMY-test-refresh')).resolves.toEqual(
+      login(),
+    );
     transport.rawPost.mockResolvedValueOnce({
       data: { code: 401, msg: 'expired', data: login() },
     });
-    await expect(refreshTokenApi('test-refresh')).rejects.toThrow('expired');
+    await expect(refreshTokenApi('DUMMY-test-refresh')).rejects.toThrow(
+      'expired',
+    );
     transport.rawPost.mockResolvedValueOnce({
       data: { code: 0, data: { ...login(), refreshToken: null } },
     });
-    await expect(refreshTokenApi('test-refresh')).rejects.toThrow(
+    await expect(refreshTokenApi('DUMMY-test-refresh')).rejects.toThrow(
       'refreshToken',
     );
   });
@@ -194,7 +203,88 @@ describe('认证响应契约', /** 验证正常数据、边界值及拒绝错误
       accessToken: { privateValue: 'must-not-appear' },
     });
     await expect(
-      loginApi({ username: 'admin', password: 'test-input' }),
+      loginApi({ username: 'admin', password: 'DUMMY-test-input' }),
     ).rejects.not.toThrow('must-not-appear');
+  });
+});
+
+describe('认证辅助入口', /** 退出、验证码、短信与重置密码入口的地址、凭据头与透传契约。 */ () => {
+  beforeEach(
+    /** 清理各 API 的传输结果。 */ () => {
+      vi.clearAllMocks();
+    },
+  );
+
+  it('退出登录携带当前身份的 Bearer 令牌且不发送请求体', /** 缺少 Bearer 前缀会让服务端无法撤销本次会话的令牌。 */ async () => {
+    transport.rawPost.mockResolvedValue({ data: true });
+
+    await expect(logoutApi('DUMMY-test-access')).resolves.toEqual({
+      data: true,
+    });
+    expect(transport.rawPost).toHaveBeenCalledWith(
+      '/system/auth/logout',
+      {},
+      { headers: { Authorization: 'Bearer DUMMY-test-access' } },
+    );
+  });
+
+  it('验证码获取与校验都走无认证客户端并原样透传请求体', /** 未登录时也要能取验证码，响应体必须原样交给组件解密。 */ async () => {
+    const request = { captchaType: 'blockPuzzle' };
+    transport.rawPost.mockResolvedValueOnce({
+      originalImageBase64: 'DUMMY-test-image',
+      repCode: '0000',
+      token: 'DUMMY-test-token',
+    });
+    await expect(getCaptcha(request)).resolves.toEqual({
+      originalImageBase64: 'DUMMY-test-image',
+      repCode: '0000',
+      token: 'DUMMY-test-token',
+    });
+    expect(transport.rawPost).toHaveBeenNthCalledWith(
+      1,
+      '/system/captcha/get',
+      request,
+    );
+
+    transport.rawPost.mockResolvedValueOnce({ repCode: '0000', repMsg: '' });
+    await expect(checkCaptcha(request)).resolves.toEqual({
+      repCode: '0000',
+      repMsg: '',
+    });
+    expect(transport.rawPost).toHaveBeenNthCalledWith(
+      2,
+      '/system/captcha/check',
+      request,
+    );
+  });
+
+  it('短信验证码与短信重置密码走业务客户端并原样透传参数', /** 两个入口共用业务客户端，地址写反会把重置密码发到验证码接口。 */ async () => {
+    transport.post.mockResolvedValue(true);
+
+    await expect(
+      sendSmsCode({ mobile: 'test-mobile', scene: 1 }),
+    ).resolves.toBe(true);
+    expect(transport.post).toHaveBeenNthCalledWith(
+      1,
+      '/system/auth/send-sms-code',
+      { mobile: 'test-mobile', scene: 1 },
+    );
+
+    await expect(
+      smsResetPassword({
+        code: 'test-code',
+        mobile: 'test-mobile',
+        password: 'DUMMY-test-input',
+      }),
+    ).resolves.toBe(true);
+    expect(transport.post).toHaveBeenNthCalledWith(
+      2,
+      '/system/auth/reset-password',
+      {
+        code: 'test-code',
+        mobile: 'test-mobile',
+        password: 'DUMMY-test-input',
+      },
+    );
   });
 });

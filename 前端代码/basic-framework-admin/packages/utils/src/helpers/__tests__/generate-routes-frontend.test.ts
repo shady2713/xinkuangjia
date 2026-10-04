@@ -7,8 +7,33 @@ import {
   hasAuthority,
 } from '../generate-routes-frontend';
 
-/** 403 兜底组件标识，替换行为只关心"被替换成什么"，不关心组件如何加载。 */
-const FORBIDDEN_COMPONENT = '/_core/fallback/forbidden.vue';
+/** 业务页面组件替身：前端路由模式只透传组件引用，不关心组件实现。 */
+const BILLING_PAGE = {
+  name: 'BillingPage',
+  /** 渲染空节点，用例只断言组件引用被原样保留。 */
+  render: () => null,
+};
+/** 403 兜底组件替身，替换行为只关心“被替换成什么”，不关心组件如何加载。 */
+const FORBIDDEN_COMPONENT = {
+  name: 'ForbiddenPage',
+  /** 渲染空节点，用例只断言替换后的组件引用。 */
+  render: () => null,
+};
+
+/**
+ * 取出路由表中指定位置的路由，缺失时直接失败。
+ * @param routes 路由表。
+ * @param index 目标下标。
+ * @returns 该位置的路由记录。
+ * @throws Error 下标越界时抛出，避免用例在空路由上静默通过。
+ */
+function routeAt(routes: RouteRecordRaw[], index: number): RouteRecordRaw {
+  const route = routes[index];
+  if (!route) {
+    throw new Error(`路由表缺少下标 ${index}`);
+  }
+  return route;
+}
 
 // Mock 路由数据
 const mockRoutes = [
@@ -40,16 +65,16 @@ const mockRoutes = [
 ] as RouteRecordRaw[];
 
 describe('hasAuthority', /** 角色判定：无权限元信息放行，元信息非法或角色不匹配时拒绝。 */ () => {
-  it('should return true if there is no authority defined', () => {
-    expect(hasAuthority(mockRoutes[2], ['admin'])).toBe(true);
+  it('should return true if there is no authority defined', /** 未声明权限元信息时放行。 */ () => {
+    expect(hasAuthority(routeAt(mockRoutes, 2), ['admin'])).toBe(true);
   });
 
-  it('should return true if the user has the required authority', () => {
-    expect(hasAuthority(mockRoutes[0], ['admin'])).toBe(true);
+  it('should return true if the user has the required authority', /** 角色命中时必须放行。 */ () => {
+    expect(hasAuthority(routeAt(mockRoutes, 0), ['admin'])).toBe(true);
   });
 
-  it('should return false if the user does not have the required authority', () => {
-    expect(hasAuthority(mockRoutes[1], ['user'])).toBe(false);
+  it('should return false if the user does not have the required authority', /** 角色不匹配时必须拒绝。 */ () => {
+    expect(hasAuthority(routeAt(mockRoutes, 1), ['user'])).toBe(false);
   });
 });
 
@@ -109,10 +134,11 @@ describe('generateRoutesByFrontend', /** 前端方式生成路由：无权限节
   it('replaces a forbidden component for routes visible in the menu', /** 菜单里可见但无权限的页面要落到 403，让用户知道该去申请权限。 */ async () => {
     const routes: RouteRecordRaw[] = [
       {
-        component: 'system/billing',
+        component: BILLING_PAGE,
         meta: {
           authority: ['admin'],
           menuVisibleWithForbidden: true,
+          title: '账单',
         },
         path: '/billing',
       },
@@ -131,8 +157,8 @@ describe('generateRoutesByFrontend', /** 前端方式生成路由：无权限节
   it('keeps the original component for authorised routes', /** 有权限的路由不能被替换成 403。 */ async () => {
     const routes: RouteRecordRaw[] = [
       {
-        component: 'system/billing',
-        meta: { authority: ['admin'] },
+        component: BILLING_PAGE,
+        meta: { authority: ['admin'], title: '账单' },
         path: '/billing',
       },
     ];
@@ -143,7 +169,7 @@ describe('generateRoutesByFrontend', /** 前端方式生成路由：无权限节
       FORBIDDEN_COMPONENT,
     );
 
-    expect(generated[0]?.component).toBe('system/billing');
+    expect(generated[0]?.component).toBe(BILLING_PAGE);
   });
 });
 

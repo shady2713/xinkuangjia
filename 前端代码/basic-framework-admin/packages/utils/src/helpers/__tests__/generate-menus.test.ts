@@ -128,6 +128,7 @@ describe('真实路由到菜单的转换', /** 在独立展示树中验证可观
       },
       { component: {}, path: '/target', name: 'target' },
       {
+        children: [],
         component: {},
         path: '/dynamic',
         name: 'dynamic',

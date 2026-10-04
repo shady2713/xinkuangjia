@@ -96,4 +96,73 @@ describe('上传响应契约', /** 正常响应和各类不可作为成功凭据
       ).rejects.toThrow('上传响应地址无效');
     },
   );
+
+  it.each([
+    ['预约地址', 'javascript:alert(1)'],
+    [
+      '预签名上传地址',
+      'https://CHANGE_ME_USER:CHANGE_ME_PASSWORD@files.example.test/upload',
+    ],
+  ])(
+    '预约响应中的%s协议或凭据非法时拒绝整份预约',
+    /**
+     * 预约返回的每个地址都会被浏览器实际请求，必须逐个核验而不能只看第一个。
+     * @param _name 参数化用例名，决定本用例替换哪个地址。
+     * @param invalidAddress 本用例使用的非法地址。
+     */ async (_name, invalidAddress) => {
+      vi.mocked(requestClient.get).mockResolvedValue({
+        path: 'files/reserved.txt',
+        /** 用非法值替换其中一个地址，另一个保持合法以证明是逐个校验。 */
+        url:
+          _name === '预约地址'
+            ? invalidAddress
+            : 'https://files.example.test/files/reserved.txt',
+        uploadUrl:
+          _name === '预签名上传地址'
+            ? invalidAddress
+            : 'https://files.example.test/upload-staging/reserved',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': 'attachment',
+        },
+      });
+
+      await expect(getFilePresignedUrl('note.txt', 5)).rejects.toThrow(
+        '上传预约地址无效',
+      );
+    },
+  );
+
+  it('上传前移除空目录字段以沿用后端默认目录', /** 空字符串目录会被序列化提交，覆盖后端默认目录导致文件落到错误路径。 */ async () => {
+    vi.mocked(requestClient.upload).mockResolvedValue(
+      'https://files.example.test/ready.txt',
+    );
+    const data = { directory: '', file: new File(['ok'], 'note.txt') };
+
+    await uploadFile(data);
+
+    expect(requestClient.upload).toHaveBeenCalledWith(
+      '/infra/file/upload',
+      { file: expect.any(File) },
+      { onUploadProgress: undefined },
+    );
+  });
+
+  it('上传进度回调原样传给请求客户端', /** 进度条依赖调用方回调被真实转发，不能在中途丢失。 */ async () => {
+    vi.mocked(requestClient.upload).mockResolvedValue(
+      'https://files.example.test/ready.txt',
+    );
+    const onUploadProgress = vi.fn();
+
+    await uploadFile(
+      { directory: 'notes', file: new File(['ok'], 'note.txt') },
+      onUploadProgress,
+    );
+
+    expect(requestClient.upload).toHaveBeenCalledWith(
+      '/infra/file/upload',
+      { directory: 'notes', file: expect.any(File) },
+      { onUploadProgress },
+    );
+  });
 });

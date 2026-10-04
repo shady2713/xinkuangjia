@@ -147,8 +147,11 @@ describe('getNestedValue', /** 按点分路径逐层取值，路径穿过原始�
     expect(result).toBe(2);
   });
 
-  it('should return the entire object if path is empty', () => {
-    expect(() => getNestedValue(data, '')()).toThrow();
+  it('should throw if path is empty', /** 空路径没有可读取的键，必须显式拒绝而不是返回整个对象。 */ () => {
+    expect(
+      /** 空路径调用必须抛错，而不是返回整个对象。 */ () =>
+        getNestedValue(data, ''),
+    ).toThrow();
   });
 
   it('should handle paths with array indexes', () => {

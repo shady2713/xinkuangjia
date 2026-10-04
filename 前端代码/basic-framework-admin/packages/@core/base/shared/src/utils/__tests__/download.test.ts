@@ -295,8 +295,9 @@ describe('triggerDownload', /** 通用下载触发：造隐藏锚点、点击、
   });
 
   it('浏览器不支持 download 属性时改用新窗口打开', /** 老浏览器忽略 download，只能靠 target 触发下载。 */ () => {
+    // 老浏览器没有 download 属性：这里按运行期真实取值返回 undefined。
     vi.spyOn(HTMLAnchorElement.prototype, 'download', 'get').mockReturnValue(
-      undefined,
+      undefined as unknown as string,
     );
 
     triggerDownload('https://host.com/a.png', 'a.png');
@@ -377,11 +378,14 @@ describe('downloadFileFromUrl', /** 通过 URL 下载：按浏览器能力分流
   it('地址已带查询串时不重复追加参数', /** 已有参数再追加会破坏签名。 */ async () => {
     setUserAgent(UA.firefox);
 
-    await downloadFileFromUrl({ source: 'https://host.com/a.png?token=1' });
+    await downloadFileFromUrl({ source: 'https://host.com/a.png?token=DUMMY' });
 
-    expect(openWindow).toHaveBeenCalledWith('https://host.com/a.png?token=1', {
-      target: '_blank',
-    });
+    expect(openWindow).toHaveBeenCalledWith(
+      'https://host.com/a.png?token=DUMMY',
+      {
+        target: '_blank',
+      },
+    );
   });
 
   it('按传入的 target 打开窗口', /** 调用方可以要求在当前窗口打开。 */ async () => {
@@ -423,7 +427,7 @@ describe('downloadFileFromBlob', /** 用 Blob 触发下载，临时地址由浏�
   it('不是 Blob 时抛 TypeError', /** 类型不符说明调用方传错了通道。 */ () => {
     expect(
       /** 传入字符串验证通道类型校验。 */ () =>
-        downloadFileFromBlob({ source: 'not-a-blob' }),
+        downloadFileFromBlob({ source: 'not-a-blob' as unknown as Blob }),
     ).toThrow(TypeError);
   });
 

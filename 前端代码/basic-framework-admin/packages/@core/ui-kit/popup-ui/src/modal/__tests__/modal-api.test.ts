@@ -65,7 +65,7 @@ vi.mock(
   },
 );
 
-describe('modalApi', () => {
+describe('modalApi', /** 逐项核对弹窗 API 的状态读写、回调转发与默认关闭路径。 */ () => {
   let modalApi: ModalApi;
   // 使用 modalState 而不是 state
   let modalState: ModalState;
@@ -146,5 +146,47 @@ describe('modalApi', () => {
     modalApiWithHook.open();
     modalApiWithHook.onOpened();
     expect(onOpened).toHaveBeenCalled();
+  });
+  it('lock 与 unlock 切换提交锁定状态', /** 提交期间必须锁住弹窗，结束后必须恢复，否则用户会看到永久 loading。 */ () => {
+    modalApi.lock();
+    expect(modalApi.store.state.submitting).toBe(true);
+
+    modalApi.unlock();
+    expect(modalApi.store.state.submitting).toBe(false);
+  });
+
+  it('lock 接受显式布尔值作为目标锁定状态', /** 默认参数只覆盖省略场景，显式传 false 必须等价于 unlock。 */ () => {
+    modalApi.lock(false);
+    expect(modalApi.store.state.submitting).toBe(false);
+
+    modalApi.lock(true);
+    expect(modalApi.store.state.submitting).toBe(true);
+  });
+
+  it('未提供 onCancel 时取消动作会关闭弹窗', /** 没有自定义取消回调时必须走默认关闭路径，否则取消按钮点击无效果。 */ async () => {
+    modalApi.open();
+    expect(modalApi.store.state.isOpen).toBe(true);
+
+    modalApi.onCancel();
+    await vi.waitFor(
+      /** 关闭是异步流程，等到状态真正落库后再断言。 */ () => {
+        expect(modalApi.store.state.isOpen).toBe(false);
+      },
+    );
+  });
+
+  it('onConfirm 把确认动作转发给已注册回调', /** 确认按钮只负责转发，回调缺失时不应吞掉或重复调用。 */ () => {
+    const onConfirm = vi.fn();
+    const modalApiWithHook = new ModalApi({ onConfirm });
+
+    modalApiWithHook.onConfirm();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    // 负对照：未注册回调时调用不能抛错，也不能凭空产生调用。
+    expect(
+      /** 触发一次无回调的确认动作，确认不会抛错。 */ () =>
+        modalApi.onConfirm(),
+    ).not.toThrow();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 });

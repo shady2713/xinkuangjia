@@ -12,22 +12,31 @@ import { findMenuByPath, findRootMenuByPath } from '../find-menu-by-path';
 
 // 示例菜单数据
 const menus: MenuRecordRaw[] = [
-  { path: '/', children: [] },
-  { path: '/about', children: [] },
+  { name: 'Root', path: '/', children: [] },
+  { name: 'About', path: '/about', children: [] },
   {
+    name: 'Contact',
     path: '/contact',
     children: [
-      { path: '/contact/email', children: [] },
-      { path: '/contact/phone', children: [] },
+      { name: 'ContactEmail', path: '/contact/email', children: [] },
+      { name: 'ContactPhone', path: '/contact/phone', children: [] },
     ],
   },
   {
+    name: 'Services',
     path: '/services',
     children: [
-      { path: '/services/design', children: [] },
+      { name: 'ServicesDesign', path: '/services/design', children: [] },
       {
+        name: 'ServicesDevelopment',
         path: '/services/development',
-        children: [{ path: '/services/development/web', children: [] }],
+        children: [
+          {
+            name: 'ServicesDevelopmentWeb',
+            path: '/services/development/web',
+            children: [],
+          },
+        ],
       },
     ],
   },
@@ -58,7 +67,7 @@ describe('menu Finder Tests', /** 覆盖菜单路径查找在顶层、嵌套、�
 
   it('handles menu items without children', /** children 是可选字段，显式传 undefined 用于覆盖这条分支。 */ () => {
     const menu = findMenuByPath(
-      [{ path: '/only', children: undefined }],
+      [{ name: 'Only', path: '/only', children: undefined }],
       '/only',
     );
     expect(menu).toBeDefined();
@@ -101,9 +110,11 @@ describe('menu Finder Tests', /** 覆盖菜单路径查找在顶层、嵌套、�
           {
             children: [],
             parents: ['/services', '/services/development'],
+            name: 'ServicesDevelopmentWeb',
             path: '/services/development/web',
           },
         ],
+        name: 'Services',
         path: '/services',
       },
     ];
@@ -125,9 +136,11 @@ describe('menu Finder Tests', /** 覆盖菜单路径查找在顶层、嵌套、�
           {
             children: [],
             parents: ['/missing-root'],
+            name: 'ServicesDevelopmentWeb',
             path: '/services/development/web',
           },
         ],
+        name: 'Services',
         path: '/services',
       },
     ];

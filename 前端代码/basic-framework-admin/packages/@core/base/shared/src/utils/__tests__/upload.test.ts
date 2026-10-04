@@ -133,7 +133,7 @@ describe('getFileNameFromUrl', /** 从下载地址里取回可展示的文件名
 
   it('带查询串的地址去掉参数', /** 带签名的下载地址不能把查询参数当成文件名。 */ () => {
     expect(
-      getFileNameFromUrl('https://host.com/files/report.pdf?token=abc'),
+      getFileNameFromUrl('https://host.com/files/report.pdf?token=DUMMY'),
     ).toBe('report.pdf');
   });
 });

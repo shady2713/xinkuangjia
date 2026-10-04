@@ -1,4 +1,6 @@
 /** 服务端路由描述通过真实转换器解析组件，并通过真实 Router 验证安装结果。 */
+import type { RouteRecordRaw } from 'vue-router';
+
 import type { RouteRecordStringComponent } from '@vben-core/typings';
 
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -66,7 +68,12 @@ describe('后端路由组件边界', /** 输入描述与安装记录必须是不
   });
   it('没有菜单数据时直接返回空数组并丢弃静态路由', /** 当前实现在合并静态路由之前就返回空数组，因此 options.routes 不会被带出。 */ async () => {
     const router = createRouter({ history: createMemoryHistory(), routes: [] });
-    const staticRoute = { path: '/login', name: 'login' };
+    const staticRoute: RouteRecordRaw = {
+      children: [],
+      component: {},
+      name: 'login',
+      path: '/login',
+    };
 
     const routes = await generateRoutesByBackend({
       /** 接口无数据时返回 undefined。 */ fetchMenuListAsync: async () =>
@@ -122,7 +129,7 @@ describe('后端路由组件边界', /** 输入描述与安装记录必须是不
       fetchMenuListAsync: async () => [
         {
           component: 'system/billing',
-          meta: { menuVisibleWithForbidden: true },
+          meta: { menuVisibleWithForbidden: true, title: '账单' },
           name: 'billing',
           path: '/billing',
         },
@@ -148,7 +155,7 @@ describe('后端路由组件边界', /** 输入描述与安装记录必须是不
       fetchMenuListAsync: async () => [
         {
           component: 'system/billing',
-          meta: { menuVisibleWithForbidden: true },
+          meta: { menuVisibleWithForbidden: true, title: '账单' },
           name: 'billing',
           path: '/billing',
         },

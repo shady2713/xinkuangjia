@@ -5,7 +5,9 @@
  * 字段校验边界（未定义值不写入、schema 外字段被丢弃）、以及主题色与暗色判定的派生计算。
  * 用例以真实状态断言为主，只有 matchMedia 为 jsdom 缺失的浏览器 API，单独用 vi.stubGlobal 兜底。
  */
-import type { DeepPartial, Preferences } from '../src/types';
+import type { DeepPartial } from '@vben-core/typings';
+
+import type { Preferences } from '../src/types';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -171,8 +173,10 @@ describe('preferences', /** 偏好管理器的行为规格：初始化覆盖、�
   it('does not update undefined preferences', /** 故意传入 schema 中不存在的字段，验证它不会被写入状态。 */ () => {
     const originalPreferences = preferenceManager.getPreferences();
 
-    // 先绑定到变量再传入，可绕开对象字面量的多余属性检查，从而无需断言类型。
-    const updateWithUnknownField = { app: { nonexistentField: 'value' } };
+    // 故意传入 schema 之外的字段：类型上按配置收窄，运行期用于验证它不会被写入状态。
+    const updateWithUnknownField = {
+      app: { nonexistentField: 'value' },
+    } as unknown as DeepPartial<Preferences>;
     preferenceManager.updatePreferences(updateWithUnknownField);
 
     expect(preferenceManager.getPreferences()).toEqual(originalPreferences);
@@ -223,7 +227,10 @@ describe('preferences', /** 偏好管理器的行为规格：初始化覆盖、�
       },
     };
 
-    await preferenceManager.initPreferences(overrides);
+    await preferenceManager.initPreferences({
+      namespace: 'preferences-test',
+      overrides,
+    });
 
     preferenceManager.updatePreferences({
       theme: { mode: 'light' },

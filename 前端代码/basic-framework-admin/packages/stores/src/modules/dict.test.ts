@@ -85,4 +85,44 @@ describe('字典加载生命周期', /** 集中验证字典加载生命周期的
     expect(store.getDictOptions('constructor')).toEqual([]);
     expect(store.getDictData('constructor', 'x')).toBeUndefined();
   });
+
+  it('响应不是数组时拒绝且保留已有缓存', /** 后端返回对象或 null 时不能把非数组写进缓存让下拉框崩溃。 */ async () => {
+    const store = useDictStore();
+    store.setDictCache({ role: [{ label: 'B', value: 'b' }] });
+
+    await expect(
+      store.setDictCacheByApi(
+        /** 返回非数组的畸形响应。 */ async () => ({ role: [] }),
+      ),
+    ).rejects.toThrow('字典响应必须是数组');
+    expect(store.getDictOptions('role')).toEqual([{ label: 'B', value: 'b' }]);
+  });
+
+  it('字典项不是对象时拒绝且保留已有缓存', /** 传输数组中的标量无法按字段读取，必须中断而不是写入空字典项。 */ async () => {
+    const store = useDictStore();
+    store.setDictCache({ role: [{ label: 'B', value: 'b' }] });
+
+    await expect(
+      store.setDictCacheByApi(
+        /** 返回混入标量的字典数组。 */ async () => ['role'],
+      ),
+    ).rejects.toThrow('字典项必须是对象');
+    expect(store.getDictOptions('role')).toEqual([{ label: 'B', value: 'b' }]);
+  });
+
+  it('写入前身份失效时整体丢弃请求结果', /** 迟到结果在写入前被判定过期，不能出现在缓存里。 */ async () => {
+    const store = useDictStore();
+    const response = deferred<Record<string, unknown>[]>();
+    const pending = store.setDictCacheByApi(
+      /** 旧身份字典请求等待用例显式释放。 */ () => response.promise,
+      {},
+      'label',
+      'value',
+      /** 写入前判定该请求已经过期。 */ () => false,
+    );
+
+    response.resolve([{ dictType: 'role', label: 'A', value: 'a' }]);
+    await pending;
+    expect(store.getDictOptions('role')).toEqual([]);
+  });
 });

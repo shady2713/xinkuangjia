@@ -169,19 +169,19 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
       .mockReturnValueOnce(old.promise)
       .mockResolvedValueOnce(loginResult(2));
     vi.mocked(getAuthPermissionInfoApi).mockResolvedValue(permission(2));
-    const params = { username: 'A', password: 'test-only-input' };
+    const params = { username: 'A', password: 'DUMMY-test-only-input' };
     const a = auth.authLogin('username', params, keepCurrentPage);
     const rejected = expect(a).rejects.toThrow('登录会话已变更');
     await auth.authLogin(
       'username',
-      { username: 'B', password: 'test-input' },
+      { username: 'B', password: 'DUMMY-test-input' },
       keepCurrentPage,
     );
     old.resolve(loginResult(1));
     await rejected;
     expect(access.accessToken).toBe('test-session-2');
     expect(useUserStore().userInfo?.userId).toBe('2');
-    expect(params.password).toBe('test-only-input');
+    expect(params.password).toBe('DUMMY-test-only-input');
   });
 
   it('a 的权限响应不能覆盖已经登录的 B 菜单与权限', /** 安排明确的响应顺序并验证：A 的权限响应不能覆盖已经登录的 B 菜单与权限。 */ async () => {
@@ -194,7 +194,7 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
     vi.mocked(loginApi).mockResolvedValue(loginResult(2));
     await auth.authLogin(
       'username',
-      { username: 'B', password: 'test-input' },
+      { username: 'B', password: 'DUMMY-test-input' },
       keepCurrentPage,
     );
     old.resolve(permission(1));
@@ -221,7 +221,7 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
     vi.mocked(getAuthPermissionInfoApi).mockResolvedValue(permission(2));
     await auth.authLogin(
       'username',
-      { username: 'B', password: 'test-input' },
+      { username: 'B', password: 'DUMMY-test-input' },
       /** 新登录完成后导航到本例静态首页。 */ async () => {
         await router.push('/');
       },
@@ -236,15 +236,15 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
     const old = deferred<undefined>();
     vi.mocked(updateUserPassword).mockReturnValueOnce(old.promise);
     const change = auth.changePassword({
-      oldPassword: 'old-input',
-      newPassword: 'new-input',
+      oldPassword: 'DUMMY-old-input',
+      newPassword: 'DUMMY-new-input',
     });
     const rejected = expect(change).rejects.toThrow('登录会话已变更');
     vi.mocked(loginApi).mockResolvedValue(loginResult(2));
     vi.mocked(getAuthPermissionInfoApi).mockResolvedValue(permission(2));
     await auth.authLogin(
       'username',
-      { username: 'B', password: 'test-input' },
+      { username: 'B', password: 'DUMMY-test-input' },
       keepCurrentPage,
     );
     old.resolve(undefined);
@@ -253,13 +253,38 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
     expect(logoutApi).not.toHaveBeenCalled();
   });
 
+  it('本地无凭据时退出不请求服务端撤销', /** 未登录状态退出只需导航，不能向服务端发送空令牌请求。 */ async () => {
+    vi.mocked(logoutApi).mockClear();
+    await auth.logout();
+
+    expect(logoutApi).not.toHaveBeenCalled();
+    expect(router.currentRoute.value.path).toBe('/auth/login');
+  });
+
+  it('服务端撤销失败仍完成本地退出并记录告警', /** 远端不可用不能把用户留在已清空的后台页面，也不能恢复已清除的身份。 */ async () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(/** 不真正打印告警，只让 Spy 记录调用。 */ () => {});
+    access.setAccessToken('test-session-9');
+    vi.mocked(logoutApi).mockRejectedValueOnce(new Error('offline'));
+
+    await expect(auth.logout(false)).resolves.toBeUndefined();
+
+    expect(access.accessToken).toBeNull();
+    expect(router.currentRoute.value.path).toBe('/auth/login');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('服务端退出未确认'),
+    );
+    warn.mockRestore();
+  });
+
   it('当前账号改密成功后清空凭据并进入登录页', /** 安排明确的响应顺序并验证：当前账号改密成功后清空凭据并进入登录页。 */ async () => {
     access.setAccessToken('test-session-1');
     access.setRefreshToken('test-refresh-1');
     vi.mocked(updateUserPassword).mockResolvedValue(undefined);
     await auth.changePassword({
-      oldPassword: 'old-input',
-      newPassword: 'new-input',
+      oldPassword: 'DUMMY-old-input',
+      newPassword: 'DUMMY-new-input',
     });
     expect(access.accessToken).toBeNull();
     expect(access.refreshToken).toBeNull();
@@ -281,11 +306,11 @@ describe('认证会话生命周期', /** 集中验证认证会话生命周期的
     vi.mocked(getAuthPermissionInfoApi).mockResolvedValue(permission(4));
     const params = {
       username: 'new-user',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
       captchaVerification: 'test-captcha',
     };
     await auth.authLogin('register', params, keepCurrentPage);
-    expect(params.password).toBe('test-input');
+    expect(params.password).toBe('DUMMY-test-input');
     expect(register).toHaveBeenCalledWith({
       ...params,
       password: expect.stringMatching(/^[\da-f]{32}$/u),

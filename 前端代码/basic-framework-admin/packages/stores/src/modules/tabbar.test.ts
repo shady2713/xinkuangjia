@@ -40,6 +40,7 @@ function createTab(overrides: TabOverrides = {}): TabDefinition {
     params: {},
     path: '/',
     query: {},
+    redirectedFrom: undefined,
     ...rest,
     meta: { title: '', ...meta },
   };

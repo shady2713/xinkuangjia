@@ -1,6 +1,7 @@
 /**
  * 用真实 TypeScript/Vue AST 确认零计数文件仅含声明；不以文件名判断可执行性。
  */
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 
 import { parse } from '@vue/compiler-sfc';
@@ -89,7 +90,24 @@ function hasOnlyDeclarations(filename) {
   return true;
 }
 
-const filenames = JSON.parse(readFileSync(0, 'utf8'));
+/**
+ * 读取标准输入的全部内容。
+ *
+ * 不能用 `readFileSync(0)`：调用方通过管道写入上千条路径时，输入远大于管道缓冲，
+ * 同步读在非阻塞管道上会间歇抛出 `EAGAIN`，让覆盖率裁决误判为“声明文件解析失败”（退出 2）。
+ * 按流读取会等待写入方结束，不受缓冲大小影响。
+ *
+ * @returns {Promise<string>} 标准输入的 UTF-8 文本。
+ */
+async function readStandardInput() {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+const filenames = JSON.parse(await readStandardInput());
 if (!Array.isArray(filenames)) {
   throw new TypeError('源码列表格式无效');
 }

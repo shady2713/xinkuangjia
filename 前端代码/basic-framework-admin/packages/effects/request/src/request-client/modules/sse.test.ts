@@ -167,6 +167,71 @@ describe('sSE 公开请求链', /** 测试真实字节流、请求配置及身�
     expect(stream.locked).toBe(false);
   });
 
+  it('调用方显式声明 Accept 时不被默认流类型覆盖', /** 幂等赋值要保留下游显式声明的媒体类型。 */ async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(streamResponse([new TextEncoder().encode('ok')]));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new RequestClient({ baseURL: 'https://example.test/api' });
+
+    await client.requestSSE('/events', undefined, {
+      headers: { Accept: 'text/event-stream;charset=utf-8' },
+    });
+
+    const request = fetchMock.mock.calls[0]?.[0];
+    if (!(request instanceof Request)) throw new TypeError('缺少 Fetch 请求');
+    expect(request.headers.get('Accept')).toBe(
+      'text/event-stream;charset=utf-8',
+    );
+  });
+
+  it('未声明 Accept 时补上 SSE 默认流类型', /** 服务端按 Accept 选择长连接格式，头部不能为空。 */ async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(streamResponse([new TextEncoder().encode('ok')]));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new RequestClient({ baseURL: 'https://example.test/api' });
+
+    await client.requestSSE('/events');
+
+    const request = fetchMock.mock.calls[0]?.[0];
+    if (!(request instanceof Request)) throw new TypeError('缺少 Fetch 请求');
+    expect(request.headers.get('Accept')).toBe('text/event-stream');
+  });
+
+  it('流数据不是 UTF-8 字节时拒绝消费', /** 文本块无法按字节解码，必须中断而不是产出乱码。 */ async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<unknown>({
+      /** 保持流开放，以便观察类型错误的清理行为。
+       * @param controller 本例真实流控制器。
+       */ start(controller) {
+        controller.enqueue('not-bytes');
+      },
+      cancel,
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          /** 用未知流伪装字节流，验证运行期类型收窄。 */ new Response(
+            stream as ReadableStream<Uint8Array>,
+          ),
+        ),
+    );
+    const onMessage = vi.fn();
+
+    await expect(
+      new RequestClient({ baseURL: 'https://example.test' }).requestSSE(
+        '/events',
+        undefined,
+        { onMessage },
+      ),
+    ).rejects.toThrow('流数据必须是 UTF-8 字节');
+    expect(onMessage).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it('消费回调抛错时取消底层流并释放读取锁', /** 用户回调失败也必须清理网络资源。 */ async () => {
     const cancel = vi.fn();
     const stream = new ReadableStream<Uint8Array>({

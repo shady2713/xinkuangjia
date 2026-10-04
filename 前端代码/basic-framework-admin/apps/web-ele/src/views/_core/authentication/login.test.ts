@@ -40,6 +40,12 @@ vi.mock(
   }),
 );
 vi.mock(
+  '@vben/utils',
+  /** 只观察失败日志，页面其余逻辑保持真实实现。 */ () => ({
+    logError: vi.fn(),
+  }),
+);
+vi.mock(
   '#/api/core/auth',
   /** 验证码事件由用例控制，不调用真实网络。 */ () => ({
     checkCaptcha: vi.fn(),
@@ -102,7 +108,7 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
       advanceSession();
       boundary.getValues.mockResolvedValue({
         username: 'A',
-        password: 'test-input',
+        password: 'DUMMY-test-input',
       });
       wrapper = mount(Login);
     },
@@ -115,14 +121,14 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
   it('默认关闭注册展示，当前验证码成功仍可正常登录', /** 通过组件事件验证普通登录链路可用。 */ async () => {
     const form = wrapper.getComponent({ name: 'AuthenticationLogin' });
     expect(form.props('showRegister')).toBe(false);
-    form.vm.$emit('submit', { username: 'A', password: 'test-input' });
+    form.vm.$emit('submit', { username: 'A', password: 'DUMMY-test-input' });
     wrapper
       .getComponent({ name: 'VerificationStub' })
       .vm.$emit('onSuccess', { captchaVerification: 'test-verification' });
     await flushPromises();
     expect(boundary.authLogin).toHaveBeenCalledWith('username', {
       username: 'A',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
       captchaVerification: 'test-verification',
     });
   });
@@ -142,13 +148,13 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
     );
     wrapper
       .getComponent({ name: 'AuthenticationLogin' })
-      .vm.$emit('submit', { username: 'A', password: 'test-input' });
+      .vm.$emit('submit', { username: 'A', password: 'DUMMY-test-input' });
     wrapper
       .getComponent({ name: 'VerificationStub' })
       .vm.$emit('onSuccess', { captchaVerification: 'old-verification' });
     expect(boundary.getValues).toHaveBeenCalledTimes(1);
     advanceSession();
-    resolve({ username: 'A', password: 'test-input' });
+    resolve({ username: 'A', password: 'DUMMY-test-input' });
     await flushPromises();
     expect(boundary.authLogin).not.toHaveBeenCalled();
   });
@@ -159,13 +165,13 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
     wrapper = mount(Login);
     wrapper.getComponent({ name: 'AuthenticationLogin' }).vm.$emit('submit', {
       username: 'A',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
       roles: ['unexpected-role'],
     });
     await flushPromises();
     expect(boundary.authLogin).toHaveBeenCalledWith('username', {
       username: 'A',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
     });
   });
 
@@ -173,7 +179,7 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
     boundary.getValues.mockResolvedValue({ username: 'A', password: {} });
     wrapper.getComponent({ name: 'AuthenticationLogin' }).vm.$emit('submit', {
       username: 'A',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
     });
     wrapper.getComponent({ name: 'VerificationStub' }).vm.$emit('onSuccess', {
       captchaVerification: 'test-verification',
@@ -185,7 +191,7 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
   it('非法验证码事件不能发起登录', /** 第三方组件事件需要携带有效文本凭证才能进入认证。 */ async () => {
     wrapper.getComponent({ name: 'AuthenticationLogin' }).vm.$emit('submit', {
       username: 'A',
-      password: 'test-input',
+      password: 'DUMMY-test-input',
     });
     wrapper
       .getComponent({ name: 'VerificationStub' })
@@ -193,5 +199,24 @@ describe('登录页安全默认与验证码生命周期', /** 验证正常验证
     await flushPromises();
     expect(boundary.getValues).not.toHaveBeenCalled();
     expect(boundary.authLogin).not.toHaveBeenCalled();
+  });
+
+  it('表单值非法时记录失败日志且不发起认证', /** 登录页不能因为凭据字段异常而静默失败，必须留下可定位的作用域日志。 */ async () => {
+    const { logError } = await import('@vben/utils');
+    wrapper.unmount();
+    boundary.captchaEnabled = false;
+    wrapper = mount(Login);
+
+    wrapper.getComponent({ name: 'AuthenticationLogin' }).vm.$emit('submit', {
+      username: '',
+      password: 'DUMMY-test-input',
+    });
+    await flushPromises();
+
+    expect(boundary.authLogin).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(
+      'auth:login:submit',
+      expect.any(TypeError),
+    );
   });
 });
