@@ -601,6 +601,77 @@ class TestWorkflowWiring:
             assert f'name: {spec["evidence"].replace("release-", "release-evidence-").replace(".json", "")}' in gate_section
 
 
+class TestWorkflowOutputWiring:
+    """对全部作业输出做结构性核对，不只核对历史上出过问题的那两处。
+
+    历史缺陷有两类：引用不存在的步骤（backend 曾绑定 `steps.stage`），以及只声明输出名
+    却没人在 `GITHUB_OUTPUT` 里写入同名值。逐条字符串断言只能覆盖已知位置，这里改成
+    对整份工作流的引用与写入方逐一比对，防止同类缺陷在别处重新出现。
+    """
+
+    def step_blocks(self, job: str) -> dict[str, str]:
+        """按 `id` 取回作业内每个步骤的文本块，供核对谁真的写出了该输出。
+
+        Args:
+            job: 工作流中两空格缩进的作业名。
+        Returns:
+            步骤 id 到该步骤文本块（从 `- ` 到下一个步骤之前）的映射。
+        Raises:
+            AssertionError: 作业不存在，或同一作业内出现重复步骤 id。
+        """
+        blocks: dict[str, str] = {}
+        for part in re.split(r"\n      - ", job_section(job))[1:]:
+            found = re.search(r"^\s*id:\s*([A-Za-z_][\w-]*)\s*$", part, re.MULTILINE)
+            if found:
+                assert found.group(1) not in blocks, f"{job} 出现重复步骤 id：{found.group(1)}"
+                blocks[found.group(1)] = part
+        return blocks
+
+    def writes_output(self, block: str, name: str) -> bool:
+        """判断步骤是否真的把 `name` 写进 `GITHUB_OUTPUT`，含它所调用的仓库脚本。
+
+        Args:
+            block: 单个步骤的 YAML 文本块。
+            name: 期望写入的输出名。
+        Returns:
+            shell 的 printf/echo、Python 的 `stream.write`，或该步骤调用的仓库脚本中
+            存在同名写入时为 True。
+        """
+        texts = [block]
+        for relative in re.findall(r"scripts/[\w./-]+\.py", block):
+            path = ROOT / relative
+            if path.is_file():
+                texts.append(path.read_text(encoding="utf-8"))
+        patterns = (rf"printf\s+['\"]?{re.escape(name)}=", rf"echo\s+['\"]?{re.escape(name)}=",
+                    rf"\.write\(\s*f?['\"]{re.escape(name)}=")
+        return any(re.search(pattern, text) for text in texts for pattern in patterns)
+
+    @pytest.mark.parametrize("job", ["docs_tools", "frontend", "backend", "browser_e2e", "gate"])
+    def test_every_step_output_reference_resolves(self, job: str) -> None:
+        """反例：任何 `steps.<id>.outputs.<name>` 的 `<id>` 都必须是本作业真实存在的步骤。"""
+        ids = set(self.step_blocks(job))
+        references = re.findall(r"steps\.([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)", job_section(job))
+        for step_id, output_name in references:
+            assert step_id in ids, f"{job} 引用了不存在的步骤 id：steps.{step_id}.outputs.{output_name}"
+
+    @pytest.mark.parametrize("job", ["docs_tools", "frontend", "backend", "browser_e2e"])
+    def test_declared_job_outputs_are_really_written(self, job: str) -> None:
+        """作业级输出必须由被引用步骤真实写入同名值，名字不一致或没人写入都失败。"""
+        section = job_section(job)
+        # 作业级键固定 4 空格缩进，输出项为 6 空格；块内允许注释行，不假设没有注释。
+        declared_block = re.search(r"^    outputs:\n(.*?)(?=^    \w|\Z)", section, re.MULTILINE | re.DOTALL)
+        assert declared_block, f"{job} 缺少作业级 outputs 声明"
+        declared = re.findall(r"^      ([\w-]+):\s*\$\{\{\s*steps\.([\w-]+)\.outputs\.([\w-]+)\s*\}\}\s*$",
+                              declared_block.group(1), re.MULTILINE)
+        assert declared, f"{job} 的作业级 outputs 必须逐项绑定真实步骤输出"
+        blocks = self.step_blocks(job)
+        for name, step_id, output_name in declared:
+            assert output_name == name, f"{job}.outputs.{name} 绑定了不同名的步骤输出：{output_name}"
+            assert step_id in blocks, f"{job}.outputs.{name} 绑定了不存在的步骤：{step_id}"
+            assert self.writes_output(blocks[step_id], name), \
+                f"{job}.outputs.{name} 没有被 steps.{step_id} 真实写入 GITHUB_OUTPUT"
+
+
 class TestCommandLine:
     """CLI 必须在失败时受控退出，且不把上游内容或凭据写进输出。"""
 
