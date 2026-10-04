@@ -16,5 +16,8 @@
     "@vben-core/typings": "workspace:*",
     "vue": "catalog:",
     "vue-router": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

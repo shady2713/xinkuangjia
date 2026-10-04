@@ -18,5 +18,8 @@
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
     "vue": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

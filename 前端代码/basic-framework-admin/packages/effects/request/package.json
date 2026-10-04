@@ -22,5 +22,8 @@
   "devDependencies": {
     "@types/qs": "catalog:",
     "axios-mock-adapter": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

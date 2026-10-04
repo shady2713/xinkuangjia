@@ -10,13 +10,15 @@ import { EOL } from 'node:os';
 import { dateUtil, readPackageJSON } from '@vben/node-utils';
 
 /**
- * Inject license header into entry chunks.
+ * 构造许可证头注入插件：把包清单里的名称、版本与作者写进入口分块。
+ * @param root 应用根目录，用于读取 package.json。
+ * @returns 生产构建使用的 Vite 插件；包清单读取失败时返回 undefined。
  */
 async function viteLicensePlugin(
   root = process.cwd(),
 ): Promise<PluginOption | undefined> {
   const {
-    author = {},
+    author,
     description = '',
     homepage = '',
     name = 'Admin Console',

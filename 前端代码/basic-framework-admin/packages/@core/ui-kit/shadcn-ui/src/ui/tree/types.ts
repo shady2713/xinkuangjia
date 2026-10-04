@@ -61,7 +61,8 @@ export function treePropsDefaults() {
     autoCheckParent: true,
     bordered: false,
     checkStrictly: false,
-    defaultExpandedKeys: () => [],
+    /** 默认展开键：每次返回独立数组，调用方可安全修改。 */
+    defaultExpandedKeys: (): (number | string)[] => [],
     defaultExpandedLevel: 0,
     disabled: false,
     disabledField: 'disabled',

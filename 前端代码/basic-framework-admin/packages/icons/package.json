@@ -11,5 +11,8 @@
   },
   "dependencies": {
     "@vben-core/icons": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

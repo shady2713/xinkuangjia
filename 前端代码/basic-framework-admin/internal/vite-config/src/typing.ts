@@ -38,6 +38,12 @@ interface LibraryPluginOptions extends CommonPluginOptions {
   dts?: boolean | DtsPluginOptions;
 }
 
+/** 归档插件选项：构建产物打包为 ZIP 时的文件名与输出目录。 */
+interface ArchiverPluginOptions {
+  name?: string;
+  outputDir?: string;
+}
+
 interface ConditionPlugin {
   condition?: boolean;
   plugins: () => PluginOption[] | PromiseLike<PluginOption[]>;
@@ -59,6 +65,7 @@ type VbenViteConfig = Promise<UserConfig> | UserConfig | UserConfigFnPromise;
 
 export type {
   ApplicationPluginOptions,
+  ArchiverPluginOptions,
   CommonPluginOptions,
   ConditionPlugin,
   DefineApplicationOptions,

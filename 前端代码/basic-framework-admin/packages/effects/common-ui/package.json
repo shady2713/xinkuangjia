@@ -43,5 +43,8 @@
   },
   "devDependencies": {
     "@types/qrcode": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

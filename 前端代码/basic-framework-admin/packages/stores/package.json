@@ -21,5 +21,8 @@
     "secure-ls": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

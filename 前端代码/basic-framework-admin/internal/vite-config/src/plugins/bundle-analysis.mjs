@@ -5,7 +5,7 @@ import { gzipSync } from 'node:zlib';
 
 /**
  * 构造当前应用的离线体积报告插件，不生成或公开 sourcemap。
- * @param root - 当前应用根目录。
+ * @param {string} root - 当前应用根目录。
  * @returns 仅在分析构建启用的 Vite 插件。
  */
 export function bundleAnalysis(root) {
@@ -25,6 +25,7 @@ export function bundleAnalysis(root) {
     },
     generateBundle: {
       // 在 Vite 导入预加载等常规输出钩子完成后统计最终内容。
+      /** @type {'post'} */
       order: 'post',
       /**
        * 读取实际输出和模块信息，字节与渲染长度分别保存，不混淆两种口径。

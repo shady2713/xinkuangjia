@@ -1,5 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@vben/tsconfig/web.json",
-  "include": ["src", "shim-pinia.d.ts"]
+  // 本包读取管理平台运行时配置（window._VBEN_ADMIN_PRO_APP_CONF_），
+  // 类型门禁需要 @vben/types 的全局声明；直接引用该文件保持唯一来源，不新增依赖。
+  "include": ["src", "shim-pinia.d.ts", "../types/global.d.ts"]
 }

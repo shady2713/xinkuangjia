@@ -60,9 +60,7 @@ interface TabbarState {
  */
 const MAX_VISIT_HISTORY = 50;
 
-/**
- * @zh_CN 访问权限相关
- */
+/** 标签页 store：维护打开的标签页、缓存集合、右键菜单与访问历史。 */
 export const useTabbarStore = defineStore('core-tabbar', {
   actions: {
     /**
@@ -476,7 +474,11 @@ export const useTabbarStore = defineStore('core-tabbar', {
       const findTab = this.tabs.find((item) => equalTab(item, tab));
 
       if (findTab) {
-        findTab.meta.newTabTitle = title;
+        // 动态标题以 ComputedRef 存入响应式 meta；Pinia 的 state 类型会把 ref 解包成
+        // string，读取方拿到的正是解包后的标题，因此这里按运行期真实存储形态写入。
+        (
+          findTab.meta as { newTabTitle?: ComputedRef<string> | string }
+        ).newTabTitle = title;
 
         await this.updateCacheTabs();
       }

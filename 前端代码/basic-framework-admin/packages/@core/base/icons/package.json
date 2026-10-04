@@ -4,7 +4,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "pnpm unbuild"
+    "build": "pnpm unbuild",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "files": [
     "dist"

@@ -102,6 +102,10 @@ interface RouteMeta {
    */
   menuVisibleWithForbidden?: boolean;
   /**
+   * 标签页自定义标题；标签页 store 读取并写入该字段
+   */
+  newTabTitle?: string;
+  /**
    * 不使用基础布局（仅在顶级生效）
    */
   noBasicLayout?: boolean;
@@ -135,7 +139,10 @@ type RouteRecordStringComponent<T = string> = Omit<
 type ComponentRecordType = Record<string, () => Promise<Component>>;
 
 interface GenerateMenuAndRoutesOptions {
-  fetchMenuListAsync?: () => Promise<RouteRecordStringComponent[]>;
+  /** 拉取服务端菜单；接口无数据时允许返回 null 或 undefined。 */
+  fetchMenuListAsync?: () => Promise<
+    null | RouteRecordStringComponent[] | undefined
+  >;
   forbiddenComponent?: RouteRecordRaw['component'];
   layoutMap?: ComponentRecordType;
   pageMap?: ComponentRecordType;

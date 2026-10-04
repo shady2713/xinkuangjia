@@ -17,5 +17,8 @@
     "@vben-core/composables": "workspace:*",
     "vue": "catalog:",
     "vue-i18n": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

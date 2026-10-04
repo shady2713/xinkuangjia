@@ -26,5 +26,8 @@
   },
   "dependencies": {
     "@vben-core/design": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

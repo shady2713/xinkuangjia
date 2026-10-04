@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm unbuild",
-    "stub": "pnpm exec unbuild --stub"
+    "stub": "pnpm exec unbuild --stub",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   },
   "files": [
     "dist"

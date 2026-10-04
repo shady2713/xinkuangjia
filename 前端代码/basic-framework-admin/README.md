@@ -76,13 +76,14 @@ pnpm dev:ele
 
 | 命令 | 用途 |
 | --- | --- |
-| `pnpm check:type` | 工作区 TypeScript 类型检查 |
+| `pnpm check:type` | 应用、`packages/**` 与 `internal/**` 各包按自身 tsconfig 的 TypeScript/Vue 类型检查 |
 | `python -B -X utf8 scripts/quality/check_crud.py <api-path> <views-path>` | 完整 CRUD 的文件、导入边界、应用类型与模块 ESLint；环境缺失不能通过 |
 | `pnpm lint` | ESLint、Prettier、Stylelint 检查；不加 --format 不自动修复 |
 | `pnpm quality:comments` | 当前变更中文职责注释检查 |
 | `pnpm quality:workspace` | workspace 和 catalog 约束 |
 | `pnpm test:unit` | Vitest 已声明单元测试 |
-| `pnpm test:e2e` | Turbo 分发声明的 E2E 任务，核对实际用例数 |
+| `pnpm test:e2e` | Turbo 分发声明的 E2E 任务，核对实际用例数；当前规格只验证生产登录页 |
+| 仓库根 `python -B -X utf8 scripts/e2e/run_business_e2e.py` | 隔离库、种子管理员、真实后端与预览上的字典类型 CRUD 浏览器业务用例；缺少连接变量、后端或浏览器时失败 |
 | `pnpm build:ele` | 生成 apps/web-ele/dist |
 | `pnpm quality:verify` | 当前串联门禁，包括类型、Lint、单测、构建与 E2E |
 
@@ -120,4 +121,4 @@ pnpm dev:ele
 - 当前维护 system、infra 与核心页面，AI、Workflow、媒体页面不在范围内。
 - 路由和按钮权限控制界面，真实授权仍由 Java 执行。
 - 生产对象 URL 必须从浏览器可达；Java 能访问存储不等于用户浏览器能访问。
-- E2E 命令存在不证明每项业务有自动化场景，零任务与跳过必须如实记录。
+- E2E 命令存在不证明每项业务有自动化场景，零任务与跳过必须如实记录；浏览器业务用例当前只覆盖字典类型 CRUD 与两条重名拒绝路径。

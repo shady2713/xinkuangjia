@@ -15,5 +15,8 @@
   "dependencies": {
     "@vben-core/preferences": "workspace:*",
     "@vben-core/typings": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

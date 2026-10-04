@@ -4,7 +4,8 @@ import type { RouteRecordRaw } from 'vue-router';
 /** 服务端权限菜单；尚未解析为 Vue 组件或前端菜单，不能与路由记录混用。 */
 interface AppRouteRecordRaw {
   children?: AppRouteRecordRaw[];
-  component?: string;
+  /** 页面组件标识；服务端菜单可能返回 null，消费方按空组件处理。 */
+  component?: null | string;
   componentName?: string;
   icon?: string;
   id: number;
