@@ -7,43 +7,59 @@ import com.basicframework.framework.mq.support.MqRedisTestSupport;
 import lombok.Getter;
 import lombok.Setter;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.connection.stream.Consumer;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.PendingMessage;
 import org.springframework.data.redis.connection.stream.PendingMessagesSummary;
 import org.springframework.data.redis.connection.stream.ReadOffset;
+import org.springframework.data.redis.connection.stream.StreamReadOptions;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.RedisCallback;
-import org.springframework.data.redis.stream.StreamListener;
-import org.springframework.data.redis.stream.StreamMessageListenerContainer;
+import org.springframework.data.redis.core.StreamOperations;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.awaitility.Awaitility.await;
 
 /**
- * 用真实 Redis 验证待确认消息重投任务的三个可达契约：未超时消息不重投、锁被占用时整段跳过、
- * 执行期异常被吞掉后仍然释放锁。
+ * 用真实 Redis 验证待确认消息重投任务的契约：未超时消息不重投、已超时消息被重新投递并确认、
+ * 锁被占用时整段跳过、执行期异常被吞掉后仍然释放锁。
  *
  * <p>重投只处理“上次投递已超过 5 分钟”的待确认消息。未超时消息仍在处理窗口内，提前重投会让同一条
  * 业务被并发执行两次；任务运行在所有实例上，没有锁就继续会让多个节点同时对同一消费组重投。</p>
  *
- * <p>“已超时”分支在当前隔离实例上无法覆盖：{@code EXPIRE_TIME} 是 5 分钟，而让服务端把待确认消息的
- * 空闲时间改大的 {@code XCLAIM ... IDLE} 选项要求 Redis 6.2，本实例是 5.0.14.1，服务端会把它当成
- * 额外的消息编号并忽略。详见 {@code shouldRedeliverTimedOutPendingMessage} 的禁用原因。</p>
+ * <p>“已超时”分支用 {@code XCLAIM ... IDLE} 把待确认消息的空闲时间改到窗口之外，该选项自 Redis 6.2
+ * 起由服务端支持，仓库要求的 Redis 7.x 与当前隔离实例（8.8.0）都具备；服务端不支持时用例会在前置
+ * 断言处真实失败，而不是跳过。</p>
  *
  * @author shady2713
  */
 class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
+
+    /** 改写的待确认空闲时间（毫秒），比生产 5 分钟超时窗口多 100 秒。 */
+    private static final String CLAIM_IDLE_MILLIS = "400000";
+
+    /**
+     * 通过 Lua 下发原生 {@code XCLAIM} 的脚本，成功时返回被抢占的消息条数。
+     *
+     * <p>生产使用的 Redisson 连接桥没有实现 {@code RedisConnection#execute}，无法直接下发裸命令
+     * （调用会抛 {@code UnsupportedOperationException}）；Redisson 自身也用 EVAL 包装 XPENDING，
+     * 因此这里走连接自带的 EVAL 通道下发未改写的 {@code XCLAIM ... IDLE}，服务端执行的仍是原生命令。</p>
+     */
+    private static final String CLAIM_WITH_IDLE_SCRIPT =
+            "local claimed = redis.call('XCLAIM', KEYS[1], ARGV[1], ARGV[2], '0', ARGV[3], 'IDLE', ARGV[4]) "
+                    + "return #claimed";
 
     /**
      * 被测 Stream Key。
@@ -62,6 +78,11 @@ class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
 
     /**
      * 为每个用例建立独立的 Stream、消费组与一条待确认消息。
+     *
+     * <p>用同步 {@code XREADGROUP} 把消息留在待确认列表，复现消费者崩溃后的滞留消息。这里刻意不启动
+     * 消费容器：容器停止后仍可能完成一次已发出的阻塞读取，把重投产生的新消息再次读成待确认，
+     * 导致“重投是否真的确认了原消息”无法判定。读取刻意不加 {@code NOACK}（Spring Data 的
+     * {@code noack()}/{@code autoAcknowledge()} 都会加上该选项），消息才会真实进入待确认列表。</p>
      */
     @BeforeEach
     void preparePendingMessage() {
@@ -71,12 +92,17 @@ class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
         trackKey(streamKey);
         group = keyPrefix + "pending-group";
         pendingConsumer = keyPrefix + "crashed-consumer";
-        // 先建组再建消息：客户端会自动创建 Stream，消费组从空流末尾开始，
+        // 先建组再建消息：客户端会自动创建 Stream，消费组从空流开始，
         // 这样后面写入的唯一一条消息就是全部待确认消息，前置条件不会随用例变化。
         stringRedisTemplate.opsForStream().createGroup(streamKey, group);
-        readIntoPendingWithoutAcknowledge();
+        newRedisMQTemplate().send(new PendingProbeMessage());
+        List<MapRecord<String, Object, Object>> records = stringRedisTemplate.opsForStream().read(
+                Consumer.from(group, pendingConsumer), StreamReadOptions.empty(),
+                StreamOffset.create(streamKey, ReadOffset.lastConsumed()));
+        assertThat(records).as("前置条件：消息必须被真实读成待确认").hasSize(1);
         assertThat(stringRedisTemplate.opsForStream().pending(streamKey, group).getTotalPendingMessages())
-                .as("前置条件：必须真实存在一条待确认消息").isEqualTo(1L);
+                .as("前置条件：必须真实存在一条待确认消息")
+                .isEqualTo(1L);
     }
 
     /**
@@ -174,25 +200,17 @@ class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
     }
 
     /**
-     * 验证“已超时”重投分支在当前隔离实例上无法构造。
+     * 验证“已超时”的待确认消息被重新投递到 Stream 并确认原记录。
      *
-     * <p>任务用服务端上报的待确认空闲时间与 5 分钟阈值比较。空闲时间由 {@code XPENDING} 直接返回，
-     * 客户端无法伪造；唯一能改写它的 {@code XCLAIM ... IDLE} 选项要求 Redis 6.2，而本隔离实例是
-     * 5.0.14.1，实测该选项被当成额外消息编号忽略、空闲时间仍为 0。唯一的真实办法是等待 5 分钟，
-     * 不适合放进构建流程。隔离实例升级到 6.2 及以上后，本用例即可启用。</p>
+     * <p>先用 {@code XCLAIM ... IDLE 400000} 把待确认消息的空闲时间真实改到 5 分钟窗口之外
+     * （该选项需要 Redis 6.2+，服务端不支持时前置断言会失败并指出原因），再执行重投任务。
+     * 断言 Stream 长度从 1 变为 2 且待确认数量归零：重新投递产生新记录，原记录被确认，
+     * 崩溃消费者的消息因此不会永久滞留。</p>
      */
     @Test
-    @Disabled("需要 Redis 6.2+ 的 XCLAIM ... IDLE 才能把待确认空闲时间调到 5 分钟以上，"
-            + "当前隔离实例为 5.0.14.1，服务端会忽略该选项")
-    @DisplayName("已超时的待确认消息被重新投递并确认（需要 Redis 6.2+）")
+    @DisplayName("已超时的待确认消息被重新投递并确认")
     void shouldRedeliverTimedOutPendingMessage() {
-        byte[] recordId = stringRedisTemplate.opsForStream().range(streamKey, Range.unbounded())
-                .get(0).getId().getValue().getBytes(StandardCharsets.UTF_8);
-        stringRedisTemplate.execute((RedisCallback<Object>) connection -> {
-            connection.execute("XCLAIM", utf8(streamKey), utf8(group), utf8(pendingConsumer),
-                    utf8("0"), recordId, utf8("IDLE"), utf8("400000"));
-            return null;
-        });
+        String recordId = markPendingMessageTimedOut();
         RedisPendingMessageResendJob job = new RedisPendingMessageResendJob(List.of(newListener()),
                 newRedisMQTemplate(), redissonClient);
 
@@ -201,6 +219,86 @@ class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
         assertThat(stringRedisTemplate.opsForStream().size(streamKey)).isEqualTo(2L);
         assertThat(stringRedisTemplate.opsForStream().pending(streamKey, group).getTotalPendingMessages())
                 .isZero();
+    }
+
+    /**
+     * Stream 中已被删除的待确认消息必须跳过，既不重投也不删除待确认记录。
+     *
+     * <p>消息可能已被清理任务从 Stream 中移除，而崩溃消费者的待确认记录仍留在 PEL 里；
+     * 此时按编号取不到消息体。生产的处理是跳过并且不确认，待确认记录留给后续清理，
+     * 这里用真实 {@code XDEL} 构造该状态，断言没有凭空重投、也没有误确认。</p>
+     */
+    @Test
+    @DisplayName("Stream 中已删除的待确认消息被跳过，既不重投也不确认")
+    void shouldSkipPendingMessageWhoseStreamEntryWasDeleted() {
+        String recordId = markPendingMessageTimedOut();
+
+        Long deleted = stringRedisTemplate.opsForStream().delete(streamKey, recordId);
+        assertThat(deleted).as("必须真实删除 Stream 实体").isEqualTo(1L);
+        assertThat(stringRedisTemplate.opsForStream().range(streamKey, Range.unbounded()))
+                .as("前置条件：Stream 中已无消息体").isEmpty();
+        assertThat(stringRedisTemplate.opsForStream().pending(streamKey, group).getTotalPendingMessages())
+                .as("前置条件：待确认记录仍留在 PEL").isEqualTo(1L);
+
+        new RedisPendingMessageResendJob(List.of(newListener()), newRedisMQTemplate(), redissonClient)
+                .messageResend();
+
+        assertThat(stringRedisTemplate.opsForStream().size(streamKey)).as("不得凭空重投消息").isZero();
+        assertThat(stringRedisTemplate.opsForStream().pending(streamKey, group).getTotalPendingMessages())
+                .as("跳过时不得误确认，待确认记录保留").isEqualTo(1L);
+    }
+
+    /**
+     * 汇总与下钻两次读取之间消息被其它节点确认时，必须跳过该消费者且不产生副作用。
+     *
+     * <p>{@code XPENDING} 汇总与按消费者下钻是两次独立读取，生产中存在“汇总说有、下钻已空”的
+     * 竞争窗口（另一实例刚完成确认）。用并发线程复现会变成偶发用例，因此这里由测试在两次真实
+     * Redis 命令之间执行一次真实 {@code XACK} 把窗口固定下来：被测任务仍自己读汇总、自己读下钻，
+     * 测试只决定何时确认，不伪造任何返回值。</p>
+     */
+    @Test
+    @DisplayName("汇总后消息被其它节点确认时跳过该消费者，不重投")
+    void shouldSkipConsumerConfirmedBetweenSummaryAndDetailReads() {
+        String recordId = markPendingMessageTimedOut();
+        AtomicBoolean summaryObserved = new AtomicBoolean();
+        InterleavingStringRedisTemplate interleavingTemplate = new InterleavingStringRedisTemplate(
+                stringRedisTemplate, () -> {
+                    summaryObserved.set(true);
+                    stringRedisTemplate.opsForStream().acknowledge(streamKey, group, recordId);
+                });
+        RedisPendingMessageResendJob job = new RedisPendingMessageResendJob(List.of(newListener()),
+                new RedisMQTemplate(interleavingTemplate), redissonClient);
+
+        job.messageResend();
+
+        assertThat(summaryObserved).as("竞争窗口必须在真实汇总读取之后才触发").isTrue();
+        assertThat(stringRedisTemplate.opsForStream().size(streamKey))
+                .as("消息已被确认，不得再重投").isEqualTo(1L);
+        assertThat(stringRedisTemplate.opsForStream().pending(streamKey, group).getTotalPendingMessages())
+                .isZero();
+    }
+
+    /**
+     * 把当前待确认消息的空闲时间改到 5 分钟窗口之外并返回其编号。
+     *
+     * <p>用原生 {@code XCLAIM ... IDLE} 真实改写空闲时间；服务端不支持该选项时前置断言会失败，
+     * 用例以“无法构造超时待确认消息”收场而不是静默跳过。</p>
+     *
+     * @return 被改写的待确认消息编号
+     */
+    private String markPendingMessageTimedOut() {
+        String recordId = stringRedisTemplate.opsForStream().range(streamKey, Range.unbounded())
+                .get(0).getId().getValue();
+        Long claimed = stringRedisTemplate.execute((RedisCallback<Long>) connection -> connection.eval(
+                utf8(CLAIM_WITH_IDLE_SCRIPT), ReturnType.INTEGER, 1,
+                utf8(streamKey), utf8(group), utf8(pendingConsumer), utf8(recordId), utf8(CLAIM_IDLE_MILLIS)));
+        assertThat(claimed).as("必须真实抢占到目标待确认消息").isEqualTo(1L);
+        PendingMessage claimedMessage = stringRedisTemplate.opsForStream()
+                .pending(streamKey, Consumer.from(group, pendingConsumer), Range.unbounded(), 10L).get(0);
+        assertThat(claimedMessage.getElapsedTimeSinceLastDelivery().getSeconds())
+                .as("XCLAIM ... IDLE 必须真实生效（需要 Redis 6.2+），否则无法构造超时待确认消息")
+                .isGreaterThanOrEqualTo(300L);
+        return recordId;
     }
 
     /**
@@ -213,34 +311,62 @@ class RedisPendingMessageResendJobTest extends MqRedisTestSupport {
     }
 
     /**
-     * 用真实消费容器把消息读成待确认状态且不做确认，复现“消费者崩溃后消息滞留”。
+     * 在真实汇总读取之后注入一次真实确认的字符串模板，用于固定竞争窗口。
      *
-     * <p>直接下发裸 {@code XREADGROUP} 在当前 Redis 客户端桥接下不受支持，因此改用与生产同构的
-     * 消费容器：关闭自动确认、注册一个不做确认的空监听器，停止容器后消息就稳定留在待确认列表里。</p>
+     * <p>只代理 {@code opsForStream()}：除在首次两参数 {@code XPENDING} 汇总返回后执行一次注入动作外，
+     * 其余命令与返回值都原样交给真实模板，因此被测任务面对的仍是真实 Redis 结果。</p>
      */
-    private void readIntoPendingWithoutAcknowledge() {
-        StreamMessageListenerContainer<String, ObjectRecord<String, String>> container =
-                StreamMessageListenerContainer.create(connectionFactory,
-                        StreamMessageListenerContainer.StreamMessageListenerContainerOptions
-                                .<String, ObjectRecord<String, String>>builder()
-                                .batchSize(10)
-                                .targetType(String.class)
-                                .build());
-        container.register(StreamMessageListenerContainer.StreamReadRequest
-                .builder(StreamOffset.create(streamKey, ReadOffset.lastConsumed()))
-                .consumer(Consumer.from(group, pendingConsumer))
-                .autoAcknowledge(false)
-                .cancelOnError(throwable -> false)
-                .build(), (StreamListener<String, ObjectRecord<String, String>>) record -> {
-        });
-        container.start();
-        try {
-            newRedisMQTemplate().send(new PendingProbeMessage());
-            await().atMost(15, TimeUnit.SECONDS).pollInterval(100, TimeUnit.MILLISECONDS)
-                    .until(() -> stringRedisTemplate.opsForStream().pending(streamKey, group)
-                            .getTotalPendingMessages() >= 1L);
-        } finally {
-            container.stop();
+    static class InterleavingStringRedisTemplate extends StringRedisTemplate {
+
+        /** 真实模板的 Stream 操作，代理只在其外层附加注入动作。 */
+        private final StreamOperations<String, Object, Object> delegate;
+        /** 首次汇总读取返回后执行的动作。 */
+        private final Runnable afterSummaryRead;
+        /** 保证注入动作只触发一次。 */
+        private final AtomicBoolean summaryRead = new AtomicBoolean();
+        /** 对外暴露的代理操作。 */
+        private final StreamOperations<String, Object, Object> operations;
+
+        /**
+         * 基于真实模板连接创建代理模板。
+         *
+         * @param delegate 连接同一个隔离 Redis 的真实模板
+         * @param afterSummaryRead 首次汇总读取后执行的动作
+         */
+        @SuppressWarnings("unchecked")
+        InterleavingStringRedisTemplate(StringRedisTemplate delegate, Runnable afterSummaryRead) {
+            super(delegate.getConnectionFactory());
+            afterPropertiesSet();
+            this.delegate = delegate.opsForStream();
+            this.afterSummaryRead = afterSummaryRead;
+            this.operations = (StreamOperations<String, Object, Object>) Proxy.newProxyInstance(
+                    StreamOperations.class.getClassLoader(), new Class<?>[] {StreamOperations.class},
+                    this::invokeWithInterleaving);
+        }
+
+        /** 返回附加了竞争窗口注入的 Stream 操作。 */
+        @Override
+        @SuppressWarnings("unchecked")
+        public <HK, HV> StreamOperations<String, HK, HV> opsForStream() {
+            return (StreamOperations<String, HK, HV>) operations;
+        }
+
+        /**
+         * 先执行真实命令，再在首次两参数汇总读取后触发注入动作。
+         *
+         * @param proxy 代理对象
+         * @param method 被调用的 Stream 操作
+         * @param args 调用参数
+         * @return 真实命令的返回值
+         * @throws Throwable 真实命令抛出的异常原样传播
+         */
+        private Object invokeWithInterleaving(Object proxy, Method method, Object[] args) throws Throwable {
+            Object result = method.invoke(delegate, args);
+            if ("pending".equals(method.getName()) && args != null && args.length == 2
+                    && summaryRead.compareAndSet(false, true)) {
+                afterSummaryRead.run();
+            }
+            return result;
         }
     }
 

@@ -12,6 +12,7 @@ import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.security.config.AuthorizeRequestsCustomizer;
+import com.basicframework.framework.security.core.LoginUser;
 import com.basicframework.framework.security.config.BasicFrameworkSecurityAutoConfiguration;
 import com.basicframework.framework.security.config.BasicFrameworkWebSecurityConfigurerAdapter;
 import com.basicframework.framework.security.config.SecurityProperties;
@@ -179,12 +180,28 @@ class TokenAuthenticationFilterSecurityIT {
     @RestController
     @RequestMapping("/app-api/member")
     static class MemberController {
-
         /** 会员端免登录读端点。 */
         @GetMapping("/public")
         @PermitAll
         public CommonResult<String> publicEndpoint() {
             return CommonResult.success("member-public");
+        }
+    }
+
+    /**
+     * 模块显式声明的机器接口，用于验证机器主体仍被写入安全上下文。
+     *
+     * <p>机器主体只能访问模块通过 {@code authorizeMachineApi} 声明的路径；该端点报告上下文中的主体
+     * 编号与用户类型，作为“过滤器接受机器令牌”的可观察证据，授权范围判定也依赖同一上下文。</p>
+     */
+    @RestController
+    static class MachineSurfaceController {
+
+        /** 报告当前登录主体的编号与用户类型。 */
+        @GetMapping("/admin-api/machine-context")
+        public CommonResult<String> machineContext() {
+            LoginUser loginUser = SecurityFrameworkUtils.getLoginUser();
+            return CommonResult.success("machine-context:" + loginUser.getId() + ":" + loginUser.getUserType());
         }
     }
 
@@ -262,11 +279,17 @@ class TokenAuthenticationFilterSecurityIT {
         AuthorizeRequestsCustomizer customExtraAuthorizeRequestsCustomizer() {
             return new AuthorizeRequestsCustomizer() {
 
-                /** 与生产扩展点一致：追加一条按生产前缀组合出的免登录规则。 */
+                /**
+                 * 与生产扩展点一致：追加一条按生产前缀组合出的免登录规则，并声明机器主体可访问的接口。
+                 *
+                 * @param registry Spring Security 请求匹配注册器
+                 */
                 @Override
                 public void customize(
                         AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry registry) {
                     registry.requestMatchers(buildAdminApi("/biz-permit/**")).permitAll();
+                    // 机器主体默认被隔离在管理端接口之外，只有显式声明的路径放行。
+                    authorizeMachineApi(registry, buildAdminApi("/machine-context"));
                 }
             };
         }
@@ -297,7 +320,8 @@ class TokenAuthenticationFilterSecurityIT {
                 SecuritySliceConfiguration.class, BasicFrameworkSecurityAutoConfiguration.class,
                 BasicFrameworkWebSecurityConfigurerAdapter.class, ClassPermitAllController.class,
                 MethodPermitAllController.class, AnyMethodPermitAllController.class, ProtectedController.class,
-                PermitAllWhitelistController.class, MemberController.class, PrefixProbeConfiguration.class);
+                PermitAllWhitelistController.class, MemberController.class, MachineSurfaceController.class,
+                PrefixProbeConfiguration.class);
         context.refresh();
 
         // 静态替身与容器 Bean 必须是同一实例，断言才能观察到容器内的实际调用。
@@ -329,6 +353,7 @@ class TokenAuthenticationFilterSecurityIT {
         tokenApi.checkedTokens.clear();
         tokenApi.failingTokens.clear();
         tokenApi.errorTokens.clear();
+        tokenApi.nullResultTokens.clear();
         permissionApi.checkedUserIds.clear();
         permissionApi.grantedUserIds.clear();
         SecurityContextHolder.clearContext();
@@ -356,6 +381,25 @@ class TokenAuthenticationFilterSecurityIT {
                 .header("Authorization", "Bearer forged-" + UUID.randomUUID()));
         assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(401);
         assertThat(tokenApi.checkedTokens).as("伪造令牌必须真实进入校验").hasSize(1);
+    }
+
+    /**
+     * 令牌校验返回空结果时按未登录处理，不能放行也不能抛空指针。
+     *
+     * <p>{@code OAuth2TokenCommonApi} 是跨模块扩展点，实现方可以用空结果表示“令牌不可用”，
+     * 而不是必须抛异常。过滤器若把空结果当成校验通过，请求会带着空主体进入业务；
+     * 若直接解引用，用户会收到 500 而看不出是未登录。这里锁定“拒绝且响应仍是 401”。</p>
+     */
+    @Test
+    void protectedEndpointRejectsNullTokenCheckResult() throws Exception {
+        String token = issueToken(12L, UserTypeEnum.ADMIN, LocalDateTime.now().plusMinutes(10), Map.of());
+        tokenApi.nullResultTokens.add(token);
+
+        JsonNode body = perform(get("/admin-api/protected/login-only")
+                .header("Authorization", "Bearer " + token));
+
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(401);
+        assertThat(tokenApi.checkedTokens).as("空结果也必须来自真实校验调用").containsExactly(token);
     }
 
     /** 过期令牌必须被拒绝；放过过期令牌等同于凭据永久有效。 */
@@ -431,28 +475,43 @@ class TokenAuthenticationFilterSecurityIT {
     }
 
     /**
-     * 记录并锁定机器主体（userId=0）当前的真实行为：过滤器不拒绝该主体，
-     * 会把它写入安全上下文。是否允许访问由后续功能权限判定决定，因此需在别处单独加固。
+     * 机器主体（userId=0）不能以管理端用户身份访问只要求登录的管理接口。
+     *
+     * <p>拒绝码是 403 而不是 401：令牌本身仍被过滤器接受并通过校验，拒绝来自机器主体隔离规则。
+     * 未认证与无效凭据的对照见 {@code missingTokenIsRejected} 与 {@code unknownTokenIsRejected}。</p>
      */
     @Test
-    void machinePrincipalIsWrittenIntoContextByFilter() throws Exception {
+    void machinePrincipalDeniedOnAdminEndpoint() throws Exception {
         String token = issueToken(0L, UserTypeEnum.ADMIN, LocalDateTime.now().plusMinutes(10), Map.of());
         JsonNode body = perform(get("/admin-api/protected/login-only")
                 .header("Authorization", "Bearer " + token));
-        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
-        assertThat(body.get("data").asText())
-                .as("机器主体当前会被写入上下文，实际行为=%s", body.get("data").asText())
-                .isEqualTo("login-only:0");
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
     }
 
-    /** 负数主体与零号主体同属机器边界，过滤器同样不做拒绝，实际行为一并锁定。 */
+    /** 负数主体与零号主体同属机器边界，同样只能访问显式声明的机器接口。 */
     @Test
-    void negativePrincipalIsWrittenIntoContextByFilter() throws Exception {
+    void negativePrincipalDeniedOnAdminEndpoint() throws Exception {
         String token = issueToken(-1L, UserTypeEnum.ADMIN, LocalDateTime.now().plusMinutes(10), Map.of());
         JsonNode body = perform(get("/admin-api/protected/login-only")
                 .header("Authorization", "Bearer " + token));
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+    }
+
+    /**
+     * 模块显式声明的机器接口仍放行机器主体，证明过滤器把主体写入安全上下文而不是丢弃凭据。
+     *
+     * <p>授权范围判定（{@code @ss.hasScope}）依赖上下文中的登录用户与其 scopes，因此隔离管理接口
+     * 不能以“过滤器拒绝机器令牌”的方式实现。</p>
+     */
+    @Test
+    void machinePrincipalReachesDeclaredMachineApiSurface() throws Exception {
+        String token = issueToken(0L, UserTypeEnum.ADMIN, LocalDateTime.now().plusMinutes(10), Map.of());
+        JsonNode body = perform(get("/admin-api/machine-context")
+                .header("Authorization", "Bearer " + token));
         assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
-        assertThat(body.get("data").asText()).isEqualTo("login-only:-1");
+        assertThat(body.get("data").asText())
+                .as("机器主体必须被写入上下文，实际=%s", body.get("data").asText())
+                .isEqualTo("machine-context:0:2");
     }
 
     /** 类级 {@code @PermitAll} 声明的 URL 必须免登录。 */
@@ -649,6 +708,8 @@ class TokenAuthenticationFilterSecurityIT {
         private final Set<String> failingTokens = ConcurrentHashMap.newKeySet();
         /** 需要抛出 JVM 级故障的令牌，用于验证故障不被伪装成鉴权响应。 */
         private final Set<String> errorTokens = ConcurrentHashMap.newKeySet();
+        /** 需要返回空结果的令牌，用于验证“校验结果为空”被当作未登录而不是通过。 */
+        private final Set<String> nullResultTokens = ConcurrentHashMap.newKeySet();
 
         /** 写入一个令牌。 */
         String issue(Long userId, Integer userType, LocalDateTime expiresTime, Map<String, String> info) {
@@ -667,6 +728,10 @@ class TokenAuthenticationFilterSecurityIT {
         @Override
         public OAuth2AccessTokenCheckRespDTO checkAccessToken(String accessToken) {
             checkedTokens.add(accessToken);
+            if (nullResultTokens.contains(accessToken)) {
+                // 扩展点允许以空结果表示令牌不可用，过滤器必须按未登录处理。
+                return null;
+            }
             if (errorTokens.contains(accessToken)) {
                 throw new StackOverflowError("模拟令牌校验中的 JVM 级故障");
             }

@@ -117,6 +117,34 @@ public class SecurityFrameworkUtils {
     }
 
     /**
+     * 判断当前认证主体是否为不对应任何真实用户的机器主体。
+     *
+     * <p>OAuth2 客户端凭据模式没有登录用户，框架以 {@code userId <= 0} 作为占位编号落库。这类主体只
+     * 持有有效令牌，不代表任何可被禁用或撤销的账号，因此不能作为管理端或应用端用户使用。</p>
+     *
+     * @param authentication 当前认证信息，允许为 {@code null}
+     * @return 认证主体是机器主体时返回 {@code true}；未认证、匿名或其他主体返回 {@code false}
+     */
+    public static boolean isMachinePrincipal(@Nullable Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof LoginUser loginUser)) {
+            return false;
+        }
+        return isMachinePrincipal(loginUser);
+    }
+
+    /**
+     * 判断登录用户是否为机器主体。
+     *
+     * <p>占位编号缺失或非正数都表示该凭据不代表真实账号；真实用户编号恒为正数。</p>
+     *
+     * @param loginUser 登录用户，允许为 {@code null}
+     * @return 编号缺失或非正数时返回 {@code true}；{@code null} 返回 {@code false}
+     */
+    public static boolean isMachinePrincipal(@Nullable LoginUser loginUser) {
+        return loginUser != null && (loginUser.getId() == null || loginUser.getId() <= 0);
+    }
+
+    /**
      * 设置当前用户
      *
      * @param loginUser 登录用户

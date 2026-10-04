@@ -71,6 +71,41 @@ class CorsBoundaryTest {
                 .run(context -> assertThat(context).hasFailed());
     }
 
+    /**
+     * 白名单整体缺失（null）时必须判定为不合法，不得按“空列表”放行。
+     *
+     * <p>null 与空列表在过滤器中语义不同：空列表是默认拒绝，null 说明配置绑定没有产出任何结果，
+     * 若判为合法会让配置缺失时进入未定义分支。</p>
+     */
+    @Test
+    void nullCorsAllowedOriginsIsRejected() {
+        WebProperties properties = new WebProperties();
+        properties.setCorsAllowedOrigins(null);
+
+        assertThat(properties.isCorsAllowedOriginsValid()).isFalse();
+    }
+
+    /** 白名单中的 null 与空白项必须判定为不合法，避免出现永远匹配不上的影子条目。 */
+    @Test
+    void nullOrBlankEntriesAreRejected() {
+        WebProperties properties = new WebProperties();
+
+        properties.setCorsAllowedOrigins(java.util.Arrays.asList((String) null));
+        assertThat(properties.isCorsAllowedOriginsValid()).isFalse();
+
+        properties.setCorsAllowedOrigins(List.of("   "));
+        assertThat(properties.isCorsAllowedOriginsValid()).isFalse();
+    }
+
+    /** 无法解析为 URI 的条目必须判定为不合法，而不是抛出异常中断启动流程。 */
+    @Test
+    void malformedOriginIsRejected() {
+        WebProperties properties = new WebProperties();
+        properties.setCorsAllowedOrigins(List.of("http://exa mple.com"));
+
+        assertThat(properties.isCorsAllowedOriginsValid()).isFalse();
+    }
+
     /** 构造只加载 Web 配置校验的上下文，避免业务模块和外部服务影响结果。 */
     private ApplicationContextRunner runner() {
         return new ApplicationContextRunner()

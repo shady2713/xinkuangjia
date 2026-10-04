@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
+import com.basicframework.module.system.controller.admin.sms.vo.callback.AliyunSmsCallbackRespVO;
 import com.basicframework.module.system.framework.sms.core.client.SmsReceiptException;
 import com.basicframework.module.system.framework.sms.core.client.impl.AliyunSmsClient;
 import com.basicframework.module.system.framework.sms.core.client.impl.TencentSmsClient;
@@ -18,12 +19,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -176,6 +180,18 @@ class SmsCallbackParsingTest {
         rejectJsonWithoutResourceAccess(provider, "[]");
     }
 
+    /**
+     * 数组元素必须是对象，标量元素无法提供手机号与流水号，必须在访问资源前整批拒绝。
+     *
+     * <p>数组协议允许元素个数变化，若只校验数组非空就继续，标量元素会在后续字段读取处
+     * 以臆造的空值参与匹配，把无效匿名输入当成有效回执。</p>
+     */
+    @ParameterizedTest(name = "{0}: non-object element -> 400")
+    @ValueSource(strings = {"aliyun", "tencent"})
+    void nonObjectReceiptElementIsRejectedBeforeResourceAccess(String provider) throws Exception {
+        rejectJsonWithoutResourceAccess(provider, "[\"" + SERIAL + "\"]");
+    }
+
     /** 缺少供应商流水号无法与已有发送记录交叉匹配，必须在访问资源前拒绝。 */
     @Test
     void aliyunMissingSerialIsRejectedBeforeResourceAccess() throws Exception {
@@ -264,10 +280,7 @@ class SmsCallbackParsingTest {
         doThrow(new IllegalStateException(sensitiveMarker + MOBILE + SERIAL)).when(logService)
                 .updateSmsReceiveResult(anyString(), any(), anyString(), anyString(),
                         any(), any(), any(), any());
-        Logger logger = (Logger) LoggerFactory.getLogger(SmsCallbackController.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
+        ListAppender<ILoggingEvent> appender = attachAppender();
         try {
             String body = tencentBody(REPORT_TIME);
             MvcResult result = mvc.perform(post("/system/sms/callback/tencent")
@@ -290,9 +303,7 @@ class SmsCallbackParsingTest {
             assertThat(result.getResponse().getContentAsString(StandardCharsets.UTF_8))
                     .doesNotContain(MOBILE, SERIAL, sensitiveMarker, "IllegalStateException");
         } finally {
-            // Appender 属于本用例，及时移除以免污染后续测试的日志观察结果。
-            logger.detachAppender(appender);
-            appender.stop();
+            detachAppender(appender);
         }
     }
 
@@ -305,6 +316,148 @@ class SmsCallbackParsingTest {
             assertThat(annotation).isNotNull();
             assertThat(annotation.requestEnable()).isFalse();
         }
+    }
+
+    /**
+     * 正文不是合法 UTF-8 时按协议错误拒绝，且不触达渠道与日志存储。
+     *
+     * <p>供应商回执必须按 UTF-8 解码：非法字节序列说明对端编码错误或报文被破坏，
+     * 若容忍替换字符继续解析，会在后续字段匹配处产生难以定位的空值参与查询。</p>
+     */
+    @Test
+    void invalidUtf8BodyIsRejectedWith400AndSafeLog() throws Exception {
+        byte[] invalidUtf8 = {'{', (byte) 0xFF, '}'};
+
+        MvcResult result;
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            result = mvc.perform(post("/system/sms/callback/aliyun")
+                            .contentType(MediaType.APPLICATION_JSON).content(invalidUtf8))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value(1))
+                    .andExpect(jsonPath("$.msg").value("接收失败"))
+                    .andReturn();
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains("reason(invalid_encoding)", "mediaType(application/json)",
+                            "bodyLength(" + invalidUtf8.length + ")");
+        } finally {
+            detachAppender(appender);
+        }
+        verifyNoInteractions(channelService, logService);
+        assertThat(result.getResponse().getContentAsString(StandardCharsets.UTF_8))
+                .doesNotContain("\uFFFD");
+    }
+
+    /**
+     * 请求体不可读时按协议错误拒绝，且不得把异常细节写入日志或响应。
+     *
+     * <p>该分支覆盖容器读取失败（连接中断、上游代理截断）等真实场景；
+     * 直接调用控制器并以受控请求替身触发 IO 故障，避免依赖真实网络中断。</p>
+     */
+    @Test
+    void unreadableBodyIsRejectedWith400AndSafeLog() throws Exception {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getContentType()).thenReturn("application/json");
+        when(request.getContentLengthLong()).thenReturn(64L);
+        when(request.getInputStream()).thenThrow(new IOException("synthetic-read-failure"));
+
+        SmsSendServiceImpl sendService = mock(SmsSendServiceImpl.class);
+        SmsCallbackController controller = new SmsCallbackController();
+        ReflectionTestUtils.setField(controller, "smsSendService", sendService);
+
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        ResponseEntity<AliyunSmsCallbackRespVO> response;
+        try {
+            response = controller.receiveAliyunSmsStatus(request);
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains("reason(unreadable_body)", "mediaType(application/json)", "bodyLength(64)")
+                    .doesNotContain("synthetic-read-failure", "IOException");
+        } finally {
+            detachAppender(appender);
+        }
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());
+        verifyNoInteractions(sendService);
+    }
+
+    /**
+     * 规范化后超过长度上限的媒体类型按不支持处理，并以固定占位记录日志。
+     *
+     * <p>媒体类型来自匿名请求头，超长内容写入日志会撑大审计记录；超过 128 字符时
+     * 必须以 {@code invalid} 占位而不是原样记录，同时仍然拒绝该请求。</p>
+     */
+    @Test
+    void oversizedMediaTypeIsRejectedWith415AndPlaceholderLog() throws Exception {
+        String oversizedMediaType = "application/" + "a".repeat(130);
+
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            mvc.perform(post("/system/sms/callback/aliyun")
+                            .contentType(oversizedMediaType).content(aliyunBody(REPORT_TIME)))
+                    .andExpect(status().isUnsupportedMediaType())
+                    .andExpect(jsonPath("$.code").value(1));
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains("reason(unsupported_media_type)", "mediaType(invalid)")
+                    .doesNotContain("aaaa");
+        } finally {
+            detachAppender(appender);
+        }
+        verifyNoInteractions(channelService, logService);
+    }
+
+    /**
+     * 无法解析的媒体类型按不支持处理，并以固定占位记录日志。
+     *
+     * <p>缺少子类型的请求头无法被 Spring 解析为媒体类型，此时同样只能按 415 拒绝，
+     * 且日志必须以 {@code invalid} 占位而不是原样记录匿名请求头。</p>
+     */
+    @Test
+    void unparseableMediaTypeIsRejectedWith415AndPlaceholderLog() throws Exception {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getContentType()).thenReturn("application/");
+        when(request.getContentLengthLong()).thenReturn(0L);
+
+        SmsSendServiceImpl sendService = mock(SmsSendServiceImpl.class);
+        SmsCallbackController controller = new SmsCallbackController();
+        ReflectionTestUtils.setField(controller, "smsSendService", sendService);
+
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        ResponseEntity<AliyunSmsCallbackRespVO> response;
+        try {
+            response = controller.receiveAliyunSmsStatus(request);
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains("reason(unsupported_media_type)", "mediaType(invalid)")
+                    .doesNotContain("application/");
+        } finally {
+            detachAppender(appender);
+        }
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());
+        verifyNoInteractions(sendService);
+    }
+
+    /** 为当前用例挂载日志收集器，观察回调控制器真实写入的日志字段。 */
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(SmsCallbackController.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    /** 移除并停止本用例的日志收集器，避免污染后续测试的日志观察结果。 */
+    private static void detachAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(SmsCallbackController.class);
+        logger.detachAppender(appender);
+        appender.stop();
     }
 
     /** 构造只满足客户端初始化约束的本地配置，凭据运行时生成且不会发起网络调用。 */

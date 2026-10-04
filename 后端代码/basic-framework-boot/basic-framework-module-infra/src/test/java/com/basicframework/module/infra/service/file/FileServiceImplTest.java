@@ -101,6 +101,30 @@ class FileServiceImplTest {
         verifyNoInteractions(storage);
     }
 
+    /**
+     * 空文件名保持空值语义，对象路径的空白与超长边界必须在入库前被拒绝。
+     *
+     * <p>文件名可能整份缺失：归一化把 null 变成字符串 "null" 会生成名为 null 的对象键；
+     * 对象路径是预签名上传后登记定位的唯一依据，空白或超过列容量的路径一旦放行，
+     * 要么登记出无法访问的对象，要么在数据库写入阶段才失败。</p>
+     */
+    @Test
+    void blankFileNamesAndInvalidObjectPathsAreRejected() {
+        assertThat(FilePathUtils.normalizeFileName(null)).isNull();
+        assertThat(FilePathUtils.normalizeFileName("")).isEmpty();
+        assertThat(FilePathUtils.normalizeFileName("   ")).as("纯空白名称清理后为空").isEmpty();
+        assertThat(FilePathUtils.normalizeFileName("C:\\fakepath\\头像.png")).isEqualTo("头像.png");
+
+        assertThat(FilePathUtils.isObjectPathValid(null)).isFalse();
+        assertThat(FilePathUtils.isObjectPathValid("")).isFalse();
+        assertThat(FilePathUtils.isObjectPathValid("   ")).isFalse();
+        assertThat(FilePathUtils.isObjectPathValid("a".repeat(FilePathUtils.MAX_OBJECT_PATH_LENGTH + 1)))
+                .as("超过列容量的路径必须拒绝").isFalse();
+        assertThat(FilePathUtils.isObjectPathValid("a".repeat(FilePathUtils.MAX_OBJECT_PATH_LENGTH)))
+                .as("恰好等于列容量的受限相对路径仍然可用").isTrue();
+        assertThat(FilePathUtils.isObjectPathValid("profile/2026/01/头像.png")).isTrue();
+    }
+
     /** 第二项存储失败时，第一项元数据已经移除，失败项及未开始项保持可重试。 */
     @Test
     void partialBatchFailureKeepsMetadataOnlyForUnfinishedItems() throws Exception {

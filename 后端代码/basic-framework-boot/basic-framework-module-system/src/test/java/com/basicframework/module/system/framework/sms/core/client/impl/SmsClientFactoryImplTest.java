@@ -1,15 +1,21 @@
 package com.basicframework.module.system.framework.sms.core.client.impl;
 
+import com.basicframework.framework.common.core.KeyValue;
 import com.basicframework.module.system.framework.sms.core.client.SmsClient;
+import com.basicframework.module.system.framework.sms.core.client.dto.SmsReceiveRespDTO;
+import com.basicframework.module.system.framework.sms.core.client.dto.SmsSendRespDTO;
+import com.basicframework.module.system.framework.sms.core.client.dto.SmsTemplateRespDTO;
 import com.basicframework.module.system.framework.sms.core.enums.SmsChannelEnum;
 import com.basicframework.module.system.framework.sms.core.property.SmsChannelProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -191,6 +197,57 @@ class SmsClientFactoryImplTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(factory.createOrUpdateSmsClient(right).getId()).isEqualTo(22L);
         assertThat(factory.getSmsClient(21L)).isNull();
+    }
+
+    /**
+     * 配置未提供时摘要必须给出可读占位文本，不能抛出空指针。
+     *
+     * <p>抽象基类的构造方法允许配置缺省（按编码注册的占位客户端只用于解析回执），初始化会写配置
+     * 摘要日志；摘要若解引用空配置，初始化会在日志语句上失败，故障点与真实原因完全无关。
+     * 这里走真实 {@code init()} 入口，并确认正常配置的摘要仍包含渠道编号与编码。</p>
+     */
+    @Test
+    void configurationSummaryToleratesMissingConfiguration() {
+        ProbeSmsClient client = new ProbeSmsClient();
+
+        assertThatCode(client::init).doesNotThrowAnyException();
+
+        assertThat(client.summarizeProperties(aliyunProperties(33L, "key-1", "secret-1")))
+                .as("正常配置的摘要必须包含渠道编号与编码，便于定位是哪条渠道在刷新")
+                .isEqualTo("id(33) code(ALIYUN)");
+    }
+
+    /**
+     * 不带渠道配置的短信客户端探针，用于观察抽象基类在配置缺省时的初始化行为。
+     *
+     * <p>基类构造方法不校验配置，真实渠道实现才要求凭据；这里只需复现“配置为空”的基类状态，
+     * 因此发送、回执解析与模板查询都不参与本用例。</p>
+     */
+    static class ProbeSmsClient extends AbstractSmsClient {
+
+        /** 以缺省配置构造，对应只用于解析回执的占位客户端状态。 */
+        ProbeSmsClient() {
+            super(null);
+        }
+
+        /** 本探针不发送短信。 */
+        @Override
+        public SmsSendRespDTO sendSms(Long logId, String mobile, String apiTemplateId,
+                                      List<KeyValue<String, Object>> templateParams) {
+            throw new UnsupportedOperationException("探针不发送短信");
+        }
+
+        /** 本探针不解析回执。 */
+        @Override
+        public List<SmsReceiveRespDTO> parseSmsReceiveStatus(String text) {
+            throw new UnsupportedOperationException("探针不解析回执");
+        }
+
+        /** 本探针不查询模板。 */
+        @Override
+        public SmsTemplateRespDTO getSmsTemplate(String apiTemplateId) {
+            throw new UnsupportedOperationException("探针不查询模板");
+        }
     }
 
     /** 构造阿里云渠道配置，签名与回调地址一并参与配置等价判定。 */

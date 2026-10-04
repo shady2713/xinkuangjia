@@ -262,6 +262,11 @@ class ConfigServiceImplMySqlIT {
     void existenceValidationDistinguishesNullFromMissing() {
         assertThat(configService.getConfig(999_999L)).isNull();
         assertThat(configService.getConfigByKey("no-such-key")).isNull();
+        // 空编号表示“没有可校验对象”，按契约直接返回 null，调用方据此跳过后续校验
+        assertThat(((ConfigServiceImpl) configService).validateConfigExists(null)).isNull();
+        // 编号存在但记录缺失属于真实业务错误，必须与空编号区分开
+        assertBusinessError(() -> ((ConfigServiceImpl) configService).validateConfigExists(999_999L),
+                CONFIG_NOT_EXISTS);
     }
 
     /** 分页按名称、键名和类型过滤，并按编号倒序返回。 */

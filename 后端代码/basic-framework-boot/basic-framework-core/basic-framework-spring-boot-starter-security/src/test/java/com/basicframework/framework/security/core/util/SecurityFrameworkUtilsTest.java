@@ -319,6 +319,71 @@ class SecurityFrameworkUtilsTest {
         assertThat(SecurityFrameworkUtils.getAuthentication().isAuthenticated()).isTrue();
     }
 
+    /**
+     * 未认证时不得判定为机器主体。
+     *
+     * <p>该判定用于把机器令牌挡在管理端与用户端之外；把“没有认证信息”也判成机器主体，
+     * 会让匿名请求得到与机器令牌相同的处理路径，掩盖真实的未认证状态。</p>
+     */
+    @Test
+    void unauthenticatedRequestIsNotMachinePrincipal() {
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal((Authentication) null)).isFalse();
+    }
+
+    /**
+     * 主体不是 {@link LoginUser} 的认证（如匿名令牌）不得判定为机器主体。
+     *
+     * <p>只有框架自己写入的登录用户才带占位编号语义；其它主体类型属于未知身份，
+     * 误判会改变其授权结论。</p>
+     */
+    @Test
+    void nonLoginUserPrincipalIsNotMachinePrincipal() {
+        Authentication anonymous = new AnonymousAuthenticationToken(
+                "key", "anonymous", AuthorityUtils.createAuthorityList("ROLE_ANONYMOUS"));
+
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal(anonymous)).isFalse();
+    }
+
+    /**
+     * 占位编号的登录用户必须判定为机器主体，真实用户不得被误判。
+     *
+     * <p>OAuth2 客户端凭据模式以 {@code userId<=0} 落库，因此 0、负数与缺少编号都表示
+     * “不对应任何真实账号”；真实用户编号恒为正数。</p>
+     */
+    @Test
+    void placeholderUserIdsAreMachinePrincipals() {
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal(authenticationOf(loginUser(0L))))
+                .as("0 号占位用户必须被识别为机器主体").isTrue();
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal(authenticationOf(loginUser(-1L))))
+                .as("负数编号同样不对应真实账号").isTrue();
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal(authenticationOf(new LoginUser())))
+                .as("缺少编号表示凭据不代表真实账号").isTrue();
+
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal(authenticationOf(loginUser(80L))))
+                .as("真实用户编号恒为正数，不得判为机器主体").isFalse();
+    }
+
+    /**
+     * 直接用登录用户判定时，null 表示“没有身份”而不是机器主体。
+     *
+     * <p>该重载被过滤器用于判定当前身份；把 null 判成机器主体会让未登录请求被当作机器令牌拒绝，
+     * 返回错误的失败语义。</p>
+     */
+    @Test
+    void nullLoginUserIsNotMachinePrincipal() {
+        assertThat(SecurityFrameworkUtils.isMachinePrincipal((LoginUser) null)).isFalse();
+    }
+
+    /**
+     * 构造携带指定登录用户的认证对象。
+     *
+     * @param loginUser 登录用户
+     * @return 认证对象
+     */
+    private static Authentication authenticationOf(LoginUser loginUser) {
+        return new UsernamePasswordAuthenticationToken(loginUser, null, List.of());
+    }
+
     /** 构造仅含编号与管理员类型的登录用户。 */
     private static LoginUser loginUser(Long id) {
         LoginUser loginUser = new LoginUser();

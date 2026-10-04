@@ -41,4 +41,17 @@ class SensitiveDataUtilsTest {
         assertThat(SensitiveDataUtils.isSensitiveKey(" ")).isFalse();
         assertThat(SensitiveDataUtils.isSensitiveKey("userName")).isFalse();
     }
+
+    /**
+     * 验证调用方整体缺失追加字段（显式传入 null 数组）时按“没有追加字段”处理。
+     *
+     * <p>追加字段来自调用方配置，可能整份缺失。该方法运行在日志脱敏路径上，
+     * 抛出空指针会让日志写入失败，并可能把原始字段名带进错误日志；
+     * 同时默认敏感字段的识别不能因为追加字段缺失而失效。</p>
+     */
+    @Test
+    void shouldTreatNullAdditionalKeysAsAbsent() {
+        assertThat(SensitiveDataUtils.isSensitiveKey("userName", (String[]) null)).isFalse();
+        assertThat(SensitiveDataUtils.isSensitiveKey("password", (String[]) null)).isTrue();
+    }
 }

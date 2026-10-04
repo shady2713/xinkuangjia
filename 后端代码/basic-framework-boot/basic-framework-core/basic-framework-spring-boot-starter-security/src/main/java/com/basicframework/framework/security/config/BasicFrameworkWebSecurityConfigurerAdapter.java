@@ -1,6 +1,7 @@
 package com.basicframework.framework.security.config;
 
 import cn.hutool.core.collection.CollUtil;
+import com.basicframework.framework.security.core.authorization.RealUserRequiredAuthorizationManager;
 import com.basicframework.framework.security.core.filter.TokenAuthenticationFilter;
 import com.basicframework.framework.web.config.WebProperties;
 import com.google.common.collect.HashMultimap;
@@ -142,7 +143,15 @@ public class BasicFrameworkWebSecurityConfigurerAdapter {
                 )
                 // ②：每个项目的自定义规则
                 .authorizeHttpRequests(c -> authorizeRequestsCustomizers.forEach(customizer -> customizer.customize(c)))
-                // ③：兜底规则，必须认证
+                // ③：机器主体隔离；模块可在 ② 中通过 authorizeMachineApi 显式声明机器接口。
+                // 客户端凭据模式签发的令牌不代表真实账号，不能作为管理端或应用端用户读写接口；
+                // 未在此前规则中放行的管理端/应用端请求，机器主体一律按无权限拒绝。
+                .authorizeHttpRequests(c -> c
+                        .requestMatchers(webProperties.getAdminApi().getPrefix() + "/**")
+                        .access(RealUserRequiredAuthorizationManager.INSTANCE)
+                        .requestMatchers(webProperties.getAppApi().getPrefix() + "/**")
+                        .access(RealUserRequiredAuthorizationManager.INSTANCE))
+                // ④：兜底规则，必须认证
                 .authorizeHttpRequests(c -> c
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll() // WebFlux 异步请求，无需认证，目的：SSE 场景
                         .anyRequest().authenticated());

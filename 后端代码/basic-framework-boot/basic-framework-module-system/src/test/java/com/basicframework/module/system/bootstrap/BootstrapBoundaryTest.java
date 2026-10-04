@@ -25,10 +25,10 @@ class BootstrapBoundaryTest {
     @ValueSource(strings = {
             "jdbc:mysql://localhost/", "jdbc:mysql://localhost/mysql", "jdbc:mysql://localhost/SYS",
             "jdbc:mysql://localhost/app/extra", "jdbc:mysql://localhost/%61pp",
-            "jdbc:mysql://user:secret@localhost/app", "jdbc:mysql://localhost,other/app",
+            "jdbc:mysql://CHANGE_ME_USER:CHANGE_ME_PASSWORD@localhost/app", "jdbc:mysql://localhost,other/app",
             "jdbc:mysql:loadbalance://localhost/app", "jdbc:mysql://localhost:0/app",
             "jdbc:mysql://localhost:65536/app", "jdbc:mysql://localhost/app#extra",
-            "jdbc:mysql://localhost/app?password=secret", "jdbc:mysql://localhost/app?user=other",
+            "jdbc:mysql://localhost/app?password=CHANGE_ME", "jdbc:mysql://localhost/app?user=other",
             "jdbc:mysql://localhost/app?allowLoadLocalInfile=true",
             "jdbc:mysql://localhost/app?allowUrlInLocalInfile=true",
             "jdbc:mysql://localhost/app?autoDeserialize=true",
@@ -36,7 +36,7 @@ class BootstrapBoundaryTest {
             "jdbc:mysql://localhost/app?logger=custom.Logger",
             "jdbc:mysql://localhost/app?useSSL=false&useSSL=true",
             "jdbc:mysql://localhost/app?connectTimeout=0", "jdbc:mysql://localhost/app?socketTimeout=99999",
-            "jdbc:mysql://localhost/app?useSSL=false%26password=secret"
+            "jdbc:mysql://localhost/app?useSSL=false%26password=CHANGE_ME"
     })
     void unsafeConnectionTargetsAreRejected(String url) {
         Map<String, String> environment = environment();
@@ -80,6 +80,18 @@ class BootstrapBoundaryTest {
             "Abcd12345678\u200b9"})
     void weakOrAmbiguousPasswordsAreRejected(String password) {
         assertThatThrownBy(() -> BootstrapPassword.encode(password.toCharArray())).hasMessage("PASSWORD_POLICY");
+    }
+
+    /**
+     * 空口令与缺失口令必须按口令策略失败，不得抛出空指针。
+     *
+     * <p>交互入口在流结束或直接回车时会得到 null 或空数组；此处若抛空指针，
+     * 调用方只能看到通用运行期错误，运维无法区分“口令不符合策略”和程序缺陷。</p>
+     */
+    @Test
+    void missingPasswordFailsAsPolicyViolation() {
+        assertThatThrownBy(() -> BootstrapPassword.encode(null)).hasMessage("PASSWORD_POLICY");
+        assertThatThrownBy(() -> BootstrapPassword.encode(new char[0])).hasMessage("PASSWORD_POLICY");
     }
 
     /** Unicode 明文和内部空格按原样参与现有 MD5 协议，BCrypt 固定 cost 10。 */

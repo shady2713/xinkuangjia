@@ -892,6 +892,25 @@ class SmsSendPipelineMySqlIT {
         assertThat(readLog(logId).getReceiveStatus()).isEqualTo(SmsReceiveStatusEnum.INIT.getStatus());
     }
 
+    /**
+     * 按回执标识预读日志时缺少任一关联标识都不得命中已有记录。
+     *
+     * <p>该入口是匿名回调的第一道匹配：条件不全时若退化成“少一个条件就少一个条件”，
+     * 同一手机号在其它渠道或其它流水号下的日志会被误读成当前回执的对象，进而被改写成错误终态。</p>
+     */
+    @Test
+    void receiptLookupRequiresEveryIdentifier() {
+        Long logId = sendAndMarkDelivered();
+        SmsLogMapper mapper = context.getBean(SmsLogMapper.class);
+
+        assertThat(mapper.selectByReceiveCallback(ALIYUN, logId, "serial-1", MOBILE))
+                .as("关联标识完整时必须真实命中已发送日志").isNotNull();
+
+        assertThat(mapper.selectByReceiveCallback(null, logId, "serial-1", MOBILE)).isNull();
+        assertThat(mapper.selectByReceiveCallback(ALIYUN, logId, " ", MOBILE)).isNull();
+        assertThat(mapper.selectByReceiveCallback(ALIYUN, logId, "serial-1", " ")).isNull();
+    }
+
     /** 重复成功回执不能刷新已确认的接收时间或供应商结果，保证重投的幂等性。 */
     @Test
     void duplicateReceiptPreservesFirstTerminalDetails() {

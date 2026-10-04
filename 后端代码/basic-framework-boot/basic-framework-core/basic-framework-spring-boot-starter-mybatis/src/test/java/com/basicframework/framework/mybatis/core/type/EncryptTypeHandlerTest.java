@@ -297,6 +297,24 @@ class EncryptTypeHandlerTest {
         assertInvalidCipherText(encrypted);
     }
 
+    /**
+     * 认证通过但分组填充非法的存储值必须拒绝，不能返回损坏明文或未分类异常。
+     *
+     * <p>本实现只用当前密钥写数据，正常流程不会产生“认证通过、填充非法”的值；该形态等价于
+     * 其他实现或历史版本按同一格式写入的数据，也等价于分组被替换后标签被同步重算的构造值。
+     * 用例用隔离密钥真实构造 CBC 分组，使解密结果末字节不是合法填充长度，再复用生产认证算法
+     * 生成标签，验证解密阶段的失败被收敛为 {@code 字段密文无效} 的 {@code IllegalArgumentException}，
+     * 而不是抛出 JDK 异常细节或返回半截明文。</p>
+     *
+     * @throws Exception 构造分组或调用生产认证算法失败时抛出，说明测试夹具不可用
+     */
+    @Test
+    void authenticatedValueWithInvalidPaddingFailsClosed() throws Exception {
+        byte[] payload = authenticatedPayloadWithInvalidPadding();
+
+        assertInvalidCipherText("v1:" + Base64.getEncoder().encodeToString(payload));
+    }
+
     /** 未配置或空密钥保持 Assert 失败约定，并提示实际配置项而非旧注释名。 */
     @Test
     void missingOrEmptyKeyFailsClosed() {
@@ -399,6 +417,40 @@ class EncryptTypeHandlerTest {
     /** 解码新格式以构造损坏布局用例，不改变生产算法。 */
     private static byte[] decodePayload(String encrypted) {
         return Base64.getDecoder().decode(encrypted.substring(3));
+    }
+
+    /**
+     * 构造“认证通过但解密填充非法”的存储值负载。
+     *
+     * <p>做法是先固定目标解密结果为一个末字节不是合法填充长度的分组，再用当前密钥对该分组
+     * 与 IV 的异或结果做一次 AES 分组加密，得到解出来必然是目标分组的密文块；最后复用生产
+     * 认证算法为 IV 与密文生成标签，使失败原因严格落在解密阶段而不是认证阶段。</p>
+     *
+     * @return 布局合法的负载字节：16 字节 IV + 16 字节密文 + 32 字节认证标签
+     * @throws Exception JDK 分组算法或生产认证算法不可用时抛出
+     */
+    private byte[] authenticatedPayloadWithInvalidPadding() throws Exception {
+        byte[] key = ((String) properties.get("mybatis-plus.encryptor.password"))
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] iv = new byte[16];
+        byte[] invalidPlainBlock = new byte[16];
+        // 末字节 0x41 大于分组长度，不可能是合法 PKCS#5 填充，解密必然在填充校验处失败。
+        Arrays.fill(invalidPlainBlock, (byte) 0x41);
+        byte[] masked = new byte[16];
+        for (int index = 0; index < masked.length; index++) {
+            masked[index] = (byte) (invalidPlainBlock[index] ^ iv[index]);
+        }
+        javax.crypto.Cipher blockCipher = javax.crypto.Cipher.getInstance("AES/ECB/NoPadding");
+        blockCipher.init(javax.crypto.Cipher.ENCRYPT_MODE, new javax.crypto.spec.SecretKeySpec(key, "AES"));
+        byte[] cipherBlock = blockCipher.doFinal(masked);
+        byte[] authenticated = new byte[32];
+        System.arraycopy(iv, 0, authenticated, 0, 16);
+        System.arraycopy(cipherBlock, 0, authenticated, 16, 16);
+        byte[] mac = ReflectionTestUtils.invokeMethod(EncryptTypeHandler.class, "authenticate", key, authenticated);
+        byte[] payload = new byte[authenticated.length + 32];
+        System.arraycopy(authenticated, 0, payload, 0, authenticated.length);
+        System.arraycopy(mac, 0, payload, authenticated.length, 32);
+        return payload;
     }
 
     /** 编码损坏内容为语法合法的新格式，隔离 Base64 与布局、认证失败原因。 */

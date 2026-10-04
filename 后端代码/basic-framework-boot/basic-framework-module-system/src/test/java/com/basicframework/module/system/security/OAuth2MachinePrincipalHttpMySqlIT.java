@@ -12,7 +12,6 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.mybatis.core.handler.DefaultDBFieldHandler;
-import com.basicframework.framework.security.config.AuthorizeRequestsCustomizer;
 import com.basicframework.framework.security.config.BasicFrameworkSecurityAutoConfiguration;
 import com.basicframework.framework.security.config.BasicFrameworkWebSecurityConfigurerAdapter;
 import com.basicframework.framework.security.core.service.SecurityFrameworkService;
@@ -26,7 +25,9 @@ import com.basicframework.module.system.api.permission.PermissionApiImpl;
 import com.basicframework.module.system.api.sms.SmsCodeApi;
 import com.basicframework.module.system.api.sms.SmsCodeApiImpl;
 import com.basicframework.module.system.controller.admin.auth.AuthController;
+import com.basicframework.module.system.controller.admin.oauth2.OAuth2UserController;
 import com.basicframework.module.system.controller.admin.permission.RoleController;
+import com.basicframework.module.system.controller.admin.user.UserProfileController;
 import com.basicframework.module.system.controller.open.oauth2.OAuth2OpenController;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2ClientDO;
@@ -51,6 +52,7 @@ import com.basicframework.module.system.enums.oauth2.OAuth2GrantTypeEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.enums.oauth2.OAuth2MachineToken;
 import com.basicframework.module.system.framework.auth.config.AdminAuthenticationProperties;
+import com.basicframework.module.system.framework.security.config.SecurityConfiguration;
 import com.basicframework.module.system.framework.sms.config.SmsCodeProperties;
 import com.basicframework.module.system.service.auth.AdminAuthService;
 import com.basicframework.module.system.service.auth.AdminAuthServiceImpl;
@@ -140,6 +142,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 用独立 MySQL、真实 Mapper、生产 Spring Security 过滤链和生产 Controller 验证
  * OAuth2 client_credentials 机器主体（userId=0、userType=ADMIN）的真实越权边界。
  *
+ * <p>机器主体不是管理端用户：生产安全链只允许它在模块显式声明的机器 API 面（此处为
+ * {@code /admin-api/system/oauth2/user/**}，由 {@code @ss.hasScope} 限定授权范围）通过，
+ * 其余管理端接口一律按无权限拒绝。因此本类断言“机器令牌在只要求登录的读/写入口返回 403”，
+ * 而不是依赖数据权限或账号状态。</p>
+ *
+ * <p>边界：本上下文不装配生产数据权限拦截器。生产数据权限只为 {@code system_users} 与
+ * {@code system_dept} 登记部门/用户列规则，约束的是真实用户的可见行范围，不能用它证明机器主体
+ * 被拒绝；此处拒绝发生在认证与授权层，控制器与 Mapper 都不会被调用。</p>
+ *
  * <p>显式执行本集成入口时必须注入环回测试 MySQL 与 Redis；缺失环境直接失败。
  * 数据库仅以随机 bf_machine_ 前缀创建和删除，不连接业务库。</p>
  */
@@ -223,6 +234,7 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         context.register(TransactionConfiguration.class, MvcConfiguration.class, WebSecurityTestConfiguration.class,
                 ClassProxyingConfiguration.class,
                 BasicFrameworkSecurityAutoConfiguration.class, BasicFrameworkWebSecurityConfigurerAdapter.class,
+                SecurityConfiguration.class,
                 DataLayerConfiguration.class, ServiceLayerConfiguration.class, WebLayerConfiguration.class,
                 ControllerLayerConfiguration.class);
         context.refresh();
@@ -381,6 +393,20 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         assertThat(accessMapper.selectCount(null)).isZero();
     }
 
+    /**
+     * 空白 scope 必须按参数错误拒绝，不能签发授权范围不明的机器令牌。
+     *
+     * <p>拆分后的范围集合是签发与后续鉴权的唯一依据：允许空范围会得到一张不绑定任何权限、
+     * 却又真实有效的令牌，调用方拿到的是“凭据可用但权限语义未定义”的状态。</p>
+     */
+    @Test
+    void openTokenRejectsBlankScope() throws Exception {
+        JsonNode body = postToken(Map.of("grant_type", "client_credentials", "client_id", clientId,
+                "client_secret", clientSecret, "scope", "   "));
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(400);
+        assertThat(accessMapper.selectCount(null)).isZero();
+    }
+
     /** 超出客户端授权范围的 scope 必须被拒绝。 */
     @Test
     void openTokenRejectsScopeBeyondGrant() throws Exception {
@@ -412,32 +438,84 @@ class OAuth2MachinePrincipalHttpMySqlIT {
                 Long.class, stored.getRefreshToken())).isZero();
     }
 
-    /** 核心验证：机器令牌通过只要求登录的后台接口，并读到真实管理员数据。 */
+    /**
+     * 核心验证：机器令牌访问只要求登录的后台读入口必须被按无权限拒绝，且不返回任何管理数据。
+     *
+     * <p>{@code /system/role/list-all-simple} 没有权限表达式，机器令牌曾以此为管理端用户读取真实
+     * 角色数据。这里断言拒绝码、拒绝响应体不含数据，并说明拒绝来自认证授权层。</p>
+     */
     @Test
-    void machineTokenReadsAuthenticatedOnlyAdminEndpoint() throws Exception {
+    void machineTokenDeniedOnAuthenticatedOnlyAdminEndpoint() throws Exception {
         MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple")
                         .header("Authorization", "Bearer " + machineToken()))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode body = readBody(result);
-        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
-        JsonNode roles = body.get("data");
-        assertThat(roles.isArray()).isTrue();
-        assertThat(roles.size()).isGreaterThan(0);
-        // 读到的是真实管理员角色数据，证明并非空集或异常兜底。
-        assertThat(roles.get(0).get("name").asText()).startsWith("机密角色");
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertThat(body.get("data")).as("拒绝响应不得携带角色数据，实际=%s", body).isNull();
     }
 
-    /** 同一令牌访问依赖真实用户的接口时返回空数据，不构成越权读。 */
+    /** 只要求登录的写入口必须同样对机器令牌拒绝，不能在控制器或服务层才失败。 */
     @Test
-    void machineTokenGetsEmptyPermissionInfo() throws Exception {
+    void machineTokenDeniedOnAuthenticatedOnlyWriteEndpoint() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.put("/admin-api/system/user/profile/update")
+                        .header("Authorization", "Bearer " + machineToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(JsonUtils.toJsonString(Map.of("nickname", "机器主体写入"))))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = readBody(result);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertThat(body.get("data")).as("拒绝响应不得携带数据，实际=%s", body).isNull();
+    }
+
+    /**
+     * 模块显式声明的机器 API 面必须继续放行机器令牌，否则隔离会变成一刀切切断正规机器调用。
+     *
+     * <p>用该路径上不存在的 POST 方法探测：安全链放行后请求才会进入 MVC 路由并返回“请求方法不正确”
+     * （405）；若安全链拒绝机器主体，响应会是“没有该操作权限”（403）。同一路径上的 405 与随机令牌的
+     * 401 互为对照，证明 405 需要真实有效的机器凭据。</p>
+     */
+    @Test
+    void machineTokenReachesDeclaredMachineApiSurface() throws Exception {
+        MvcResult machineResult = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + machineToken()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(readBody(machineResult).get("code").asInt())
+                .as("机器面必须放行机器主体，真实响应=%s", readBody(machineResult))
+                .isEqualTo(405);
+
+        MvcResult forgedResult = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(readBody(forgedResult).get("code").asInt())
+                .as("无效凭据不得进入机器面")
+                .isEqualTo(401);
+    }
+
+    /** 机器面不得成为真实用户的绕行通道：真实用户令牌在同一路径上同样按正常路由返回 405。 */
+    @Test
+    void realUserTokenReachesDeclaredMachineApiSurface() throws Exception {
+        String accessToken = loginAsRealUser().get("data").get("accessToken").asText();
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(405);
+    }
+
+    /** 依赖真实用户的接口必须对机器主体拒绝，不能返回空数据后仍被视为已授权访问。 */
+    @Test
+    void machineTokenDeniedOnPermissionInfoEndpoint() throws Exception {
         MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/auth/get-permission-info")
                         .header("Authorization", "Bearer " + machineToken()))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode body = readBody(result);
-        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
-        assertThat(body.get("data").isNull()).isTrue();
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertThat(body.get("data")).as("拒绝响应不得携带数据，实际=%s", body).isNull();
     }
 
     /** 有 @PreAuthorize 权限要求的接口必须对机器主体拒绝。 */
@@ -451,7 +529,7 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(403);
     }
 
-    /** 无令牌访问受保护后台接口必须返回未授权，说明机器令牌的放行不是因为链路失效。 */
+    /** 无令牌访问受保护后台接口必须返回未授权，说明机器令牌的拒绝不是因为链路失效。 */
     @Test
     void protectedEndpointRejectsAnonymous() throws Exception {
         MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple"))
@@ -470,9 +548,14 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(401);
     }
 
-    /** 真实管理员被禁用后，机器令牌仍然有效，说明会话撤销无法覆盖该主体。 */
+    /**
+     * 机器主体的隔离与真实账号状态无关：真实用户被禁用前后，机器令牌在管理读入口都必须被拒绝。
+     *
+     * <p>占位主体没有可禁用的账号行，因此不能靠账号状态或会话撤销兜底；这里用禁用真实用户作为对照，
+     * 证明拒绝来自主体类型判定而不是某次账号校验的副作用。</p>
+     */
     @Test
-    void machineTokenSurvivesDisablingRealUsers() throws Exception {
+    void machineTokenDeniedRegardlessOfRealUserStatus() throws Exception {
         String token = machineToken();
         userMapper.updateById(AdminUserDO.builder().id(user.getId())
                 .status(CommonStatusEnum.DISABLE.getStatus()).build());
@@ -481,8 +564,8 @@ class OAuth2MachinePrincipalHttpMySqlIT {
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode body = readBody(result);
-        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
-        assertThat(body.get("data").size()).isGreaterThan(0);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertThat(body.get("data")).as("拒绝响应不得携带数据，实际=%s", body).isNull();
     }
 
     /** 用未过期且客户端匹配的旧版零号刷新会话验证机器守卫，避免客户端错配造成假通过。 */
@@ -507,7 +590,12 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         assertRejectedRefreshPreservesSession(legacy, "无效的刷新令牌");
     }
 
-    /** 两枚机器令牌共享哨兵；真实退出只撤销目标令牌，另一枚必须仍能通过安全链读取角色。 */
+    /**
+     * 两枚机器令牌共享哨兵；真实退出只撤销目标令牌，另一枚必须仍被识别为有效机器主体。
+     *
+     * <p>用管理读入口的两种拒绝码区分凭据状态：403 表示凭据有效但主体是机器（被隔离），
+     * 401 表示凭据已失效。这样既不读取任何管理数据，也不依赖机器主体可用的业务接口。</p>
+     */
     @Test
     void revokingOneMachineTokenPreservesOtherToken() throws Exception {
         String revoked = machineToken();
@@ -518,27 +606,16 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         assertThat(accessMapper.selectByAccessToken(retained).getRefreshToken())
                 .isEqualTo(OAuth2MachineToken.MACHINE_NO_REFRESH_TOKEN);
 
-        // 先证明两枚凭据都能访问，避免把原本无效的令牌误当成撤销成功。
-        for (String token : List.of(revoked, retained)) {
-            MvcResult beforeLogout = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple")
-                            .header("Authorization", "Bearer " + token))
-                    .andExpect(status().isOk()).andReturn();
-            assertThat(readBody(beforeLogout).get("code").asInt()).isZero();
-        }
+        // 先证明两枚凭据都能通过令牌校验，避免把原本无效的令牌误当成撤销成功。
+        assertThat(machinePrincipalStatus(revoked)).as("第一枚令牌必须是有效机器主体").isEqualTo(403);
+        assertThat(machinePrincipalStatus(retained)).as("第二枚令牌必须是有效机器主体").isEqualTo(403);
 
         MvcResult logout = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/auth/logout")
                         .header("Authorization", "Bearer " + revoked))
                 .andExpect(status().isOk()).andReturn();
         assertThat(readBody(logout).get("code").asInt()).isZero();
-        MvcResult denied = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple")
-                        .header("Authorization", "Bearer " + revoked))
-                .andExpect(status().isOk()).andReturn();
-        assertThat(readBody(denied).get("code").asInt()).isEqualTo(401);
-        MvcResult allowed = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple")
-                        .header("Authorization", "Bearer " + retained))
-                .andExpect(status().isOk()).andReturn();
-        assertThat(readBody(allowed).get("code").asInt()).as("另一枚机器会话必须保持有效").isZero();
-        assertThat(readBody(allowed).get("data").size()).isGreaterThan(0);
+        assertThat(machinePrincipalStatus(revoked)).as("已登出的机器令牌必须按未授权处理").isEqualTo(401);
+        assertThat(machinePrincipalStatus(retained)).as("另一枚机器会话必须保持有效").isEqualTo(403);
         assertThat(accessMapper.selectByAccessToken(revoked)).isNull();
         assertThat(accessMapper.selectByAccessToken(retained)).isNotNull();
         assertThat(accessMapper.selectCount(null)).isEqualTo(1L);
@@ -670,6 +747,24 @@ class OAuth2MachinePrincipalHttpMySqlIT {
                 "client_secret", clientSecret, "scope", "user.read"));
         assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(0);
         return body.get("data").get("accessToken").asText();
+    }
+
+    /**
+     * 读取管理读入口对指定令牌返回的业务码，用于区分凭据状态。
+     *
+     * <p>401 表示令牌不存在或已失效；403 表示令牌有效但主体是机器，被安全链按无权限隔离。
+     * 该入口本身没有权限表达式，因此这里的 403 只能来自主体类型判定。</p>
+     *
+     * @param token 待探测的访问令牌
+     * @return 真实响应中的业务码
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    private int machinePrincipalStatus(String token) throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/role/list-all-simple")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        return readBody(result).get("code").asInt();
     }
 
     /** 通过公开登录接口取得真实用户令牌。 */
@@ -1095,25 +1190,11 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         }
 
         /**
-         * system 模块在生产中不注册任何 AuthorizeRequestsCustomizer；
-         * 此处提供空实现以满足 @Resource List 注入，使兜底 anyRequest().authenticated() 生效。
+         * 显式声明 ss Bean，行为与生产 SecurityFrameworkServiceImpl 一致。
+         *
+         * <p>机器 API 面的放行规则由生产 {@code SecurityConfiguration} 提供，这里不再放置任何替身，
+         * 保证测试断言的就是生产装配。</p>
          */
-        @Bean
-        AuthorizeRequestsCustomizer systemAuthorizeRequestsCustomizer() {
-            return new AuthorizeRequestsCustomizer() {
-
-                /** 与生产一致：system 模块不额外放行任何路径。 */
-                @Override
-                public void customize(
-                        org.springframework.security.config.annotation.web.configurers.AuthorizeHttpRequestsConfigurer
-                                <org.springframework.security.config.annotation.web.builders.HttpSecurity>
-                                .AuthorizationManagerRequestMatcherRegistry registry) {
-                    // 无放行规则
-                }
-            };
-        }
-
-        /** 显式声明 ss Bean，行为与生产 SecurityFrameworkServiceImpl 一致。 */
         @Bean("ss")
         SecurityFrameworkService securityFrameworkService(PermissionApi permissionApi) {
             return new SecurityFrameworkServiceImpl(permissionApi);
@@ -1138,6 +1219,34 @@ class OAuth2MachinePrincipalHttpMySqlIT {
             RoleController controller = new RoleController();
             wire(controller, "roleService", roleService);
             return wire(controller, "userService", userService);
+        }
+
+        /** 个人资料接口，提供只要求登录的写入口用于证明机器主体不能写入管理数据。 */
+        @Bean
+        UserProfileController userProfileController(AdminUserService userService, RoleService roleService,
+                                                   PermissionService permissionService, DeptService deptService,
+                                                   PostService postService) {
+            UserProfileController controller = new UserProfileController();
+            wire(controller, "userService", userService);
+            wire(controller, "roleService", roleService);
+            wire(controller, "permissionService", permissionService);
+            wire(controller, "deptService", deptService);
+            return wire(controller, "postService", postService);
+        }
+
+        /**
+         * 第三方客户端范围接口，作为模块显式声明的机器 API 面参与安全链判定。
+         *
+         * <p>本用例只用不存在的 POST 方法探测安全链是否放行，不调用其业务逻辑，
+         * 因此部门与岗位服务只作为装配依赖注入。</p>
+         */
+        @Bean
+        OAuth2UserController oauth2UserController(AdminUserService userService, DeptService deptService,
+                                                 PostService postService) {
+            OAuth2UserController controller = new OAuth2UserController();
+            wire(controller, "userService", userService);
+            wire(controller, "deptService", deptService);
+            return wire(controller, "postService", postService);
         }
 
         /** 认证接口，用于真实用户登录与刷新正例。 */

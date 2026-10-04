@@ -170,6 +170,34 @@ class DataPermissionPipelineTest {
     }
 
     /**
+     * 真实翻译组件的调用帧内必须关闭数据权限，离开该帧后必须恢复。
+     *
+     * <p>数据翻译会按被引用字段回查数据；若翻译期间仍追加数据权限条件，用户看到的翻译结果
+     * 会因权限条件而空白，属于“查得更少”的静默故障。生产按调用栈里真实翻译组件
+     * {@code com.fhs.trans.service.impl.SimpleTransService} 的方法帧判定，且该判定只在已压入
+     * 数据权限注解上下文（真实业务方法带 {@code @DataPermission}）时才会被读取，因此本用例先压入
+     * 启用状态的上下文，再调用该组件自身的反翻译流程：帧内必须空集合，帧外必须恢复全部规则。</p>
+     */
+    @Test
+    void translateComponentFrameDisablesDataPermission() {
+        DataPermissionRuleFactoryImpl factory = new DataPermissionRuleFactoryImpl(List.of(alwaysRule("a")));
+        AtomicReference<Integer> rulesInsideFrame = new AtomicReference<>();
+        TranslateFrameProbe probe = new TranslateFrameProbe(factory, rulesInsideFrame);
+        TranslateSample sample = new TranslateSample();
+        sample.setRefValue("probe-value");
+        DataPermissionContextHolder.add(annotation(true));
+
+        probe.unTransOne(sample, List.of(translateField()));
+
+        assertThat(rulesInsideFrame.get())
+                .as("真实翻译组件帧内必须不返回任何数据权限规则").isZero();
+        assertThat(factory.getDataPermissionRule("any"))
+                .as("离开翻译帧后必须恢复数据权限规则").hasSize(1);
+        assertThat(sample.getRefValue())
+                .as("反翻译仍按组件契约把结果写回字段").isEqualTo("probe");
+    }
+
+    /**
      * 覆写翻译组件公开方法的探针。
      * 生产守卫按类名精确匹配调用栈，子类帧的类名不同，故不会命中该守卫。
      */
@@ -192,6 +220,45 @@ class DataPermissionPipelineTest {
                                       java.lang.reflect.Field field) {
             ruleCount.set(factory.getDataPermissionRule("any").size());
             return "probe";
+        }
+    }
+
+    /** 参与反翻译的样例对象，字段类型与探针的返回值一致。 */
+    static class TranslateSample {
+
+        /** 待反翻译的引用字段，类型按 easy-trans 的 SIMPLE 翻译登记。 */
+        @com.fhs.core.trans.anno.UnTrans(type = "simple")
+        private String refValue;
+
+        /**
+         * 读取引用字段当前值。
+         *
+         * @return 引用字段值
+         */
+        String getRefValue() {
+            return refValue;
+        }
+
+        /**
+         * 写入引用字段，用于让反翻译流程有真实的待处理内容。
+         *
+         * @param refValue 引用字段值
+         */
+        void setRefValue(String refValue) {
+            this.refValue = refValue;
+        }
+    }
+
+    /**
+     * 读取反翻译样例的引用字段声明。
+     *
+     * @return 带 {@code UnTrans} 注解的字段
+     */
+    private static java.lang.reflect.Field translateField() {
+        try {
+            return TranslateSample.class.getDeclaredField("refValue");
+        } catch (NoSuchFieldException exception) {
+            throw new IllegalStateException("反翻译样例字段被改动", exception);
         }
     }
 
@@ -354,6 +421,69 @@ class DataPermissionPipelineTest {
 
         assertThat(observed).containsExactly("inner:0", "outer:1");
         DataPermissionContextHolder.clear();
+    }
+
+    /**
+     * {@code getAll()} 必须返回当前线程的完整栈，顺序为自栈底到栈顶，且是上下文的实时视图。
+     *
+     * <p>诊断与嵌套场景需要看到整条栈；若返回快照或自栈顶开始的顺序，读到的“外层规则”
+     * 会与真正生效的规则相反，排查权限范围问题时得到错误结论。</p>
+     */
+    @Test
+    void getAllExposesFullStackFromBottomToTop() {
+        DataPermission outer = annotation(true);
+        DataPermission inner = annotation(false);
+        DataPermissionContextHolder.add(outer);
+        DataPermissionContextHolder.add(inner);
+
+        List<DataPermission> stack = DataPermissionContextHolder.getAll();
+
+        assertThat(stack).containsExactly(outer, inner);
+        assertThat(DataPermissionContextHolder.get())
+                .as("get 必须是栈顶元素，与 getAll 的末位一致").isSameAs(stack.get(stack.size() - 1));
+
+        DataPermissionContextHolder.remove();
+        assertThat(DataPermissionContextHolder.getAll())
+                .as("出栈后 getAll 必须同步反映当前上下文，而不是旧快照").containsExactly(outer);
+
+        DataPermissionContextHolder.clear();
+        assertThat(DataPermissionContextHolder.getAll())
+                .as("清理后不得残留上一轮的权限配置").isEmpty();
+    }
+
+    /**
+     * 实例化上下文持有类不得读写当前线程的权限上下文。
+     *
+     * <p>该类只有静态成员，但保留公开无参构造；如果构造过程顺带清理或写入上下文，
+     * 任何按普通对象使用的调用方都会静默改变数据权限范围。</p>
+     */
+    @Test
+    void contextHolderInstantiationDoesNotTouchContext() {
+        DataPermissionContextHolder.add(annotation(true));
+
+        new DataPermissionContextHolder();
+
+        assertThat(DataPermissionContextHolder.getAll())
+                .as("实例化既不得清空也不得追加上下文").hasSize(1);
+    }
+
+    /**
+     * 实例化忽略工具类不得改变当前上下文，其静态入口仍按原契约工作。
+     *
+     * <p>工具类没有实例状态；构造后既不能丢外层配置，也不能让后续忽略块失效。</p>
+     */
+    @Test
+    void utilsInstantiationDoesNotTouchContext() {
+        DataPermissionContextHolder.add(annotation(true));
+
+        new DataPermissionUtils();
+        assertThat(DataPermissionContextHolder.getAll())
+                .as("实例化不得丢弃已有的外层配置").hasSize(1);
+
+        DataPermissionUtils.executeIgnore(() -> assertThat(DataPermissionContextHolder.get().enable())
+                .as("忽略块内生效的必须是禁用数据权限的注解").isFalse());
+        assertThat(DataPermissionContextHolder.getAll())
+                .as("忽略块结束后必须恢复外层配置").hasSize(1);
     }
 
     /** 构造默认配置的数据权限注解。 */

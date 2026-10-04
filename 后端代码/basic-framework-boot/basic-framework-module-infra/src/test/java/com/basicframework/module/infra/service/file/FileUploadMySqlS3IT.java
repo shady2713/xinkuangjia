@@ -17,6 +17,7 @@ import com.basicframework.module.infra.dal.mysql.file.FileUploadMapper;
 import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
 import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileClientFactoryImpl;
+import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -68,6 +69,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
@@ -403,6 +405,188 @@ class FileUploadMySqlS3IT {
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    /**
+     * 大小与路径校验必须发生在任何持久化写入之前，拒绝后不消耗日预算。
+     *
+     * <p>预约是"先占额度、后写对象"的入口：若大小为零或超过上限仍被放行，后续完成阶段
+     * 会写入空对象或超出存储策略的文件；若文件名或对象路径含路径穿越语义被放行，
+     * 对象键就会落到本身份目录之外。校验顺序同样重要——先消耗预算再拒绝会让失败请求
+     * 白占额度，用户当天无法再上传。</p>
+     */
+    @Test
+    void reserveRejectsInvalidSizeAndPathBeforeQuota() {
+        assertThatThrownBy(() -> lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt", 0, false))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_SIZE_EXCEEDED.getCode()));
+        assertThatThrownBy(() -> lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt",
+                limits.getMaxBytes() + 1, false))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_SIZE_EXCEEDED.getCode()));
+        assertThatThrownBy(() -> lifecycle.reserve(owner, uniquePath("note.txt"), "../evil.txt", 8, false))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_PATH_INVALID.getCode()));
+        assertThatThrownBy(() -> lifecycle.reserve(owner, "tests/../evil.txt", "note.txt", 8, false))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_PATH_INVALID.getCode()));
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file_upload WHERE owner_key = ?",
+                Integer.class, owner)).as("被拒绝的预约不得落库").isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file_upload_quota WHERE owner_key = ?",
+                Integer.class, owner)).as("被拒绝的预约不得消耗日预算").isZero();
+    }
+
+    /**
+     * 直传预约不允许在完成阶段改为后端上传内容。
+     *
+     * <p>直传预约的目的是让浏览器把字节写到暂存键，服务端只做有界读取与校验；
+     * 若允许调用方再传一份内容，就会出现"最终对象来自请求体、校验来自暂存对象"的分裂，
+     * 使大小与类型校验形同虚设。</p>
+     */
+    @Test
+    void directReservationRejectsServerSuppliedContent() {
+        byte[] body = bytes("staged only");
+        FileUploadDO upload = reserve(body, true);
+
+        assertThatThrownBy(() -> lifecycle.complete(upload.getPath(), owner, body))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_UPLOAD_INVALID.getCode()));
+
+        assertNoMetadata(upload);
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                upload.getId())).isEqualTo("PENDING");
+    }
+
+    /**
+     * 后端上传内容缺失、长度与预约不符或超过当前上限时都必须拒绝登记。
+     *
+     * <p>预约记录是"用户可以写多少字节"的唯一凭据；缺少长度校验会让客户端用小预约登记大文件，
+     * 也会让空内容生成零字节元数据。上限在预约后被调小的场景同样必须拦住，
+     * 否则配置收紧对已存在的预约完全无效。</p>
+     */
+    @Test
+    void serverContentMustMatchReservationSizeAndLimit() {
+        byte[] body = bytes("valid text");
+        FileUploadDO absent = lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt", 10, false);
+        assertThatThrownBy(() -> lifecycle.complete(absent.getPath(), owner, null))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_SIZE_EXCEEDED.getCode()));
+
+        FileUploadDO mismatch = lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt", body.length + 5, false);
+        assertThatThrownBy(() -> lifecycle.complete(mismatch.getPath(), owner, body))
+                .as("实际字节数少于预约时同样必须拒绝").isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_SIZE_EXCEEDED.getCode()));
+
+        limits.setMaxBytes(body.length);
+        FileUploadDO lowered = lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt", body.length, false);
+        limits.setMaxBytes(body.length - 1);
+        assertThatThrownBy(() -> lifecycle.complete(lowered.getPath(), owner, body))
+                .as("预约之后收紧上限也必须拦住已经超限的内容").isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_SIZE_EXCEEDED.getCode()));
+
+        assertNoMetadata(absent);
+        assertNoMetadata(mismatch);
+        assertNoMetadata(lowered);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file WHERE path = ?", Long.class,
+                absent.getPath())).isZero();
+    }
+
+    /**
+     * 存储适配器返回空地址或超长地址时不得登记文件。
+     *
+     * <p>地址由存储客户端按端点与桶名拼接；端点被配错时可能返回空白或超长地址。
+     * 此时若仍写库，文件表会留下永远无法访问的记录，且长度超出列容量会在提交阶段才失败，
+     * 让"上传成功"的语义无法成立。</p>
+     */
+    @Test
+    void invalidStorageUrlIsRejectedBeforeMetadata() throws Exception {
+        byte[] body = bytes("valid text");
+        FileUploadDO blank = reserve(body, false);
+        doReturn("   ").when(storage).upload(any(byte[].class), anyString(), anyString());
+        assertThatThrownBy(() -> lifecycle.complete(blank.getPath(), owner, body))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_METADATA_INVALID.getCode()));
+
+        reset(storage);
+        FileUploadDO oversized = reserve(body, false);
+        doReturn("a".repeat(FilePathUtils.MAX_FILE_URL_LENGTH + 1))
+                .when(storage).upload(any(byte[].class), anyString(), anyString());
+        assertThatThrownBy(() -> lifecycle.complete(oversized.getPath(), owner, body))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        failure -> assertThat(failure.getCode()).isEqualTo(FILE_METADATA_INVALID.getCode()));
+
+        assertNoMetadata(blank);
+        assertNoMetadata(oversized);
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                oversized.getId())).isEqualTo("PENDING");
+    }
+
+    /**
+     * 补偿扫描对未知预约与"到期但预约尚未过期"的记录必须无副作用返回。
+     *
+     * <p>清理时间与预约过期时间相互独立：清理项可能先到期，此时预约仍在有效的五分钟窗口内，
+     * 若直接按到期清理，用户正在进行的上传会在完成前被取消。这里用一个负对照确认
+     * 同一条预约在真正过期后确实会被取消，证明前一次返回是边界判断而不是整体失效。</p>
+     */
+    @Test
+    void reconcileSkipsUnknownAndNotYetExpiredReservations() {
+        lifecycle.reconcile(999_999L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file_upload WHERE owner_key = ?",
+                Integer.class, owner)).as("未知预约不得产生任何记录").isZero();
+
+        FileUploadDO pending = reserve(bytes("staged"), true);
+        jdbc.update("UPDATE infra_file_upload SET next_cleanup_at = UTC_TIMESTAMP() WHERE id = ?", pending.getId());
+
+        lifecycle.reconcile(pending.getId());
+
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                pending.getId())).as("预约未过期时不得取消").isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("SELECT next_cleanup_at FROM infra_file_upload WHERE id = ?",
+                java.time.LocalDateTime.class, pending.getId())).as("未处理记录不得推进清理时间").isNotNull();
+
+        expire(pending);
+        lifecycle.reconcile(pending.getId());
+
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                pending.getId())).as("真实过期后必须被取消").isEqualTo("CANCELLED");
+    }
+
+    /**
+     * 存储清理失败时必须先提交取消状态并把重试时间推后五分钟，且不阻塞后续重试。
+     *
+     * <p>清理失败是正常的运维状态（存储短暂不可用）：状态若不落库，迟到的写入会被重新登记；
+     * 重试时间若不推后，失败记录会一直占据扫描批次最前面的位置。这里同时锁定失败后的持久状态、
+     * 对象仍然存在（说明确实没有删掉）与重试成功后的对象清理，避免"报错但状态看起来正常"。</p>
+     */
+    @Test
+    void cleanupFailureIsPersistedAndRetriedLater() throws Exception {
+        byte[] body = bytes("staged text");
+        FileUploadDO upload = reserve(body, true);
+        storage.upload(body, upload.getStagingPath(), "text/plain");
+        expire(upload);
+        doThrow(new IOException("controlled cleanup failure")).when(storage).delete(anyString());
+
+        lifecycle.reconcile(upload.getId());
+
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                upload.getId())).as("失败也必须提交取消状态").isEqualTo("CANCELLED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file_upload WHERE id = ? "
+                        + "AND next_cleanup_at BETWEEN DATE_ADD(UTC_TIMESTAMP(), INTERVAL 4 MINUTE) "
+                        + "AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL 6 MINUTE)", Integer.class, upload.getId()))
+                .as("失败后必须安排五分钟后的重试而不是等到次日").isEqualTo(1);
+        assertThat(storage.getContent(upload.getStagingPath()))
+                .as("失败必须保留对象以便重试").isEqualTo(body);
+
+        reset(storage);
+        expire(upload);
+        lifecycle.reconcile(upload.getId());
+
+        assertAbsent(upload.getStagingPath());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file_upload WHERE id = ? "
+                        + "AND next_cleanup_at BETWEEN DATE_ADD(UTC_TIMESTAMP(), INTERVAL 23 HOUR) "
+                        + "AND DATE_ADD(UTC_TIMESTAMP(), INTERVAL 25 HOUR)", Integer.class, upload.getId()))
+                .as("成功后改为次日核对迟到的写入").isEqualTo(1);
     }
 
     /** 关闭客户端后仅移除本类已创建的随机桶和数据库，异常也继续回收其他独立资源。 */
