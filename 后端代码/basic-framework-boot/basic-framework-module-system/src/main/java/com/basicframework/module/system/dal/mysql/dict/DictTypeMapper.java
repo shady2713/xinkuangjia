@@ -57,18 +57,24 @@ public interface DictTypeMapper extends BaseMapperX<DictTypeDO> {
     /**
      * 软删除单个字典类型并记录删除时间。
      *
+     * <p>逻辑删除列必须经 {@code LambdaUpdateWrapper.set} 显式写入：实体式
+     * {@code update(entity, wrapper)} 会跳过带 {@code @TableLogic} 的列，导致删除标记不落库、
+     * 记录继续被查询命中。</p>
+     *
      * @param id 字典类型编号
      * @param deletedTime 删除时间
      */
     default void updateToDelete(Long id, LocalDateTime deletedTime) {
-        DictTypeDO update = new DictTypeDO();
-        update.setDeleted(true);
-        update.setDeletedTime(deletedTime);
-        update(update, new LambdaUpdateWrapper<DictTypeDO>().eq(DictTypeDO::getId, id));
+        update(null, new LambdaUpdateWrapper<DictTypeDO>()
+                .set(DictTypeDO::getDeleted, true)
+                .set(DictTypeDO::getDeletedTime, deletedTime)
+                .eq(DictTypeDO::getId, id));
     }
 
     /**
      * 使用同一删除时间批量软删除字典类型。
+     *
+     * <p>与单条删除同源，逻辑删除列同样必须显式 set，否则批量删除不会让记录从查询中消失。</p>
      *
      * @param ids 字典类型编号集合
      * @param deletedTime 删除时间
@@ -78,10 +84,10 @@ public interface DictTypeMapper extends BaseMapperX<DictTypeDO> {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        DictTypeDO update = new DictTypeDO();
-        update.setDeleted(true);
-        update.setDeletedTime(deletedTime);
-        return update(update, new LambdaUpdateWrapper<DictTypeDO>().in(DictTypeDO::getId, ids));
+        return update(null, new LambdaUpdateWrapper<DictTypeDO>()
+                .set(DictTypeDO::getDeleted, true)
+                .set(DictTypeDO::getDeletedTime, deletedTime)
+                .in(DictTypeDO::getId, ids));
     }
 
 }
