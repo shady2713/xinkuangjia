@@ -106,7 +106,15 @@ export class FormApi<
   TValues extends FormValuesConstraint = FormValues,
   TComp extends BaseFormComponentType = BaseFormComponentType,
 > {
-  public form: FormActions<TValues> | undefined;
+  /**
+   * 挂载后供业务直接读取的 vee-validate 表单上下文。
+   *
+   * 这里刻意保持对象引用恒定，而不是在挂载时替换引用：`const [Form, { form }] = useVbenForm(...)`
+   * 这类解构写法在 setup 期就把属性值取走，之后不会再读取本属性，替换引用会让解构方永远停留在挂载前的空值。
+   * 因此 `mount` 把上下文成员复制进这个容器，`unmount` 逐个清空成员：容器本身始终存在，
+   * 挂载前与卸载后读取到的成员均为 undefined，业务侧仍可按“有值即已挂载”判断。
+   */
+  public form: FormActions<TValues> = {} as FormActions<TValues>;
   isMounted = false;
   public state: null | TypedFormProps<TValues, TComp> = null;
   stateHandler: StateHandler;
@@ -295,6 +303,8 @@ export class FormApi<
   /**
    * 交入真实表单上下文并放行挂载等待。
    * 重复挂载直接忽略：第二次调用来自组件重渲染，不能覆盖已在使用的上下文与组件引用。
+   * 上下文成员被复制进固定的 `form` 容器而不是替换容器引用，
+   * 这样 setup 期解构出 `form` 并长期持有的消费方（如锁屏）在挂载后仍能读到真实上下文。
    * @param formActions 由 `use-form-renderer` 提供的 vee-validate 表单上下文。
    * @param componentRefMap 字段名到组件实例的映射，用于聚焦定位与滚动定位。
    */
@@ -303,7 +313,7 @@ export class FormApi<
     componentRefMap = new Map<string, unknown>(),
   ) {
     if (!this.isMounted) {
-      this.form = formActions;
+      Object.assign(this.form, formActions);
       this.wasUnmounted = false;
       this.setLatestSubmissionValues(
         this.toValueType(this.handleRangeTimeValue(this.form.values)),
@@ -556,17 +566,24 @@ export class FormApi<
     )();
   }
 
-  /** 结束实例并拒绝挂载等待，清理后的旧异步动作不能进入下次挂载。 */
+  /**
+   * 结束实例并拒绝挂载等待，清理后的旧异步动作不能进入下次挂载。
+   * 容器引用保持不变、只清空成员，解构持有 `form` 的消费方在卸载后读到的是“无上下文”，
+   * 而不是上一次挂载遗留的失效实例；之后重新挂载会再次写入成员。
+   */
   unmount() {
-    const form = this.form;
+    // 未挂载时容器内没有成员，取用成员会在调用时抛 TypeError，
+    // 因此本次是否真的持有上下文以 isMounted 判定，而不是以容器是否存在判定。
+    const form = this.isMounted ? this.form : undefined;
     this.lifecycle++;
     this.wasUnmounted = true;
-    this.form = undefined;
     this.latestSubmissionValues = null;
     this.isMounted = false;
     this.componentRefMap.clear();
     this.stateHandler.reset();
+    // 必须先重置再清空容器：清空后容器里不再有 resetForm 可调用。
     form?.resetForm();
+    this.clearFormActions();
   }
 
   /**
@@ -682,6 +699,17 @@ export class FormApi<
   }
 
   /**
+   * 逐个清空 `form` 容器里由本次挂载复制进来的上下文成员。
+   * 容器引用必须保留（解构方长期持有该引用），因此不能整体替换或删除属性本身；
+   * 清空后挂载前、卸载后的读取语义一致，也避免把已销毁实例的 vee-validate 上下文留在容器里。
+   */
+  private clearFormActions() {
+    for (const key of Object.keys(this.form)) {
+      Reflect.deleteProperty(this.form, key);
+    }
+  }
+
+  /**
    * 依次执行全部成员的读取闭包，任一成员失败即整体无效。
    * 组合提交必须整体成功，因此这里不做部分成功：任一成员校验不通过都返回 undefined。
    * @param readers 组合成员登记的读取闭包，调用顺序即合并顺序。
@@ -736,6 +764,7 @@ export class FormApi<
   }
 
   /** 等待首次挂载；销毁前的等待不能借用后续挂载实例。
+   * 容器始终存在，因此“没有上下文”只由挂载标记与代次判定，而不是由容器是否为空判定。
    * @returns 当前挂载的真实 vee-validate FormContext。
    * @throws {Error} 表单已销毁、等待被取消或挂载代次已经变化。
    */
@@ -746,7 +775,7 @@ export class FormApi<
       await this.stateHandler.waitForCondition();
     }
     const form = this.form;
-    if (!form || !this.isMounted || lifecycle !== this.lifecycle) {
+    if (!this.isMounted || lifecycle !== this.lifecycle) {
       throw new Error('表单挂载已失效');
     }
     return form;
@@ -974,7 +1003,9 @@ export class FormApi<
         (item) => !currentFields.has(item.fieldName),
       );
       for (const schema of deletedSchema) {
-        this.form?.setFieldValue?.(
+        // 容器在未挂载或已卸载时是空的，这里用可选调用跳过而不是崩溃；
+        // 挂载中则与既有行为一致，直接清理被删除字段的值。
+        this.form.setFieldValue?.(
           schema.fieldName as Path<TValues>,
           undefined as PathValue<TValues, Path<TValues>>,
         );

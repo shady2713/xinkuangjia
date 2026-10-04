@@ -70,6 +70,8 @@ const validPass = computed(
 /**
  * 提交解锁密码。
  * 密码正确才真正解锁；密码错误时把错误写到字段上，让用户看到失败原因。
+ * `form` 是引用恒定的上下文容器，前面校验通过即代表已挂载，
+ * 因此这里刻意不加可选链：契约被破坏时要直接抛错暴露，不能把失败原因静默吞掉。
  */
 async function handleSubmit() {
   const { valid } = await validate();
@@ -77,8 +79,7 @@ async function handleSubmit() {
     if (validPass.value) {
       accessStore.unlockScreen();
     } else {
-      // 表单未挂载时没有可写入的上下文，这里直接结束，避免抛出未处理异常。
-      form?.setFieldError('password', $t('authentication.passwordErrorTip'));
+      form.setFieldError('password', $t('authentication.passwordErrorTip'));
     }
   }
 }

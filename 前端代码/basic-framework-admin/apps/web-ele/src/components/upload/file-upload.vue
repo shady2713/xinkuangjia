@@ -1,5 +1,14 @@
 <script lang="ts" setup>
-import type { UploadFile, UploadRequestOptions } from 'element-plus';
+/**
+ * 文件上传组件：以 Element Plus 上传列表承载业务文件值，
+ * 负责数量、类型与大小校验，上传编排、完成项登记以及删除后向外同步值。
+ * 列表项一律按 Element Plus 生成的 uid 标识，不能用文件名或时间戳代替。
+ */
+import type {
+  UploadFile,
+  UploadRawFile,
+  UploadRequestOptions,
+} from 'element-plus';
 
 import type { FileUploadProps, UploadApiResult } from './typing';
 
@@ -140,9 +149,12 @@ watch(
       // 值为空时清空文件列表
       fileList.value = [];
     }
-    if (!isFirstRender.value) {
-      emit('change', value);
+    // 首次渲染只建立内部列表，不向外发变更事件，避免调用方把初始化当成用户修改；
+    // 标记必须在首次处理结束时独立复位，放在抛出分支内会让外部变化永远不通知调用方。
+    if (isFirstRender.value) {
       isFirstRender.value = false;
+    } else {
+      emit('change', value);
     }
   },
   {
@@ -238,7 +250,7 @@ async function customRequest(options: UploadRequestOptions) {
     const res = await requestUpload(props, options);
 
     // 处理上传成功后的逻辑
-    handleUploadSuccess(res, options.file as File);
+    handleUploadSuccess(res, options.file);
 
     options.onSuccess(res);
     showSuccessMessage($t('ui.upload.uploadSuccess'));
@@ -253,14 +265,19 @@ async function customRequest(options: UploadRequestOptions) {
 /**
  * 处理上传成功
  * @param res 上传响应结果
- * @param file 上传的文件
+ * @param file 本次上传完成的原始文件；其 `uid` 由 Element Plus 生成并保证同一列表内唯一，
+ * 既用于定位要清理的临时占位项，也作为完成项的标识沿用下去
  */
-function handleUploadSuccess(res: UploadApiResult, file: File) {
-  // 删除临时文件；fileList 始终是数组，findIndex 不会返回 undefined，
+function handleUploadSuccess(res: UploadApiResult, file: UploadRawFile) {
+  // 删除本次上传对应的临时占位项；fileList 始终是数组，findIndex 不会返回 undefined，
   // 必须同时排除 -1，否则 splice(-1) 会误删最后一项
   const index = fileList.value.findIndex(
-    /** 按文件名匹配本次要清理的同名占位项。 */
-    (item) => item.name === file.name,
+    /**
+     * 按 Element Plus 生成的文件标识匹配本次上传的占位项。
+     * 不能按文件名匹配：同名文件（例如不同目录下的同名文件）同时上传时会删错占位项，
+     * 留下的占位项与完成项重名重标，后续删除、计数都会指向错误的条目。
+     */
+    (item) => item.uid === file.uid,
   );
   if (index !== -1) {
     fileList.value.splice(index, 1);
@@ -272,9 +289,9 @@ function handleUploadSuccess(res: UploadApiResult, file: File) {
     name: file.name,
     url: fileUrl,
     status: UploadResultStatus.SUCCESS,
-    // UploadFile.uid 按 Element Plus 契约是 number；同一批次的同名占位项
-    // 已在上面被移除，剩余条目按上传完成时刻取值即可保持唯一
-    uid: Date.now(),
+    // 沿用原始上传文件的 uid：它由 Element Plus 逐文件递增生成，
+    // 同一毫秒完成的上传不会共享标识，删除时按 uid 过滤才只影响目标文件。
+    uid: file.uid,
   });
 
   // 检查是否所有文件都上传完成

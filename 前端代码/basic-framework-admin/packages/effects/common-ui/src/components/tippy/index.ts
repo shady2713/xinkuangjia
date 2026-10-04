@@ -31,7 +31,12 @@ export type TippyProps = Partial<
   }
 >;
 
-export function initTippy(app: App<Element>, options?: DefaultProps) {
+/**
+ * 初始化全局提示：写入默认属性、注册 v-tippy 指令，并在未固定主题时跟随明暗模式。
+ * @param app Vue 应用实例，用于注册指令。
+ * @param options 调用方覆盖的默认属性；未传时按当前明暗模式自动刷新主题。
+ */
+export function initTippy(app: App<Element>, options?: Partial<DefaultProps>) {
   setDefaultProps({
     allowHTML: true,
     delay: [500, 200],

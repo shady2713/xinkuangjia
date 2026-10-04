@@ -279,6 +279,82 @@ describe('formApi', /** 实例挂载、读写、提交与重置的基础行为�
   });
 });
 
+describe('formApi 引用契约', /** 挂载上下文必须写入引用恒定的容器：解构后长期持有的消费方不能停留在挂载前的空值。 */ () => {
+  let formApi: FormApi;
+
+  beforeEach(
+    /** 每个用例前重建实例，避免容器在用例之间残留上一次挂载的成员。 */
+    () => {
+      formApi = new FormApi();
+    },
+  );
+
+  it('挂载前取出的 form 引用在挂载后仍能读到真实上下文', /** 解构写法在 setup 期取走属性值，挂载只能写入成员，不能替换容器引用。 */ async () => {
+    const setFieldError = vi.fn();
+    const formActions = stubFormActions({
+      setFieldError,
+      values: { name: 'test' },
+    });
+    // 模拟 `const [Form, { form }] = useVbenForm()`：挂载前就取走并长期持有引用。
+    const held = formApi.form;
+
+    await formApi.mount(formActions);
+
+    expect(held).toBe(formApi.form);
+    expect(held.values).toEqual({ name: 'test' });
+    // 长期持有的引用可直接写入字段错误，这是锁屏错误提示可见的前提。
+    held.setFieldError('name', '错误提示');
+    expect(setFieldError).toHaveBeenCalledWith('name', '错误提示');
+  });
+
+  it('重复挂载被忽略，容器保留首次挂载的上下文', /** 第二次挂载来自组件重渲染，不能覆盖正在使用的上下文。 */ async () => {
+    const first = stubFormActions({ values: { name: 'first' } });
+    const second = stubFormActions({ values: { name: 'second' } });
+    const held = formApi.form;
+
+    await formApi.mount(first);
+    await formApi.mount(second);
+
+    expect(held).toBe(formApi.form);
+    expect(formApi.form.values).toEqual({ name: 'first' });
+  });
+
+  it('卸载后容器成员被清空，且引用本身保持不变', /** 卸载只清空成员：持有引用的消费方读到“无上下文”，不会拿到失效的旧实例。 */ async () => {
+    const resetForm = vi.fn();
+    const formActions = stubFormActions({
+      resetForm,
+      values: { name: 'test' },
+    });
+    const held = formApi.form;
+
+    await formApi.mount(formActions);
+    formApi.unmount();
+
+    expect(held).toBe(formApi.form);
+    expect(held.values).toBeUndefined();
+    expect(held.resetForm).toBeUndefined();
+    // 清空前必须先在旧上下文上完成重置，否则组件销毁时字段值不会复位。
+    expect(resetForm).toHaveBeenCalledTimes(1);
+    await expect(formApi.getValues()).rejects.toThrow('表单已卸载');
+  });
+
+  it('卸载后重新挂载，容器写入新的上下文', /** 容器跨挂载代次复用，重新挂载必须让持有引用的消费方再次读到可用上下文。 */ async () => {
+    const held = formApi.form;
+
+    await formApi.mount(
+      stubFormActions({ resetForm: vi.fn(), values: { name: 'first' } }),
+    );
+    formApi.unmount();
+    await formApi.mount(
+      stubFormActions({ resetForm: vi.fn(), values: { name: 'second' } }),
+    );
+
+    expect(held).toBe(formApi.form);
+    expect(formApi.form.values).toEqual({ name: 'second' });
+    expect(formApi.isMounted).toBe(true);
+  });
+});
+
 describe('updateSchema', /** 按字段名合并更新既有 schema，不新增字段。 */ () => {
   let instance: FormApi;
 

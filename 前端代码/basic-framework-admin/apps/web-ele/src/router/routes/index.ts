@@ -4,9 +4,19 @@ import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 
-const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
-  eager: true,
-});
+/**
+ * 动态路由模块表。
+ *
+ * 这里刻意排除 `*.test.ts` 与 `*.spec.ts`：该 glob 是 eager 且进入生产模块图，
+ * 而仓库约定测试与被测源码同目录，测试文件一旦落在 `modules/` 下就会被一起打包
+ * （实测曾把 vitest 与测试代码打进 `dist` 的生产 chunk）。
+ */
+const dynamicRouteFiles = import.meta.glob(
+  ['./modules/**/*.ts', '!./modules/**/*.test.ts', '!./modules/**/*.spec.ts'],
+  {
+    eager: true,
+  },
+);
 
 /** 动态路由 */
 const dynamicRoutes: RouteRecordRaw[] = mergeRouteModules(dynamicRouteFiles);

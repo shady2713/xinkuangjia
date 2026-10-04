@@ -109,41 +109,47 @@ async function handleStatusChange(
   return new Promise(
     /**
      * 交由二次确认组件承载用户决策；确认后执行状态更新并按结果 resolve。
-     * @param resolve 状态更新成功时 resolve true，缺少主键或失败时 resolve false。
-     * @param reject 更新过程抛出异常时调用，向调用方透出原始错误。
+     * @param resolve 状态更新成功时 resolve true，缺少主键时 resolve false。
+     * @param reject 用户取消或写库失败时调用，向调用方透出失败原因。
      */
     (resolve, reject) => {
       confirm({
         content: `你要将${row.username}的状态切换为【${getDictLabel(DICT_TYPE.COMMON_STATUS, newStatus)}】吗？`,
-      })
-        .then(
-          /**
-           * 用户确认后写库：缺少主键直接判失败，否则提交状态变更并给出成功提示。
-           * @returns 无返回值；结果通过 resolve 传给调用方。
-           */
-          async () => {
-            // 状态变更会写库，行缺少 id 时无法定位目标记录，直接失败而不是用 undefined 发请求
-            const userId = row.id;
-            if (userId === undefined) {
-              ElMessage.error($t('ui.actionMessage.operationFailed'));
-              resolve(false);
-              return;
-            }
+      }).then(
+        /**
+         * 用户确认后写库：缺少主键直接判失败，写库失败给出提示并拒绝原始错误。
+         * @returns 无返回值；结果通过 resolve 或 reject 传给调用方。
+         */
+        async () => {
+          // 状态变更会写库，行缺少 id 时无法定位目标记录，直接失败而不是用 undefined 发请求
+          const userId = row.id;
+          if (userId === undefined) {
+            ElMessage.error($t('ui.actionMessage.operationFailed'));
+            resolve(false);
+            return;
+          }
+          try {
             // 更新用户状态
             await updateUserStatus(userId, newStatus);
-            // 提示并返回成功
-            ElMessage.success($t('ui.actionMessage.operationSuccess'));
-            resolve(true);
-          },
-        )
-        .catch(
-          /**
-           * 用户取消确认时以「取消操作」拒绝，让调用方据此回滚行内状态。
-           */
-          () => {
-            reject(new Error('取消操作'));
-          },
-        );
+          } catch (error) {
+            // 写库失败必须与「用户取消」分开处理：取消是用户的正常决策，既不写库也不提示；
+            // 失败要让管理员看到提示并拿到原始错误，否则行内开关只会静默回滚。
+            ElMessage.error($t('ui.actionMessage.operationFailed'));
+            reject(error);
+            return;
+          }
+          // 提示并返回成功
+          ElMessage.success($t('ui.actionMessage.operationSuccess'));
+          resolve(true);
+        },
+        /**
+         * 用户取消确认时以「取消操作」拒绝，让调用方据此回滚行内状态。
+         * 该分支只处理二次确认被取消，不再兜住写库异常。
+         */
+        () => {
+          reject(new Error('取消操作'));
+        },
+      );
     },
   );
 }

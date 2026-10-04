@@ -71,6 +71,41 @@ function handleClick(event: MouseEvent) {
   emit('click', event);
 }
 
+/**
+ * 把 json-bigint 的解析结果还原成原型正常的普通结构。
+ * json-bigint 以 `Object.create(null)` 承载对象节点（数组仍继承 Array.prototype），而第三方
+ * 查看器渲染对象时直接调用节点自身的 `hasOwnProperty`；无原型节点取不到该方法，会抛
+ * `TypeError: obj.hasOwnProperty is not a function` 让整块区域空白。因此这里按自有属性逐层
+ * 复制：判断一律走 `Object.hasOwn`，复制后既恢复 Object.prototype，又保留 storeAsString
+ * 得到的字符串形式大整数。代价是每次解析多复制一份结构，换取查看器不再崩溃。
+ * @param value 解析结果中的任意节点，可能是无原型对象、数组或原始值。
+ * @returns 原型正常的等价结构；原始值原样返回。
+ */
+function toPlainStructure(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(
+      /**
+       * 递归还原数组元素，嵌套对象同样需要还原。
+       * @param item 当前数组元素。
+       * @returns 还原后的元素。
+       */
+      (item) => toPlainStructure(item),
+    );
+  }
+  if (typeof value === 'object' && value !== null) {
+    // 无原型对象没有继承到 hasOwnProperty，只能用 Object.hasOwn 判断自有属性
+    const source = value as Record<string, unknown>;
+    const plain: Record<string, unknown> = {};
+    for (const key of Object.keys(source)) {
+      if (Object.hasOwn(source, key)) {
+        plain[key] = toPlainStructure(source[key]);
+      }
+    }
+    return plain;
+  }
+  return value;
+}
+
 // 支持显示 bigint 数据，如较长的订单号
 const jsonData = computed<Record<string, unknown>>(
   /**
@@ -87,11 +122,11 @@ const jsonData = computed<Record<string, unknown>>(
     }
 
     try {
-      // 解析结果整体交给查看器渲染，具体形状由 JSON 文本决定，这里只保证是对象。
-      return JsonBigint({ storeAsString: true }).parse(props.value) as Record<
-        string,
-        unknown
-      >;
+      // 解析结果整体交给查看器渲染，具体形状由 JSON 文本决定；交给查看器前必须还原原型，
+      // 否则对象根的文本会因查看器调用 hasOwnProperty 而渲染失败。
+      return toPlainStructure(
+        JsonBigint({ storeAsString: true }).parse(props.value),
+      ) as Record<string, unknown>;
     } catch (error) {
       console.error('JSON parse error:', error);
       return {};

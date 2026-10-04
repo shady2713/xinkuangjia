@@ -119,7 +119,10 @@ function setupAccessGuard(router: Router) {
             replace: true,
           };
         }
-        return to;
+        // 目标就是登录页且已无访问权限：放行本次导航。
+        // 不能返回 `to`——Vue Router 4 会把"返回同一 location"当作自重定向，
+        // 以 Infinite redirect 终止导航（实测会让 vitest 进程挂死）。
+        return true;
       }
 
       // 是否已经生成过动态路由

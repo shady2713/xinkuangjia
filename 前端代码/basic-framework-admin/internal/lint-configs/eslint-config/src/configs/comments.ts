@@ -1,3 +1,7 @@
+/**
+ * eslint-comments 插件的规则配置：禁用无依据、重复或无限范围的注释指令，
+ * 使被关闭的规则必须在代码评审中可解释。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

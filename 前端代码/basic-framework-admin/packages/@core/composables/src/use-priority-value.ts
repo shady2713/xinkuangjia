@@ -1,4 +1,11 @@
-import type { ComputedRef, Ref } from 'vue';
+/**
+ * 按 插槽 > attrs > props > state 的优先级解析组件字段值。
+ *
+ * 关键约束是求值时机：computed getter 惰性求值，首次读取往往发生在事件回调里，
+ * 那时没有 active instance。因此组件上下文必须在 composable 创建时固化，
+ * 而 attrs/slots 的响应式依赖必须经由 useAttrs()/useSlots() 建立。
+ */
+import type { ComponentInternalInstance, ComputedRef, Ref, Slots } from 'vue';
 
 import { computed, getCurrentInstance, unref, useAttrs, useSlots } from 'vue';
 
@@ -23,6 +30,23 @@ function readStateValue(source: object | undefined, key: string): unknown {
 }
 
 /**
+ * 创建期固化的组件上下文快照。
+ * @description computed getter 是惰性求值的，首次求值通常发生在事件回调或渲染副作用内，
+ * 那时已不存在 active instance，`getCurrentInstance()`、`useSlots()`、`useAttrs()` 会读到 null
+ * （弹窗的 Escape、打开焦点、点击外部回调正是这种时机）。
+ * 因此上下文必须在 composable 创建（setup 期间）时取出，getter 内只做纯读取。
+ * `instance` 保存实例对象本身而不是当时的 vnode，getter 仍能读到最新 vnode 的 props。
+ */
+interface PriorityValueContext {
+  /** 组件透传 attrs；由 useAttrs 提供，读取其中字段会建立响应式依赖。 */
+  attrs: Record<string, unknown>;
+  /** 组件实例；在 setup 之外创建时为 null。 */
+  instance: ComponentInternalInstance | null;
+  /** 组件插槽；由 useSlots 提供，setup 之外为空对象。 */
+  slots: Slots;
+}
+
+/**
  * 依次从插槽、attrs、props、state 中获取值
  * @description 泛型约束只要求 props/state 是对象，不使用索引签名，
  * 否则 Dept[]、Menu[] 这类数组 state 会因为缺少字符串索引签名而无法传入。
@@ -36,8 +60,24 @@ export function usePriorityValue<
   S extends object,
   K extends keyof T = keyof T,
 >(key: K, props: T, state: Readonly<Ref<NoInfer<S>>> | undefined) {
+  const instance = getCurrentInstance();
+  // 实例为空说明调用点不在 setup 内：此时不调用 useSlots/useAttrs（它们会抛 TypeError），
+  // 退化为无插槽、无 attrs，让 props/state 仍可解析。
+  //
+  // 这里必须保留 useSlots/useAttrs，不能改读 instance.slots/instance.attrs：
+  // Vue 3.5 的 attrs/slots 本身不是响应式对象，依赖由 setupContext 的开发态 Proxy 建立
+  // （attrs 为 track(target, 'get', '')，slots 为 track(instance, 'get', '$slots')），
+  // 对应 Vue 内部的 trigger(instance.attrs, 'set', '') 与 trigger(instance, 'set', '$slots')。
+  // 直接读原始对象会丢掉这条依赖，导致 attrs/slots 变化后 computed 不再重新解析。
+  const context: PriorityValueContext = instance
+    ? {
+        attrs: useAttrs() as Record<string, unknown>,
+        instance,
+        slots: useSlots(),
+      }
+    : { attrs: {}, instance, slots: {} };
   /** 任一来源（插槽/attrs/props/state）变化都会重新解析出该字段的值。 */
-  const resolve = (): T[K] => resolvePriorityValue(key, props, state);
+  const resolve = (): T[K] => resolvePriorityValue(key, props, state, context);
   const value = computed(resolve);
   return value;
 }
@@ -45,19 +85,24 @@ export function usePriorityValue<
 /**
  * 按 插槽 > attrs > props > state 的顺序解析出字段值。
  * @description 抽成具名函数以便单测直接覆盖各来源的优先级；slot 可以关闭。
+ * 上下文来自 composable 创建期的快照，这里不再读取 Vue 的 active instance。
  * @param key 要读取的字段名
  * @param props 组件声明的 props
  * @param state 外部状态，可为空
+ * @param context 创建期固化的组件上下文快照
  * @returns 第一个非 null/undefined 的来源值；全部为空时为 undefined
  */
 function resolvePriorityValue<
   T extends object,
   S extends object,
   K extends keyof T,
->(key: K, props: T, state: Readonly<Ref<NoInfer<S>>> | undefined): T[K] {
-  const instance = getCurrentInstance();
-  const slots = useSlots();
-  const attrs = useAttrs() as T;
+>(
+  key: K,
+  props: T,
+  state: Readonly<Ref<NoInfer<S>>> | undefined,
+  context: PriorityValueContext,
+): T[K] {
+  const { attrs, instance, slots } = context;
 
   // props不管有没有传，都会有默认值，会影响这里的顺序，
   // 通过判断原始props是否有值来判断是否传入
@@ -74,7 +119,7 @@ function resolvePriorityValue<
   // 四个来源的值类型互不相同，这里统一按 unknown 收集后回落到 T[K]
   return getFirstNonNullOrUndefined<unknown>(
     slots[key as string],
-    attrs[key],
+    attrs[key as string],
     propsKey,
     readStateValue(state?.value, key as string),
   ) as T[K];

@@ -214,10 +214,18 @@ export function useGridFormSchema(): VbenFormSchema[] {
 
 /**
  * 把后端以秒为单位的有效期展示为带单位的文本。
- * @param cellValue 表格单元格的原始值，单位为秒。
- * @returns 形如“3600 秒”的展示文本。
+ * vxe-table 调用列上的函数式 formatter 时传入的是单元格参数对象（含 cellValue、row、column
+ * 等），不能把入参直接当秒数拼接，否则列表会渲染成 “[object Object] 秒”。
+ * 0 是合法有效期（表单下限为 0），只有 null/undefined 才是空值并显示空文本。
+ * @param formatParams 表格格式化入参。
+ * @param formatParams.cellValue 单元格的原始值，单位为秒。
+ * @returns 形如“3600 秒”的展示文本；空值返回空串。
  */
-function formatSeconds(cellValue: unknown) {
+function formatSeconds(formatParams: { cellValue?: unknown }) {
+  const { cellValue } = formatParams;
+  if (cellValue === null || cellValue === undefined) {
+    return '';
+  }
   return `${cellValue as number} 秒`;
 }
 

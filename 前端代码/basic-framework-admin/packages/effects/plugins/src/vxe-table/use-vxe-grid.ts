@@ -52,12 +52,12 @@ export function useVbenVxeGrid<
       inheritAttrs: false,
       slots: Object as SlotsType<
         {
-          // 表格标题
-          'table-title': undefined;
+          // 表格标题；插槽由使用方按需提供，类型上保持可选
+          'table-title'?: undefined;
           // 工具栏左侧部分
-          'toolbar-actions': VxeGridSlotTypes.DefaultSlotParams<T>;
+          'toolbar-actions'?: VxeGridSlotTypes.DefaultSlotParams<T>;
           // 工具栏右侧部分
-          'toolbar-tools': VxeGridSlotTypes.DefaultSlotParams<T>;
+          'toolbar-tools'?: VxeGridSlotTypes.DefaultSlotParams<T>;
         } & FilteredSlots<T>
       >,
     },
