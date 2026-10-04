@@ -4,9 +4,11 @@
 @author 李杰
 """
 
+import inspect
 from pathlib import Path
 
 import pytest
+from scripts.common import quality_common
 from scripts.common.quality_common import CheckError, discover
 from scripts.docs import agent_note_support, verify_agent_note_format
 from scripts.docs.markdown_support import parse
@@ -107,12 +109,21 @@ def test_discovery_explicit_files_avoid_pairwise_ancestry(
     for name in names:
         write(tmp_path, name, "sample")
     original = Path.is_relative_to
+    module_file = quality_common.__file__
     calls = 0
 
     def counted(path: Path, other: Path) -> bool:
-        """记录祖先判断次数并调用原方法，保持真实路径判断语义。"""
+        """只统计被测模块自身发起的祖先判断，并保持真实路径判断语义。
+
+        Python 3.12 的 ``PurePath.relative_to`` 内部会调用 ``is_relative_to``；
+        把这类解释器实现调用一并计数，会让同一份被测代码在不同 Python 版本下
+        得到不同的调用总数，掩盖真正要约束的"不逐对比较祖先"行为。
+        """
         nonlocal calls
-        calls += 1
+        frame = inspect.currentframe()
+        caller = frame.f_back if frame is not None else None
+        if caller is not None and caller.f_code.co_filename == module_file:
+            calls += 1
         return original(path, other)
 
     monkeypatch.setattr(Path, "is_relative_to", counted)

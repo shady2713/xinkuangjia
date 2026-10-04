@@ -24,8 +24,9 @@ SCRIPT = ROOT / "scripts" / "workflow" / "ci_services.py"
 INSTALLER = ROOT / "scripts" / "workflow" / "install_ci_maven.sh"
 OWNER = "a" * 32
 DIGEST = "sha256:" + "b" * 64
-CREDENTIALS = {"MYSQL_ROOT_PASSWORD": "mysql-secret-1", "REDISCLI_AUTH": "redis-secret-2",
-               "MINIO_ROOT_USER": "minio-user-3", "MINIO_ROOT_PASSWORD": "minio-secret-4"}
+# 固定夹具统一带 DUMMY 标记，显式声明为合成值，不指向任何可连接环境的真实凭据。
+CREDENTIALS = {"MYSQL_ROOT_PASSWORD": "DUMMY-mysql-1", "REDISCLI_AUTH": "DUMMY-redis-2",
+               "MINIO_ROOT_USER": "DUMMY-minio-3", "MINIO_ROOT_PASSWORD": "DUMMY-minio-4"}
 
 
 class FakeDocker:

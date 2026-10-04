@@ -136,14 +136,14 @@ def test_empty_project_is_not_a_passing_gate(tmp_path: Path, kind: str) -> None:
     ('package demo; import lombok.Data; @Data public class Value { private String code; public interface Group { } }', True),
     ('package demo; import lombok.Data; @Data public class Value { private Runnable task = this::go; }', True),
     # 手写私有构造是防实例化守卫的真实字节码，不能因为"看起来只有常量"就当作声明。
-    ('package demo; public final class Value { public static final String TOKEN = "machine-no-refresh-token"; private Value() { } }', True),
-    ('package demo; public final class Value { public static final String TOKEN = "x"; private Value() { throw new IllegalStateException(); } }', False),
-    ('package demo; public final class Value { public static final String TOKEN = "x"; public static String get() { return TOKEN; } }', False),
-    ('package demo; public class Value { public static final String TOKEN = "x"; private Value() { } }', False),
-    ('package demo; public final class Value { public static final String TOKEN = "x"; static { init(); } private Value() { } }', False),
-    ('package demo; public final class Value { public static final String TOKEN = "x"; private String cache = load(); private Value() { } }', False),
-    ('package demo; public final class Value { public static final String TOKEN = build(); private Value() { } }', False),
-    ('package demo; public final class Value { public static final String TOKEN = "x"; public Value() { } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; private Value() { } }', True),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; private Value() { throw new IllegalStateException(); } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; public static String get() { return TOKEN; } }', False),
+    ('package demo; public class Value { public static final String TOKEN = "DUMMY"; private Value() { } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; static { init(); } private Value() { } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; private String cache = load(); private Value() { } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = build("DUMMY"); private Value() { } }', False),
+    ('package demo; public final class Value { public static final String TOKEN = "DUMMY"; public Value() { } }', False),
     ('package demo; public final class Value { static final int MAX = 100; static final boolean ON = true; private Value() { } }', True),
 ])
 def test_zero_java_counts_require_independent_declaration(tmp_path: Path, content: str, declaration: bool) -> None:

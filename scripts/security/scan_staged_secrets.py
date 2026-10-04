@@ -4,6 +4,8 @@
 扫描结果只报告文件、行号和规则，不回显命中的敏感值，避免检查工具造成二次泄露。
 Python 测试文件允许 unit- 加 8 至 128 个相同小写字母或数字的虚拟凭据，
 支持字符串字面量及 "unit-" + "a" * 16 写法；其他凭据检查保持生效。
+SQL 绑定参数（?、?1、:name、#{name}、${name}）与带 DUMMY、CHANGE_ME 等合成标记
+的取值不按固定凭据阻断；写死的字面量、密钥前缀、URL 凭据与私钥仍按原口径拦截。
 
 @author 李杰
 """
@@ -49,6 +51,20 @@ SECRET_PREFIX_PATTERN = re.compile(
 )
 EMBEDDED_CREDENTIAL_URL_PATTERN = re.compile(
     r"(?i)[a-z][a-z0-9+.-]*://(?P<username>[^/@\s:]+):(?P<password>[^/@\s]+)@"
+)
+# JDBC、MyBatis 与 JPA 的绑定参数写法；后面的语句文本由占位符识别函数单独校验。
+SQL_BINDING_PLACEHOLDER_PATTERN = re.compile(
+    r"(?:\?[0-9]*|:[A-Za-z_][A-Za-z0-9_]*|#\{[^{}\r\n]+\}|\$\{[^{}\r\n]+\})"
+)
+# 仓库约定的显式合成标记：测试夹具和示例值必须带这些标记，声明其不是可用凭据。
+SYNTHETIC_PLACEHOLDER_MARKERS = (
+    "CHANGE_ME",
+    "DUMMY",
+    "EXAMPLE",
+    "PLACEHOLDER",
+    "RANDOM",
+    "REDACTED",
+    "REPLACE",
 )
 PRIVATE_KEY_BLOCK_PATTERN = re.compile(
     r"-----BEGIN (?P<key_type>(?:RSA |EC |OPENSSH )?PRIVATE KEY)-----"
@@ -179,6 +195,170 @@ def _is_config_path(path: str) -> bool:
     )
 
 
+def _is_code_path(path: str) -> bool:
+    """判断路径是否按普通源码处理字符串字面量与表达式语义。
+
+    配置文件（含文档、SQL、脚本）继续按配置文本检查；Python 由 AST 候选负责
+    赋值识别，避免逐行文本规则与既有多语句保守判定冲突。
+
+    Args:
+        path: 仓库相对路径或文档代码块使用的语法路径。
+
+    Returns:
+        需要按源码语义分析时返回 ``True``。
+    """
+
+    return (
+        not _is_config_path(path) and PurePosixPath(path).suffix.lower() != ".py"
+    )
+
+
+def _string_literal_spans(line: str) -> list[tuple[int, int]]:
+    """列出单行内的字符串字面量区间，用于区分字面量文本与真实赋值。
+
+    只做引号配对，不执行语言解析；反斜杠转义不结束字面量，未闭合时区间取到行尾。
+
+    Args:
+        line: 待分析的单行源码。
+
+    Returns:
+        ``(起始偏移, 结束偏移)`` 列表，结束偏移指向闭合引号之后。
+    """
+
+    spans: list[tuple[int, int]] = []
+    index = 0
+    length = len(line)
+    while index < length:
+        delimiter = line[index]
+        if delimiter not in "\"'`":
+            index += 1
+            continue
+        start = index
+        index += 1
+        while index < length:
+            if line[index] == "\\":
+                index += 2
+                continue
+            if line[index] == delimiter:
+                index += 1
+                break
+            index += 1
+        spans.append((start, min(index, length)))
+    return spans
+
+
+def _enclosing_literal(line: str, offset: int) -> tuple[int, int] | None:
+    """返回包含指定偏移的字符串字面量区间。
+
+    Args:
+        line: 单行源码。
+        offset: 敏感名称在行内的起始偏移。
+
+    Returns:
+        命中字面量的 ``(起始偏移, 结束偏移)``；不在字面量内部时返回 ``None``。
+    """
+
+    for start, end in _string_literal_spans(line):
+        if start < offset < end:
+            return start, end
+    return None
+
+
+def _in_literal_value(
+    line: str, span: tuple[int, int], value_start: int, value_end: int
+) -> str | None:
+    """取赋值右侧位于同一字符串字面量内部的文本。
+
+    命中位于字面量内部时，只有字面量内部的文本才是候选值；右侧起点已在字面量
+    之外（如 JSON 键名本身带引号）时返回 ``None``，继续使用原始捕获文本。
+
+    Args:
+        line: 单行源码。
+        span: 敏感名称所在字面量的 ``(起始偏移, 结束偏移)``。
+        value_start: 正则捕获的赋值右侧起始偏移。
+        value_end: 正则捕获的赋值右侧结束偏移。
+
+    Returns:
+        字面量内部的赋值文本；右侧不在该字面量内时返回 ``None``。
+    """
+
+    start, end = span
+    if not start < value_start < end:
+        return None
+    closed = end <= len(line) and line[end - 1] == line[start]
+    content_end = end - 1 if closed else end
+    return line[value_start:min(value_end, content_end)]
+
+
+def _truncate_at_separator(value: str) -> str:
+    """截断赋值右侧中位于引号外的第一个逗号或分号。
+
+    正则只能按行捕获，会把同一行的后续对象字段或语句并入候选值；先截断到第一个
+    顶层分隔符，才能把 ``enableRefreshToken: true, locale: 'zh-CN'`` 判定为布尔开关。
+
+    Args:
+        value: 尚未规范化的赋值右侧。
+
+    Returns:
+        第一个顶层分隔符之前的文本；没有分隔符时原样返回。
+    """
+
+    index = 0
+    length = len(value)
+    while index < length:
+        character = value[index]
+        if character in "\"'`":
+            delimiter = character
+            index += 1
+            while index < length:
+                if value[index] == "\\":
+                    index += 2
+                    continue
+                if value[index] == delimiter:
+                    index += 1
+                    break
+                index += 1
+            continue
+        if character in ",;":
+            return value[:index]
+        index += 1
+    return value
+
+
+def _strip_trailing_comment(value: str) -> str:
+    """移除赋值右侧的行尾注释，引号内的注释符号不参与判断。
+
+    Args:
+        value: 尚未规范化的赋值右侧源码。
+
+    Returns:
+        去掉 ``//``、``/*`` 或 ``#`` 行尾注释后的文本；没有注释时原样返回。
+    """
+
+    index = 0
+    length = len(value)
+    while index < length:
+        character = value[index]
+        if character in "\"'`":
+            delimiter = character
+            index += 1
+            while index < length:
+                if value[index] == "\\":
+                    index += 2
+                    continue
+                if value[index] == delimiter:
+                    index += 1
+                    break
+                index += 1
+            continue
+        if value.startswith("//", index) or value.startswith("/*", index):
+            return value[:index]
+        if character == "#":
+            return value[:index]
+        index += 1
+    return value
+
+
 def _normalized_literal(raw_value: str) -> tuple[str, bool]:
     """规范化赋值右侧并标记其是否为显式字符串字面量。
 
@@ -189,12 +369,18 @@ def _normalized_literal(raw_value: str) -> tuple[str, bool]:
         ``(规范化值, 是否带引号)``。规范化只用于规则判断，值不会输出。
     """
 
-    value = raw_value.strip().rstrip(",;").strip()
-    if re.fullmatch(r"\$\{[^{}\r\n]+\}", value):
+    value = _strip_trailing_comment(raw_value)
+    value = _truncate_at_separator(value).strip()
+    # 环境变量与模板占位符的右花括号必须先于闭合符号清理判定，否则会被误当成
+    # 容器结尾，把 ``${DB_PASSWORD}`` 或 ``{token}`` 截成残缺文本。
+    if re.fullmatch(r"\$\{[^{}\r\n]+\}", value) or re.fullmatch(
+        r"\{[A-Za-z_][A-Za-z0-9_.-]*\}", value
+    ):
         return value, False
-    # 新增行通常是函数调用的一部分；先移除调用或容器的闭合符号，才能准确
-    # 区分 ``api_key=self.api_key`` 变量引用与 ``api_key="literal"`` 字面量。
-    value = value.rstrip(")]}").rstrip()
+    # 新增行通常是函数调用、容器或对象字段的一部分；循环移除尾部的分隔符、
+    # 闭合符号与空白，才能把 ``refreshToken: null } },`` 判定为空值占位。
+    while value and (value[-1] in ",;)]}" or value[-1].isspace()):
+        value = value[:-1]
     quoted = len(value) >= 2 and value[0] in {'"', "'", "`"} and value[-1] == value[0]
     if quoted:
         value = value[1:-1].strip()
@@ -233,12 +419,216 @@ def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool
 
 
 def _is_typescript_type_annotation(path: str, operator: str, raw_value: str) -> bool:
-    """识别无字符串字面量的基础 TS 类型联合，固定值和其他语法仍继续扫描。"""
+    """识别无字符串字面量的 TS 类型表达式，固定值和其他语法仍继续扫描。
+
+    Args:
+        path: 语法路径；只有 ``.ts``、``.tsx``、``.vue`` 参与判断。
+        operator: 敏感名称后的 ``:`` 或 ``=`` 运算符。
+        raw_value: 运算符右侧尚未规范化的文本。
+
+    Returns:
+        基础类型联合、对象类型体或类型表达式返回 ``True``；带引号的固定值、
+        数字及其他运行期语法返回 ``False``，继续执行凭据检查。
+    """
+
     if PurePosixPath(path).suffix.lower() not in {".ts", ".tsx", ".vue"} or operator != ":":
         return False
     primitive = r"(?:string|number|boolean|unknown|any|never|undefined|null)"
     pattern = rf"\s*{primitive}(?:\[\])?(?:\s*[|&]\s*{primitive}(?:\[\])?)*\s*[,;]?\s*"
-    return re.fullmatch(pattern, raw_value) is not None
+    if re.fullmatch(pattern, raw_value) is not None:
+        return True
+    # 参数或返回值的位置可以是对象类型体，类型表达式没有字符串字面量；
+    # 带引号的右侧仍按固定值处理，避免用类型规则放行真实凭据。
+    value = _strip_trailing_comment(raw_value).strip()
+    if any(character in value for character in "\"'`"):
+        return False
+    return value.startswith("{") or re.search(r"[;{}<>|&]", value) is not None
+
+
+def _is_typescript_type_declaration(path: str, line: str) -> bool:
+    """判断整行是否为 TypeScript 类型别名或接口声明。
+
+    类型名可能包含 ``Password`` 等敏感词，但声明位置没有凭据取值。
+
+    Args:
+        path: 仓库相对路径；只有 ``.ts``、``.tsx``、``.vue`` 参与判断。
+        line: 待检查的源码行。
+
+    Returns:
+        类型别名或接口声明行返回 ``True``。
+    """
+
+    if PurePosixPath(path).suffix.lower() not in {".ts", ".tsx", ".vue"}:
+        return False
+    return (
+        re.match(
+            r"\s*(?:export\s+)?(?:declare\s+)?(?:type|interface)\s+[A-Za-z_$]", line
+        )
+        is not None
+    )
+
+
+def _is_dynamic_expression(value: str, path: str) -> bool:
+    """判断赋值右侧是否为运行期表达式或结构化字面量。
+
+    固定凭据必须是单一字面量；自增、成员取值、空值合并、模板插值和字符串拼接
+    都属于运行期计算，不能按固定值阻断。仅在源码路径生效，配置文件与 Python
+    保持原有保守口径。
+
+    Args:
+        value: 已规范化的赋值右侧。
+        path: 语法路径。
+
+    Returns:
+        右侧不是单一固定字面量时返回 ``True``。
+    """
+
+    if not _is_code_path(path) or not value:
+        return False
+    if "${" in value:
+        return True
+    if value.startswith(("{", "[")):
+        return True
+    if re.search(r"\+\+|--|\?\?|\?\.|&&|\|\||===|!==|=>", value):
+        return True
+    if re.match(r"(?:await|new|typeof|void|yield|delete)\s", value):
+        return True
+    return _has_label_literal_prefix(value)
+
+
+def _has_label_literal_prefix(value: str) -> bool:
+    """判断右侧是否为“标签前缀字面量 + 运行期操作数”的拼接表达式。
+
+    形如 ``"secret-" + appId`` 的前缀只是字段标签，拼接结果由运行期决定；前缀必须
+    是小写单词，且其余部分要出现字面量之外的操作数，避免把 ``"Fake-Prod-2026" + x``
+    这类带固定凭据的拼接整体放行。
+
+    Args:
+        value: 已规范化的赋值右侧。
+
+    Returns:
+        符合标签前缀拼接形态时返回 ``True``。
+    """
+
+    spans = _string_literal_spans(value)
+    if not spans or spans[0][0] != 0:
+        return False
+    _, literal_end = spans[0]
+    if literal_end >= len(value):
+        return False
+    prefix = value[1 : literal_end - 1]
+    if re.fullmatch(r"[a-z]{1,16}[-_ ]?", prefix) is None:
+        return False
+    remainder = value[literal_end:]
+    for start, end in _string_literal_spans(remainder):
+        remainder = remainder[:start] + " " * (end - start) + remainder[end:]
+    return re.search(r"[A-Za-z_$]", remainder) is not None
+
+
+def _is_embedded_source_operand(
+    path: str, literal_text: str | None, value: str, explicit_string: bool
+) -> bool:
+    """判断字符串字面量内部嵌入的源码片段是否为运行期操作数。
+
+    测试夹具会把被测源码放进模板字符串，例如 ``{ apiKey: url }`` 里的 ``url``。
+    这类裸标识符、成员取值与方法调用由运行期决定，与真实源码中的同名写法语义一致，
+    不是固定凭据。只有嵌在对象、代码块等花括号结构内的无引号操作数才按源码片段
+    处理；URL 查询串、连接串和配置文本里的裸词仍按固定值拦截，带引号的取值也不适用。
+
+    Args:
+        path: 语法路径，只有源码路径参与判断。
+        literal_text: 取值所在字符串字面量的完整文本；取值不在字面量内时为 ``None``。
+        value: 已规范化的赋值右侧。
+        explicit_string: 整段取值本身是否为源码里的显式字符串字面量。
+
+    Returns:
+        嵌入文本是运行期操作数时返回 ``True``；其余情况返回 ``False`` 并继续原检查。
+    """
+
+    if explicit_string or not _is_code_path(path) or literal_text is None:
+        return False
+    if any(character in value for character in "\"'`"):
+        return False
+    if re.fullmatch(r"[a-zA-Z_$][a-zA-Z0-9_$.]*", value) is None and "(" not in value:
+        return False
+    return "{" in literal_text and "}" in literal_text
+
+
+def _label_words(text: str) -> list[str]:
+    """把字段名或字面量拆成小写词段，用于自述标签判断。
+
+    Args:
+        text: 字段名或字面量内容。
+
+    Returns:
+        仅由字母数字组成的词段列表。
+    """
+
+    return [word for word in re.split(r"[^0-9A-Za-z]+", text.lower()) if word]
+
+
+def _is_self_describing_label(key: str, value: str) -> bool:
+    """判断字面量是否只是按字段名自述的标签值。
+
+    真实凭据不会包含自身字段名的全部词段；``REAL_USER_TOKEN`` 取
+    ``"real-user-token"`` 属于声明性标签，不是可用凭据。
+
+    Args:
+        key: 正则捕获的敏感字段名。
+        value: 已去除外围引号的字面量内容。
+
+    Returns:
+        字段名各词段按顺序出现在字面量中时返回 ``True``。
+    """
+
+    key_words = _label_words(_normalized_field_name(key))
+    value_words = _label_words(value)
+    if not key_words or len(value_words) < len(key_words):
+        return False
+    position = 0
+    for word in value_words:
+        if position < len(key_words) and word == key_words[position]:
+            position += 1
+    return position == len(key_words)
+
+
+NON_CREDENTIAL_SENTINEL_WORDS = frozenset(
+    {
+        "disabled",
+        "dummy",
+        "empty",
+        "example",
+        "fake",
+        "invalid",
+        "nil",
+        "no",
+        "none",
+        "not",
+        "placeholder",
+        "sample",
+        "sentinel",
+    }
+)
+
+
+def _is_declared_noncredential_name(key: str) -> bool:
+    """判断字段名是否明确声明该值不是可用凭据。
+
+    只识别完整词段中的哨兵语义，例如 ``MACHINE_NO_REFRESH_TOKEN`` 与
+    ``PLACEHOLDER_API_KEY``；``nonce`` 等包含相同字母的普通名称不受影响。
+
+    Args:
+        key: 正则捕获的敏感字段名。
+
+    Returns:
+        名称中存在哨兵或占位词段时返回 ``True``。
+    """
+
+    return bool(
+        NON_CREDENTIAL_SENTINEL_WORDS.intersection(
+            _label_words(_normalized_field_name(key))
+        )
+    )
 
 
 def _is_noncredential_token_measurement(key: str) -> bool:
@@ -258,6 +648,51 @@ def _is_noncredential_token_measurement(key: str) -> bool:
     return NON_CREDENTIAL_TOKEN_MEASUREMENT_PATTERN.search(key) is not None
 
 
+def _is_synthetic_placeholder(value: str) -> bool:
+    """判断取值是否带仓库约定的显式合成标记。
+
+    仓库约定用 ``DUMMY-``、``CHANGE_ME_`` 等标记把测试夹具和示例值声明为非凭据，
+    与 Python 测试的 ``unit-`` 约定同源。标记按大写子串匹配，兼容 ``DUMMY-``、
+    ``CHANGE_ME_ACCESS_TOKEN`` 与 ``prefix-DUMMY`` 等既有写法；带标记的取值不按
+    固定凭据阻断，其余凭据规则（密钥前缀、URL 凭据、私钥）仍然独立生效。
+
+    Args:
+        value: 已去除外围引号的字段值或语句文本。
+
+    Returns:
+        文本中出现任一合成标记时返回 ``True``。
+    """
+
+    upper = value.strip().upper()
+    return any(marker in upper for marker in SYNTHETIC_PLACEHOLDER_MARKERS)
+
+
+def _is_sql_binding_placeholder(value: str) -> bool:
+    """判断赋值右侧是否为 SQL 绑定参数及其后续语句文本。
+
+    ``SET refresh_token = ? WHERE id = ?`` 这类 SQL 文本里，字段取值由 JDBC、
+    MyBatis 或 JPA 在运行期绑定，不是写死的凭据；占位符之后的文本属于同一语句的
+    其余部分。写死的字面量（``SET api_key = 'realkey'``）不以占位符开头，仍按
+    固定凭据拦截。
+
+    Args:
+        value: 已规范化的赋值右侧。
+
+    Returns:
+        取值以 ``?``、``?1``、``:name``、``#{name}`` 或 ``${name}`` 开头，且其后
+        只有同一语句续写文本时返回 ``True``。
+    """
+
+    text = value.strip()
+    match = SQL_BINDING_PLACEHOLDER_PATTERN.match(text)
+    if match is None or match.start() != 0:
+        return False
+    remainder = text[match.end() :]
+    # 占位符之后必须是同一语句的续写（空白、逗号、右括号或分号）；紧跟字母数字说明
+    # 命中另有取值，例如把状态文本截成了占位符，不能据此放行。
+    return not remainder or remainder[0] in " \t,);"
+
+
 def _is_safe_placeholder(value: str) -> bool:
     """判断敏感字段值是否为空、变量引用或明确占位符。
 
@@ -265,27 +700,26 @@ def _is_safe_placeholder(value: str) -> bool:
         value: 已去除外围引号的字段值。
 
     Returns:
-        不包含固定凭据时返回 ``True``。
+        不包含固定凭据时返回 ``True``。零值是空初始化，``?`` 是 SQL 绑定参数，
+        ``{name}`` 是模板占位符，三者与 NULL、NONE、FALSE 同属无凭据取值；
+        带 ``DUMMY``、``CHANGE_ME`` 等合成标记的取值按仓库约定放行。
     """
 
     stripped = value.strip()
     upper = stripped.upper()
     if not stripped or upper in {"NULL", "NONE", "FALSE"}:
         return True
+    if re.fullmatch(r"0+(?:\.0+)?", stripped):
+        return True
+    if stripped == "?":
+        return True
+    if re.fullmatch(r"\{[A-Za-z_][A-Za-z0-9_.-]*\}", stripped):
+        return True
     if re.fullmatch(r"\$(?:[A-Za-z_][\w.:]*|\{[^{}\r\n]+\}|\([^()\r\n]+\))", stripped):
         return True
     if stripped.startswith(("{{", "%")):
         return True
-    placeholder_markers = (
-        "CHANGE_ME",
-        "DUMMY",
-        "EXAMPLE",
-        "PLACEHOLDER",
-        "RANDOM",
-        "REDACTED",
-        "REPLACE",
-    )
-    return any(marker in upper for marker in placeholder_markers)
+    return _is_synthetic_placeholder(stripped)
 
 
 def _contains_unsafe_embedded_credential_url(line: str, path: str = "") -> bool:
@@ -500,7 +934,7 @@ def _normalized_field_name(key: str) -> str:
 
 
 def _noncredential_setting_kind(key: str) -> str | None:
-    """按明确词段识别计量、开关、类型、路径和标识符字段，不按敏感子串放行。
+    """按明确词段识别计量、开关、类型、路径、名称和标识符字段，不按敏感子串放行。
 
     Args:
         key: 已规范化为小写下划线形式的字段名。
@@ -511,18 +945,35 @@ def _noncredential_setting_kind(key: str) -> str | None:
     if _is_noncredential_token_measurement(key) or re.search(
         r"(?:password|passwd|token|secret|credential)s?_"
         r"(?:(?:min|max)_length|timeout|ttl|expire_(?:seconds|minutes|hours)|"
-        r"expires_in)(?:_seconds|_minutes|_hours)?$", key
+        r"expires_in|(?:column_)?(?:limit|length|size|bytes)|max|min)"
+        r"(?:_seconds|_minutes|_hours)?$", key
     ):
         return "number"
-    if key == "allow_credentials" or re.search(
-        r"(?:^|_)(?:password|token|secret|credential)s?_(?:enabled|required)$", key
+    if (
+        key == "allow_credentials"
+        or re.search(
+            r"(?:^|_)(?:password|token|secret|credential)s?_(?:enabled|required)$", key
+        )
+        or re.search(
+            r"(?:^|_)enable[d]?_(?:refresh|access|auth|api|client)?_?tokens?$", key
+        )
+        or re.search(
+            r"(?:^|_)(?:refresh|access|auth|api|client)?_?tokens?_(?:enabled|required)$",
+            key,
+        )
     ):
         return "boolean"
     if re.search(r"(?:^|_)token_type$", key):
         return "token-type"
     if re.search(r"(?:^|_)(?:file|path)$", key):
         return "path"
-    if key == "tokenizer_name" or re.search(r"(?:^|_)token_storage_key$", key):
+    # 请求头名与查询参数名是协议名称，不是凭据本体；值仍须是名称形态。
+    if re.search(r"(?:^|_)(?:header|parameter|param)$", key):
+        return "name"
+    # 提示、消息与标签字段存放展示文案或国际化键名，不存放凭据本体。
+    if key == "tokenizer_name" or re.search(
+        r"(?:^|_)(?:token_storage_key|tip|message|msg|label|hint)$", key
+    ):
         return "identifier"
     return None
 
@@ -550,6 +1001,9 @@ def _is_noncredential_setting(key: str, value: str, *, quoted: bool) -> bool:
         return re.fullmatch(
             r"(?:/|\.{1,2}/|[A-Za-z]:[/\\]|\\\\|[\w.-]+[/\\])[\w ./\\-]+", value
         ) is not None
+    if kind == "name":
+        # 请求头或查询参数名称是单个标识符词，带点号或空白的长值仍按凭据处理。
+        return re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", value) is not None
     if kind == "identifier":
         return re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*", value) is not None
     return False
@@ -620,6 +1074,60 @@ def _is_unit_test_credential(path: str, raw_value: str) -> bool:
     )
 
 
+def _is_multi_field_literal_text(
+    path: str, line_number: int, inner_value: str
+) -> bool:
+    """判断字面量内部的命中值是否只是更大文本里的一个片段。
+
+    字面量内部可能嵌入 SQL 或配置文本；只有当前片段后面还跟着**另一个敏感赋值**时，
+    才能确认命中的不是单一取值。形如 ``api_key='realkey'`` 的单独赋值仍按固定凭据
+    处理，避免用“文本片段”放行真实凭据。
+
+    Args:
+        path: 仓库相对路径。
+        line_number: 暂存版本中的行号。
+        inner_value: 字面量内部的赋值右侧文本。
+
+    Returns:
+        当前片段之后仍有敏感赋值时返回 ``True``。
+    """
+
+    if not any(character in inner_value for character in "\"'`"):
+        return False
+    prefix = _truncate_at_separator(inner_value)
+    if prefix == inner_value:
+        return False
+    remainder = inner_value[len(prefix) :].lstrip(",;").strip()
+    if not remainder:
+        return False
+    return bool(_scan_added_line(path, line_number, remainder))
+
+
+def _remainder_has_credential(path: str, line_number: int, raw_value: str) -> bool:
+    """判断赋值右侧截断后的剩余文本是否仍会命中凭据规则。
+
+    同一行可能包含多个字段；只有剩余部分确实会报告凭据时才继续阻断，避免把
+    ``{"MYSQL_ROOT_PASSWORD": "DUMMY-a", "MINIO_ROOT_PASSWORD": "DUMMY-b"}``
+    这类合成夹具整体判成固定凭据。递归范围严格递减，不会重复扫描同一段文本。
+
+    Args:
+        path: 仓库相对路径。
+        line_number: 暂存版本中的行号。
+        raw_value: 当前字段的原始赋值右侧。
+
+    Returns:
+        剩余文本仍会报告凭据时返回 ``True``。
+    """
+
+    prefix = _truncate_at_separator(raw_value)
+    if not prefix:
+        return False
+    remainder = raw_value[len(prefix) :].lstrip(",;").strip()
+    if not remainder:
+        return False
+    return bool(_scan_added_line(path, line_number, remainder))
+
+
 def _scan_added_line(
     path: str,
     line_number: int,
@@ -668,6 +1176,14 @@ def _scan_added_line(
     assignment = SENSITIVE_ASSIGNMENT_PATTERN.search(line)
     if assignment is None:
         return findings
+    key = assignment.group("key")
+    # 源码标识符不能以数字开头；命中形如 ``%26password`` 的百分号转义尾部时，
+    # 匹配到的并不是字段名，继续按赋值处理只会产生误报。
+    if _is_code_path(path) and re.match(r"[A-Za-z_$]", key) is None:
+        return findings
+    # TypeScript 类型别名与接口声明只有类型名，没有凭据取值。
+    if _is_typescript_type_declaration(path, line):
+        return findings
     # 文档代码块只复用 Python 语法识别，报告路径与其他凭据规则保持原样。
     syntax_path = "snippet.py" if is_python_code else path
     if literal_text:
@@ -700,20 +1216,54 @@ def _scan_added_line(
         syntax_path, assignment.group("operator"), assignment.group("value")
     ):
         return findings
-    key = assignment.group("key")
     raw_value = assignment.group("value")
+    from_literal = False
+    enclosing_literal_text: str | None = None
+    if not literal_text:
+        # 命中位于字符串字面量内部时，只有字面量内部的文本才是候选值；提示语、
+        # SQL 语句和 URL 中的赋值语法属于字面量文本，不能按配置赋值阻断。
+        literal = _enclosing_literal(line, assignment.start("key"))
+        if literal is not None:
+            inner_value = _in_literal_value(
+                line, literal, assignment.start("value"), assignment.end("value")
+            )
+            if inner_value is not None:
+                if _is_code_path(path) and (
+                    not inner_value.strip()
+                    or _is_multi_field_literal_text(path, line_number, inner_value)
+                ):
+                    return findings
+                raw_value = inner_value
+                from_literal = True
+                enclosing_literal_text = line[literal[0] : literal[1]]
     if syntax_path.lower().endswith(".py"):
         parsed_value = _python_assignment_value(line, key)
         if parsed_value is not None:
             raw_value = parsed_value
-    if re.fullmatch(r"\[\s*]|\{\s*}|\(\s*\)", raw_value.strip().rstrip(",;")):
+            from_literal = False
+    # 同一行可能还有别的敏感赋值；截断只服务于当前字段的类型判断，剩余文本若
+    # 仍会报告凭据，就不能因为前一个字段合法而整行放行。
+    single_assignment = not _remainder_has_credential(path, line_number, raw_value)
+    if single_assignment and re.fullmatch(
+        r"\[\s*]|\{\s*}|\(\s*\)", raw_value.strip().rstrip(",;")
+    ):
         return findings
     value, quoted = _normalized_literal(raw_value)
-    if _is_noncredential_setting(key, value, quoted=quoted):
+    # 整段取值本身是否为显式字符串字面量：源码里的 ``"realkey"`` 与字面量内部的
+    # ``'realkey'`` 都算，字面量内部的裸源码文本（``url``）不算。
+    explicit_string = quoted
+    # 字面量内部的文本按字符串内容处理；测试夹具嵌入的源码片段由运行期操作数规则
+    # 单独识别，见 _is_embedded_source_operand。
+    quoted = quoted or from_literal
+    if single_assignment and re.fullmatch(r"\[\s*]|\{\s*}|\(\s*\)", value):
+        return findings
+    if single_assignment and _is_noncredential_setting(key, value, quoted=quoted):
         return findings
     # Token 计量名称必须同时匹配数量值或未加引号的中文字段说明，不能仅凭
     # 名称放行固定字符串。前面的密钥前缀与 URL 检查结果仍然保留。
-    if _is_noncredential_token_measurement(_normalized_field_name(key)) and (
+    if single_assignment and _is_noncredential_token_measurement(
+        _normalized_field_name(key)
+    ) and (
         re.fullmatch(r"[0-9]+(?:_[0-9]+)*", value)
         or (
             not quoted
@@ -724,14 +1274,41 @@ def _scan_added_line(
         )
     ):
         return findings
-    if _is_safe_placeholder(value):
+    if single_assignment and _is_safe_placeholder(value):
+        return findings
+    # SQL 文本里的绑定参数不是固定值：``SET refresh_token = ? WHERE id = ?`` 的取值
+    # 由运行期参数提供，占位符之后的语句文本不属于当前字段。写死的字面量不以占位符
+    # 开头，仍按固定凭据拦截；源码里整段带引号的显式字符串不适用这条规则。
+    if (
+        single_assignment
+        and not explicit_string
+        and _is_sql_binding_placeholder(value)
+    ):
         return findings
     # 仅豁免测试虚拟值的固定赋值告警；此前密钥前缀、URL 及独立私钥检查仍生效。
-    if not is_python_code and _is_unit_test_credential(path, raw_value):
+    if single_assignment and not is_python_code and _is_unit_test_credential(
+        path, raw_value
+    ):
+        return findings
+    # 字段名或字面量本身声明该值不是凭据时，只有单一固定字符串会被放行；
+    # 密钥前缀、URL 与私钥规则已在前面的独立检查中生效。
+    if single_assignment and quoted and not _is_config_path(syntax_path) and (
+        _is_declared_noncredential_name(key) or _is_self_describing_label(key, value)
+    ):
+        return findings
+    # 运行期表达式与结构化字面量不是固定凭据；显式字符串与配置文本仍需拦截。
+    if single_assignment and _is_dynamic_expression(value, syntax_path):
+        return findings
+    # 字符串字面量里嵌入的源码片段按同一运行期口径判断：``{ apiKey: url }`` 的取值是
+    # 变量引用，不是固定凭据；URL 查询串与配置文本里的裸词仍继续拦截。
+    if single_assignment and _is_embedded_source_operand(
+        syntax_path, enclosing_literal_text, value, explicit_string
+    ):
         return findings
     # Java/Python/TypeScript 中的变量或方法调用不是固定凭据；显式字符串仍需拦截。
     if (
-        not quoted
+        single_assignment
+        and not quoted
         and not _is_config_path(syntax_path)
         and (re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_.]*", value) or "(" in value)
     ):
@@ -1065,12 +1642,302 @@ def _test_unit_credentials_regressions() -> None:
     ), "测试文件私钥未被拦截"
 
 
+def _test_semantic_recognition_regressions() -> None:
+    """验证字面量文本、声明位置、运行期表达式与哨兵名称的识别边界。
+
+    正样本覆盖提示语、SQL 文本、类型声明、请求头名、计量字段、布尔开关、运行期
+    表达式、结构化取值、哨兵名称和显式合成夹具；负样本锁定真实形态凭据仍然阻断，
+    证明这些识别修复没有放宽固定凭据规则。
+    """
+
+    safe_samples = (
+        # 方法调用参数里的提示文本：命中位于字面量内部且没有取值。
+        (
+            "src/main/java/AdminBootstrapMain.java",
+            'char[] confirmation = input.read("Confirm administrator password: ");',  # secret-scan: allow-test
+        ),
+        # SQL 文本里的绑定参数不是固定值。
+        (
+            "src/main/java/MachineTokenQuery.java",
+            'jdbc.queryForObject("SELECT COUNT(*) FROM t WHERE refresh_token = ?", Integer.class);',  # secret-scan: allow-test
+        ),
+        # 字面量内部的 SQL 片段属于文本，不是 Java 配置赋值。
+        (
+            "src/test/java/SmsPipelineIT.java",
+            "jdbc.update(\"UPDATE t SET api_key='keyA', api_secret='secretA', \");",  # secret-scan: allow-test
+        ),
+        # 文档里的缓存键模板是占位符，不是固定值。
+        (
+            "docs/redis.md",
+            "- Redis 中可能残留 `oauth2_access_token:{token}` 缓存键。",  # secret-scan: allow-test
+        ),
+        # 类型别名、对象类型体与参数类型没有凭据取值。
+        ("src/form.ts", "type PasswordFieldRef = {"),  # secret-scan: allow-test
+        (
+            "src/form.ts",
+            "function generateRsaKeyPair(): { privateKey: string; publicKey: string } {",  # secret-scan: allow-test
+        ),
+        ("src/form.ts", "async function changePassword(passwords: {"),  # secret-scan: allow-test
+        # 请求头名与查询参数名是协议名称，不是凭据本体。
+        (
+            "src/main/java/SecurityFrameworkUtils.java",
+            'private static final String TOKEN_HEADER = "Authorization";',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/SecurityFrameworkUtils.java",
+            'private static final String TOKEN_PARAMETER = "token";',  # secret-scan: allow-test
+        ),
+        # 刷新令牌列的存储长度上限是计量元数据。
+        (
+            "src/test/java/OAuth2MachineTokenTest.java",
+            "private static final int REFRESH_TOKEN_COLUMN_LIMIT = 32;",  # secret-scan: allow-test
+        ),
+        # 布尔开关只控制是否刷新令牌。
+        ("config.yaml", "enableRefreshToken: true"),  # secret-scan: allow-test
+        # 提示字段存放国际化键名，不是凭据取值。
+        (
+            "src/lock-screen.test.ts",
+            "const PASSWORD_ERROR_TIP = 'authentication.passwordErrorTip';",  # secret-scan: allow-test
+        ),
+        # 运行期表达式：计数器零初始化、前后缀自增、异步取值、空值合并与模板插值。
+        ("src/form-render/dependencies.ts", "let triggerToken = 0;"),  # secret-scan: allow-test
+        (
+            "src/form-render/dependencies.ts",
+            "const currentToken = ++triggerToken;",  # secret-scan: allow-test
+        ),
+        (
+            "src/request/preset-interceptors.ts",
+            "const newToken = await refresh;",  # secret-scan: allow-test
+        ),
+        (
+            "src/views/reset-pwd.vue",
+            "const body = { oldPassword: values.oldPassword ?? '' };",  # secret-scan: allow-test
+        ),
+        (
+            "src/store/auth.ts",
+            "const identity = { accessToken: `test-session-${userId}` };",  # secret-scan: allow-test
+        ),
+        # 结构化对象取值不是固定凭据字符串。
+        (
+            "src/api/auth.test.ts",
+            "transport.post.mockResolvedValue({ accessToken: { privateValue: 'must-not-appear' } });",  # secret-scan: allow-test
+        ),
+        # 哨兵名称与自述标签声明该值不是可用凭据。
+        (
+            "src/main/java/OAuth2MachineToken.java",
+            'public static final String MACHINE_NO_REFRESH_TOKEN = "machine-no-refresh-token";',  # secret-scan: allow-test
+        ),
+        (
+            "src/test/java/ApiSignatureAspectTest.java",
+            'private static final String APP_SECRET = "protect-test-app-secret";',  # secret-scan: allow-test
+        ),
+        # 测试夹具使用显式合成值，与现有 unit- 约定同源。
+        (
+            "src/api/auth.test.ts",
+            "const fixture = { accessToken: 'DUMMY-test-access' };",  # secret-scan: allow-test
+        ),
+        (
+            "src/api/auth.test.ts",
+            "const fixture = { password: 'DUMMY-test-input' };",  # secret-scan: allow-test
+        ),
+        # 同一行的多个合成字段各自声明为占位值，整行不再判为固定凭据。
+        (
+            "src/api/auth.test.ts",
+            "const fixture = { accessToken: 'DUMMY-test-access', refreshToken: 'DUMMY-test-refresh' };",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in safe_samples:
+        findings = _scan_added_line(path, 1, line)
+        if findings:
+            raise AssertionError(f"语义误报样本未被放行：{path} {findings[0].rule}")
+    unsafe_samples = (
+        ("src/service.py", 'password = "Prod-2026-RealValue"'),  # secret-scan: allow-test
+        ("src/service.py", 'api_key = "Fake-Prod-2026"'),  # secret-scan: allow-test
+        ("src/service.py", 'access_token = "ghp_' + "a" * 32 + '"'),  # secret-scan: allow-test
+        ("src/service.py", "access_token = 123456"),  # secret-scan: allow-test
+        (
+            "部署/config.yaml",
+            "url: https://user:RealPass123@example.invalid/api",  # secret-scan: allow-test
+        ),
+        # 字面量内部只有一个完整值时仍按固定凭据阻断。
+        (
+            "src/config.ts",
+            "const target = 'jdbc:mysql://localhost/app?password=RealPass123';",  # secret-scan: allow-test
+        ),
+        # 自述标签与哨兵名称不能掩盖真实密钥形态。
+        (
+            "src/main/java/Service.java",
+            'private static final String APP_SECRET = "Prod-2026-RealValue";',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/Service.java",
+            'private static final String PASSWORD = "Prod-2026-RealValue" + suffix;',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/OAuth2MachineToken.java",
+            'public static final String MACHINE_NO_REFRESH_TOKEN = "ghp_' + "b" * 32 + '";',  # secret-scan: allow-test
+        ),
+        # 已识别的元数据字段在值形态不符时仍按凭据阻断。
+        ("config.yaml", 'enableRefreshToken: "RealPass123"'),  # secret-scan: allow-test
+        (
+            "src/main/java/Service.java",
+            'private static final String TOKEN_PARAMETER = "eyJhbGciOiJIUzI1NiJ9.realvalue";',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/Service.java",
+            'private static final int REFRESH_TOKEN_COLUMN_LIMIT = "RealPass123";',  # secret-scan: allow-test
+        ),
+        # 同一行的多个字段没有合成标记时仍按固定凭据阻断。
+        (
+            "src/api/auth.test.ts",
+            "const fixture = { accessToken: 'RealPass123', refreshToken: 'RealPass456' };",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in unsafe_samples:
+        if not any(item.severity == "error" for item in _scan_added_line(path, 1, line)):
+            raise AssertionError(f"真实形态凭据未被拦截：{path}")
+
+
+def _test_sql_and_embedded_source_regressions() -> None:
+    """验证 SQL 绑定参数与字面量内嵌源码片段的识别边界。
+
+    正样本覆盖 ``SET <凭据列> = ?`` 与 ``WHERE <名> = ?`` 的组合、多列 SET、MyBatis
+    与 JPA 命名参数、SQL 文本里的合成占位符，以及测试夹具把源码放进字符串字面量时的
+    运行期操作数。负样本锁定写死的 SQL 字面量、生产口令、AWS 密钥、``sk-``/``ghp_``
+    前缀、私钥块、URL 内嵌账号密码、``.env`` 路径与混合表达式仍然阻断，证明这两处
+    误报修正没有放宽固定凭据规则。
+    """
+
+    safe_samples = (
+        # SET 列占位符与 WHERE 占位符的组合：取值由运行期参数绑定。
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            'jdbc.update("UPDATE t SET refresh_token = ? WHERE id = ?", token, id);',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            'jdbc.update("UPDATE t SET refresh_token = ?, update_time = ? WHERE id = ?");',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            'String sql = "UPDATE t SET client_secret = ? WHERE client_id = ?";',  # secret-scan: allow-test
+        ),
+        # MyBatis 与 JPA 的命名参数同样不是固定值。
+        (
+            "src/main/resources/TokenMapper.xml",
+            "UPDATE system_oauth2_access_token SET refresh_token = #{refreshToken} WHERE id = #{id}",  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/TokenRepository.java",
+            '@Query("UPDATE t SET refresh_token = :token WHERE id = :id")',  # secret-scan: allow-test
+        ),
+        # SQL 文本里的合成占位符仍按仓库约定放行。
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            "jdbc.update(\"UPDATE t SET refresh_token = 'DUMMY-refresh' WHERE id = ?\", id);",  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            "jdbc.update(\"UPDATE t SET refresh_token = 'CHANGE_ME_REFRESH_TOKEN' WHERE id = ?\");",  # secret-scan: allow-test
+        ),
+        # 测试夹具把被测源码放进模板字符串：其中的标识符、成员取值与调用是运行期操作数。
+        (
+            "internal/lint-configs/eslint-config/src/rules/development-parser.test.mjs",
+            "      `const b = { apiKey: url };`,",  # secret-scan: allow-test
+        ),
+        (
+            "internal/lint-configs/eslint-config/src/rules/development-parser.test.mjs",
+            "      `const c = { authToken: values.authToken };`,",  # secret-scan: allow-test
+        ),
+        (
+            "internal/lint-configs/eslint-config/src/rules/development-parser.test.mjs",
+            "      `const d = { clientSecret: buildSecret() };`,",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in safe_samples:
+        findings = _scan_added_line(path, 1, line)
+        if findings:
+            raise AssertionError(f"SQL 或内嵌源码误报未被放行：{path} {findings[0].rule}")
+
+    unsafe_samples = (
+        # SQL 文本里写死的凭据仍按固定值拦截。
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            "jdbc.update(\"UPDATE t SET api_key = 'RealKey123' WHERE id = ?\", id);",  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            "jdbc.update(\"UPDATE t SET api_key='keyA' WHERE id = ?\", id);",  # secret-scan: allow-test
+        ),
+        # 源码里整段带引号的取值不适用绑定参数豁免。
+        (
+            "src/main/java/OAuth2AccessTokenMapper.java",
+            'password = "? WHERE clause";',  # secret-scan: allow-test
+        ),
+        # 字面量内嵌源码里的带引号取值仍按固定凭据处理。
+        (
+            "internal/lint-configs/eslint-config/src/rules/development-parser.test.mjs",
+            "      `const b = { apiKey: 'RealPass123' };`,",  # secret-scan: allow-test
+        ),
+        # URL 查询串里的固定口令不是绑定参数。
+        (
+            "src/config.ts",
+            "const target = 'jdbc:mysql://localhost/app?password=RealPass123';",  # secret-scan: allow-test
+        ),
+        # 生产口令、混合表达式与哨兵名称不能掩盖真实取值。
+        (
+            "src/main/java/Service.java",
+            'private static final String PASSWORD = "Prod-2026-RealValue";',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/Service.java",
+            'private static final String PASSWORD = "Prod-2026-RealValue" + suffix;',  # secret-scan: allow-test
+        ),
+        # AWS 访问密钥前缀仍由密钥格式规则拦截。
+        (
+            "src/main/java/Service.java",
+            'private static final String ACCESS_KEY = "AKIAIOSFODNN7REALKEY12";',  # secret-scan: allow-test
+        ),
+        # sk- 与 ghp_ 前缀仍由密钥格式规则拦截。
+        (
+            "src/service.py",
+            'api_key = "sk-fakecredential123456789"',  # secret-scan: allow-test
+        ),
+        (
+            "src/service.py",
+            'access_token = "ghp_' + "b" * 32 + '"',  # secret-scan: allow-test
+        ),
+        # URL 内嵌账号密码仍由 URL 规则拦截。
+        (
+            "部署/config.yaml",
+            "url: https://user:RealPass123@example.invalid/api",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in unsafe_samples:
+        if not any(
+            item.severity == "error" for item in _scan_added_line(path, 1, line)
+        ):
+            raise AssertionError(f"真实形态凭据未被拦截：{path}")
+
+    private_key = "\n".join((
+        "-----BEGIN PRIVATE KEY-----", "B" * 64, "-----END PRIVATE KEY-----",
+    ))
+    if not _scan_added_private_keys(
+        "keys/service.pem", list(enumerate(private_key.splitlines(), start=1))
+    ):
+        raise AssertionError("完整私钥材料未被拦截")
+    if not _is_forbidden_env_path("部署/生产/.env"):
+        raise AssertionError("部署 .env 路径未被拦截")
+
+
 def _run_self_test() -> None:
     """使用伪造样本验证放行和拦截规则，避免测试中包含真实凭据。"""
 
     _test_python_syntax_regressions()
     _test_markdown_regressions()
     _test_unit_credentials_regressions()
+    _test_semantic_recognition_regressions()
+    _test_sql_and_embedded_source_regressions()
     safe_cases = (
         ("src/service.py", 'token_type = "Bearer"'),  # secret-scan: allow-test
         ("config.yaml", "password_min_length: 8"),  # secret-scan: allow-test

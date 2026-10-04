@@ -18,7 +18,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, IO, Sequence
 
 from scripts.common.check_protocol import payload
 
@@ -119,44 +119,53 @@ def run_process(
         CheckError: 启动失败、超时或输出超过上限。
     """
     try:
-        # 临时文件承接输出，防止检查较大仓库时管道死锁和内存无限增长。
+        # 标准输入、输出都由临时文件承载：管道写入方超时后可能既不写完也不关闭，
+        # 读端会一直等 EOF 直到整体超时。临时文件让子进程读到的内容完整且必然结束。
         with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
-            process = subprocess.Popen(
-                list(arguments),
-                cwd=cwd,
-                env=env,
-                stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
-                stdout=stdout,
-                stderr=stderr,
-                start_new_session=os.name != "nt",
-            )
+            stdin: IO[bytes] | int = subprocess.DEVNULL
+            input_file = None
+            if input_bytes is not None:
+                input_file = tempfile.TemporaryFile()
+                input_file.write(input_bytes)
+                input_file.seek(0)
+                stdin = input_file
             try:
-                deadline = time.monotonic() + timeout
-                pending_input = input_bytes
-                while True:
-                    if cancel is not None and cancel.is_set():
-                        _terminate(process)
-                        raise CheckError("检查已取消，子进程已终止")
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise subprocess.TimeoutExpired(arguments, timeout)
-                    try:
-                        process.communicate(pending_input, timeout=min(0.2, remaining))
-                        break
-                    except subprocess.TimeoutExpired:
-                        # communicate 会保留尚未发送的输入，后续调用不能重复写入。
-                        pending_input = None
+                process = subprocess.Popen(
+                    list(arguments),
+                    cwd=cwd,
+                    env=env,
+                    stdin=stdin,
+                    stdout=stdout,
+                    stderr=stderr,
+                    start_new_session=os.name != "nt",
+                )
+                try:
+                    deadline = time.monotonic() + timeout
+                    while process.poll() is None:
+                        if cancel is not None and cancel.is_set():
+                            _terminate(process)
+                            raise CheckError("检查已取消，子进程已终止")
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise subprocess.TimeoutExpired(arguments, timeout)
                         if stdout.tell() + stderr.tell() > MAX_OUTPUT_BYTES:
                             _terminate(process)
                             raise CheckError("子进程输出超过 32 MiB，已终止")
-            except (subprocess.TimeoutExpired, KeyboardInterrupt):
-                _terminate(process)
-                raise
-            if stdout.tell() + stderr.tell() > MAX_OUTPUT_BYTES:
-                raise CheckError("子进程输出超过 32 MiB，检查未完成")
-            stdout.seek(0)
-            stderr.seek(0)
-            return ProcessResult(process.returncode, stdout.read(), stderr.read())
+                        try:
+                            process.wait(timeout=min(0.2, remaining))
+                        except subprocess.TimeoutExpired:
+                            continue
+                except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                    _terminate(process)
+                    raise
+                if stdout.tell() + stderr.tell() > MAX_OUTPUT_BYTES:
+                    raise CheckError("子进程输出超过 32 MiB，检查未完成")
+                stdout.seek(0)
+                stderr.seek(0)
+                return ProcessResult(process.returncode, stdout.read(), stderr.read())
+            finally:
+                if input_file is not None:
+                    input_file.close()
     except subprocess.TimeoutExpired as exc:
         raise CheckTimeout(f"子进程超过 {timeout:g} 秒，已终止") from exc
     except OSError as exc:

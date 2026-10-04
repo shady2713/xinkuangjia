@@ -3,17 +3,28 @@
 # 重要状态（维护者必读，勿据此推断 CI 曾经通过）：
 #   1. 本文件从未在 GitHub Actions 云端运行过，仓库内没有任何一次真实流水线运行记录。
 #   2. 本地仅验证了编排语义与所用命令：run_checks.py、ci_gate.py、ci_services.py、
-#      vitest JSON 报告都在本机实际执行过；云端 runner 行为未验证。
+#      vitest JSON 报告、coverage_gate.py 都在本机实际执行过；云端 runner 行为未验证。
 #   3. MinIO 镜像来源在本环境无法证实（Docker Hub 匿名 401、dl.min.io 官方端点 410），
 #      因此没有写死默认值。backend 作业必须由仓库变量 BF_CI_IMAGE_MINIO 显式提供
 #      已按 sha256 固定的引用；未配置时该作业与门禁如实红灯，不做任何降级。
+#   4. docs_tools 的 skills 检查需要 PyYAML，requirements-ci.txt 未固定该依赖，本文件
+#      也不安装它；云端该检查是否因缺依赖红灯未验证，本地不具备 GitHub runner 环境。
+#   5. 发布阶段的前端覆盖率裁决调用 coverage_declarations.mjs，该脚本用 readFileSync(0)
+#      读取完整源码清单。本机 Linux（Node 24.15.0）实测：清单超过管道缓冲时间歇报
+#      EAGAIN，裁决以环境错误退出 2 红灯；修复位置在前端桥接脚本，本次未改，云端未验证。
+#   6. 浏览器业务端到端（browser_e2e）在 runner 内真实构建前后端、创建随机隔离库与种子
+#      管理员并执行 Playwright 用例。它同样依赖 BF_CI_IMAGE_MINIO；缺少该变量、缺少
+#      Chromium 或任何一步环境失败都会让作业红灯，没有跳过或忽略分支。
 #
 # 门禁语义（与 scripts/workflow/ci_gate.py 的强制规则一致）：
-#   * docs_tools、backend、frontend 三个作业都是必需作业，必须 result == success。
+#   * docs_tools、backend、frontend、browser_e2e 四个作业都是必需作业，必须 result == success。
 #   * skipped、cancelled、failure 一律不算通过；零用例、空报告同样不算通过。
 #   * 每个作业只能上报本阶段的真实计数；阶段由 workflow_dispatch 的 stage 输入决定。
-#   * audit 阶段通过不代表 release 通过：aggregate() 只在 stage == release 时
-#     才返回 release_verified，审计证据不能顶替发布证据。
+#   * 各阶段执行的真实检查不同：functional 与 audit 跑测试并通过 JUnit 报告门禁；
+#     release 还必须产出发布阶段的覆盖率裁决（逐文件行与方法/函数 100%）和完整前端验证。
+#   * release 结论必须有真实证据：aggregate 要求取回 release-backend.json /
+#     release-frontend.json 与 coverage-backend.json / coverage-web.json，文件缺失、零对象、
+#     审计阶段结论、阈值被改或计数与作业上报不一致一律拒绝。阶段标签本身不产生发布结论。
 name: ci-gate
 
 on:
@@ -70,20 +81,24 @@ jobs:
           python -B -X utf8 scripts/workflow/verify_report.py "$RUNNER_TEMP/docs-report.json" --json
 
       # 只统计真实通过检查的对象数；零对象必须失败，不能用空报告冒充通过。
+      # 输出文件必须取 runner 注入的 GITHUB_OUTPUT 环境变量：不存在的 context 属性会
+      # 解析为空字符串，open("") 直接失败，检查通过也写不出真实计数。
       - name: 汇总真实检查对象
         id: count
         env:
           REPORT: ${{ runner.temp }}/docs-report.json
-          OUTPUT: ${{ github.output }}
         run: |
           python -B -X utf8 - <<'PY'
           import json, os, sys
+          output = os.environ.get("GITHUB_OUTPUT")
+          if not output:
+              sys.exit("缺少 GITHUB_OUTPUT：无法上报本次真实检查对象数")
           report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
           passed = [item for item in report["results"] if item.get("status") == "passed"]
           total = sum(int(item["checked"]) for item in passed)
           if total <= 0:
               sys.exit("没有任何实际检查对象，docs_tools 不计为通过")
-          with open(os.environ["OUTPUT"], "a", encoding="utf-8") as stream:
+          with open(output, "a", encoding="utf-8") as stream:
               stream.write(f"checked={total}\n")
           PY
 
@@ -119,9 +134,10 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
         run: pnpm install --frozen-lockfile
 
-      # 与本地 quality:verify 使用同一条 test:unit；JSON 报告提供机器可读的真实用例数，
-      # 退出码仍由 pnpm 原样传递，失败不会被报告文件掩盖。
+      # functional 与 audit 阶段：真实单元测试加 JSON 报告；退出码仍由 pnpm 原样传递，
+      # 失败不会被报告文件掩盖。
       - name: 运行单元测试并产出 JSON 报告
+        if: inputs.stage != 'release'
         id: vitest
         working-directory: 前端代码/basic-framework-admin
         env:
@@ -134,14 +150,32 @@ jobs:
           test -s "$REPORT" || { echo "前端没有产出 JSON 测试报告"; exit 1; }
           exit $status
 
+      # release 阶段：同一次测试同时采集覆盖率，供后面的发布阶段裁决使用；用例数仍由
+      # JSON 报告提供，因此汇总步骤不依赖报告之外的任何声明。
+      - name: 运行单元测试并采集覆盖率
+        if: inputs.stage == 'release'
+        id: vitest_coverage
+        working-directory: 前端代码/basic-framework-admin
+        env:
+          REPORT: ${{ runner.temp }}/frontend-vitest.json
+        run: |
+          set +e
+          pnpm test:coverage -- --reporter=json --outputFile="$REPORT"
+          status=$?
+          set -e
+          test -s "$REPORT" || { echo "前端没有产出 JSON 测试报告"; exit 1; }
+          exit $status
+
       - name: 汇总真实用例数
         id: count
         env:
           REPORT: ${{ runner.temp }}/frontend-vitest.json
-          OUTPUT: ${{ github.output }}
         run: |
           python -B -X utf8 - <<'PY'
           import json, os, sys
+          output = os.environ.get("GITHUB_OUTPUT")
+          if not output:
+              sys.exit("缺少 GITHUB_OUTPUT：无法上报本次真实用例数")
           report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
           total = int(report["numTotalTests"])
           failed = int(report["numFailedTests"])
@@ -149,7 +183,7 @@ jobs:
               sys.exit("前端没有实际用例，frontend 不计为通过")
           if failed or not report.get("success"):
               sys.exit(f"前端存在 {failed} 个失败用例，frontend 不计为通过")
-          with open(os.environ["OUTPUT"], "a", encoding="utf-8") as stream:
+          with open(output, "a", encoding="utf-8") as stream:
               stream.write(f"checked={total}\n")
           PY
 
@@ -158,11 +192,91 @@ jobs:
           STAGE: ${{ inputs.stage || 'audit' }}
         run: printf 'stage=%s\n' "$STAGE" >> "$GITHUB_OUTPUT"
 
+      # 以下只属于 release：完整前端验证的每一步失败都会让 frontend 作业失败，
+      # 聚合门禁随即拒绝发布，不会出现“只换标签”的发布通过。
+      - name: 类型检查（发布阶段）
+        if: inputs.stage == 'release'
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm check:type
+
+      - name: 生产构建（发布阶段）
+        if: inputs.stage == 'release'
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm build:ele
+
+      - name: 生产产物配置扫描（发布阶段）
+        if: inputs.stage == 'release'
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm quality:prod-scan
+
+      # 发布门槛由覆盖率先按可读方式裁决：未达标时日志直接给出缺口，不写出任何证据；
+      # 只有真实通过才再产出机器证据，避免把失败或审计结论写成发布证据。
+      - name: 发布阶段前端覆盖率裁决
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+        run: |
+          mkdir -p "$EVIDENCE"
+          python -B -X utf8 scripts/workflow/coverage_gate.py --kind web --stage release
+          python -B -X utf8 scripts/workflow/coverage_gate.py --kind web --stage release --json \
+            > "$EVIDENCE/coverage-web.json"
+
+      # 证据清单绑定本次提交，并声明每条真实检查与其可核对命令；计数取自上面的
+      # 报告门禁输出，门禁汇总会与作业上报的计数、覆盖率裁决的实测文件数交叉核对。
+      - name: 生成发布阶段前端证据
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+          REVISION: ${{ github.sha }}
+          UNIT_CASES: ${{ steps.count.outputs.checked }}
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          evidence = Path(os.environ["EVIDENCE"])
+          coverage = json.loads((evidence / "coverage-web.json").read_text(encoding="utf-8"))
+          document = {
+              "schema": "ci-release-evidence/v1",
+              "job": "frontend",
+              "stage": "release",
+              "revision": os.environ["REVISION"],
+              "checks": [
+                  {"name": "frontend-unit-tests", "status": "passed", "checked": int(os.environ["UNIT_CASES"]),
+                   "command": "pnpm test:coverage -- --reporter=json --outputFile=..."},
+                  {"name": "frontend-release-coverage", "status": "passed", "checked": coverage["measured_files"],
+                   "command": "python -B -X utf8 scripts/workflow/coverage_gate.py --kind web --stage release --json"},
+                  {"name": "frontend-typecheck", "status": "passed", "checked": None,
+                   "command": "pnpm check:type"},
+                  {"name": "frontend-production-build", "status": "passed", "checked": None,
+                   "command": "pnpm build:ele"},
+                  {"name": "frontend-production-scan", "status": "passed", "checked": None,
+                   "command": "pnpm quality:prod-scan"},
+              ],
+              "coverage": {"kind": "web", "evidence": "coverage-web.json", "stage": "release",
+                           "measured_files": coverage["measured_files"],
+                           "failed_files": coverage["failed_files"]},
+          }
+          (evidence / "release-frontend.json").write_text(
+              json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: 上传发布阶段前端证据
+        if: inputs.stage == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-frontend
+          path: ${{ runner.temp }}/release-evidence
+          if-no-files-found: error
+          retention-days: 7
+
   backend:
     name: Java 测试与真实集成依赖
     runs-on: ubuntu-latest
     outputs:
-      stage: ${{ steps.stage.outputs.stage }}
+      # 阶段与用例数都由 reports 步骤真实写入 GITHUB_OUTPUT；本作业没有名为 stage 的步骤，
+      # 绑定不存在的 steps.stage 会让两个输出永远为空，测试全部成功后汇总仍然失败。
+      stage: ${{ steps.reports.outputs.stage }}
       checked: ${{ steps.reports.outputs.checked }}
     env:
       # MinIO 来源无法在仓库内证实，必须由仓库变量显式提供已固定的摘要引用。
@@ -189,11 +303,19 @@ jobs:
       - name: 启动真实 MySQL、Redis、MinIO
         run: python -B -X utf8 scripts/workflow/ci_services.py start
 
+      # Surefire 默认不包含 *IT；显式保留四种单测命名并纳入全部集成测试。
+      # 无测试的 reactor 模块允许继续，reports 步骤仍拒绝零用例或必需类缺失。
       - name: 运行后端测试
+        if: inputs.stage != 'release'
         working-directory: 后端代码/basic-framework-boot
-        # Surefire 默认不包含 *IT；显式保留四种单测命名并纳入全部集成测试。
-        # 无测试的 reactor 模块允许继续，reports 步骤仍拒绝零用例或必需类缺失。
         run: mvn -B -ntp '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false test
+
+      # release 阶段必须采集覆盖率：quality-audit 在处理测试类时绑定本次输入摘要，
+      # 在 verify 生成 JaCoCo 报告与 PMD 审计，供后面的发布阶段裁决使用。
+      - name: 运行后端测试并采集覆盖率（发布阶段）
+        if: inputs.stage == 'release'
+        working-directory: 后端代码/basic-framework-boot
+        run: mvn -B -ntp -Pquality-audit '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false verify
 
       - name: 校验真实集成测试证据
         id: reports
@@ -202,7 +324,165 @@ jobs:
             --backend 后端代码/basic-framework-boot
           printf 'stage=%s\n' "${{ inputs.stage || 'audit' }}" >> "$GITHUB_OUTPUT"
 
+      # 发布门槛由覆盖率先按可读方式裁决：未达标时日志直接给出缺口，不写出任何证据；
+      # 只有真实通过才再产出机器证据，避免把失败或审计结论写成发布证据。
+      - name: 发布阶段后端覆盖率裁决
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+        run: |
+          mkdir -p "$EVIDENCE"
+          python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared
+          python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared --json \
+            > "$EVIDENCE/coverage-backend.json"
+
+      - name: 生成发布阶段后端证据
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+          REVISION: ${{ github.sha }}
+          JUNIT_CASES: ${{ steps.reports.outputs.checked }}
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          evidence = Path(os.environ["EVIDENCE"])
+          coverage = json.loads((evidence / "coverage-backend.json").read_text(encoding="utf-8"))
+          document = {
+              "schema": "ci-release-evidence/v1",
+              "job": "backend",
+              "stage": "release",
+              "revision": os.environ["REVISION"],
+              "checks": [
+                  {"name": "backend-tests-and-integration", "status": "passed",
+                   "checked": int(os.environ["JUNIT_CASES"]),
+                   "command": "mvn -B -ntp -Pquality-audit '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false verify"},
+                  {"name": "backend-release-coverage", "status": "passed",
+                   "checked": coverage["measured_files"],
+                   "command": "python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared --json"},
+              ],
+              "coverage": {"kind": "backend", "evidence": "coverage-backend.json", "stage": "release",
+                           "measured_files": coverage["measured_files"],
+                           "failed_files": coverage["failed_files"]},
+          }
+          (evidence / "release-backend.json").write_text(
+              json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: 上传发布阶段后端证据
+        if: inputs.stage == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-backend
+          path: ${{ runner.temp }}/release-evidence
+          if-no-files-found: error
+          retention-days: 7
+
       # 无论测试成败都回收本次运行自建的容器；所有权不匹配时拒绝删除并保留证据。
+      - name: 停止真实服务
+        if: always()
+        run: python -B -X utf8 scripts/workflow/ci_services.py stop
+
+  # 浏览器业务端到端：真实构建、真实隔离库、真实后端与真实 Chromium。
+  # 本作业没有任何跳过或忽略分支：缺少镜像变量、缺少 Chromium、环境准备失败或用例失败
+  # 都会让作业红灯，聚合门禁随即拒绝本次结论。
+  browser_e2e:
+    name: 浏览器业务端到端
+    runs-on: ubuntu-latest
+    outputs:
+      stage: ${{ steps.count.outputs.stage }}
+      checked: ${{ steps.count.outputs.checked }}
+    env:
+      # 与 backend 作业相同：MinIO 来源无法在仓库内证实，必须由仓库变量显式提供固定摘要。
+      BF_CI_IMAGE_MINIO: ${{ vars.BF_CI_IMAGE_MINIO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 安装固定版本的 CI 工具依赖
+        run: python -m pip install --require-hashes -r scripts/workflow/requirements-ci.txt
+
+      - name: 安装固定 Maven
+        run: bash scripts/workflow/install_ci_maven.sh
+
+      - name: 校验 MinIO 镜像来源已显式配置
+        run: |
+          test -n "$BF_CI_IMAGE_MINIO" || {
+            echo "未配置 BF_CI_IMAGE_MINIO：MinIO 镜像来源未证实，browser_e2e 不计为通过"; exit 1; }
+          echo "BF_CI_IMAGE_MINIO=${BF_CI_IMAGE_MINIO%%@sha256:*}@sha256:<已配置摘要>"
+
+      - name: 启动真实 MySQL、Redis、MinIO
+        run: python -B -X utf8 scripts/workflow/ci_services.py start
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
+
+      - name: 安装管理前端依赖
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm install --frozen-lockfile
+
+      # 浏览器缺失时用例会直接失败；这里显式安装并补齐系统依赖，不把缺失当跳过。
+      - name: 安装 Playwright Chromium
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 连接变量由上一步写入 GITHUB_ENV：AUTH_TEST_MYSQL_*、BF_TEST_REDIS_*、
+      # BF_TEST_S3_*、BF_TEST_MYSQL_CLIENT；凭据只存在于 runner 临时环境。
+      - name: 执行浏览器业务端到端
+        id: e2e
+        env:
+          SUMMARY: ${{ runner.temp }}/business-e2e.json
+          RESULTS: ${{ runner.temp }}/business-e2e-results
+        run: python -B -X utf8 scripts/e2e/run_business_e2e.py --summary "$SUMMARY" --results "$RESULTS"
+
+      # 失败痕迹只在用例失败时取回，便于定位真实原因；没有痕迹时不阻断结论。
+      - name: 上传失败痕迹
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-e2e-results
+          path: ${{ runner.temp }}/business-e2e-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # 只统计本次真实执行的用例数；跳过、重试通过与零用例都不算通过。
+      - name: 汇总真实用例数
+        id: count
+        env:
+          SUMMARY: ${{ runner.temp }}/business-e2e.json
+          STAGE: ${{ inputs.stage || 'audit' }}
+        run: |
+          python -B -X utf8 - <<'PY'
+          import json, os, sys
+          output = os.environ.get("GITHUB_OUTPUT")
+          if not output:
+              sys.exit("缺少 GITHUB_OUTPUT：无法上报本次真实用例数")
+          summary = json.load(open(os.environ["SUMMARY"], encoding="utf-8"))
+          total = int(summary.get("total", 0))
+          failed = int(summary.get("failed", 0))
+          skipped = int(summary.get("skipped", 0))
+          flaky = int(summary.get("flaky", 0))
+          if total <= 0:
+              sys.exit("浏览器业务端到端没有实际用例，browser_e2e 不计为通过")
+          if summary.get("status") != "passed" or failed or skipped or flaky:
+              sys.exit(f"浏览器业务端到端存在失败 {failed}、跳过 {skipped}、重试通过 {flaky}，不计为通过")
+          with open(output, "a", encoding="utf-8") as stream:
+              stream.write(f"checked={total}\n")
+              stream.write(f"stage={os.environ['STAGE']}\n")
+          PY
+
+      # 与 backend 作业同一清理职责：无论成败都回收本次自建容器。
       - name: 停止真实服务
         if: always()
         run: python -B -X utf8 scripts/workflow/ci_services.py stop
@@ -216,6 +496,7 @@ jobs:
       - docs_tools
       - backend
       - frontend
+      - browser_e2e
     steps:
       - uses: actions/checkout@v4
 
@@ -223,9 +504,28 @@ jobs:
         with:
           python-version: "3.13"
 
+      # 发布证据只能来自真实作业产出：作业失败时跳过取回，让聚合门禁直接报告真实原因，
+      # 而不是用下载失败掩盖首个失败。缺少制品时下载本身也会失败，结论仍然是红灯。
+      - name: 取回发布阶段后端证据
+        if: inputs.stage == 'release' && needs.backend.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-evidence-backend
+          path: ${{ runner.temp }}/release-evidence
+
+      - name: 取回发布阶段前端证据
+        if: inputs.stage == 'release' && needs.frontend.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-evidence-frontend
+          path: ${{ runner.temp }}/release-evidence
+
       # toJSON(needs) 保留每个作业的真实 result；skipped/cancelled 会被 aggregate 拒绝。
+      # release 阶段还要求取回的真实发布证据绑定到本次提交，缺少或不一致一律拒绝。
       - name: 核对必需作业与真实用例
         env:
           STAGE: ${{ inputs.stage || 'audit' }}
           NEEDS_JSON: ${{ toJSON(needs) }}
+          RELEASE_EVIDENCE: ${{ runner.temp }}/release-evidence
+          CI_REVISION: ${{ github.sha }}
         run: python -B -X utf8 scripts/workflow/ci_gate.py aggregate --stage "$STAGE"
