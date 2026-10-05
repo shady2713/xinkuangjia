@@ -34,6 +34,40 @@ FRONTEND = Path("前端代码/basic-framework-admin")
 WEB_EXTENSIONS = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".vue"}
 TEST_NAME = re.compile(r"(?:[.-](?:test|spec|bench|benchmark))(?:-d)?\.[cm]?[jt]sx?$")
 
+# 前端覆盖率输入指纹：结构、键名与哨兵值必须与前端 vitest.coverage-provider.mjs 的
+# coverageInputs() 完全一致，任一侧改动都会让旧报告被判过期而不是继续生效。
+WEB_INPUTS_SCHEMA = "web-coverage-inputs/v1"
+WEB_INPUTS_MISSING = "(missing)"
+WEB_INPUT_FILES = (
+    "vitest.config.ts",
+    "vitest.coverage-provider.mjs",
+    "package.json",
+    "pnpm-lock.yaml",
+    "node_modules/@vitest/coverage-v8/package.json",
+    "node_modules/@vitest/coverage-v8/dist/provider.js",
+    "node_modules/vitest/package.json",
+    "node_modules/vite/package.json",
+    "node_modules/typescript/package.json",
+    "node_modules/@vue/compiler-sfc/package.json",
+    "node_modules/vue/package.json",
+    "node_modules/@vitejs/plugin-vue/package.json",
+    "node_modules/@vitejs/plugin-vue-jsx/package.json",
+    "node_modules/happy-dom/package.json",
+    "node_modules/@vue/test-utils/package.json",
+)
+WEB_INPUT_DEPENDENCIES = (
+    "vitest",
+    "@vitest/coverage-v8",
+    "vite",
+    "typescript",
+    "@vue/compiler-sfc",
+    "vue",
+    "@vitejs/plugin-vue",
+    "@vitejs/plugin-vue-jsx",
+    "happy-dom",
+    "@vue/test-utils",
+)
+
 
 def backend_inputs(root: Path) -> dict[str, str]:
     """绑定后端源码、测试、配置与覆盖率裁决源码，排除构建输出而不按业务包排除。"""
@@ -347,6 +381,37 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
             "problems": problems, "reports": reports}
 
 
+def web_coverage_inputs(root: Path) -> dict[str, str]:
+    """绑定前端覆盖率测量的提供者、配置、锁文件与关键依赖，拒绝过期报告。
+
+    Args:
+        root: 仓库根目录，前端范围固定为 FRONTEND。
+    Returns:
+        与 vitest.coverage-provider.mjs 写出的 inputs 同构的摘要映射；文件缺失或依赖未安装
+        时写哨兵值，使替换、卸载与新增都能被比较发现。
+    Raises:
+        OSError: 已存在的输入无法读取。
+        ValueError: 依赖清单不是合法 JSON 对象。
+    """
+    frontend = root / FRONTEND
+    result: dict[str, str] = {}
+    for relative in WEB_INPUT_FILES:
+        path = frontend / relative
+        result["file:" + relative] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else WEB_INPUTS_MISSING
+    for name in WEB_INPUT_DEPENDENCIES:
+        path = frontend / "node_modules" / name / "package.json"
+        version = WEB_INPUTS_MISSING
+        if path.is_file():
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError as error:
+                raise ValueError(f"依赖清单不是合法 JSON：{name}") from error
+            if isinstance(manifest, dict) and isinstance(manifest.get("version"), str):
+                version = manifest["version"]
+        result["version:" + name] = version
+    return result
+
+
 def web_sources(root: Path) -> tuple[list[Path], list[dict[str, object]]]:
     """枚举应用、共享包及构建工具 src，测试与声明单列且不排除任何 vendored 包。"""
     sources: list[Path] = []
@@ -448,6 +513,28 @@ def web_report(root: Path, report: Path) -> dict[str, object]:
         entries[path] = entry
     rows: list[dict[str, object]] = []
     problems: list[dict[str, str]] = []
+    # 报告必须绑定本次测量输入：提供者、测试配置、锁文件与关键依赖版本。改动其中任一项
+    # 而不重跑，旧报告不再代表当前测量方式，直接判为过期证据。
+    baseline = report.parent / "coverage-inputs.json"
+    baseline_path = baseline.relative_to(root).as_posix() if baseline.is_relative_to(root) else str(baseline)
+    unverified_offsets: set[str] = set()
+    if not baseline.is_file():
+        problems.append({"path": baseline_path, "rule": "missing-coverage-inputs"})
+    else:
+        try:
+            prepared = json.loads(baseline.read_text(encoding="utf-8"))
+            if not isinstance(prepared, dict) or prepared.get("schema") != WEB_INPUTS_SCHEMA:
+                raise ValueError("输入清单结构不匹配")
+            if prepared.get("inputs") != web_coverage_inputs(root):
+                raise ValueError("测量输入已变化")
+            if report.stat().st_mtime_ns < baseline.stat().st_mtime_ns:
+                raise ValueError("报告早于输入清单")
+            listed = prepared.get("unverifiedOffsets")
+            if not isinstance(listed, list) or any(not isinstance(item, str) for item in listed):
+                raise ValueError("脚本坐标不可信清单无效")
+            unverified_offsets = set(listed)
+        except (OSError, ValueError, KeyError, TypeError):
+            problems.append({"path": baseline_path, "rule": "coverage-inputs-changed-or-stale"})
     counts: dict[Path, tuple[dict[str, object], dict[str, object]]] = {}
     # V8 对未加载的纯类型文件也可能合成 (empty-report) 函数，必须通过 AST 分清分母。
     declarations = web_declarations(root, sources)
@@ -464,8 +551,14 @@ def web_report(root: Path, report: Path) -> dict[str, object]:
         if str(path) in declarations:
             rows.append({**row(path, root, metric(0, 0), metric(0, 0), True),
                          "provider_counts": {"lines": lines, "functions": functions}})
-        else:
-            rows.append(row(path, root, lines, functions, False))
+            continue
+        item = row(path, root, lines, functions, False)
+        # 提供者已证明该文件的 V8 区间越出"包裹前缀 + 转换后代码"的脚本范围：偏移与代码整体
+        # 错位，行与函数分母都不可信。只把"通过"改成缺口，既不让不可信分母变绿，也不掩盖
+        # invalid-zero 这类"没有任何实测对象"的报告完整性问题。
+        if item["status"] == "passed" and path.relative_to(frontend).as_posix() in unverified_offsets:
+            item.update(status="failed", reason="V8 脚本坐标与转换后代码不一致，分母不可信")
+        rows.append(item)
     for path in sorted(set(entries) - set(sources)):
         problems.append({"path": path.relative_to(root).as_posix(), "rule": "report-source-unmanaged"})
     return {"files": rows, "inventory": [source_record(path, root) for path in sources],
