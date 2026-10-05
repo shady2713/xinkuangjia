@@ -33,7 +33,14 @@ import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,7 +52,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>这些方法承载字典模块的关键约束：字典类型编码与名称必须能按唯一键定位（重复即数据错误），
  * 字典数据的标签/值查询决定导入导出与校验能否找到正确条目；分页条件写错会让停用数据出现在启用筛选里、
  * 或让排序结果不稳定；软删除必须同时写入删除标记与删除时间，否则回收站与唯一键释放都会失效。
- * 因此这里使用真实 SQL 与真实约束观察结果，不用内存替身代替映射。</p>
+ * 类型编码的复用同样由数据库约束决定：唯一索引只覆盖存活行，被删记录保留原编码，同一编码可以反复
+ * 创建与删除，并发创建时仍然只能有一条存活记录。因此这里使用真实 SQL 与真实约束观察结果，
+ * 不用内存替身代替映射。</p>
  *
  * <p>显式执行此集成入口必须提供环回测试环境，缺失环境直接失败，不连接业务库。</p>
  *
@@ -232,32 +241,162 @@ class DictMapperMySqlIT {
     }
 
     /**
-     * 软删除后同名类型仍无法重建，因为唯一索引只覆盖 {@code type} 列。
+     * 软删除后必须能用同一编码重建字典类型，被删记录仍按原编码留在表里。
      *
-     * <p><b>独立的 schema 层发现（未修，需迁移决策）</b>：{@code system_dict_type} 的
-     * {@code uk_type} 是 {@code UNIQUE(type)}，不含 {@code deleted}，因此即使逻辑删除标记已正确落库，
-     * 被删记录仍占用类型编码，用同一编码新建会抛
-     * {@code Duplicate entry ... for key 'system_dict_type.uk_type'}。</p>
-     *
-     * <p>修 {@code DictTypeMapper} 无法解决这一点——它需要改唯一索引，而改成
-     * {@code UNIQUE(type, deleted)} 会带来新的问题：同一类型被删除第二次时会与第一条已删记录
-     * （{@code type, 1}）撞索引而删除失败。稳妥方案需要一并确定"同名类型可反复删除重建"的语义，
-     * 属迁移设计决策，本用例按真实现状断言并留档。</p>
+     * <p>回归契约：唯一索引只覆盖 {@code type} 时，被删记录会永久占用编码——业务预校验只查未删除行，
+     * 因此"查不到旧记录、重建却撞唯一键"。修复后唯一索引为 {@code (type, alive)}，{@code alive}
+     * 只对未删除行取值，同一编码可以"删一条、建一条"；历史行不得被删除或改写。</p>
      */
     @Test
-    void updateToDeleteStillBlocksTypeRecreationBecauseUniqueIndexExcludesDeleted() {
+    void updateToDeleteAllowsRecreatingTheSameTypeCode() {
         dictTypeMapper.insert(dictType(8L, "sys_recreate", "重建前", CommonStatusEnum.ENABLE.getStatus()));
         LocalDateTime deletedTime = LocalDateTime.of(2024, 3, 4, 5, 6, 7);
 
         dictTypeMapper.updateToDelete(8L, deletedTime, "9001");
-
         assertThat(dictTypeMapper.selectByType("sys_recreate"))
                 .as("删除后原记录必须不可见").isNull();
-        DictTypeDO recreated = dictType(9L, "sys_recreate", "重建后", CommonStatusEnum.ENABLE.getStatus());
-        assertThatThrownBy(() -> dictTypeMapper.insert(recreated))
-                .as("真实现状：唯一索引只覆盖 type，被删记录仍占用类型编码")
-                .isInstanceOf(DuplicateKeyException.class)
-                .hasMessageContaining("uk_type");
+
+        dictTypeMapper.insert(dictType(9L, "sys_recreate", "重建后", CommonStatusEnum.ENABLE.getStatus()));
+
+        assertThat(dictTypeMapper.selectByType("sys_recreate").getId())
+                .as("同一编码重建后必须命中新记录").isEqualTo(9L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + TYPE_TABLE + " WHERE type = 'sys_recreate'",
+                Long.class)).as("被删历史行必须保留").isEqualTo(2L);
+        assertThat(jdbc.queryForObject("SELECT deleted FROM " + TYPE_TABLE + " WHERE id = 8", Boolean.class))
+                .as("历史行的删除标记不得被重建改写").isTrue();
+        assertThat(jdbc.queryForObject("SELECT type FROM " + TYPE_TABLE + " WHERE id = 8", String.class))
+                .as("历史行的编码不得被改写").isEqualTo("sys_recreate");
+    }
+
+    /**
+     * 同一编码必须能承受反复创建与删除，每次删除都留下独立历史行。
+     *
+     * <p>三次删除是关键边界：把唯一索引写成 {@code UNIQUE(type, deleted)} 时，第二次删除就会与第一条
+     * 已删记录（{@code type, 1}）冲突而失败；这里三条历史行还共用同一个删除时间，证明复用不依赖
+     * 删除时间互不相同，只依赖"存活标记对已删除行为空"。</p>
+     */
+    @Test
+    void sameTypeCodeSurvivesRepeatedRecreationCycles() {
+        String type = "sys_cycle";
+        LocalDateTime deletedTime = LocalDateTime.of(2024, 4, 5, 6, 7, 8);
+        for (int cycle = 1; cycle <= 3; cycle++) {
+            dictTypeMapper.insert(dictType(200L + cycle, type, "第" + cycle + "代", CommonStatusEnum.ENABLE.getStatus()));
+            dictTypeMapper.updateToDelete(200L + cycle, deletedTime, "9100");
+            assertThat(dictTypeMapper.selectByType(type)).as("第 %s 次删除后编码必须不可见", cycle).isNull();
+        }
+
+        dictTypeMapper.insert(dictType(300L, type, "当前代", CommonStatusEnum.ENABLE.getStatus()));
+
+        assertThat(jdbc.queryForList("SELECT id FROM " + TYPE_TABLE + " WHERE type = ? ORDER BY id", Long.class, type))
+                .as("每次创建都必须留下独立历史行").containsExactly(201L, 202L, 203L, 300L);
+        assertThat(jdbc.queryForList("SELECT deleted FROM " + TYPE_TABLE + " WHERE type = ? AND id < 300",
+                Boolean.class, type)).as("三条历史行必须保持已删除").containsOnly(true);
+        assertThat(jdbc.queryForList("SELECT DISTINCT type FROM " + TYPE_TABLE + " WHERE id < 300", String.class))
+                .as("历史编码不得被改写").containsExactly(type);
+        assertThat(dictTypeMapper.selectByType(type).getId()).as("存活记录必须是最近一次创建").isEqualTo(300L);
+    }
+
+    /**
+     * 同一编码的第二条存活记录必须被唯一索引直接拒绝。
+     *
+     * <p>业务层的"先查后写"在并发下不可靠，编码唯一性最终只能由数据库保证；错误信息里必须出现
+     * 覆盖存活行的索引名，便于运维按索引定位冲突。</p>
+     */
+    @Test
+    void duplicateAliveTypeIsRejectedByUniqueIndex() {
+        dictTypeMapper.insert(dictType(61L, "sys_dup", "第一条", CommonStatusEnum.ENABLE.getStatus()));
+
+        assertThatThrownBy(() -> dictTypeMapper.insert(dictType(62L, "sys_dup", "第二条", CommonStatusEnum.ENABLE.getStatus())))
+                .as("未删除行之间必须仍然唯一").isInstanceOf(DuplicateKeyException.class)
+                .hasMessageContaining("uk_type_alive");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM " + TYPE_TABLE, Long.class)).isEqualTo(1L);
+    }
+
+    /**
+     * 两个并发创建同一编码只能成功一个，另一个必须被唯一索引拒绝。
+     *
+     * <p>并发下两个请求都会通过"编码不存在"的预校验，唯一约束是最后一道防线；用例用两个真实线程在
+     * 同一时刻插入同一编码，断言成功数恰好为 1、失败方是重复键异常、表里只剩一条存活记录。</p>
+     *
+     * @throws Exception 线程启动、等待或并发任务取值失败
+     */
+    @Test
+    void concurrentCreationOfSameTypeAllowsExactlyOne() throws Exception {
+        String type = "sys_race";
+        CyclicBarrier startLine = new CyclicBarrier(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Object> insertSameType = () -> {
+                startLine.await(10, TimeUnit.SECONDS);
+                try {
+                    dictTypeMapper.insert(dictType(null, type, "并发", CommonStatusEnum.ENABLE.getStatus()));
+                    return "created";
+                } catch (RuntimeException failure) {
+                    return failure;
+                }
+            };
+            Future<Object> first = pool.submit(insertSameType);
+            Future<Object> second = pool.submit(insertSameType);
+            List<Object> outcomes = List.of(first.get(30, TimeUnit.SECONDS), second.get(30, TimeUnit.SECONDS));
+
+            assertThat(outcomes).as("并发创建同一编码必须恰好成功一次").containsOnlyOnce("created");
+            Object rejected = outcomes.stream().filter(item -> !"created".equals(item)).findFirst().orElseThrow();
+            assertThat(rejected).as("失败方必须是重复键异常").isInstanceOf(DuplicateKeyException.class);
+            assertThat(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM " + TYPE_TABLE + " WHERE type = ? AND deleted = b'0'", Long.class, type))
+                    .as("唯一索引必须保证只剩一条存活记录").isEqualTo(1L);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * 复用编码不得破坏字典数据与字典类型的关联。
+     *
+     * <p>字典数据按 {@code dict_type} 字符串关联类型、没有外键级联；重建类型会得到新编号，但编码不变，
+     * 因此原字典数据必须仍按编码可查、可用，且不得被改写、复制或删除。这里同时核对类型侧新增一条
+     * 历史行、数据侧两行原样保留。</p>
+     */
+    @Test
+    void recreatingTypeKeepsHistoryAndDictDataAssociation() {
+        dictTypeMapper.insert(dictType(41L, "sys_linked", "关联前", CommonStatusEnum.ENABLE.getStatus()));
+        dictDataMapper.insert(dictData(51L, "男", "1", "sys_linked", 1));
+        dictDataMapper.insert(dictData(52L, "女", "2", "sys_linked", 2));
+
+        dictTypeMapper.updateToDelete(41L, LocalDateTime.of(2024, 8, 9, 10, 11, 12), "9200");
+        dictTypeMapper.insert(dictType(42L, "sys_linked", "关联后", CommonStatusEnum.ENABLE.getStatus()));
+
+        assertThat(dictTypeMapper.selectByType("sys_linked").getId())
+                .as("同一编码必须指向本次重建的编号").isEqualTo(42L);
+        assertThat(jdbc.queryForList("SELECT id FROM " + TYPE_TABLE + " WHERE type = ? ORDER BY id",
+                Long.class, "sys_linked")).as("历史类型行与重建行必须并存").containsExactly(41L, 42L);
+        assertThat(dictDataMapper.selectCountByDictType("sys_linked")).as("字典数据数量不得变化").isEqualTo(2L);
+        assertThat(dictDataMapper.selectByDictTypeAndValue("sys_linked", "1").getLabel()).isEqualTo("男");
+        assertThat(dictDataMapper.selectByDictTypeAndLabel("sys_linked", "女").getValue()).isEqualTo("2");
+        assertThat(jdbc.queryForList("SELECT CONCAT(id, ':', dict_type) FROM " + DATA_TABLE + " ORDER BY id", String.class))
+                .as("字典数据行不得被重建改写或复制").containsExactly("51:sys_linked", "52:sys_linked");
+    }
+
+    /**
+     * schema 层契约：类型唯一索引必须覆盖存活标记，且不得存在只覆盖 {@code type} 的唯一索引。
+     *
+     * <p>这是本缺陷的根因位置。只要唯一索引退回 {@code UNIQUE(type)}，编码复用就会重新被拒；
+     * 用例直接读 {@code information_schema}，让"只改注释或只改业务断言"的假修复无法通过。</p>
+     */
+    @Test
+    void uniqueIndexCoversTypeAndAliveMarker() {
+        assertThat(jdbc.queryForMap(
+                "SELECT IS_NULLABLE, EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+                        + "AND TABLE_NAME = ? AND COLUMN_NAME = 'alive'", TYPE_TABLE))
+                .as("存活标记必须是可空生成列，否则已删除历史行无法共存")
+                .containsEntry("IS_NULLABLE", "YES")
+                .containsEntry("EXTRA", "VIRTUAL GENERATED");
+        assertThat(jdbc.queryForList(
+                "SELECT CONCAT(INDEX_NAME, ':', COLUMN_NAME) FROM information_schema.STATISTICS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND NON_UNIQUE = 0 "
+                        + "ORDER BY INDEX_NAME, SEQ_IN_INDEX", String.class, TYPE_TABLE))
+                .as("唯一索引必须是主键与 (type, alive)，不得存在只覆盖 type 的唯一索引")
+                .containsExactly("PRIMARY:id", "uk_type_alive:type", "uk_type_alive:alive");
     }
 
     /**
