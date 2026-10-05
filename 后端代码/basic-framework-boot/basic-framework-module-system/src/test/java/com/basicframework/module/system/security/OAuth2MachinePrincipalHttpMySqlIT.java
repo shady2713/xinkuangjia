@@ -142,10 +142,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 用独立 MySQL、真实 Mapper、生产 Spring Security 过滤链和生产 Controller 验证
  * OAuth2 client_credentials 机器主体（userId=0、userType=ADMIN）的真实越权边界。
  *
- * <p>机器主体不是管理端用户：生产安全链只允许它在模块显式声明的机器 API 面（此处为
- * {@code /admin-api/system/oauth2/user/**}，由 {@code @ss.hasScope} 限定授权范围）通过，
- * 其余管理端接口一律按无权限拒绝。因此本类断言“机器令牌在只要求登录的读/写入口返回 403”，
- * 而不是依赖数据权限或账号状态。</p>
+ * <p>机器主体不是管理端用户：system 模块不声明任何机器 API 面，安全链对 {@code /admin-api/**}
+ * 统一执行真实用户判定，机器令牌一律按无权限拒绝。OAuth2 用户接口按认证上下文里的登录用户编号
+ * 读取资料，机器主体的占位编号 0 在 system_users 中没有对应账号，放行只会让请求在控制器内对空用户
+ * 解引用；该接口因此要求真实用户，并继续用 {@code @ss.hasScope('user.read')} 限定授权范围。
+ * 本类断言“机器令牌在管理端入口返回 403”，而不是依赖数据权限或账号状态。</p>
  *
  * <p>边界：本上下文不装配生产数据权限拦截器。生产数据权限只为 {@code system_users} 与
  * {@code system_dept} 登记部门/用户列规则，约束的是真实用户的可见行范围，不能用它证明机器主体
@@ -470,34 +471,99 @@ class OAuth2MachinePrincipalHttpMySqlIT {
     }
 
     /**
-     * 模块显式声明的机器 API 面必须继续放行机器令牌，否则隔离会变成一刀切切断正规机器调用。
+     * 核心验证：机器令牌用正确方法 GET 访问 OAuth2 用户接口必须被安全链按无权限拒绝。
      *
-     * <p>用该路径上不存在的 POST 方法探测：安全链放行后请求才会进入 MVC 路由并返回“请求方法不正确”
-     * （405）；若安全链拒绝机器主体，响应会是“没有该操作权限”（403）。同一路径上的 405 与随机令牌的
-     * 401 互为对照，证明 405 需要真实有效的机器凭据。</p>
+     * <p>该接口按认证上下文中的登录用户编号读取资料，机器主体占位编号 0 在 system_users 中没有
+     * 对应记录；把它当作机器接口放行，请求会进入控制器并对空用户解引用，得到系统异常而不是用户资料。
+     * 因此该路径必须要求真实用户：拒绝码为 403，响应体不携带任何用户字段。</p>
      */
     @Test
-    void machineTokenReachesDeclaredMachineApiSurface() throws Exception {
+    void machineTokenDeniedOnOAuth2UserInfoEndpoint() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + machineToken()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = readBody(result);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertNoPayload(body);
+    }
+
+    /** 机器令牌不得靠其他 HTTP 方法绕过该路径的授权判定，未映射的方法同样在安全链被拒绝。 */
+    @Test
+    void machineTokenDeniedOnOAuth2UserInfoUnsupportedMethod() throws Exception {
         MvcResult machineResult = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
                         .header("Authorization", "Bearer " + machineToken()))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(readBody(machineResult).get("code").asInt())
-                .as("机器面必须放行机器主体，真实响应=%s", readBody(machineResult))
-                .isEqualTo(405);
+                .as("机器主体在任何方法上都不得通过该路径，真实响应=%s", readBody(machineResult))
+                .isEqualTo(403);
 
+        // 伪造凭据必须仍在认证层被拒绝，说明上面的 403 不是“整条路径不可达”造成的。
         MvcResult forgedResult = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
                         .header("Authorization", "Bearer " + UUID.randomUUID().toString()))
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(readBody(forgedResult).get("code").asInt())
-                .as("无效凭据不得进入机器面")
+                .as("无效凭据不得通过该路径，真实响应=%s", readBody(forgedResult))
                 .isEqualTo(401);
     }
 
-    /** 机器面不得成为真实用户的绕行通道：真实用户令牌在同一路径上同样按正常路由返回 405。 */
+    /** 伪造凭据用正确方法访问该路径必须返回未授权，作为机器令牌 403 的对照。 */
     @Test
-    void realUserTokenReachesDeclaredMachineApiSurface() throws Exception {
+    void oauth2UserInfoEndpointRejectsForgedToken() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(401);
+    }
+
+    /**
+     * 正例：带 user.read 范围的真实用户令牌必须用真实 GET 读到自己的资料。
+     *
+     * <p>这是原缺陷真正缺失的验证：既有用例只用不存在的 POST 得到 405，从未执行 GET 业务分支。
+     * 当前 HTTP 只开放 client_credentials 授权，带范围的用户令牌由生产授权服务签发，因此这里调用真实
+     * {@code OAuth2GrantService#grantPassword} 走 password 授权取得令牌，再经过真实过滤链读取自己的
+     * 编号、账号与昵称。</p>
+     */
+    @Test
+    void realUserScopedTokenReadsOAuth2UserInfo() throws Exception {
+        OAuth2AccessTokenDO issued = context.getBean(OAuth2GrantService.class).grantPassword(
+                user.getUsername(), userPassword, OAuth2ClientConstants.CLIENT_ID_DEFAULT, List.of("user.read"));
+        assertThat(issued.getUserId()).as("password 授权必须签发真实用户令牌").isEqualTo(user.getId());
+
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + issued.getAccessToken()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = readBody(result);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isZero();
+        assertThat(body.get("data").get("id").asLong()).isEqualTo(user.getId());
+        assertThat(body.get("data").get("username").asText()).isEqualTo(user.getUsername());
+        assertThat(body.get("data").get("nickname").asText()).isEqualTo("真实管理员");
+    }
+
+    /**
+     * 授权范围仍是该接口的准入条件：管理端登录令牌没有 user.read 范围，必须同样按无权限拒绝。
+     *
+     * <p>修复机器面不能把接口放宽成“登录即可读”，否则第三方授权范围语义失效。</p>
+     */
+    @Test
+    void realUserTokenWithoutScopeDeniedOnOAuth2UserInfoEndpoint() throws Exception {
+        String accessToken = loginAsRealUser().get("data").get("accessToken").asText();
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/system/oauth2/user/get")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = readBody(result);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isEqualTo(403);
+        assertNoPayload(body);
+    }
+
+    /** 真实用户令牌在该路径上使用错误方法仍按正常路由返回 405，说明路径对真实用户保持可达。 */
+    @Test
+    void realUserTokenReachesOAuth2UserInfoPath() throws Exception {
         String accessToken = loginAsRealUser().get("data").get("accessToken").asText();
         MvcResult result = mvc.perform(MockMvcRequestBuilders.post("/admin-api/system/oauth2/user/get")
                         .header("Authorization", "Bearer " + accessToken))
@@ -789,6 +855,20 @@ class OAuth2MachinePrincipalHttpMySqlIT {
     /** 解析真实响应体，避免断言依赖日志输出。 */
     private static JsonNode readBody(MvcResult result) throws Exception {
         return JsonUtils.parseObject(result.getResponse().getContentAsString(), JsonNode.class);
+    }
+
+    /**
+     * 断言拒绝响应不携带任何数据载荷。
+     *
+     * <p>安全链拒绝由 {@code ServletUtils} 直写响应体，序列化省略 {@code data} 字段；
+     * 方法级 {@code @PreAuthorize} 拒绝经全局异常处理器与 MVC 消息转换器返回，序列化为显式
+     * {@code null}。两种形态都不得携带数据，因此这里同时接受字段缺失与显式 null，只拒绝有值载荷。</p>
+     *
+     * @param body 真实响应体
+     */
+    private static void assertNoPayload(JsonNode body) {
+        JsonNode data = body.get("data");
+        assertThat(data == null || data.isNull()).as("拒绝响应不得携带数据，实际=%s", body).isTrue();
     }
 
     /** 保留生产事务代理，令牌签发与校验走真实数据库。 */

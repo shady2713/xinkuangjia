@@ -357,6 +357,40 @@ class AuthenticationSessionMySqlIT {
         assertThat(tokens.checkAccessToken(unaffected.getAccessToken()).getUserId()).isEqualTo(otherUser.getId());
     }
 
+    /**
+     * 短信找回后必须能用同一个密码摘要重新登录。
+     *
+     * <p>前端登录、个人改密、管理员重置与短信找回都只提交 MD5 摘要，服务端按摘要直接
+     * 使用 BCrypt 存储。找回入口一旦改写摘要来源（例如再摘要一次原密码），存储值与登录
+     * 提交值就不同源，用户会带着“已重置成功”的提示被永久挡在密码登录之外；本用例把
+     * 找回成功、旧会话与旧摘要失效、新摘要可登录三件事放在同一条链上验证。</p>
+     */
+    @Test
+    void recoveryDigestIsAcceptedByPasswordLogin() {
+        OAuth2AccessTokenDO session = issue();
+        SmsCodeDO code = createSms(SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD.getScene());
+        withHttpRequest(() -> {
+            auth.resetPassword(AuthResetPasswordReqVO.builder()
+                    .mobile(user.getMobile()).code(code.getCode()).password(newPassword).build());
+            return null;
+        });
+
+        assertRevoked(session);
+        // 失败审计同样要求连接信息，两种登录都在真实 HTTP 上下文内提交。
+        assertError(() -> withHttpRequest(() -> loginWith(oldPassword)), AUTH_LOGIN_BAD_CREDENTIALS.getCode());
+        AuthLoginRespVO response = withHttpRequest(() -> loginWith(newPassword));
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(tokens.checkAccessToken(response.getAccessToken()).getUserId()).isEqualTo(user.getId());
+    }
+
+    /** 按普通账号密码入口提交密码摘要，返回携带新会话的登录结果。 */
+    private AuthLoginRespVO loginWith(String passwordDigest) {
+        AuthLoginReqVO request = new AuthLoginReqVO();
+        request.setUsername(user.getUsername());
+        request.setPassword(passwordDigest);
+        return auth.login(request);
+    }
+
     /** 撤销 SQL 失败时三种入口自己的事务回滚密码及已执行的访问令牌删除。 */
     @ParameterizedTest
     @EnumSource(PasswordChange.class)
