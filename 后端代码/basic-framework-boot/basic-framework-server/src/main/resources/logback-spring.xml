@@ -2,8 +2,10 @@
     <!-- 格式化输出：%d 表示日期，%thread 表示线程名，%-5level：级别从左显示 5 个字符宽度，%msg：日志消息，%n是换行符 -->
     <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{50}:%L) - %msg%n"/>
     <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50}:%L - %msg%n"/>
-    <!-- JSON 格式模板，用于生产环境日志聚合（ELK/Loki 等） -->
-    <property name="JSON_LOG_PATTERN" value='{"timestamp":"%d{yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSZ}","level":"%level","thread":"%thread","logger":"%logger{50}","line":"%L","message":"%replace(%msg){&apos;,&apos;}","exception":"%replace(%xException{10}){&apos;,&apos;}"}%n'/>
+    <!-- JSON 格式模板，用于生产环境日志聚合（ELK/Loki 等）。
+         %replace 必须给出“正则,替换”两个选项；此前写成 {','} 只有正则，prod 配置解析直接失败，
+         应用无法启动。逗号作为正则时必须放在单引号选项内，否则会被当成选项分隔符。 -->
+    <property name="JSON_LOG_PATTERN" value='{"timestamp":"%d{yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSZ}","level":"%level","thread":"%thread","logger":"%logger{50}","line":"%L","message":"%replace(%msg){&apos;,&apos;,&apos;;&apos;}","exception":"%replace(%xException{10}){&apos;,&apos;,&apos;;&apos;}"}%n'/>
 
     <!-- ==================== local/dev 环境 ==================== -->
     <springProfile name="local,dev">
