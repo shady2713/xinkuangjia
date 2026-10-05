@@ -125,4 +125,21 @@ describe('字典加载生命周期', /** 集中验证字典加载生命周期的
     await pending;
     expect(store.getDictOptions('role')).toEqual([]);
   });
+
+  it('已登记类型的缓存值被清空后按无字典处理', /** 缓存值可能被置空，读取必须退化为"没有字典"而不是抛错或返回脏数据。 */ () => {
+    const store = useDictStore();
+    store.setDictCache({ emptied: [{ label: 'A', value: 'a' }] });
+    // 通过字典口径的索引签名把已登记类型置空，模拟缓存被外部清空后的读取。
+    (store.dictCache as Record<string, unknown>).emptied = undefined;
+
+    expect(store.getDictData('emptied', 'a')).toBeUndefined();
+    expect(store.getDictOptions('emptied')).toEqual([]);
+  });
+
+  it('类型未登记时读取返回空结果', /** 未缓存的字典类型必须返回空结果，不能读取到原型链上的同名键。 */ () => {
+    const store = useDictStore();
+
+    expect(store.getDictData('missing-type', 'x')).toBeUndefined();
+    expect(store.getDictOptions('missing-type')).toEqual([]);
+  });
 });
