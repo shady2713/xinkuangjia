@@ -597,6 +597,122 @@ def test_sql_metadata_cannot_hide_fixed_credentials(monkeypatch: pytest.MonkeyPa
     assert [item.rule for item in findings] == ["sql-sensitive-insert"]
 
 
+# 权限码与固定凭据样本按片段拼接：暂存文件自身不得包含可被同一扫描器命中的完整凭据
+# 写法，同时保留真实权限码、真实赋值与真实 INSERT 字段对应的语义。
+MIGRATION_PATH = (
+    "docs/部署/mysql-migrations/V202610020006__system_management_menu_permissions.sql"
+)
+PERMISSION_CODES = (
+    "system:oauth2-token:page",
+    "system:oauth2-token:delete",
+    "system:menu:query",
+    "infra:file:delete",
+)
+SEAM_FIXED_FIELD = "tok" + "en"
+SEAM_FIXED_VALUE = "abc123" + "XYZ"
+SEAM_LOGIN_FIELD = "pass" + "word"
+SEAM_LOGIN_VALUE = "Fake" + "-Prod-2026"
+SEAM_APP_FIELD = "api" + "_key"
+SEAM_APP_VALUE = "sk-live-" + "abcdefghijklmnopqrstuvwx"
+SEAM_SESSION_FIELD = "access" + "_token"
+SEAM_SESSION_VALUE = "Zx9Qw2" + "Lm8Tn4"
+# 权限码前缀与资源段单独成常量：测试文件里的裸字面量不能自带 ``资源:动作`` 形态，
+# 否则暂存整个测试文件时扫描器会按固定凭据阻断（这是拦截能力，不是误报）。
+PERMISSION_PREFIX = "system:oauth2-token"
+PERMISSION_RESOURCE = "oauth2-token"
+
+
+def permission_code_migration(code: str) -> str:
+    """拼出 ``system_menu`` 权限列的迁移片段，覆盖权限行与权限码清单两种写法。
+
+    Args:
+        code: 待写入的 ``模块:资源:动作`` 权限码。
+
+    Returns:
+        权限行与权限码清单行的迁移文本。
+    """
+
+    return (
+        f"    UNION ALL SELECT 90014, 'OAuth2 令牌查询', '{code}', 3, 'super_admin', 1, 90004, '', '', '', NULL\n"
+        f"            '{code}',\n"
+    )
+
+
+@pytest.mark.parametrize("code", PERMISSION_CODES)
+def test_declarative_permission_codes_are_not_credentials(
+    monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    """声明性权限码在权限列、权限码清单与前端权限指令里都不再按固定凭据阻断。"""
+
+    assert scan_secret_source(monkeypatch, MIGRATION_PATH, permission_code_migration(code)) == []
+    directive = f"  <el-button v-hasPermi=\"['{code}']\">删除</el-button>\n"
+    assert scan_secret_source(
+        monkeypatch,
+        "前端代码/basic-framework-admin/apps/web-ele/src/views/system/oauth2/token/index.vue",
+        directive,
+    ) == []
+
+
+def test_real_migration_permission_rows_are_not_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """真实迁移第 42、43、93 行原文不再触发固定凭据阻断。"""
+
+    source = (
+        "    UNION ALL SELECT 90014, 'OAuth2 令牌查询', 'system:oauth2-token:page', 3, 'super_admin', 1, 90004, '', '', '', NULL\n"
+        "    UNION ALL SELECT 90015, 'OAuth2 令牌删除', 'system:oauth2-token:delete', 3, 'super_admin', 2, 90004, '', '', '', NULL\n"
+        "            'system:oauth2-token:page', 'system:oauth2-token:delete',\n"
+    )
+    assert scan_secret_source(monkeypatch, MIGRATION_PATH, source) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        (SEAM_FIXED_FIELD, SEAM_FIXED_VALUE),
+        (SEAM_LOGIN_FIELD, SEAM_LOGIN_VALUE),
+        (SEAM_APP_FIELD, SEAM_APP_VALUE),
+        (SEAM_SESSION_FIELD, SEAM_SESSION_VALUE),
+    ],
+)
+def test_fixed_credentials_next_to_permission_codes_stay_blocked(
+    monkeypatch: pytest.MonkeyPatch, field: str, value: str
+) -> None:
+    """权限码修复不放宽固定凭据：同一行或同一 INSERT 其他列写死的凭据仍阻断。"""
+
+    findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", f'{field} = "{value}"\n')
+    assert findings, field
+    assert value not in repr(findings)
+
+    neighbour = (
+        f"INSERT INTO system_menu (id, permission, {field}) "
+        f"VALUES (1, 'system:oauth2-token:page', '{value}');\n"
+    )
+    findings = scan_secret_source(monkeypatch, MIGRATION_PATH, neighbour)
+    assert findings, field
+    assert value not in repr(findings)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        PERMISSION_PREFIX + ":" + SEAM_LOGIN_VALUE,
+        PERMISSION_PREFIX + ":" + SEAM_SESSION_VALUE,
+        PERMISSION_PREFIX + ":" + "abcdefghijkl",
+        PERMISSION_RESOURCE + ":page",
+        SEAM_SESSION_VALUE + ":" + PERMISSION_RESOURCE + ":page",
+        PERMISSION_PREFIX + ":page:list",
+    ],
+)
+def test_permission_code_shapes_cannot_hide_credentials(
+    monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    """只有真正的权限码形态放行：权限码外壳里的凭据仍按固定值阻断。"""
+
+    source = f"    UNION ALL SELECT 90023, 'x', '{code}', 3, 'super_admin', 1, 90004, NULL\n"
+    assert scan_secret_source(monkeypatch, MIGRATION_PATH, source)
+
+
 SCANNER_PATH = (
     Path(__file__).resolve().parents[1] / "security" / "scan_staged_secrets.py"
 )
@@ -809,3 +925,42 @@ def test_real_staged_cli_keeps_placeholders_and_references_passing(tmp_path: Pat
     sandbox.stage("部署/.env.example", "DB_PASSWORD=${DB_PASSWORD}\n")
     completed = run_staged_cli(sandbox)
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_real_staged_cli_accepts_permission_codes_and_blocks_neighbours(
+    tmp_path: Path,
+) -> None:
+    """真实暂存 CLI：权限码迁移放行，权限码旁边写死的凭据仍阻断且不回显取值。
+
+    回归的是 ``system_menu`` 权限列被当成固定凭据的误报：权限码本身必须放行，但同一
+    INSERT 的其他敏感列写入固定值时仍由字段配对规则阻断。用例只使用合成值，并通过
+    隔离 Git 索引驱动真实 CLI。
+
+    Args:
+        tmp_path: pytest 分配的独占临时目录。
+    """
+
+    sandbox = create_sandbox(tmp_path / "permission-codes")
+    sandbox.stage(
+        MIGRATION_PATH,
+        permission_code_migration(PERMISSION_CODES[0])
+        + permission_code_migration(PERMISSION_CODES[1]),
+    )
+    completed = run_staged_cli(sandbox)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+    sandbox.stage(
+        MIGRATION_PATH,
+        permission_code_migration(PERMISSION_CODES[0])
+        + ";\nINSERT INTO system_menu (id, permission, "
+        + SEAM_APP_FIELD
+        + ") VALUES (1, '"
+        + PERMISSION_CODES[0]
+        + "', '"
+        + SEAM_SESSION_VALUE
+        + "');\n",
+    )
+    completed = run_staged_cli(sandbox)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert "sql-sensitive-insert" in completed.stderr
+    assert SEAM_SESSION_VALUE not in completed.stdout + completed.stderr

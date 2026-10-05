@@ -712,29 +712,133 @@ def _label_words(text: str) -> list[str]:
     return [word for word in re.split(r"[^0-9A-Za-z]+", text.lower()) if word]
 
 
-def _is_self_describing_label(key: str, value: str) -> bool:
+def _is_self_describing_label(
+    key: str, value: str, *, identifier: str | None = None
+) -> bool:
     """判断字面量是否只是按字段名自述的标签值。
 
     真实凭据不会包含自身字段名的全部词段；``REAL_USER_TOKEN`` 取
-    ``"real-user-token"`` 属于声明性标签，不是可用凭据。
+    ``"real-user-token"`` 属于声明性标签，不是可用凭据。声明性权限码
+    （``system:oauth2-token:page``）是同一语义的另一种形态：标识符整体就是权限声明，
+    命中字段名只是其中的资源段，取值只是其后的动作段，标识符内部没有承载密钥的位置。
 
     Args:
         key: 正则捕获的敏感字段名。
         value: 已去除外围引号的字面量内容。
+        identifier: 命中所在的最内层声明性标识符原文（已剥离引号等语法符号）；提供时
+            额外按声明性权限码形态判断，默认 ``None`` 只判断取值是否重述字段名。
 
     Returns:
-        字段名各词段按顺序出现在字面量中时返回 ``True``。
+        字段名各词段按顺序出现在字面量中，或标识符是声明性权限码时返回 ``True``。
     """
 
     key_words = _label_words(_normalized_field_name(key))
     value_words = _label_words(value)
-    if not key_words or len(value_words) < len(key_words):
+    if key_words and len(value_words) >= len(key_words):
+        position = 0
+        for word in value_words:
+            if position < len(key_words) and word == key_words[position]:
+                position += 1
+        if position == len(key_words):
+            return True
+    return identifier is not None and _is_declarative_permission_code(
+        key_words, value_words, identifier
+    )
+
+
+# 声明性标识符只由词段字符、数字与 ``:``/``-``/``_``/``.`` 分隔符组成，用于从字面量里
+# 取出权限码本体。
+IDENTIFIER_CHARACTERS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:._-"
+)
+
+# 权限动作词表：取自仓库现有权限码（query/create/update/delete/export/import/list/page、
+# assign-user-role/update-password/trigger 等）并覆盖同类增删改查与运行操作动作。动作段
+# 必须是这里的声明性动作词，随机密钥串无法通过该词表。
+PERMISSION_ACTION_WORDS = frozenset(
+    {
+        "add", "apply", "approve", "assign", "audit", "batch", "bind", "cancel",
+        "check", "clean", "close", "connect", "copy", "create", "delete", "detail",
+        "disable", "disconnect", "download", "edit", "enable", "export", "generate",
+        "get", "grant", "import", "list", "load", "move", "open", "page", "preview",
+        "publish", "query", "refresh", "reject", "remove", "reset", "revoke", "save",
+        "send", "start", "stop", "submit", "sync", "test", "trigger", "unbind",
+        "update", "upload", "verify", "view",
+    }
+)
+
+
+def _permission_code_span(
+    line: str, start: int, end: int, *, literal_text: bool
+) -> tuple[int, int] | None:
+    """返回命中字段名所在的最大标识符片段区间，用于识别声明性权限码。
+
+    权限码是出现在引号里的声明性标识符：普通行要求命中位于字符串字面量内部，裸文本里的
+    同形片段仍按原规则处理；``literal_text`` 为真时文本本身就是字符串内容（Python 常量、
+    嵌入 SQL），无需再找引号。区间从命中字段名向两侧扩展到标识符字符边界，覆盖
+    ``'system:oauth2-token:page'`` 与 ``v-hasPermi="['system:oauth2-token:page']"`` 两种
+    写法；扩展结果由调用方按三段形态校验，多带语法符号或载荷字符都会判定失败。
+
+    Args:
+        line: 当前扫描文本。
+        start: 命中字段名的起始偏移。
+        end: 命中字段名的结束偏移。
+        literal_text: 当前文本是否来自字符串字面量内容。
+
+    Returns:
+        标识符片段的 ``(起始偏移, 结束偏移)``；普通行里命中不在字面量内部时返回 ``None``。
+    """
+
+    if not literal_text and _enclosing_literal(line, start) is None:
+        return None
+    left = start
+    while left > 0 and line[left - 1] in IDENTIFIER_CHARACTERS:
+        left -= 1
+    right = end
+    while right < len(line) and line[right] in IDENTIFIER_CHARACTERS:
+        right += 1
+    return left, right
+
+
+def _is_declarative_permission_code(
+    key_words: list[str], value_words: list[str], identifier: str
+) -> bool:
+    """判断命中的敏感片段是否只是 ``模块:资源:动作`` 声明性权限码的资源段。
+
+    权限码把权限声明本身写成标识符，例如 ``system:oauth2-token:page``：整个标识符由小写
+    模块名、资源名和动作名三段组成，冒号后的取值只是权限动作名称，标识符内部不存在承载
+    密钥的随机载荷位置。判据必须同时成立：标识符恰好是三段、模块段是小写命名空间词、
+    命中字段名的词段与中间资源段完全一致、动作段是纯小写字母（可带连字符的复合动作）
+    且首词属于权限动作词表、捕获取值正是动作段开头。因此混合大小写、含数字或随机串的
+    取值——把凭据直接塞进动作段的写法——都不满足条件，仍按固定凭据拦截；四段及以上的
+    标识符也不在放行范围内。
+
+    Args:
+        key_words: 命中字段名规范化后的词段。
+        value_words: 捕获取值的词段；只用于确认冒号位置，不参与语义放行。
+        identifier: 命中所在的最内层标识符原文，已剥离引号等语法符号。
+
+    Returns:
+        标识符是权限码且各段语义一致时返回 ``True``。
+    """
+
+    segments = identifier.split(":")
+    if len(segments) != 3:
         return False
-    position = 0
-    for word in value_words:
-        if position < len(key_words) and word == key_words[position]:
-            position += 1
-    return position == len(key_words)
+    module, resource, action = segments
+    # 模块段是单个小写命名空间词（可带尾随版本数字，如 ``oauth2``），不接受字母数字
+    # 混排或长随机串；动作段是纯小写字母动作词，两端的形态限制让凭据无法靠拼接冒号
+    # 段落混进权限码。
+    if re.fullmatch(r"[a-z]{2,15}[0-9]{0,2}", module) is None:
+        return False
+    if not key_words or _label_words(resource) != key_words:
+        return False
+    if re.fullmatch(r"[a-z]{3,}(?:-[a-z]{2,}){0,3}", action) is None:
+        return False
+    action_words = action.split("-")
+    if action_words[0] not in PERMISSION_ACTION_WORDS:
+        return False
+    return value_words[: len(action_words)] == action_words
 
 
 NON_CREDENTIAL_SENTINEL_WORDS = frozenset(
@@ -1587,6 +1691,36 @@ def _scan_added_line(
         and (_is_declared_noncredential_name(key) or _is_self_describing_label(key, value))
     ):
         return findings
+    # 声明性权限码（``'system:oauth2-token:page'``、权限码 IN 清单、Vue 的
+    # ``v-hasPermi="['system:oauth2-token:delete']"``）里的敏感片段只是
+    # ``模块:资源:动作`` 标识符的资源段，不是凭据取值。SQL、文档等配置文本与源码按同一
+    # 口径判断，因此该分支不能沿用只对源码生效的配置路径豁免。只有标识符本体被放行，
+    # 同一行其余文本（同一字面量里的其他内容、同一 INSERT 的其他列、同一行的其他赋值）
+    # 仍须独立扫描并保留命中，权限码旁边写下的固定凭据继续按原规则阻断。
+    permission_span = _permission_code_span(
+        line,
+        assignment.start("key"),
+        assignment.end("key"),
+        literal_text=literal_text,
+    )
+    if (
+        single_assignment
+        and fixed_fallback is None
+        and permission_span is not None
+        and _is_self_describing_label(
+            key,
+            value,
+            identifier=line[permission_span[0] : permission_span[1]],
+        )
+    ):
+        findings.extend(_scan_added_line(
+            path,
+            line_number,
+            line[: permission_span[0]] + " " + line[permission_span[1] :],
+            is_python_code=is_python_code,
+            literal_text=literal_text,
+        ))
+        return list(dict.fromkeys(findings))
     # 运行期表达式与结构化字面量不是固定凭据；显式字符串与配置文本仍需拦截。
     if single_assignment and _is_dynamic_expression(value, syntax_path):
         return findings
@@ -2393,6 +2527,104 @@ def _test_sql_and_embedded_source_regressions() -> None:
         raise AssertionError("部署 .env 路径未被拦截")
 
 
+def _test_declarative_permission_code_regressions() -> None:
+    """验证声明性权限码放行与固定凭据拦截的边界。
+
+    正样本覆盖 ``system_menu`` 权限列、权限码 ``IN`` 清单、前端权限指令、Python 权限常量、
+    Java 权限注解与文档权限码；负样本锁定固定凭据、密钥前缀、权限码形态伪装、权限码旁边
+    写下的凭据与四段标识符仍然阻断，证明该误报修正没有放宽固定凭据规则。
+    """
+
+    migration = "docs/部署/mysql-migrations/V2026__menu_permissions.sql"
+    safe_samples = (
+        # system_menu 权限列里的 模块:资源:动作 权限码是声明，不是凭据取值。
+        (
+            migration,
+            "    UNION ALL SELECT 90014, 'OAuth2 令牌查询', 'system:oauth2-token:page', 3, 'super_admin', 1, 90004, '', '', '', NULL",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90015, 'OAuth2 令牌删除', 'system:oauth2-token:delete', 3, 'super_admin', 2, 90004, '', '', '', NULL",  # secret-scan: allow-test
+        ),
+        # 权限码 IN 清单、普通权限码与含敏感子串的资源段同样放行。
+        (
+            migration,
+            "            'system:oauth2-token:page', 'system:oauth2-token:delete',",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "            'system:menu:query', 'infra:file:delete', 'infra:api-key:delete',",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90022, '令牌批量删除', 'system:oauth2-token:batch-delete', 3, 'super_admin', 3, 90004, NULL",  # secret-scan: allow-test
+        ),
+        # 前端指令、Python 常量、Java 注解与文档里的权限码是同一形态。
+        (
+            "前端代码/basic-framework-admin/apps/web-ele/src/views/system/oauth2/token/index.vue",
+            "  <el-button v-hasPermi=\"['system:oauth2-token:delete']\">删除</el-button>",  # secret-scan: allow-test
+        ),
+        (
+            "src/perms.py",
+            'PERMISSIONS = ("system:oauth2-token:page", "infra:api-key:delete")',  # secret-scan: allow-test
+        ),
+        (
+            "src/main/java/TokenController.java",
+            "    @PreAuthorize(\"@ss.hasPermission('system:oauth2-token:delete')\")",  # secret-scan: allow-test
+        ),
+        (
+            "docs/权限说明.md",
+            "- 令牌删除需要 `system:oauth2-token:delete` 权限码。",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in safe_samples:
+        findings = _scan_added_line(path, 1, line)
+        if findings:
+            raise AssertionError(f"声明性权限码被误报：{path} {findings[0].rule}")
+
+    unsafe_samples = (
+        # 固定凭据仍按敏感赋值拦截，密钥前缀由独立规则拦截。
+        ("src/service.py", 'token = "abc123XYZ"'),  # secret-scan: allow-test
+        ("src/service.py", 'password = "Fake-Prod-2026"'),  # secret-scan: allow-test
+        ("src/service.py", 'access_token = "Zx9Qw2Lm8Tn4"'),  # secret-scan: allow-test
+        ("src/service.py", 'api_key = "sk-live-abcdefghijklmnopqrstuvwx"'),  # secret-scan: allow-test
+        # 权限码形态伪装：动作段含大写数字，或不是声明性动作词。
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'system:oauth2-token:Fake-Prod-2026', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'system:oauth2-token:Zx9Qw2Lm8Tn4', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'system:oauth2-token:abcdefghijkl', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        # 载荷塞进模块段、标识符不足三段或超过三段时仍拦截。
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'Zx9Qw2Lm8Tn4:oauth2-token:page', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'oauth2-token:page', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        (
+            migration,
+            "    UNION ALL SELECT 90023, 'x', 'system:oauth2-token:page:list', 3, 'super_admin', 1, 90004, NULL",  # secret-scan: allow-test
+        ),
+        # 权限码旁边写下的真实凭据不能被一起放行：同一行的敏感赋值仍阻断。
+        (
+            migration,
+            "SELECT 'system:oauth2-token:page'; UPDATE t SET password = 'Fake-Prod-2026';",  # secret-scan: allow-test
+        ),
+    )
+    for path, line in unsafe_samples:
+        if not any(item.severity == "error" for item in _scan_added_line(path, 1, line)):
+            raise AssertionError(f"真实形态凭据未被拦截：{path}")
+
+
 def _run_self_test() -> None:
     """使用伪造样本验证放行和拦截规则，避免测试中包含真实凭据。"""
 
@@ -2401,6 +2633,7 @@ def _run_self_test() -> None:
     _test_unit_credentials_regressions()
     _test_semantic_recognition_regressions()
     _test_sql_and_embedded_source_regressions()
+    _test_declarative_permission_code_regressions()
     safe_cases = (
         ("src/service.py", 'token_type = "Bearer"'),  # secret-scan: allow-test
         ("config.yaml", "password_min_length: 8"),  # secret-scan: allow-test
