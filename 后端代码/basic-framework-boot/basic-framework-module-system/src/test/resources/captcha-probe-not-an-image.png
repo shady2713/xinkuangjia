@@ -1,0 +1,1 @@
+DUMMY-NOT-AN-IMAGE: this file exists so the loader reads bytes, but it is not a decodable image.

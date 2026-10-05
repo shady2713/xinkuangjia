@@ -163,4 +163,24 @@ class BootstrapBoundaryTest {
         }
     }
 
+    /**
+     * 口令协议摘要算法不可用时必须显式拒绝，不能退化成明文或弱编码落库。
+     *
+     * <p>存储用的是「先 UTF-8 小写 MD5、再 BCrypt」的既有登录协议；摘要算法缺失时没有任何等价替代，
+     * 静默跳过会让数据库里出现永远无法通过认证、或强度不足的凭据。这里让 {@code MessageDigest}
+     * 取算法失败，断言拒绝分类是运行时错误且 {@code encode} 的返回值不可用（直接抛错）。</p>
+     */
+    @Test
+    void passwordEncodingFailsWhenDigestAlgorithmIsUnavailable() {
+        try (org.mockito.MockedStatic<java.security.MessageDigest> digest =
+                     org.mockito.Mockito.mockStatic(java.security.MessageDigest.class)) {
+            digest.when(() -> java.security.MessageDigest.getInstance("MD5"))
+                    .thenThrow(new java.security.NoSuchAlgorithmException("DUMMY-NO-DIGEST"));
+
+            assertThatThrownBy(() -> BootstrapPassword.encode("Aa1".repeat(4).toCharArray()))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Required password protocol digest unavailable");
+        }
+    }
+
 }

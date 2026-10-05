@@ -13,6 +13,8 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,6 +150,42 @@ class AdminDefaultBlockPuzzleCaptchaServiceImplTest {
     private static BufferedImage decode(String base64) throws Exception {
         assertThat(ImageUtils.getBase64StrToImage(base64)).as("工具解码结果必须与断言一致").isNotNull();
         return ImageIO.read(new ByteArrayInputStream(Base64.getDecoder().decode(base64)));
+    }
+
+    /**
+     * 可读但不可解码为图片的素材必须被拒绝，而不是当成有效底图参与生成。
+     *
+     * <p>加载器把「读到字节」和「拿到图片」分开判断：只保留能解码的素材，否则后续裁剪会拿到空图，
+     * 让登录关键路径出现难以定位的失败。这里用一条独立的非图片探针资源校验该边界，并保留一条
+     * 真实依赖素材的正对照，证明 null 来自图片解码判定而不是资源找不到。</p>
+     *
+     * <p><b>白盒直调：</b>{@code loadDefaultImage} 是私有静态方法，生产调用点只传依赖包内置的
+     * {@code defaultImages/jigsaw/original|slidingBlock/1..6.png}；探针资源使用独立路径，
+     * 不遮蔽依赖包素材，也不改变本模块其它用例的类路径解析结果。</p>
+     */
+    @Test
+    void loadDefaultImageRejectsReadableNonImageResource() throws Exception {
+        assertThat(loadDefaultImage("captcha-probe-not-an-image.png"))
+                .as("读到字节但解不出图片时必须返回 null 并从候选列表剔除").isNull();
+        assertThat((String) loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                .as("正对照：依赖包内真实图片必须返回非空 Base64").isNotBlank();
+    }
+
+    /**
+     * 反射调用私有默认素材加载器，观察它对指定路径的真实返回。
+     *
+     * @param path 类路径上的资源路径
+     * @return 加载成功时的 Base64 文本，不可用时为 null
+     * @throws Exception 反射调用失败（含被测方法抛出的异常）时抛出
+     */
+    private static Object loadDefaultImage(String path) throws Exception {
+        Method method = AdminDefaultBlockPuzzleCaptchaServiceImpl.class.getDeclaredMethod("loadDefaultImage", String.class);
+        method.setAccessible(true);
+        try {
+            return method.invoke(null, path);
+        } catch (InvocationTargetException exception) {
+            throw (Exception) exception.getCause();
+        }
     }
 
 }
