@@ -26,3 +26,6 @@ coverage/
 !.vscode/settings.json
 .DS_Store
 Thumbs.db
+
+# ESLint 缓存（机器相关，不入库）
+.eslintcache
