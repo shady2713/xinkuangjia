@@ -6,7 +6,9 @@
  * keep-alive 停用时的自动关闭。这些判断写错会让提交中的抽屉被误关、遮罩点击失效、
  * 关闭动画不触发时抽屉内容残留，或缓存页面返回时抽屉仍然悬在界面上。用例按业务侧用法
  * 挂载 `useVbenDrawer` 返回的真实组件，通过真实事件与点击驱动处理器，只替换布局引擎的
- * 移动端判定。抽屉内容会 teleport 到 body，因此 DOM 结果通过组件包装器读取。
+ * 移动端判定。抽屉内容会 teleport 到 body，因此 DOM 结果通过组件包装器读取。每个用例结束后
+ * 统一卸载本次挂载的宿主：抽屉关闭后组件会注册 350ms 的关闭兜底定时器，只有卸载才会清理，
+ * 残留的定时器或渲染任务会在测试环境拆除之后访问已移除的 DOM 全局，形成未处理拒绝。
  */
 import type { VueWrapper } from '@vue/test-utils';
 
@@ -41,8 +43,18 @@ interface DrawerHarness {
   wrapper: VueWrapper;
 }
 
-/** 挂载序号；用例之间不会卸载抽屉，用唯一类名避免命中其它用例残留的元素。 */
+/** 挂载序号；每个用例结束后统一卸载，唯一类名仍用于在多个抽屉间定位当前用例的元素。 */
 let drawerSequence = 0;
+
+/**
+ * 本文件已挂载但尚未卸载的宿主包装器，按用例收集并在用例结束后统一卸载。
+ *
+ * 抽屉关闭后 `drawer.vue` 会注册 350ms 的关闭兜底定时器，并把 `isClosed` 置为 true 触发重渲染；
+ * 两者都只在该组件卸载时停止（`onUnmounted(clearCloseFallbackTimer)`）。若用例结束后组件继续存活，
+ * 定时器会在 happy-dom 环境拆除之后触发，重渲染走到 reka-ui 的 `forwardRef` 读取已被移除的
+ * `Element` 全局，抛出 `ReferenceError` 并成为未处理拒绝，令整条 `pnpm test:unit` 以 1 退出。
+ */
+const mountedWrappers: VueWrapper[] = [];
 
 /**
  * 按业务侧用法挂载抽屉并打开。
@@ -73,6 +85,7 @@ async function mountOpenedDrawer(
   });
 
   const wrapper = mount(Host) as VueWrapper;
+  mountedWrappers.push(wrapper);
   await nextTick();
   const api = captured.api;
   if (!api) {
@@ -132,9 +145,24 @@ function createEvent(target?: HTMLElement) {
 }
 
 afterEach(
-  /** 还原真实计时器与所有替身，避免影响其他用例。 */ () => {
+  /**
+   * 先卸载本用例挂载的全部抽屉，再还原真实计时器与所有替身。
+   *
+   * 卸载会走 `drawer.vue` 的 `onUnmounted(clearCloseFallbackTimer)`，取消关闭后 350ms 的兜底
+   * 定时器并解绑监听与响应式副作用；否则这些挂起任务会在本文件的环境拆除之后才执行，
+   * 触发对已销毁 DOM 的重渲染并抛出未处理拒绝。
+   */
+  () => {
+    for (const wrapper of mountedWrappers.splice(0)) {
+      wrapper.unmount();
+    }
     vi.useRealTimers();
     vi.restoreAllMocks();
+    // 卸载必须把抽屉子树彻底移出文档：只要组件实例还活着，它的响应式写入就可能在环境
+    // 拆除之后重渲染，而重渲染会读取 reka-ui `forwardRef` 里已被移除的 Element 全局。
+    expect(
+      document.querySelectorAll('[class*="drawer-events-content-"]'),
+    ).toHaveLength(0);
   },
 );
 
@@ -411,6 +439,7 @@ describe('抽屉在 keep-alive 中停用', /** 缓存页面返回时抽屉必须
     });
 
     const wrapper = mount(Host) as VueWrapper;
+    mountedWrappers.push(wrapper);
     await nextTick();
     const api = captured.api;
     if (!api) {
