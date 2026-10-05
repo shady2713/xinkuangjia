@@ -12,6 +12,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +51,9 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
 
     /** 冷 Key 初始化竞争的并发请求数，取大于 2 以覆盖多个请求同时读到“未初始化配置”的交错。 */
     private static final int CONCURRENT_REQUESTS = 16;
+
+    /** 动态改参前使用的旧配额，取大于 1 以便先耗尽旧窗口，使放行只可能来自重建。 */
+    private static final int CHANGED_FROM_COUNT = 2;
 
     /** 被测 DAO，全部方法都走真实 Redisson 客户端。 */
     private RateLimiterRedisDAO rateLimiterRedisDAO;
@@ -377,6 +382,340 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
             // 单边到达：初始化已经是原子的，继续发起真实调用。
         }
     }
+    /**
+     * 验证两个并发请求都读到“旧配置”并各自重建速率时，新配额只放行一次且只重建一次。
+     *
+     * <p>动态改参是限流的第二个初始化竞争点：限流器已存在，{@code trySetRate} 对两个请求都必然失败，
+     * 于是它们都读到同一份旧配置、都判定“配置变了”。修复前两个请求各自调用 {@code setRate}，而
+     * Redisson 3.52.0 的 {@code setRate} Lua 以 {@code del valueName permitsName} 结尾，会清空
+     * 前一次重建后已经消费掉的令牌，{@code count=1} 也能放行多次——调小限流反而多放行，是安全缺口。</p>
+     *
+     * <p>这里先用旧配额把真实窗口耗尽，再用同步代理让两个请求严格按“都读到旧配置 → 先到者重建并消费
+     * 新配额 → 后到者才重建”的顺序执行，断言服务端真实放行次数恰好等于新配额、重建次数恰好为 1。
+     * 同步代理只改变配置读写与速率重建的先后顺序，令牌计算仍由真实 Redisson 与服务端完成。</p>
+     *
+     * @throws Exception 线程等待超时或任务执行失败时抛出，避免把并发故障当成通过
+     */
+    @Test
+    @DisplayName("并发改参只重建一次速率，count=1 时合计只放行一次")
+    void shouldGrantOnceWhenConcurrentRequestsRebuildChangedRate() throws Exception {
+        String key = nextKey("rate-change-concurrent");
+        String redisKey = "rate_limiter:" + key;
+        int newCount = 1;
+        // 1. 用旧参数建立真实限流器并耗尽旧窗口，此后只有“重建”才可能再次放行
+        RRateLimiter realLimiter = redissonClient.getRateLimiter(redisKey);
+        assertThat(realLimiter.trySetRate(RateType.OVERALL, CHANGED_FROM_COUNT, Duration.ofSeconds(PERIOD_SECONDS)))
+                .as("旧配置必须由本用例真实建立")
+                .isTrue();
+        realLimiter.expire(Duration.ofSeconds(PERIOD_SECONDS));
+        for (int index = 0; index < CHANGED_FROM_COUNT; index++) {
+            assertThat(realLimiter.tryAcquire()).as("旧配额第 %s 次应放行", index + 1).isTrue();
+        }
+        assertThat(realLimiter.tryAcquire())
+                .as("旧配额必须已经耗尽，否则无法证明放行只来自重建")
+                .isFalse();
+
+        // 2. 两个并发请求同时按新参数调用，用同步代理稳定复现“后一次重建清空前一次已用配额”
+        ChangeRaceHandler raceHandler = new ChangeRaceHandler(realLimiter);
+        RRateLimiter racingLimiter = (RRateLimiter) Proxy.newProxyInstance(RRateLimiter.class.getClassLoader(),
+                new Class<?>[] {RRateLimiter.class}, raceHandler);
+        RedissonClient client = mock(RedissonClient.class);
+        when(client.getRateLimiter(redisKey)).thenReturn(racingLimiter);
+        when(client.getLock(anyString())).thenAnswer(invocation -> redissonClient.getLock((String) invocation.getArgument(0)));
+        RateLimiterRedisDAO dao = new RateLimiterRedisDAO(client);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Boolean>> results = new ArrayList<>();
+            for (int index = 0; index < 2; index++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return dao.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS);
+                }));
+            }
+            start.countDown();
+
+            long granted = 0;
+            for (Future<Boolean> result : results) {
+                if (result.get(30, TimeUnit.SECONDS)) {
+                    granted++;
+                }
+            }
+            assertThat(granted)
+                    .as("两个请求都读到旧配置时，改参后 count=%s 的新窗口合计只能放行 %s 次", newCount, newCount)
+                    .isEqualTo(newCount);
+            assertThat(raceHandler.rebuiltRateCount.get())
+                    .as("并发改参只允许重建一次；每次重复重建都会清空已消费的令牌")
+                    .isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // 3. 服务端配置必须是新参数，且新配额已被并发请求用尽，不留额外配额
+        assertThat(realLimiter.getConfig().getRate()).isEqualTo((long) newCount);
+        assertThat(realLimiter.getConfig().getRateInterval()).isEqualTo(TimeUnit.SECONDS.toMillis(PERIOD_SECONDS));
+        assertThat(realLimiter.tryAcquire())
+                .as("并发改参不得留下额外配额")
+                .isFalse();
+    }
+
+    /**
+     * 验证并发改参期间的真实流量合计放行次数恰好等于新配额，改参完成后窗口继续按新配额拒绝。
+     *
+     * <p>与同步代理用例互补：这里不注入任何顺序控制，用屏障把 {@value #CONCURRENT_REQUESTS} 个请求同时压到
+     * 一个已存在旧配置的 Key 上，全部声明同一份新参数。修复前每个请求都会独立重建一次速率，重建次数不受
+     * 约束；修复后重建被串行化且只发生一次，因此服务端真实放行次数必须恰好等于新配额，多一次都说明
+     * 有重建清空了已消费的令牌。</p>
+     *
+     * @throws Exception 线程等待超时或任务执行失败时抛出，避免把并发故障当成通过
+     */
+    @Test
+    @DisplayName("并发改参期间合计放行次数恰好等于新配额")
+    void shouldGrantExactlyNewCountWhileRateIsChangedConcurrently() throws Exception {
+        String key = nextKey("rate-change-storm");
+        String redisKey = "rate_limiter:" + key;
+        int newCount = 3;
+        RRateLimiter realLimiter = redissonClient.getRateLimiter(redisKey);
+        assertThat(realLimiter.trySetRate(RateType.OVERALL, CHANGED_FROM_COUNT, Duration.ofSeconds(PERIOD_SECONDS)))
+                .as("旧配置必须由本用例真实建立")
+                .isTrue();
+        realLimiter.expire(Duration.ofSeconds(PERIOD_SECONDS));
+        for (int index = 0; index < CHANGED_FROM_COUNT; index++) {
+            assertThat(realLimiter.tryAcquire()).isTrue();
+        }
+        assertThat(realLimiter.tryAcquire()).as("旧配额必须已经耗尽").isFalse();
+
+        CountDownLatch ready = new CountDownLatch(CONCURRENT_REQUESTS);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
+        try {
+            List<Future<Boolean>> results = new ArrayList<>();
+            for (int index = 0; index < CONCURRENT_REQUESTS; index++) {
+                results.add(pool.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return rateLimiterRedisDAO.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS);
+                }));
+            }
+            assertThat(ready.await(30, TimeUnit.SECONDS)).as("并发请求必须全部就绪").isTrue();
+            start.countDown();
+
+            long granted = 0;
+            for (Future<Boolean> result : results) {
+                if (result.get(30, TimeUnit.SECONDS)) {
+                    granted++;
+                }
+            }
+            assertThat(granted)
+                    .as("改参期间合计放行次数必须恰好等于新配额 %s", newCount)
+                    .isEqualTo(newCount);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(realLimiter.getConfig().getRate()).isEqualTo((long) newCount);
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("改参结束后新配额应已用尽，必须继续拒绝")
+                .isFalse();
+    }
+
+    /**
+     * 验证改回原参数时同样按新窗口重建，且不会因为“参数值曾经出现过”而复用旧窗口。
+     *
+     * <p>运维回滚限流参数与首次改参一样必须立即生效：若实现用历史参数值判断“无需重建”，回滚后仍会
+     * 沿用改大后的窗口，限流长时间失效。这里按 1 → 3 → 1 连续改参，逐段断言放行次数与落盘配置。</p>
+     */
+    @Test
+    @DisplayName("改回原参数时按新窗口重建，不复用历史窗口")
+    void shouldRebuildWhenRateIsRestoredToPreviousValue() {
+        String key = nextKey("rate-restore");
+        int raisedCount = 3;
+
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("1 次/周期的配额应已用尽")
+                .isFalse();
+
+        // 放大到 3 次：第一次调用完成重建并消费 1 次，剩余 2 次放行后再次拒绝
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, raisedCount, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        for (int index = 0; index < raisedCount - 1; index++) {
+            assertThat(rateLimiterRedisDAO.tryAcquire(key, raisedCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                    .as("放大后剩余 %s 次应放行", raisedCount - 1 - index)
+                    .isTrue();
+        }
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, raisedCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("放大后的配额应已用尽")
+                .isFalse();
+
+        // 回滚到 1 次：必须重新按 1 次建立窗口，而不是复用最初那个已经用尽的窗口
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("回滚到更小配额后应重新建立窗口并放行 1 次")
+                .isTrue();
+        assertThat(redissonClient.getRateLimiter("rate_limiter:" + key).getConfig().getRate())
+                .as("落盘配置必须回滚为 1")
+                .isEqualTo(1L);
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("回滚后的 1 次配额应已用尽")
+                .isFalse();
+    }
+
+    /**
+     * 验证改参只影响被改的那个业务 Key，其它 Key 的配额与落盘配置都不受影响。
+     *
+     * <p>限流按业务 Key 隔离是注解语义的一部分：重建走的是带业务前缀的独立键，若实现误用共享键或
+     * 全局状态，改一个 Key 的限流会把别的 Key 一起重置。</p>
+     */
+    @Test
+    @DisplayName("改参只影响目标 Key，其它 Key 的配额与配置不受影响")
+    void shouldKeepOtherKeysUnaffectedWhenRateChanges() {
+        String changedKey = nextKey("rate-scope-changed");
+        String untouchedKey = nextKey("rate-scope-untouched");
+
+        assertThat(rateLimiterRedisDAO.tryAcquire(changedKey, 1, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        assertThat(rateLimiterRedisDAO.tryAcquire(untouchedKey, 1, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        assertThat(rateLimiterRedisDAO.tryAcquire(untouchedKey, 1, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("另一个 Key 的配额应已用尽")
+                .isFalse();
+
+        // 只放大 changedKey，untouchedKey 必须保持“1 次且已用尽”
+        assertThat(rateLimiterRedisDAO.tryAcquire(changedKey, 5, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        assertThat(redissonClient.getRateLimiter("rate_limiter:" + changedKey).getConfig().getRate())
+                .isEqualTo(5L);
+        assertThat(redissonClient.getRateLimiter("rate_limiter:" + untouchedKey).getConfig().getRate())
+                .as("未被改参的 Key 配置不得变化")
+                .isEqualTo(1L);
+        assertThat(rateLimiterRedisDAO.tryAcquire(untouchedKey, 1, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("未被改参的 Key 配额不得被重置")
+                .isFalse();
+        assertThat(rateLimiterRedisDAO.tryAcquire(changedKey, 5, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("被改参的 Key 应按新配额继续放行")
+                .isTrue();
+    }
+
+    /**
+     * 验证限流器整体过期后按新参数重新初始化，不会把过期前的窗口状态带进新窗口。
+     *
+     * <p>限流器 Key 带 TTL 是为了不长期残留，但过期后重新初始化必须是一张白纸：新窗口可用次数等于
+     * 新声明的配额，且不再受过期前“已用尽”的影响。这里用 1 秒周期真实等待配置、令牌与许可 Key 全部
+     * 过期（三者 TTL 相同，逐个等待可避免残留 Key 让新窗口沿用旧计数）。</p>
+     *
+     * @throws Exception 等待过期被中断时抛出，避免把中断当成过期成功
+     */
+    @Test
+    @DisplayName("限流器过期后按新参数重新初始化，不残留旧窗口")
+    void shouldReinitializeWithNewRateAfterRateLimiterExpired() throws Exception {
+        String key = nextKey("rate-expire");
+        int shortPeriodSeconds = 1;
+
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, shortPeriodSeconds, TimeUnit.SECONDS)).isTrue();
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, 1, shortPeriodSeconds, TimeUnit.SECONDS))
+                .as("1 次/1 秒的配额应在周期内用尽")
+                .isFalse();
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+        while (System.nanoTime() < deadline && !scanOwnedKeysMatching(key).isEmpty()) {
+            Thread.sleep(50);
+        }
+        assertThat(scanOwnedKeysMatching(key))
+                .as("限流器相关 Key 应在周期结束后全部过期，实际残留: %s", scanOwnedKeysMatching(key))
+                .isEmpty();
+
+        int newCount = 2;
+        for (int index = 0; index < newCount; index++) {
+            assertThat(rateLimiterRedisDAO.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                    .as("过期后重建的新窗口第 %s 次应放行", index + 1)
+                    .isTrue();
+        }
+        assertThat(rateLimiterRedisDAO.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                .as("新窗口的 %s 次配额用尽后必须拒绝", newCount)
+                .isFalse();
+        assertThat(redissonClient.getRateLimiter("rate_limiter:" + key).getConfig().getRate())
+                .as("过期后必须按新参数重新初始化")
+                .isEqualTo((long) newCount);
+    }
+
+    /**
+     * 按业务 Key 过滤本类独占前缀下已存在的 Redis Key，用于观察限流器的过期与残留。
+     *
+     * @param key 业务 Key
+     * @return 命中该业务 Key 的 Redis Key 集合，可能为空
+     */
+    private static Set<String> scanOwnedKeysMatching(String key) {
+        Set<String> matched = new LinkedHashSet<>();
+        for (String candidate : scanOwnedKeys()) {
+            if (candidate.contains(key)) {
+                matched.add(candidate);
+            }
+        }
+        return matched;
+    }
+
+    /**
+     * 动态改参竞争的同步代理：精确构造“两个请求读到同一份旧配置，后一次重建夹在先到者已消费之后”。
+     *
+     * <p>前两次 {@code getConfig} 用屏障保证两个请求读到同一份旧配置；第二次及以后的 {@code setRate}
+     * 重建让后到请求等到先到请求已经消费完新配额，从而稳定复现“后一次重建清除前一次已用配额、
+     * count=1 放行两次”。修复后的实现只在慢路径的锁内做二次比较，因此重建只发生一次、屏障单边到达时
+     * 按超时继续，不会把正常路径挂死。</p>
+     */
+    private static final class ChangeRaceHandler implements InvocationHandler {
+
+        /** 两个并发请求都读取旧配置后释放的屏障。 */
+        private final CyclicBarrier bothRequestsReadConfig = new CyclicBarrier(2);
+
+        /** 先到请求完成一次真实配额消费后释放的信号。 */
+        private final CountDownLatch firstRequestConsumedPermit = new CountDownLatch(1);
+
+        /** 真实 Redisson 限流器，除顺序外不做任何替换。 */
+        private final RRateLimiter real;
+
+        /** 配置读取次数，用于只对两个请求的首次读取施加屏障。 */
+        private final AtomicInteger configReadCount = new AtomicInteger();
+
+        /** 实际发生的速率重建次数，用于断言并发改参只重建一次。 */
+        private final AtomicInteger rebuiltRateCount = new AtomicInteger();
+
+        /**
+         * 绑定真实限流器。
+         *
+         * @param real 真实 Redisson 限流器
+         */
+        private ChangeRaceHandler(RRateLimiter real) {
+            this.real = real;
+        }
+
+        /**
+         * 按被调用方法调整配置读取与速率重建的先后顺序后委托真实限流器。
+         *
+         * @param proxy 代理对象
+         * @param method 被调用的接口方法
+         * @param args 调用参数
+         * @return 真实限流器的返回值
+         * @throws Throwable 真实调用抛出的异常原样传播
+         */
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if ("getConfig".equals(method.getName()) && configReadCount.incrementAndGet() <= 2) {
+                awaitBothRequests(bothRequestsReadConfig);
+            }
+            if ("setRate".equals(method.getName()) && rebuiltRateCount.incrementAndGet() > 1) {
+                // 第二个重建请求必须等先到请求真的消费掉新配额，才能稳定复现“重建清空已用配额”。
+                if (!firstRequestConsumedPermit.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("先到的限流请求未在超时内消费配额");
+                }
+            }
+            try {
+                Object result = method.invoke(real, args);
+                if ("tryAcquire".equals(method.getName()) && rebuiltRateCount.get() > 0) {
+                    firstRequestConsumedPermit.countDown();
+                }
+                return result;
+            } catch (InvocationTargetException exception) {
+                throw exception.getCause();
+            }
+        }
+    }
+
     /**
      * 验证限流器相关 Key 都带上了过期时间，不会长期残留在 Redis 里。
      *
