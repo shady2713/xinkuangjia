@@ -1,0 +1,192 @@
+{
+  "schema": "perf-budget/v1",
+  "status": "proposed-awaiting-authority",
+  "approved_by": null,
+  "applies_to": {
+    "workload": "w7-baseline-v1",
+    "concurrency": 1,
+    "environment": "w7-local-linux-x86_64：20 vCPU / 62 GiB RAM / MySQL 8.4.10 / Redis 7 / MinIO（127.0.0.1）；应用与中间件同机",
+    "jvm": "-Xms512m -Xmx1024m；SPRING_PROFILES_ACTIVE=prod",
+    "build": {
+      "jar_sha256": "673f1623d2ca0dc6d9e1033e22ddec8a54955f95bccd77f51f960ffa5a4d4138",
+      "app_version": "2026.01-SNAPSHOT",
+      "note": "以构件 SHA-256 绑定被测版本；测量时工作区含未提交改动（server 资源 logback-spring.xml 的 prod 日志模板修复 + 本轮新增 scripts/perf 工具），因此不单独以 git 修订标识构建"
+    },
+    "dataset": {
+      "users": 5000,
+      "dict_types": 300,
+      "note": "scripts/perf/seed_dataset.py 生成的固定常量合成数据；用户名与字典编码按序号命名"
+    },
+    "preconditions": [
+      "BASIC_FRAMEWORK_CAPTCHA_ENABLE=false（登录链路不含图形验证码）",
+      "FILE_UPLOAD_DAILY_BYTES/FILE_UPLOAD_DAILY_REQUESTS 提高，使上传链路可重复测量",
+      "每场景先丢弃 10 次预热迭代，并在正式测量前丢弃一整轮遍历以消除冷 JIT"
+    ],
+    "comparability": "更换机器、运行时、JVM 参数、数据规模、并发模型或负载定义后，绝对值与参考基线都失效，必须重新校准后才能用于判定",
+    "measured_at": "2026-10-05 18:20–18:31 (+08:00)"
+  },
+  "noise_floor": {
+    "p95_relative": 0.2,
+    "rationale": "同一 JVM 连续三次实测：串行场景 p95 最大相对偏差 15.5%（多数 <10%）；并发端点 p95 波动 51%，因此并发场景单独放宽容差并以吞吐下限判定"
+  },
+  "resources": {
+    "peak_rss_kb": 2097152,
+    "threads": 300,
+    "fds": 300,
+    "max_thread_growth": 32,
+    "max_fd_growth": 0,
+    "rationale": "三次实测峰值 RSS 1.33–1.38 GiB（-Xmx1024m）、结束时线程 141–145、FD 恒为 131；单场景 FD 增长恒为 0、线程波动 ≤5"
+  },
+  "scenarios": {
+    "auth-login": {
+      "reference": {
+        "p50_ms": 49.3,
+        "p95_ms": 55.1,
+        "p99_ms": 56.4,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 150,
+      "p95_ms": 170,
+      "p99_ms": 230,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 12,
+      "sql_queries_p95": 12
+    },
+    "permission-info": {
+      "reference": {
+        "p50_ms": 4.0,
+        "p95_ms": 5.6,
+        "p99_ms": 6.3,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 12,
+      "sql_queries_p95": 13
+    },
+    "user-page-shallow": {
+      "reference": {
+        "p50_ms": 6.2,
+        "p95_ms": 8.0,
+        "p99_ms": 8.8,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 14,
+      "sql_queries_p95": 16
+    },
+    "user-page-deep": {
+      "reference": {
+        "p50_ms": 8.2,
+        "p95_ms": 9.8,
+        "p99_ms": 10.5,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 25,
+      "p95_ms": 30,
+      "p99_ms": 45,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 14,
+      "sql_queries_p95": 16
+    },
+    "dict-type-page": {
+      "reference": {
+        "p50_ms": 3.9,
+        "p95_ms": 5.3,
+        "p99_ms": 6.2,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 10,
+      "sql_queries_p95": 12
+    },
+    "dict-type-crud": {
+      "reference": {
+        "p50_ms": 17.6,
+        "p95_ms": 21.7,
+        "p99_ms": 23.7,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 55,
+      "p95_ms": 65,
+      "p99_ms": 95,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 44,
+      "sql_queries_p95": 45
+    },
+    "user-crud": {
+      "reference": {
+        "p50_ms": 59.8,
+        "p95_ms": 66.4,
+        "p99_ms": 73.9,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 180,
+      "p95_ms": 200,
+      "p99_ms": 300,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 37,
+      "sql_queries_p95": 38
+    },
+    "file-upload-64k": {
+      "reference": {
+        "p50_ms": 2.8,
+        "p95_ms": 3.5,
+        "p99_ms": 3.8,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 3,
+      "sql_queries_p95": 5
+    },
+    "file-upload-1m": {
+      "reference": {
+        "p50_ms": 10.2,
+        "p95_ms": 11.0,
+        "p99_ms": 11.3,
+        "samples_per_scenario": 120,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 35,
+      "p95_ms": 35,
+      "p99_ms": 50,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 3,
+      "sql_queries_p95": 3
+    },
+    "user-page-shallow-concurrent-8": {
+      "reference": {
+        "p50_ms": 6.2,
+        "p95_ms": 11.3,
+        "p99_ms": 28.4,
+        "samples_per_scenario": 320,
+        "source": "三次实测取最坏（final-latency-1/2/3）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 35,
+      "p99_ms": 115,
+      "relative_tolerance": 0.6,
+      "min_throughput_per_second": 600,
+      "throughput_reference_per_second": 1194.39
+    }
+  }
+}
