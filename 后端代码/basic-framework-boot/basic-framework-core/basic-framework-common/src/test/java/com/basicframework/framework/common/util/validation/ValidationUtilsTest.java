@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Set;
@@ -123,6 +124,31 @@ class ValidationUtilsTest {
     void idCardBirthDateParsingClampsImpossibleDayInsteadOfFailing() {
         assertThat(LocalDate.parse("19990230", DateTimeFormatter.ofPattern("yyyyMMdd")))
                 .as("SMART 解析把 2 月 30 日夹取为当月最后一天").isEqualTo(LocalDate.of(1999, 2, 28));
+    }
+
+    /**
+     * 出生日期解析失败必须返回 false，而不是把解析异常抛给调用方。
+     *
+     * <p>上游正则把月份限定为 01-12，SMART 解析器又只夹取“日”，所以正则放行的取值永远不会解析失败；
+     * 但解析失败的处理本身是校验器的安全底线：一旦改成向外抛出，非法身份证号会让导入或注册请求
+     * 以 500 结束，而不是得到“不合法”的结论。</p>
+     *
+     * <p><b>白盒直调：</b>{@code isValidIdCardBirthDate} 是私有静态方法且入参是裸字符串，
+     * 直接传入正则不可能放行的 {@code 99999999}（月份 99）即可触发解析异常分支，
+     * 断言方法自身的返回约定：解析失败返回 false、解析成功返回 true（正对照）。
+     * 本构造不改动生产代码与其入口契约。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void idCardBirthDateParserReportsParseFailureAsInvalid() throws Exception {
+        Method method = ValidationUtils.class.getDeclaredMethod("isValidIdCardBirthDate", String.class);
+        method.setAccessible(true);
+
+        assertThat(method.invoke(null, "00000099999999")).as("月份 99 无法解析，必须判为不合法")
+                .isEqualTo(false);
+        assertThat(method.invoke(null, "00000019900307")).as("正对照：可解析的出生日期必须放行")
+                .isEqualTo(true);
     }
 
     /** 默认校验器入口：合法对象放行，违规对象抛出携带违规项的异常。 */

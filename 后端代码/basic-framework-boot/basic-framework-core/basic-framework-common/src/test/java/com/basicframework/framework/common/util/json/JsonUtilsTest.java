@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -404,7 +405,30 @@ class JsonUtilsTest {
         assertThat(sessions).extracting(Session::getId).containsExactly(1L);
     }
 
+    /**
+     * 输入摘要必须区分“没有输入”与“有输入但不是文本/字节”两类情况。
+     *
+     * <p>摘要会进入解析失败日志，用于定位是哪个入参导致失败：把 null 与其它类型混为一谈，
+     * 会让日志无法区分“调用方传了 null”和“调用方传了不受支持的类型”。</p>
+     *
+     * <p><b>白盒直调：</b>{@code summarizeInput} 是私有静态方法，调用点只传 {@code String}/{@code byte[]}；
+     * null 与其它类型在真实入口处会先被 Jackson 以 {@link IllegalArgumentException} 拦下
+     * （不是 {@link IOException}），因此这两个分支只能直接调用方法本身来触发。这里断言的是
+     * 方法自身的返回约定，不改变任何生产代码或入口契约。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void summarizeInputDistinguishesNullFromUnsupportedTypes() throws Exception {
+        Method method = JsonUtils.class.getDeclaredMethod("summarizeInput", Object.class);
+        method.setAccessible(true);
 
+        assertThat(method.invoke(null, (Object) null)).as("null 输入必须给出固定摘要").isEqualTo("null");
+        assertThat(method.invoke(null, Integer.valueOf(7))).as("不受支持的类型必须回退到类名")
+                .isEqualTo("java.lang.Integer");
+        assertThat(method.invoke(null, "文本")).as("文本仍按长度摘要，正对照证明分支未被整体替换")
+                .isEqualTo("text(length=2)");
+    }
 
     /**
      * 自引用夹具，用于验证序列化失败路径必须显式抛出而不是截断输出。

@@ -8,6 +8,7 @@ import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -17,6 +18,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * 验证 {@link SecurityFrameworkServiceImpl} 的功能权限、角色与授权范围判定。
@@ -91,6 +93,26 @@ class SecurityFrameworkServiceImplTest {
         assertThat(service.hasPermission("system:user:query"))
                 .isEqualTo(service.hasAnyPermissions("system:user:query"));
         assertThat(service.hasRole("admin")).isEqualTo(service.hasAnyRoles("admin"));
+    }
+
+    /**
+     * 跨租户开关打开时，权限、角色与范围三个入口都必须直接放行且不触达下游。
+     *
+     * <p>该开关当前恒为 false（见 {@link SecurityFrameworkUtils#skipPermissionCheck()} 的锁定用例），
+     * 是运维在跨租户排查时使用的旁路：一旦打开，三个入口都必须短路返回 true，否则旁路只覆盖一半入口，
+     * 排查时仍会被权限接口拦住。用例用公开静态方法的替身打开开关，断言短路结果与“不查下游”这一副作用。</p>
+     */
+    @Test
+    void skipSwitchShortCircuitsPermissionRoleAndScopeEntries() {
+        try (MockedStatic<SecurityFrameworkUtils> mocked = mockStatic(SecurityFrameworkUtils.class)) {
+            mocked.when(SecurityFrameworkUtils::skipPermissionCheck).thenReturn(true);
+
+            assertThat(service.hasAnyPermissions("system:user:query")).isTrue();
+            assertThat(service.hasAnyRoles("admin")).isTrue();
+            assertThat(service.hasAnyScopes("user.read")).isTrue();
+
+            assertThat(permissionQueries).as("短路后不得再查询权限接口，也不得依赖登录态").isEmpty();
+        }
     }
 
     /** 授权范围命中时放行。 */

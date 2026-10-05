@@ -5,10 +5,16 @@ import com.basicframework.framework.common.biz.infra.logger.dto.ApiErrorLogCreat
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
+import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.web.core.util.WebFrameworkUtils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.google.common.util.concurrent.UncheckedExecutionException;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.turbo.TurboFilter;
+import ch.qos.logback.core.spi.FilterReply;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
@@ -16,6 +22,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Marker;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -39,10 +47,12 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST;
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.FORBIDDEN;
@@ -50,6 +60,7 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.METHOD_NOT_ALLOWED;
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.NOT_FOUND;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -399,6 +410,41 @@ class GlobalExceptionHandlerTest {
     }
 
     /**
+     * 打印堆栈失败时业务异常仍必须正常返回，日志故障只能被就地吞掉。
+     *
+     * <p>业务异常是登录、下单等关键路径的可预期结果：一旦因为日志设施故障向外抛出，客户端会拿到
+     * 500 而不是真实业务码，前端也就无法给出正确提示。因此打印动作被 try/catch 包住。</p>
+     *
+     * <p>触发方式：Logback 公开 API 允许注册 {@link TurboFilter}，其异常会从 {@code log.warn}
+     * 直接传播（过滤器链上没有捕获），从而稳定命中 catch 分支，无需替身被测代码。</p>
+     */
+    @Test
+    void loggingFailureIsSwallowedAndBusinessResponseIsKept() {
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        AtomicInteger filterInvocations = new AtomicInteger();
+        TurboFilter failingFilter = new TurboFilter() {
+
+            /** 记录过滤器确实被调用后抛出异常，模拟日志设施故障。 */
+            @Override
+            public FilterReply decide(Marker marker, ch.qos.logback.classic.Logger logger, Level level,
+                                      String format, Object[] params, Throwable throwable) {
+                filterInvocations.incrementAndGet();
+                throw new IllegalStateException("DUMMY-LOGBACK-FAILURE");
+            }
+        };
+        loggerContext.addTurboFilter(failingFilter);
+        try {
+            CommonResult<?> result = handler.serviceExceptionHandler(new ServiceException(409, "DUMMY-BOOM-BUSINESS"));
+
+            assertThat(result.getCode()).as("日志故障不得改变业务码").isEqualTo(409);
+            assertThat(result.getMsg()).isEqualTo("DUMMY-BOOM-BUSINESS");
+            assertThat(filterInvocations.get()).as("必须真实走到 log.warn 才能证明 catch 分支被触发").isPositive();
+        } finally {
+            loggerContext.resetTurboFilterList();
+        }
+    }
+
+    /**
      * 兜底处理必须识别被包装的业务异常并直接返回业务码，而不是当成系统异常记 500。
      */
     @Test
@@ -485,6 +531,33 @@ class GlobalExceptionHandlerTest {
         assertThat(capturedErrorLog().getRequestParams())
                 .contains("_sanitized")
                 .doesNotContain("DUMMY-PWD");
+    }
+
+    /**
+     * 脱敏递归必须忽略空节点，并把可解析 JSON 中的敏感字段真实剔除。
+     *
+     * <p>{@code sanitizeJson(JsonNode)} 是异常日志脱敏的递归内核：空节点直接返回是递归基例，
+     * 缺少它会让对象/数组里的 null 子节点抛空指针，整段脱敏降级为占位内容，异常日志失去排查价值。</p>
+     *
+     * <p><b>白盒直调：</b>该方法私有，生产入口的根节点来自 Jackson，而 Jackson 把 null 一律归一成
+     * {@code NullNode}，造不出 null 节点，因此只能直接调用方法本身验证这一基例；同时用真实解析出的
+     * 嵌套 JSON 做正对照，证明空节点分支之外的行为未被替换。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void sanitizeJsonIgnoresNullNodeAndRemovesSensitiveKeys() throws Exception {
+        Method method = GlobalExceptionHandler.class.getDeclaredMethod("sanitizeJson", JsonNode.class);
+        method.setAccessible(true);
+
+        assertThatCode(() -> method.invoke(null, (JsonNode) null))
+                .as("空节点必须被忽略而不是抛空指针").doesNotThrowAnyException();
+
+        JsonNode root = JsonUtils.parseTree("{\"password\":\"DUMMY-PWD\",\"nested\":[{\"token\":\"DUMMY-TOKEN\"}]}");
+        method.invoke(null, root);
+
+        assertThat(root.toString()).as("敏感字段必须被真实剔除，非敏感结构保留")
+                .doesNotContain("DUMMY-PWD").doesNotContain("DUMMY-TOKEN").contains("nested");
     }
 
     /**

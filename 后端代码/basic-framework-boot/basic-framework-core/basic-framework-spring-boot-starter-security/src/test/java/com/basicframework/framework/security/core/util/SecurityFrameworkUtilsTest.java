@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextHolderStrategy;
 
 import java.util.Collections;
 import java.util.List;
@@ -46,6 +47,53 @@ class SecurityFrameworkUtilsTest {
     /** 认证头中的标准令牌前缀。 */
     private static String bearer(String token) {
         return SecurityFrameworkUtils.AUTHORIZATION_BEARER + " " + token;
+    }
+
+    /**
+     * 上下文策略返回空上下文时，认证信息与登录用户都必须读成 null，而不是抛空指针。
+     *
+     * <p>内置策略（默认线程本地与 {@code MODE_GLOBAL}）都会惰性创建空上下文，永远不返回 null；
+     * 但 {@code SecurityContextHolderStrategy} 是公开扩展点，业务方可以安装自己的策略。
+     * 一旦策略返回 null，鉴权入口必须退化为“未登录”，否则每次无鉴权请求都会以空指针失败。</p>
+     *
+     * <p>本用例通过 Spring Security 的 public API {@code setContextHolderStrategy} 安装一个
+     * 返回 null 的策略，并在结束时恢复默认策略，避免影响同 JVM 内的其它用例。</p>
+     */
+    @Test
+    void nullContextFromStrategyIsReadAsAnonymous() {
+        SecurityContextHolderStrategy nullReturningStrategy = new SecurityContextHolderStrategy() {
+
+            /** 无上下文可清理。 */
+            @Override
+            public void clearContext() {
+            }
+
+            /** 恒定返回空上下文，模拟外部策略的极端实现。 */
+            @Override
+            public SecurityContext getContext() {
+                return null;
+            }
+
+            /** 忽略写入，保持空上下文语义。 */
+            @Override
+            public void setContext(SecurityContext context) {
+            }
+
+            /** 创建空白上下文，供容器在需要时使用。 */
+            @Override
+            public SecurityContext createEmptyContext() {
+                return SecurityContextHolder.createEmptyContext();
+            }
+        };
+        SecurityContextHolderStrategy originalStrategy = SecurityContextHolder.getContextHolderStrategy();
+        SecurityContextHolder.setContextHolderStrategy(nullReturningStrategy);
+        try {
+            assertThat(SecurityFrameworkUtils.getAuthentication()).as("空上下文必须读成未认证").isNull();
+            assertThat(SecurityFrameworkUtils.getLoginUser()).isNull();
+            assertThat(SecurityFrameworkUtils.getLoginUserId()).isNull();
+        } finally {
+            SecurityContextHolder.setContextHolderStrategy(originalStrategy);
+        }
     }
 
     /** 无任何凭据时必须返回 null，交由后续链路按未登录处理。 */

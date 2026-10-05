@@ -7,6 +7,7 @@ import com.basicframework.module.system.framework.captcha.core.RedisCaptchaServi
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
@@ -14,9 +15,14 @@ import org.redisson.spring.data.connection.RedissonConnectionFactory;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * 验证验证码配置注册的缓存实现与启动图片加载器。
@@ -136,6 +142,59 @@ class BasicFrameworkCaptchaConfigurationTest {
             throw new IllegalStateException("缺少隔离测试环境变量 " + name);
         }
         return value;
+    }
+
+    /**
+     * 自定义背景写入全局缓存失败时必须转换为带原因的启动失败异常。
+     *
+     * <p>登录页背景属于登录关键路径：加载失败必须阻止启动，而不是静默回退到依赖包默认素材，
+     * 否则线上会看到与配置不符的验证码背景，且没有任何失败信号。</p>
+     *
+     * <p><b>白盒直调：</b>{@code ImageUtils.cacheBootImage} 是第三方公开静态方法，真实缓存不会失败，
+     * 这里用其替身抛出异常触发包装分支；背景图仍从真实类路径资源读取，
+     * 保证包装的是“真实加载成功后的写缓存失败”。</p>
+     */
+    @Test
+    void captchaJigsawImageCacheLoaderFailsFastWhenCacheRejectsImages() {
+        SmartInitializingSingleton loader = new BasicFrameworkCaptchaConfiguration()
+                .captchaJigsawImageCacheLoader();
+
+        try (MockedStatic<ImageUtils> mocked = mockStatic(ImageUtils.class)) {
+            mocked.when(() -> ImageUtils.cacheBootImage(any(), any(), any()))
+                    .thenThrow(new IllegalStateException("probe-cache-failure"));
+
+            assertThatThrownBy(loader::afterSingletonsInstantiated)
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("登录滑块验证码自定义背景加载失败")
+                    .hasRootCauseMessage("probe-cache-failure");
+            mocked.verify(() -> ImageUtils.cacheBootImage(any(), any(), any()));
+        }
+    }
+
+    /**
+     * 目录型 location pattern 命中的资源必须被跳过，只有可读的图片文件才进入背景缓存。
+     *
+     * <p>目录本身也会被资源解析器匹配到，但它在类路径下不可读：若不过滤，Base64 转换会以空内容
+     * 或异常收场，启动随之失败。生产调用点只传 {@code *.png} 通配，这条守卫只在扩展配置或依赖升级
+     * 改变解析行为时才会生效，仍必须保持有效。</p>
+     *
+     * <p><b>白盒直调：</b>{@code loadCaptchaImages} 是私有参数化方法，直接传入目录型 pattern；
+     * 同时用生产使用的 {@code *.png} pattern 做正对照，证明空结果来自目录被跳过，而不是方法失效。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void loadCaptchaImagesSkipsDirectoryResource() throws Exception {
+        Method method = BasicFrameworkCaptchaConfiguration.class
+                .getDeclaredMethod("loadCaptchaImages", String.class);
+        method.setAccessible(true);
+        BasicFrameworkCaptchaConfiguration configuration = new BasicFrameworkCaptchaConfiguration();
+
+        Object directoryResult = method.invoke(configuration, "classpath*:captcha/jigsaw/original/");
+
+        assertThat((Map<?, ?>) directoryResult).as("目录型资源不可读，必须被跳过").isEmpty();
+        assertThat((Map<?, ?>) method.invoke(configuration, "classpath*:captcha/jigsaw/original/*.png"))
+                .as("正对照：生产使用的图片通配必须加载到背景").isNotEmpty();
     }
 
 }

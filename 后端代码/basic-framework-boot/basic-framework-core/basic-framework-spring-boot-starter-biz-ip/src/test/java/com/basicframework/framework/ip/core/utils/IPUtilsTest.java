@@ -3,9 +3,15 @@ package com.basicframework.framework.ip.core.utils;
 import com.basicframework.framework.ip.core.Area;
 import org.junit.jupiter.api.Test;
 import org.lionsoul.ip2region.xdb.Searcher;
+import org.mockito.MockedStatic;
+
+import java.io.IOException;
+import java.lang.reflect.Constructor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * 验证 IP 工具类基于内置 ip2region 数据的真实查询结果。
@@ -97,6 +103,34 @@ class IPUtilsTest {
                 .as("非法 IP 必须显式失败").hasMessageContaining("invalid ip address");
         assertThatThrownBy(() -> IPUtils.getAreaId("300.300.300.300"))
                 .as("越界网段同样必须显式失败").hasMessageContaining("should be less then 256");
+    }
+
+    /**
+     * 查询器初始化失败不得让工具类实例化失败，异常必须被记录并降级为“无查询器”。
+     *
+     * <p>该构造在类初始化时执行：若把 {@link IOException} 向外抛出，整个 IP 工具类会变成
+     * {@code ExceptionInInitializerError}，所有引用它的登录日志与审计写入会一起不可用。
+     * 因此这里锁定“初始化失败只降级、不向外抛出”的可观察结果。</p>
+     *
+     * <p><b>白盒直调：</b>{@code IPUtils} 的构造器私有，且静态实例只初始化一次，
+     * 只能反射创建新实例来重放这段初始化逻辑；替身只替换 {@link Searcher} 的缓冲构造，
+     * 不影响其它用例查询真实数据文件。</p>
+     *
+     * @throws Exception 反射构造失败时抛出
+     */
+    @Test
+    void searcherInitializationFailureIsSwallowed() throws Exception {
+        try (MockedStatic<Searcher> mocked = mockStatic(Searcher.class)) {
+            mocked.when(() -> Searcher.newWithBuffer(any(byte[].class)))
+                    .thenThrow(new IOException("probe-searcher-failure"));
+
+            Constructor<IPUtils> constructor = IPUtils.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            IPUtils instance = constructor.newInstance();
+
+            assertThat(instance).as("初始化失败必须仍能构造实例而不是向外抛出 IOException").isNotNull();
+            mocked.verify(() -> Searcher.newWithBuffer(any(byte[].class)));
+        }
     }
 
 }

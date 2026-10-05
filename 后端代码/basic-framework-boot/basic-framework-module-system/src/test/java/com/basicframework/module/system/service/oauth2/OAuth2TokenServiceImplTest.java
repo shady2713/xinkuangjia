@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -126,6 +128,33 @@ class OAuth2TokenServiceImplTest {
         assertThat(inTransaction(() -> tokenService.removeAccessToken("DUMMY-ACCESS-ABSENT"))).isNull();
         verify(accessTokenMapper, never()).deleteById(anyLong());
         verify(refreshTokenMapper, never()).deleteByRefreshToken(anyString());
+    }
+
+    /**
+     * 机器主体（空编号或非正编号）不得查询用户信息，必须直接返回空用户信息。
+     *
+     * <p>机器令牌使用非正编号作为哨兵，刷新流程的公开入口都会先用同一判定拦下它们；
+     * 若这里漏掉守卫，刷新机器令牌会带着哨兵编号去查用户表，要么拿到无关账号的信息，
+     * 要么以空指针失败。用例直接断言“返回空映射且不查询用户服务”。</p>
+     *
+     * <p><b>白盒直调：</b>{@code buildUserInfo} 私有，且唯一调用点位于机器主体守卫之后，
+     * 生产路径不可达；反射直调传入哨兵编号即可验证该守卫本身的契约。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildUserInfoReturnsEmptyMapForMachinePrincipal() throws Exception {
+        Method method = OAuth2TokenServiceImpl.class.getDeclaredMethod("buildUserInfo", Long.class, Integer.class);
+        method.setAccessible(true);
+
+        assertThat((Map<String, String>) method.invoke(tokenService, null, UserTypeEnum.ADMIN.getValue()))
+                .as("空编号属于机器主体，必须返回空用户信息").isEmpty();
+        assertThat((Map<String, String>) method.invoke(tokenService, 0L, UserTypeEnum.ADMIN.getValue()))
+                .as("编号 0 属于机器主体哨兵").isEmpty();
+        assertThat((Map<String, String>) method.invoke(tokenService, -1L, UserTypeEnum.ADMIN.getValue()))
+                .as("负编号同样属于机器主体").isEmpty();
+        verify(adminUserService, never()).getUser(anyLong());
     }
 
     /** 机器令牌按哨兵刷新值只能精确删除本行，不得按哨兵值批量撤销其它机器会话。 */

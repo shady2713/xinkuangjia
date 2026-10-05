@@ -1,15 +1,24 @@
 package com.basicframework.framework.ip.core.utils;
 
+import cn.hutool.core.io.resource.ResourceUtil;
 import com.basicframework.framework.ip.core.Area;
 import com.basicframework.framework.ip.core.enums.AreaTypeEnum;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * 验证区域数据的静态加载、路径解析、展示格式化与按类型回溯契约。
@@ -18,11 +27,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 归属地展示与实际地址不符，路径解析失败会让导入的地区列全部为空，父级回溯错误会把统计挂到
  * 别的省市。因此用例按真实数据断言可观察结果，覆盖国家、省市、区县三级与全球根节点。</p>
  *
- * <p>{@code loadAreas} 中捕获 {@link java.io.IOException} 的分支（第 59–60 行）不可达：
- * 唯一的受检异常来源是 try-with-resources 对 {@link java.io.BufferedReader} 的 {@code close()}，
- * 而读取失败只会抛出 Hutool 的非受检 {@code IORuntimeException}；若类路径上缺少 {@code area.csv}，
- * 该静态字段初始化本身就会失败，本用例的所有断言都不可能执行到。因此该分支不写用例，
- * 只在此记录不可达依据。</p>
+ * <p>{@code loadAreas} 捕获 {@link java.io.IOException} 的分支不是“资源缺失”保护：Hutool 对资源
+ * 缺失或不可读抛的是非受检异常，唯一能产生受检 {@code IOException} 的位置是 try-with-resources 对
+ * {@link java.io.BufferedReader} 的 {@code close()}。该分支仍必须保留并验证——关闭失败一旦被静默吞掉，
+ * 加载中断会表现成“区域数据少了一部分”而不是启动失败。用例用替身让关闭动作抛出受检异常，
+ * 断言它被包装成带原因的 {@link IllegalStateException} 抛出。</p>
  *
  * @author 李杰
  */
@@ -180,6 +189,46 @@ class AreaUtilsTest {
     void getParentIdByTypeRejectsNullType() {
         assertThatThrownBy(() -> AreaUtils.getParentIdByType(JINSHUI_DISTRICT_ID, null))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    /**
+     * 关闭区域数据流失败时必须按“读取失败”抛出带原因的非法状态异常。
+     *
+     * <p>try-with-resources 的隐式关闭是该方法唯一能抛出受检 {@link IOException} 的位置：
+     * 资源缺失与读取失败在 Hutool 里都是非受检异常。关闭失败若被静默忽略，区域索引会缺项，
+     * 调用方只会看到归属地错误而不是启动失败，因此这里锁定“包装成 IllegalStateException 并保留原因”。</p>
+     *
+     * <p><b>白盒直调：</b>{@code loadAreas} 是私有静态方法，且 {@code AREAS} 静态字段只初始化一次，
+     * 直接调用方法本身才能用替身替换资源读取；替身只替换 {@code ResourceUtil} 的静态方法，
+     * 不影响其它用例解析真实 {@code area.csv}。</p>
+     *
+     * @throws Exception 反射查找失败时抛出
+     */
+    @Test
+    void loadAreasWrapsCheckedCloseFailure() throws Exception {
+        try (MockedStatic<ResourceUtil> mocked = mockStatic(ResourceUtil.class)) {
+            BufferedReader failingReader = new BufferedReader(new StringReader("id,name,type,parentId\n")) {
+
+                /** 先正常关闭，再抛出受检异常，模拟底层流关闭失败。 */
+                @Override
+                public void close() throws IOException {
+                    super.close();
+                    throw new IOException("probe-close-failure");
+                }
+            };
+            mocked.when(() -> ResourceUtil.getUtf8Reader("area.csv")).thenReturn(failingReader);
+
+            Method method = AreaUtils.class.getDeclaredMethod("loadAreas");
+            method.setAccessible(true);
+            InvocationTargetException thrown = catchThrowableOfType(() -> method.invoke(null),
+                    InvocationTargetException.class);
+
+            assertThat(thrown).as("加载失败必须向外抛出而不是返回不完整索引").isNotNull();
+            assertThat(thrown.getCause()).isInstanceOf(IllegalStateException.class)
+                    .hasMessage("读取区域数据 area.csv 失败")
+                    .hasRootCauseInstanceOf(IOException.class);
+            mocked.verify(() -> ResourceUtil.getUtf8Reader("area.csv"));
+        }
     }
 
 }
