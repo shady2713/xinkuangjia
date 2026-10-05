@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypePageReqVO;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypeSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.dict.DictTypeDO;
@@ -124,8 +125,8 @@ public class DictTypeServiceImpl implements DictTypeService {
         if (getDictDataService().getDictDataCountByDictType(dictType.getType()) > 0) {
             throw exception(DICT_TYPE_HAS_CHILDREN);
         }
-        // 删除字典类型
-        dictTypeMapper.updateToDelete(id, LocalDateTime.now());
+        // 删除字典类型：连同操作人一起写入，否则审计会保留上一位操作人
+        dictTypeMapper.updateToDelete(id, LocalDateTime.now(), currentUpdater());
     }
 
     /**
@@ -152,7 +153,21 @@ public class DictTypeServiceImpl implements DictTypeService {
         }
 
         // 校验通过后一次性更新，避免逐项计数和逐项删除造成 2N 次数据库访问。
-        dictTypeMapper.updateToDeleteByIds(distinctIds, LocalDateTime.now());
+        dictTypeMapper.updateToDeleteByIds(distinctIds, LocalDateTime.now(), currentUpdater());
+    }
+
+    /**
+     * 取本次删除的操作人编号文本。
+     *
+     * <p>软删除走的是 {@code update(null, wrapper)}，空实体不会触发 MyBatis-Plus 的
+     * {@code updateFill}，因此操作人必须在服务层取出后显式写入；没有登录上下文时返回
+     * {@code null}，由 Mapper 保留原值而不是写入空操作人。</p>
+     *
+     * @return 当前登录用户编号的文本形式；无登录上下文时为 {@code null}
+     */
+    private String currentUpdater() {
+        Long userId = SecurityFrameworkUtils.getLoginUserId();
+        return userId == null ? null : userId.toString();
     }
 
     /**

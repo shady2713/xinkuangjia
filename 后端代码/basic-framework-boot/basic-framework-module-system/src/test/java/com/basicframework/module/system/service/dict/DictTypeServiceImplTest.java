@@ -3,16 +3,21 @@ package com.basicframework.module.system.service.dict;
 import com.basicframework.framework.common.exception.ErrorCode;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.PageResult;
+import com.basicframework.framework.security.core.LoginUser;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypePageReqVO;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypeSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.dict.DictTypeDO;
 import com.basicframework.module.system.dal.mysql.dict.DictTypeMapper;
 import com.basicframework.module.system.enums.ErrorCodeConstants;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -70,6 +75,71 @@ class DictTypeServiceImplTest {
         when(dictDataServiceProvider.getObject()).thenReturn(dictDataService);
         ReflectionTestUtils.setField(dictTypeService, "dictTypeMapper", dictTypeMapper);
         ReflectionTestUtils.setField(dictTypeService, "dictDataServiceProvider", dictDataServiceProvider);
+    }
+
+    /**
+     * 删除审计必须记录本次操作人，而不是沿用上一位操作人。
+     *
+     * <p>软删除走 {@code update(null, wrapper)}，空实体不触发 MyBatis-Plus 的 {@code updateFill}，
+     * 所以服务层必须自己把当前登录用户传给持久层；这里用两位不同操作人连续删除，
+     * 证明每次传入的都是当次登录者，而不是第一次的残留值。</p>
+     */
+    @Test
+    void deleteRecordsCurrentOperatorInsteadOfPreviousOne() {
+        when(dictTypeMapper.selectById(1L)).thenReturn(dictType(1L, "DUMMY-名称一", "DUMMY_TYPE_ONE"));
+        when(dictTypeMapper.selectById(2L)).thenReturn(dictType(2L, "DUMMY-名称二", "DUMMY_TYPE_TWO"));
+        when(dictDataService.getDictDataCountByDictType(any())).thenReturn(0L);
+
+        // 第一位操作人删除，服务必须把 1001 作为操作人传给持久层
+        loginAs(1001L);
+        dictTypeService.deleteDictType(1L);
+        verify(dictTypeMapper).updateToDelete(eq(1L), any(LocalDateTime.class), eq("1001"));
+
+        // 第二位操作人删除同一个服务实例的另一条记录，操作人必须随之改变
+        loginAs(2002L);
+        dictTypeService.deleteDictType(2L);
+        verify(dictTypeMapper).updateToDelete(eq(2L), any(LocalDateTime.class), eq("2002"));
+        verify(dictTypeMapper, never()).updateToDelete(eq(2L), any(LocalDateTime.class), eq("1001"));
+    }
+
+    /**
+     * 批量删除同样必须携带本次操作人。
+     *
+     * <p>批量路径与单条路径共用同一套软删除语义，若只在单条路径传操作人，
+     * 批量删除仍会把审计记到上一位操作人名下。</p>
+     */
+    @Test
+    void batchDeleteRecordsCurrentOperator() {
+        when(dictTypeMapper.selectByIds(List.of(1L, 2L)))
+                .thenReturn(List.of(dictType(1L, "DUMMY-名称一", "DUMMY_TYPE_ONE"),
+                        dictType(2L, "DUMMY-名称二", "DUMMY_TYPE_TWO")));
+        when(dictDataService.getDictDataCountByDictTypes(anyCollection())).thenReturn(0L);
+
+        loginAs(3003L);
+        dictTypeService.deleteDictTypeList(List.of(1L, 2L));
+
+        verify(dictTypeMapper).updateToDeleteByIds(eq(List.of(1L, 2L)), any(LocalDateTime.class), eq("3003"));
+    }
+
+    /**
+     * 让后续调用处于指定用户已登录的上下文，并返回清理动作。
+     *
+     * @param userId 登录用户编号
+     */
+    private void loginAs(Long userId) {
+        SecurityFrameworkUtils.setLoginUser(
+                new LoginUser().setId(userId).setUserType(1), new MockHttpServletRequest());
+    }
+
+    /**
+     * 清理登录上下文。
+     *
+     * <p>{@code setLoginUser} 把用户写进线程本地的安全上下文，用例之间共享线程；
+     * 不清理会让后续用例意外带上登录用户，把"无登录上下文时操作人为空"的断言弄红。</p>
+     */
+    @AfterEach
+    void clearLoginContext() {
+        SecurityContextHolder.clearContext();
     }
 
     /** 分页、按编号、按编码与全量查询必须原样转发到持久层。 */
@@ -164,7 +234,7 @@ class DictTypeServiceImplTest {
         dictTypeService.deleteDictType(1L);
 
         ArgumentCaptor<LocalDateTime> deletedTime = ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(dictTypeMapper).updateToDelete(eq(1L), deletedTime.capture());
+        verify(dictTypeMapper).updateToDelete(eq(1L), deletedTime.capture(), eq(null));
         assertThat(deletedTime.getValue()).isNotNull();
 
         when(dictDataService.getDictDataCountByDictType("DUMMY_TYPE")).thenReturn(2L);
@@ -202,7 +272,7 @@ class DictTypeServiceImplTest {
         dictTypeService.deleteDictTypeList(List.of(1L, 1L, 2L));
 
         ArgumentCaptor<LocalDateTime> deletedTime = ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(dictTypeMapper).updateToDeleteByIds(eq(List.of(1L, 2L)), deletedTime.capture());
+        verify(dictTypeMapper).updateToDeleteByIds(eq(List.of(1L, 2L)), deletedTime.capture(), eq(null));
         assertThat(deletedTime.getValue()).isNotNull();
     }
 

@@ -55,38 +55,46 @@ public interface DictTypeMapper extends BaseMapperX<DictTypeDO> {
     }
 
     /**
-     * 软删除单个字典类型并记录删除时间。
+     * 软删除单个字典类型并记录删除时间与操作人。
      *
      * <p>逻辑删除列必须经 {@code LambdaUpdateWrapper.set} 显式写入：实体式
      * {@code update(entity, wrapper)} 会跳过带 {@code @TableLogic} 的列，导致删除标记不落库、
      * 记录继续被查询命中。</p>
      *
+     * <p>操作人也必须显式写入：实体为 {@code null} 时 MyBatis-Plus 不执行 {@code updateFill}，
+     * {@code updater} 会保留上一位操作人，使删除审计指向错误的人。</p>
+     *
      * @param id 字典类型编号
      * @param deletedTime 删除时间
+     * @param updater 本次删除的操作人编号文本；为 {@code null} 时不覆盖原值
      */
-    default void updateToDelete(Long id, LocalDateTime deletedTime) {
+    default void updateToDelete(Long id, LocalDateTime deletedTime, String updater) {
         update(null, new LambdaUpdateWrapper<DictTypeDO>()
                 .set(DictTypeDO::getDeleted, true)
                 .set(DictTypeDO::getDeletedTime, deletedTime)
+                .set(updater != null, DictTypeDO::getUpdater, updater)
                 .eq(DictTypeDO::getId, id));
     }
 
     /**
-     * 使用同一删除时间批量软删除字典类型。
+     * 使用同一删除时间批量软删除字典类型，并记录操作人。
      *
-     * <p>与单条删除同源，逻辑删除列同样必须显式 set，否则批量删除不会让记录从查询中消失。</p>
+     * <p>与单条删除同源：逻辑删除列与操作人都必须显式写入，否则批量删除既不会让记录从查询中
+     * 消失，也会把审计记到上一位操作人名下。</p>
      *
      * @param ids 字典类型编号集合
      * @param deletedTime 删除时间
+     * @param updater 本次删除的操作人编号文本；为 {@code null} 时不覆盖原值
      * @return 更新行数
      */
-    default int updateToDeleteByIds(Collection<Long> ids, LocalDateTime deletedTime) {
+    default int updateToDeleteByIds(Collection<Long> ids, LocalDateTime deletedTime, String updater) {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
         return update(null, new LambdaUpdateWrapper<DictTypeDO>()
                 .set(DictTypeDO::getDeleted, true)
                 .set(DictTypeDO::getDeletedTime, deletedTime)
+                .set(updater != null, DictTypeDO::getUpdater, updater)
                 .in(DictTypeDO::getId, ids));
     }
 

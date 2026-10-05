@@ -188,7 +188,7 @@ class DictMapperMySqlIT {
         dictTypeMapper.insert(dictType);
         LocalDateTime deletedTime = LocalDateTime.of(2024, 3, 4, 5, 6, 7);
 
-        dictTypeMapper.updateToDelete(7L, deletedTime);
+        dictTypeMapper.updateToDelete(7L, deletedTime, "9000");
 
         assertThat(jdbc.queryForObject("SELECT deleted_time FROM " + TYPE_TABLE + " WHERE id = 7",
                 LocalDateTime.class)).as("删除时间必须落库").isEqualTo(deletedTime);
@@ -196,6 +196,39 @@ class DictMapperMySqlIT {
                 .as("逻辑删除标记必须落库").isTrue();
         assertThat(dictTypeMapper.selectByType("sys_probe"))
                 .as("删除后记录必须不可见").isNull();
+    }
+
+    /**
+     * 软删除必须把操作人写成本次删除者，而不是沿用上一位操作人。
+     *
+     * <p>软删除走 {@code update(null, wrapper)}，空实体不触发 MyBatis-Plus 的
+     * {@code updateFill}，所以 {@code updater} 必须在 wrapper 里显式写入。这里先用一位
+     * 操作人插入并更新记录，再换另一位操作人删除，证明列值确实随本次操作人变化——
+     * 若只断言"有操作人"，沿用旧值的缺陷仍会通过。</p>
+     */
+    @Test
+    void updateToDeleteRecordsCurrentOperatorInsteadOfPreviousOne() {
+        DictTypeDO dictType = dictType(9L, "sys_operator", "操作人", CommonStatusEnum.ENABLE.getStatus());
+        dictTypeMapper.insert(dictType);
+        // 先让记录带上一位操作人，模拟"上一位操作人留下的旧值"
+        jdbc.update("UPDATE " + TYPE_TABLE + " SET updater = ? WHERE id = ?", "8001", 9L);
+        assertThat(operatorOf(9L)).as("前置条件：旧操作人已就位").isEqualTo("8001");
+
+        LocalDateTime deletedTime = LocalDateTime.of(2024, 6, 7, 8, 9, 10);
+        dictTypeMapper.updateToDelete(9L, deletedTime, "8002");
+
+        assertThat(operatorOf(9L)).as("删除必须记录本次操作人，而不是旧值").isEqualTo("8002");
+        assertThat(dictTypeMapper.selectByType("sys_operator")).as("删除后记录必须不可见").isNull();
+    }
+
+    /**
+     * 批量软删除同样把操作人写成本次删除者。
+     *
+     * @param id 字典类型编号
+     * @return 该记录的 {@code updater} 列值
+     */
+    private String operatorOf(Long id) {
+        return jdbc.queryForObject("SELECT updater FROM " + TYPE_TABLE + " WHERE id = " + id, String.class);
     }
 
     /**
@@ -216,7 +249,7 @@ class DictMapperMySqlIT {
         dictTypeMapper.insert(dictType(8L, "sys_recreate", "重建前", CommonStatusEnum.ENABLE.getStatus()));
         LocalDateTime deletedTime = LocalDateTime.of(2024, 3, 4, 5, 6, 7);
 
-        dictTypeMapper.updateToDelete(8L, deletedTime);
+        dictTypeMapper.updateToDelete(8L, deletedTime, "9001");
 
         assertThat(dictTypeMapper.selectByType("sys_recreate"))
                 .as("删除后原记录必须不可见").isNull();
@@ -239,7 +272,7 @@ class DictMapperMySqlIT {
         dictTypeMapper.insert(dictType(13L, "sys_c", "丙", CommonStatusEnum.ENABLE.getStatus()));
         LocalDateTime deletedTime = LocalDateTime.of(2024, 5, 6, 7, 8, 9);
 
-        int affected = dictTypeMapper.updateToDeleteByIds(List.of(11L, 12L), deletedTime);
+        int affected = dictTypeMapper.updateToDeleteByIds(List.of(11L, 12L), deletedTime, "9002");
 
         assertThat(affected).as("返回真实更新行数").isEqualTo(2);
         assertThat(jdbc.queryForList("SELECT deleted_time FROM " + TYPE_TABLE + " WHERE id IN (11, 12)",
@@ -249,9 +282,9 @@ class DictMapperMySqlIT {
         assertThat(dictTypeMapper.selectByType("sys_a")).as("被删记录必须不可见").isNull();
         assertThat(dictTypeMapper.selectByType("sys_b")).as("被删记录必须不可见").isNull();
         assertThat(dictTypeMapper.selectByType("sys_c")).as("未指定的记录不得被删除").isNotNull();
-        assertThat(dictTypeMapper.updateToDeleteByIds(List.of(), deletedTime))
+        assertThat(dictTypeMapper.updateToDeleteByIds(List.of(), deletedTime, "9002"))
                 .as("空集合必须直接返回 0").isZero();
-        assertThat(dictTypeMapper.updateToDeleteByIds(null, deletedTime)).isZero();
+        assertThat(dictTypeMapper.updateToDeleteByIds(null, deletedTime, "9002")).isZero();
         assertThat(dictTypeMapper.selectByType("sys_c")).isNotNull();
     }
 
