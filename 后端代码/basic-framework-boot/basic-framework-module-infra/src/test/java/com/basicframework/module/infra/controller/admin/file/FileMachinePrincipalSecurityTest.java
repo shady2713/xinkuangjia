@@ -6,7 +6,9 @@ import com.basicframework.framework.common.biz.system.oauth2.dto.OAuth2AccessTok
 import com.basicframework.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenCreateReqDTO;
 import com.basicframework.framework.common.biz.system.oauth2.dto.OAuth2AccessTokenRespDTO;
 import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
+import com.basicframework.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import com.basicframework.framework.common.enums.UserTypeEnum;
+import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.security.config.BasicFrameworkSecurityAutoConfiguration;
 import com.basicframework.framework.security.config.BasicFrameworkWebSecurityConfigurerAdapter;
@@ -14,6 +16,7 @@ import com.basicframework.framework.web.config.WebProperties;
 import com.basicframework.framework.web.core.handler.GlobalExceptionHandler;
 import com.basicframework.framework.web.core.util.WebFrameworkUtils;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
+import com.basicframework.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
 import com.basicframework.module.infra.framework.security.config.SecurityConfiguration;
 import com.basicframework.module.infra.service.file.FileService;
@@ -43,8 +46,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,17 +64,22 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 用生产 Spring Security 过滤链与真实 {@link FileController} 验证机器主体
- * （client_credentials 的占位用户 userId=0、userType=ADMIN）不能写入管理端文件入口。
+ * 用生产 Spring Security 过滤链与真实 {@link FileController} 验证两类管理端文件入口的服务端拒绝。
  *
- * <p>后端上传、预签名预约和完成登记都只要求认证、没有权限表达式，机器令牌曾可以管理端用户身份进入
- * 这些入口并产生对象存储写入与元数据登记。这里断言安全链在控制器之前按无权限拒绝，并核实文件服务
- * 完全没有被调用；同时用真实用户令牌、匿名请求与公开读取入口作为对照，避免把“整条链路失效”当成
- * 隔离成功。</p>
+ * <p>第一类是机器主体隔离：client_credentials 的占位用户（userId=0、userType=ADMIN）不能写入管理端
+ * 文件入口。后端上传、预签名预约和完成登记都只要求认证、没有权限表达式，机器令牌曾可以管理端用户
+ * 身份进入这些入口并产生对象存储写入与元数据登记。这里断言安全链在控制器之前按无权限拒绝，并核实
+ * 文件服务完全没有被调用；同时用真实用户令牌、匿名请求与公开读取入口作为对照，避免把“整条链路失效”
+ * 当成隔离成功。</p>
+ *
+ * <p>第二类是权限码拒绝：查询、详情、单个删除和批量删除都由
+ * {@code @PreAuthorize("@ss.hasPermission(...)")} 保护，缺少权限码的真实用户必须在进入业务层之前被
+ * 拒绝，不能只靠前端隐藏按钮。每条拒绝断言都配一条放行断言，用记录到的权限串证明端点确实声明了该
+ * 权限码，而不是“任何请求都被拒”。</p>
  *
  * <p>令牌校验用真实 DTO 契约的替身注入：infra 模块不依赖 system 模块，无法在本模块内签发真实机器
- * 令牌。安全过滤链、URL 放行规则、控制器与拒绝处理器都是生产实现；机器令牌的端到端签发与校验由
- * module-system 的 {@code OAuth2MachinePrincipalHttpMySqlIT} 覆盖。</p>
+ * 令牌。安全过滤链、URL 放行规则、方法级鉴权、控制器与拒绝处理器都是生产实现；机器令牌的端到端签发
+ * 与校验由 module-system 的 {@code OAuth2MachinePrincipalHttpMySqlIT} 覆盖。</p>
  *
  * @author shady2713
  */
@@ -82,6 +94,9 @@ class FileMachinePrincipalSecurityTest {
     /** 被测文件服务替身；入口被拒绝时不允许出现任何交互。 */
     private static FileService fileService;
 
+    /** 权限判定替身，按权限码放行并记录每次被请求的权限串。 */
+    private static PermissionApiStub permissionApi;
+
     /** 生产安全链 + 真实控制器的 MockMvc。 */
     private static MockMvc mvc;
 
@@ -92,6 +107,7 @@ class FileMachinePrincipalSecurityTest {
     @BeforeAll
     static void createEnvironment() {
         fileService = mock(FileService.class);
+        permissionApi = new PermissionApiStub();
         context = new AnnotationConfigWebApplicationContext();
         context.setServletContext(new MockServletContext());
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("file-machine-principal",
@@ -117,11 +133,12 @@ class FileMachinePrincipalSecurityTest {
      * 清空替身交互与打桩记录，使每个用例只观察自己触发的文件服务行为。
      *
      * <p>正例用例会为上传打桩返回值；若保留到机器主体用例，就会把“未被拒绝”伪装成一次成功上传，
-     * 让拒绝断言失去意义。</p>
+     * 让拒绝断言失去意义。权限替身同样复位，避免上一例授予的权限码让下一例的拒绝断言失效。</p>
      */
     @BeforeEach
     void resetServiceInteractions() {
         reset(fileService);
+        permissionApi.reset();
     }
 
     /**
@@ -238,6 +255,182 @@ class FileMachinePrincipalSecurityTest {
         return JsonUtils.parseObject(result.getResponse().getContentAsString(), JsonNode.class);
     }
 
+    /**
+     * 缺少查询权限码的真实用户不能在文件分页入口获得任何数据。
+     *
+     * <p>页面隐藏按钮不构成授权；直接构造请求时必须在进入业务层之前被拒绝，返回统一错误体且文件服务
+     * 零交互。断言同时记录端点真正声明的权限串，避免“拒绝”来自其他原因。</p>
+     *
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    @Test
+    void userWithoutQueryPermissionDeniedOnFilePage() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/infra/file/page")
+                        .param("pageNo", "1").param("pageSize", "10")
+                        .header("Authorization", "Bearer " + REAL_USER_TOKEN))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(403);
+        assertThat(readBody(result).get("data").isNull()).isTrue();
+        verify(fileService, never()).getFilePage(any());
+        assertThat(permissionApi.requestedPermissions()).containsExactly("infra:file:query");
+    }
+
+    /**
+     * 缺少查询权限码的真实用户不能读取文件详情，且不触达业务层。
+     *
+     * <p>详情是列表之外的替代入口，单独验证可避免只保护分页而漏掉按编号直读。</p>
+     *
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    @Test
+    void userWithoutQueryPermissionDeniedOnFileDetail() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/infra/file/get")
+                        .param("id", "5")
+                        .header("Authorization", "Bearer " + REAL_USER_TOKEN))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(403);
+        verify(fileService, never()).getFile(any());
+        assertThat(permissionApi.requestedPermissions()).containsExactly("infra:file:query");
+    }
+
+    /**
+     * 授予查询权限码后同一端点必须真实返回数据，证明拒绝断言不是“整条链路失效”。
+     *
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    @Test
+    void userWithQueryPermissionReachesFilePage() throws Exception {
+        permissionApi.grant("infra:file:query");
+        when(fileService.getFilePage(any(FilePageReqVO.class))).thenReturn(new PageResult<>(List.of(), 0L));
+
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.get("/admin-api/infra/file/page")
+                        .param("pageNo", "1").param("pageSize", "10")
+                        .header("Authorization", "Bearer " + REAL_USER_TOKEN))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode body = readBody(result);
+        assertThat(body.get("code").asInt()).as("真实响应=%s", body).isZero();
+        assertThat(body.get("data").get("total").asLong()).isZero();
+        verify(fileService).getFilePage(any(FilePageReqVO.class));
+        assertThat(permissionApi.requestedPermissions()).containsExactly("infra:file:query");
+    }
+
+    /**
+     * 缺少删除权限码的真实用户不能删除单个文件，对象与元数据都不会被触碰。
+     *
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    @Test
+    void userWithoutDeletePermissionCannotDeleteFile() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.delete("/admin-api/infra/file/delete")
+                        .param("id", "5")
+                        .header("Authorization", "Bearer " + REAL_USER_TOKEN))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(403);
+        verify(fileService, never()).deleteFile(any());
+        assertThat(permissionApi.requestedPermissions()).containsExactly("infra:file:delete");
+    }
+
+    /**
+     * 批量删除与单个删除共用删除权限码，缺少权限时必须在参数展开前整体拒绝。
+     *
+     * @throws Exception HTTP 测试执行或响应解析失败时抛出
+     */
+    @Test
+    void userWithoutDeletePermissionCannotBatchDeleteFiles() throws Exception {
+        MvcResult result = mvc.perform(MockMvcRequestBuilders.delete("/admin-api/infra/file/delete-list")
+                        .param("ids", "5", "6")
+                        .header("Authorization", "Bearer " + REAL_USER_TOKEN))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        assertThat(readBody(result).get("code").asInt()).as("真实响应=%s", readBody(result)).isEqualTo(403);
+        verify(fileService, never()).deleteFileList(any());
+        assertThat(permissionApi.requestedPermissions()).containsExactly("infra:file:delete");
+    }
+
+    /**
+     * 可编程权限判定替身。
+     *
+     * <p>保留生产 {@code @ss.hasPermission(String)} 的调用契约，只把“当前用户有哪些权限码”换成测试
+     * 可控的集合，并记录每次被请求的权限串，用于证明端点确实声明了预期权限码而不是被其他原因拒绝。</p>
+     */
+    static class PermissionApiStub implements PermissionCommonApi {
+
+        /** 当前放行的权限码；为空表示任何权限码都不放行。 */
+        private final Set<String> granted = new HashSet<>();
+
+        /** 按调用顺序记录被请求的权限码。 */
+        private final List<String> requested = new ArrayList<>();
+
+        /**
+         * 判断任一权限码是否放行。
+         *
+         * @param userId 登录用户编号，本用例不区分账号
+         * @param permissions 端点声明的权限码
+         * @return 存在任一已放行权限码时为真
+         */
+        @Override
+        public boolean hasAnyPermissions(Long userId, String... permissions) {
+            requested.addAll(List.of(permissions));
+            return Arrays.stream(permissions).anyMatch(granted::contains);
+        }
+
+        /**
+         * 本用例只验证权限码判定，角色判定一律不放行。
+         *
+         * @param userId 登录用户编号
+         * @param roles 角色编码
+         * @return 恒为假
+         */
+        @Override
+        public boolean hasAnyRoles(Long userId, String... roles) {
+            return false;
+        }
+
+        /**
+         * 本用例不涉及部门数据权限，被调用返回空结果而不是伪造范围。
+         *
+         * @param userId 登录用户编号
+         * @return 恒为空
+         */
+        @Override
+        public DeptDataPermissionRespDTO getDeptDataPermission(Long userId) {
+            return null;
+        }
+
+        /**
+         * 放行指定权限码。
+         *
+         * @param permission 需要放行的权限码
+         */
+        void grant(String permission) {
+            granted.add(permission);
+        }
+
+        /**
+         * 读取按顺序记录的权限码请求。
+         *
+         * @return 被请求的权限码列表
+         */
+        List<String> requestedPermissions() {
+            return List.copyOf(requested);
+        }
+
+        /** 复位放行集合与记录，避免用例之间互相污染。 */
+        void reset() {
+            granted.clear();
+            requested.clear();
+        }
+    }
+
     /** 复现生产 WebMvc 装配：只有 controller.admin 下的 RestController 带 /admin-api 前缀。 */
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
@@ -281,10 +474,14 @@ class FileMachinePrincipalSecurityTest {
             return new GlobalExceptionHandler("file-machine-principal-test", mock(ApiErrorLogCommonApi.class));
         }
 
-        /** 权限服务替身：文件写入入口没有权限表达式，本用例不依赖真实角色数据。 */
+        /**
+         * 权限服务替身：文件写入入口没有权限表达式，查询与删除入口按声明的权限码判定。
+         *
+         * @return 可编程并记录请求的权限判定替身
+         */
         @Bean
         PermissionCommonApi permissionCommonApi() {
-            return mock(PermissionCommonApi.class);
+            return permissionApi;
         }
 
         /** 上传大小限制使用生产默认值，避免装配期缺依赖。 */

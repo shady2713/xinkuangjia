@@ -511,9 +511,10 @@ def test_read_aliases_parses_commented_tsconfig(tmp_path: Path) -> None:
     assert aliases == {"#/*": "src/*"}
 
 
-@pytest.mark.skipif(not (DEFAULT_ROOT / FRONTEND).is_dir(), reason="仓库内不存在前端工程")
 def test_repository_workspace_layering_passes() -> None:
     """真实仓库的合法消费方全部被接受，且包清单覆盖全部工作区包。"""
+    # 检查目录被改错时零对象会被检查器当成“不适用”放行，这里必须以失败暴露，不能退化成跳过。
+    assert (DEFAULT_ROOT / FRONTEND).is_dir(), "对象范围缺失：检查目录被改错或前端工程未随仓库提供"
     checked, findings = layering.verify(DEFAULT_ROOT)
     assert findings == []
     packages = layering.collect_packages(DEFAULT_ROOT)
@@ -529,9 +530,10 @@ def test_repository_workspace_layering_passes() -> None:
     assert checked > len(packages)
 
 
-@pytest.mark.skipif(not (DEFAULT_ROOT / FRONTEND).is_dir(), reason="仓库内不存在前端工程")
 def test_repository_references_are_actually_resolved() -> None:
     """真实仓库必须真的解析出跨包引用，避免空扫描伪装成通过。"""
+    # 零对象不是通过路径；目录被改错时必须失败，避免跳过掩盖空扫描。
+    assert (DEFAULT_ROOT / FRONTEND).is_dir(), "对象范围缺失：检查目录被改错或前端工程未随仓库提供"
     packages = layering.collect_packages(DEFAULT_ROOT)
     references, findings, file_count = layering.collect_references(DEFAULT_ROOT, packages)
     assert findings == []

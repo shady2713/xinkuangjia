@@ -414,9 +414,10 @@ def test_unbalanced_parenthesis_is_rejected(tmp_path: Path) -> None:
         contracts.verify(tmp_path)
 
 
-@pytest.mark.skipif(not (DEFAULT_ROOT / BACKEND).is_dir(), reason="仓库内不存在后端工程")
 def test_repository_api_contracts_pass(monkeypatch: pytest.MonkeyPatch) -> None:
     """真实仓库的接口契约全部被接受，且检查对象覆盖全部端点与响应模型。"""
+    # 检查目录被改错时零对象会被检查器当成“不适用”放行，这里必须以失败暴露，不能退化成跳过。
+    assert (DEFAULT_ROOT / BACKEND).is_dir(), "对象范围缺失：检查目录被改错或后端工程未随仓库提供"
     restore_registries(monkeypatch)
     checked, findings = contracts.verify(DEFAULT_ROOT)
     assert findings == []
@@ -428,9 +429,10 @@ def test_repository_api_contracts_pass(monkeypatch: pytest.MonkeyPatch) -> None:
     assert checked > len(endpoints)
 
 
-@pytest.mark.skipif(not (DEFAULT_ROOT / BACKEND).is_dir(), reason="仓库内不存在后端工程")
 def test_repository_endpoints_and_models_are_actually_read(monkeypatch: pytest.MonkeyPatch) -> None:
     """真实仓库必须真的读到方法签名与响应模型，避免空扫描伪装成通过。"""
+    # 零对象不是通过路径；目录被改错时必须失败，避免跳过掩盖空扫描。
+    assert (DEFAULT_ROOT / BACKEND).is_dir(), "对象范围缺失：检查目录被改错或后端工程未随仓库提供"
     restore_registries(monkeypatch)
     endpoints = contracts.collect_endpoints(DEFAULT_ROOT)
     assert all(endpoint.return_type for endpoint in endpoints)

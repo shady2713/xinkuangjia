@@ -336,6 +336,105 @@ class FileUploadMySqlS3IT {
                 upload.getPath())).isEqualTo(1L);
     }
 
+    /**
+     * 同名同目录由两个身份上传时对象键必须互不复用，一个身份的补偿不得删除另一个身份的对象。
+     *
+     * <p>放弃的直传预约到期后会被补偿清理；清理只能作用于该预约自己的最终键与暂存键。若对象路径依赖
+     * 名称或时间而不含独立随机标识，取消一个身份就会连带删除另一个身份已登记并且仍在提供访问的文件，
+     * 因此本例同时核对对象内容、元数据行与存储真实存在性，而不只断言补偿方法的返回值。</p>
+     *
+     * @throws Exception 预签名上传、登记或存储读取失败时抛出
+     */
+    @Test
+    void abandonedReservationCompensationNeverDeletesAnotherOwnersObject() throws Exception {
+        FileServiceImpl service = (FileServiceImpl) context.getBean(FileService.class);
+        String firstOwner = "test:" + UUID.randomUUID();
+        String secondOwner = "test:" + UUID.randomUUID();
+        byte[] abandoned = bytes("abandoned direct upload");
+        byte[] registered = bytes("registered file kept by another owner");
+
+        // 同名同目录，两条预约必须落到不同对象键，否则后一次上传会覆盖前一次的对象。
+        String abandonedPath = service.generateUploadPath("same-name.txt", "shared");
+        String registeredPath = service.generateUploadPath("same-name.txt", "shared");
+        assertThat(abandonedPath).isNotEqualTo(registeredPath);
+
+        FileUploadDO pending = lifecycle.reserve(firstOwner, abandonedPath, "same-name.txt", abandoned.length, true);
+        storage.upload(abandoned, pending.getStagingPath(), "text/plain");
+        FileUploadDO kept = lifecycle.reserve(secondOwner, registeredPath, "same-name.txt", registered.length, false);
+        FileDO keptFile = lifecycle.complete(kept.getPath(), secondOwner, registered);
+
+        expire(pending);
+        assertThat(status(pending.getId())).isEqualTo("PENDING");
+        lifecycle.reconcile(pending.getId());
+
+        // 补偿只清理被放弃预约自己的两个对象，终态记录保留以便迟到写入再次被清除。
+        assertThat(status(pending.getId())).isEqualTo("CANCELLED");
+        assertAbsent(pending.getPath());
+        assertAbsent(pending.getStagingPath());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file WHERE path = ?", Long.class,
+                pending.getPath())).isZero();
+        // 另一个身份已登记的对象与元数据必须完好，仍可按编号读回原内容。
+        assertThat(storage.getContent(kept.getPath())).isEqualTo(registered);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file WHERE id = ?", Long.class,
+                keptFile.getId())).isEqualTo(1L);
+        assertThat(service.getFile(keptFile.getId()).getPath()).isEqualTo(kept.getPath());
+        assertThat(lifecycle.complete(kept.getPath(), secondOwner, registered).getId()).isEqualTo(keptFile.getId());
+    }
+
+    /**
+     * 提交结果不确定与一次补偿同时发生时，只清理被放弃预约自身的孤儿对象。
+     *
+     * <p>三种结果在同一批数据上并存：已登记文件、COMMIT 实际成功但调用方收到异常、以及被放弃后到期取消
+     * 的预约。对账必须保留前两者的对象与元数据，只删除第三者，且不确定提交的预约仍可重试完成；这条链路
+     * 正是“数据库事务不是数据库与对象存储的原子事务”的落地核对。</p>
+     *
+     * @throws Exception 预约、登记、补偿或存储读取失败时抛出
+     */
+    @Test
+    void reconciliationKeepsRegisteredAndUncertainObjectsWhileCleaningAbandonedOne() throws Exception {
+        String registeredOwner = "test:" + UUID.randomUUID();
+        String uncertainOwner = "test:" + UUID.randomUUID();
+        String abandonedOwner = "test:" + UUID.randomUUID();
+        byte[] registeredBody = bytes("registered content");
+        byte[] uncertainBody = bytes("uncertain commit content");
+        byte[] abandonedBody = bytes("abandoned content");
+
+        FileUploadDO registered = reserveFor(registeredOwner, registeredBody, false);
+        FileDO registeredFile = lifecycle.complete(registered.getPath(), registeredOwner, registeredBody);
+
+        FileUploadDO uncertain = reserveFor(uncertainOwner, uncertainBody, false);
+        transactions.failAfterCommit.set(true);
+        assertThatThrownBy(() -> lifecycle.complete(uncertain.getPath(), uncertainOwner, uncertainBody))
+                .isInstanceOf(TransactionSystemException.class);
+
+        FileUploadDO abandoned = reserveFor(abandonedOwner, abandonedBody, true);
+        storage.upload(abandonedBody, abandoned.getStagingPath(), "text/plain");
+        expire(abandoned);
+
+        // 对不确定提交的预约执行一次对账，模拟后台扫描先看到它。
+        expire(uncertain);
+        lifecycle.reconcile(uncertain.getId());
+        assertThat(status(uncertain.getId())).isEqualTo("COMPLETE");
+        assertThat(storage.getContent(uncertain.getPath())).isEqualTo(uncertainBody);
+
+        lifecycle.reconcile(abandoned.getId());
+        assertThat(status(abandoned.getId())).isEqualTo("CANCELLED");
+        assertAbsent(abandoned.getPath());
+        assertAbsent(abandoned.getStagingPath());
+
+        // 已登记文件与不确定提交的对象、元数据都不受影响。
+        assertThat(storage.getContent(registered.getPath())).isEqualTo(registeredBody);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM infra_file WHERE id = ?", Long.class,
+                registeredFile.getId())).isEqualTo(1L);
+        assertThat(storage.getContent(uncertain.getPath())).isEqualTo(uncertainBody);
+        Long uncertainFileId = jdbc.queryForObject("SELECT id FROM infra_file WHERE path = ?", Long.class,
+                uncertain.getPath());
+        assertThat(uncertainFileId).isNotNull();
+        // 不确定提交仍可重试完成，并返回已经登记成功的同一条记录。
+        assertThat(lifecycle.complete(uncertain.getPath(), uncertainOwner, uncertainBody).getId())
+                .isEqualTo(uncertainFileId);
+    }
+
     /** 完成持有预约锁时，清理必须等待真实数据库锁并在锁后看到已提交完成状态。 */
     @Test
     void cleanupRacingWithCompletionCannotDeleteFinalObject() throws Exception {
@@ -615,7 +714,17 @@ class FileUploadMySqlS3IT {
 
     /** 建立本例的唯一正常文本预约。 */
     private FileUploadDO reserve(byte[] body, boolean direct) {
-        return lifecycle.reserve(owner, uniquePath("note.txt"), "note.txt", body.length, direct);
+        return reserveFor(owner, body, direct);
+    }
+
+    /** 为指定身份建立唯一文本预约，使同一用例可以并存多个互不共享预算与对象的身份。 */
+    private FileUploadDO reserveFor(String ownerKey, byte[] body, boolean direct) {
+        return lifecycle.reserve(ownerKey, uniquePath("note.txt"), "note.txt", body.length, direct);
+    }
+
+    /** 读取预约的持久化状态，避免只断言补偿方法的返回值。 */
+    private String status(Long uploadId) {
+        return jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class, uploadId);
     }
 
     /** 生成永不复用的测试对象键，不使用任何业务目录。 */

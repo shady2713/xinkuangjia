@@ -578,9 +578,10 @@ def test_unknown_module_name_is_rejected(tmp_path: Path) -> None:
         boundaries.verify(tmp_path)
 
 
-@pytest.mark.skipif(not (DEFAULT_ROOT / BACKEND).is_dir(), reason="仓库内不存在后端工程")
 def test_repository_backend_boundaries_pass() -> None:
     """真实仓库的合法消费方全部被接受，且检查对象覆盖全部模块与手写源码。"""
+    # 检查目录被改错时零对象会被检查器当成“不适用”放行，这里必须以失败暴露，不能退化成跳过。
+    assert (DEFAULT_ROOT / BACKEND).is_dir(), "对象范围缺失：检查目录被改错或后端工程未随仓库提供"
     checked, findings = boundaries.verify(DEFAULT_ROOT)
     assert findings == []
     modules = boundaries.collect_modules(DEFAULT_ROOT)
@@ -588,12 +589,11 @@ def test_repository_backend_boundaries_pass() -> None:
     assert checked > len(modules)
 
 
-@pytest.mark.skipif(
-    not (DEFAULT_ROOT / BACKEND).is_dir() or shutil.which("git") is None,
-    reason="仓库内不存在后端工程或缺少 Git",
-)
 def test_repository_sources_are_actually_read() -> None:
     """真实仓库必须真的读到包名与 import，避免空扫描伪装成通过。"""
+    # 零对象不是通过路径；目录被改错时必须失败，避免跳过掩盖空扫描。
+    assert (DEFAULT_ROOT / BACKEND).is_dir(), "对象范围缺失：检查目录被改错或后端工程未随仓库提供"
+    assert shutil.which("git") is not None, "缺少 Git，无法提供可信的源码范围证据"
     modules = boundaries.collect_modules(DEFAULT_ROOT)
     sources = boundaries.collect_sources(DEFAULT_ROOT, modules)
     assert len(sources) > 200
