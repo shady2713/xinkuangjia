@@ -168,15 +168,39 @@ class AesCbcUtilsTest {
     void decryptFromBase64_shouldFailWhenCipherTextIsTampered() {
         byte[] plainBytes = PLAIN_TEXT.getBytes(StandardCharsets.UTF_8);
         byte[] payload = Base64.getDecoder().decode(AesCbcUtils.encryptToBase64(plainBytes, KEY));
-        payload[payload.length - 1] ^= 0x01;
+        // 必须翻转"最后一个密文块之前"的那一块的末字节：CBC 下它确定性地翻转末块明文的
+        // 最后一个字节，也就是 PKCS5 填充长度字节，因此填充必然非法、解密必然失败。
+        // 若翻转最后一个密文块自身的字节，雪崩效应会把整块明文随机化，填充恰好合法的
+        // 概率约为 1/256（实测 20000 次有 93 次未抛错），断言会偶发失败。
+        payload[payload.length - 17] ^= 0x01;
         String tampered = Base64.getEncoder().encodeToString(payload);
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                 () -> AesCbcUtils.decryptFromBase64(tampered, KEY));
         assertEquals("AES 解密失败", failure.getMessage());
+    }
 
-        IllegalArgumentException wrongKey = assertThrows(IllegalArgumentException.class,
-                () -> AesCbcUtils.decryptFromBase64(AesCbcUtils.encryptToBase64(plainBytes, KEY), "OTHER_KEY_16BYTE"));
-        assertEquals("AES 解密失败", wrongKey.getMessage());
+    /**
+     * 验证错误密钥不能还原出原明文。
+     *
+     * <p>AES-CBC 只保证机密性，不保证错误密钥一定解密失败：错误密钥下明文块是随机的，
+     * PKCS5 填充恰好合法的概率实测约 0.42%（20000 次有 84 次解密"成功"并返回随机字节）。
+     * 因此这里断言真正成立的密码学性质——要么解密失败，要么结果与原明文不同，
+     * 绝不会还原出原明文；断言"必然抛错"会把随机通过当成契约，造成偶发红灯。</p>
+     */
+    @Test
+    void decryptFromBase64_shouldNeverRecoverPlainTextWithWrongKey() {
+        byte[] plainBytes = PLAIN_TEXT.getBytes(StandardCharsets.UTF_8);
+        String cipherText = AesCbcUtils.encryptToBase64(plainBytes, KEY);
+
+        byte[] recovered = null;
+        try {
+            recovered = AesCbcUtils.decryptFromBase64(cipherText, "OTHER_KEY_16BYTE");
+        } catch (IllegalArgumentException failure) {
+            assertEquals("AES 解密失败", failure.getMessage());
+        }
+        if (recovered != null) {
+            assertThat(recovered).as("错误密钥绝不能还原出原明文").isNotEqualTo(plainBytes);
+        }
     }
 }
