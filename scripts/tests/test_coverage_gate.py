@@ -72,8 +72,31 @@ def web_entry(statements: dict[str, int] | None = None, functions: dict[str, int
             "fnMap": {key: {} for key in functions}}
 
 
+def web_inputs(root: Path, unverified: list[str] | None = None) -> Path:
+    """写出本次测量的输入指纹清单，对应 provider 的正常产物。
+
+    Args:
+        root: 测试拥有的仓库根，前端范围固定为门禁的 FRONTEND。
+        unverified: 提供者报告的脚本坐标不可信文件清单，缺省为空。
+    Returns:
+        清单路径；必须早于报告写出，门禁才接受报告绑定到当前测量输入。
+    """
+    path = root / gate.FRONTEND / "coverage/coverage-inputs.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"schema": gate.WEB_INPUTS_SCHEMA, "inputs": gate.web_coverage_inputs(root),
+                    "unverifiedOffsets": unverified or []}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8", newline="\n")
+    return path
+
+
 def web_report(root: Path, entries: dict[Path, dict[str, object]]) -> Path:
-    """保存只属于当前反例的 JSON 覆盖率报告。"""
+    """保存只属于当前反例的 JSON 覆盖率报告，并先写下与其绑定的输入指纹清单。
+
+    门禁要求报告携带本次测量输入指纹：provider 先写清单再写报告，夹具按同一顺序生成，
+    因此正常场景不会因缺少指纹被判过期证据。
+    """
+    web_inputs(root)
     path = root / gate.FRONTEND / "coverage/coverage-final.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({str(key): value for key, value in entries.items()}), encoding="utf-8")
@@ -304,6 +327,37 @@ def test_audit_stage_cli_does_not_require_static_evidence(tmp_path: Path) -> Non
     assert "static_analysis" not in data
 
 
+def test_web_report_without_inputs_manifest_is_rejected(tmp_path: Path) -> None:
+    """回归反例：计数再全，缺少输入指纹清单的报告仍是过期证据，不能被当次测量接受。"""
+    source = web_source(tmp_path)
+    report = web_report(tmp_path, {source: web_entry()})
+    (report.parent / "coverage-inputs.json").unlink()
+    result = gate.web_report(tmp_path, report)
+    assert gate.conclude(result, "audit") == 2
+    assert result["status"] == "invalid-evidence"
+    assert [item["rule"] for item in result["problems"]] == ["missing-coverage-inputs"]
+
+
+@pytest.mark.parametrize("tamper", ["schema", "inputs", "newer-than-report"])
+def test_web_report_with_tampered_inputs_manifest_is_rejected(tmp_path: Path, tamper: str) -> None:
+    """回归反例：清单结构、内容或时序与本次测量不符时必须判过期，不得沿用旧计数。"""
+    source = web_source(tmp_path)
+    report = web_report(tmp_path, {source: web_entry()})
+    baseline = report.parent / "coverage-inputs.json"
+    prepared = json.loads(baseline.read_text(encoding="utf-8"))
+    if tamper == "schema":
+        prepared["schema"] = "web-coverage-inputs/v0"
+    elif tamper == "inputs":
+        prepared["inputs"]["version:vitest"] = "0.0.0"
+    baseline.write_text(json.dumps(prepared, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if tamper == "newer-than-report":
+        os.utime(baseline, ns=(report.stat().st_mtime_ns + 1_000_000_000,) * 2)
+    result = gate.web_report(tmp_path, report)
+    assert gate.conclude(result, "audit") == 2
+    assert result["status"] == "invalid-evidence"
+    assert [item["rule"] for item in result["problems"]] == ["coverage-inputs-changed-or-stale"]
+
+
 def test_frontend_runner_default_stage_stays_audit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """官方前端默认入口必须以 audit 调用门禁：不要求静态证据，退出码原样传播。"""
     runner = frontend_runner()
@@ -355,6 +409,8 @@ def test_frontend_runner_audit_path_runs_real_gate(tmp_path: Path, monkeypatch: 
         """第一次调用写出新报告，第二次调用用真实子进程运行改写 root 的门禁。"""
         commands.append(command)
         if len(commands) == 1:
+            # 真实 provider 先写输入指纹清单再写报告；这里按同一顺序补上，否则门禁会拒绝无指纹报告。
+            web_inputs(tmp_path)
             report.parent.mkdir(parents=True, exist_ok=True)
             report.write_text(payload, encoding="utf-8")
             return 0
