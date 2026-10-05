@@ -68,6 +68,20 @@ type StateUpdater<
   prev: TypedFormProps<TValues, TComp>,
 ) => Partial<TypedFormProps<TValues, TComp>>;
 
+/**
+ * 一次挂载产生的表单上下文句柄。
+ *
+ * `form` 容器的引用跨卸载重挂刻意保持不变，异步失效检查只比较容器引用无法区分
+ * “同一个容器里的新挂载”，旧校验与旧提交会因此作用到新表单上。
+ * 句柄因此同时携带该次挂载的代次标识，供每个异步边界后判定旧结果是否已经失效。
+ */
+type MountedFormHandle<TValues extends FormValuesConstraint> = {
+  /** 本次挂载写入容器的 vee-validate 表单上下文。 */
+  form: FormActions<TValues>;
+  /** 本次挂载的代次标识；每次成功挂载自增，卸载重挂后旧代次的句柄一律失效。 */
+  generation: number;
+};
+
 /** 创建互不共享的表单配置默认值。 */
 function getDefaultState<
   TValues extends FormValuesConstraint,
@@ -129,6 +143,13 @@ export class FormApi<
   private latestSubmissionValues: null | TValues = null;
 
   private lifecycle = 0;
+
+  /**
+   * 当前挂载的代次标识。
+   * 每次成功挂载自增：容器引用在卸载重挂后不变，只有代次能证明一个在途异步结果
+   * 是否仍属于发起它的那次挂载。代次不参与重置，因此旧挂载的句柄永远不会再次命中。
+   */
+  private mountGeneration = 0;
 
   private prevState: null | TypedFormProps<TValues, TComp> = null;
 
@@ -228,9 +249,9 @@ export class FormApi<
    * @returns 调用方声明的值类型；表单未挂载或已销毁时抛出。
    */
   async getValues(): Promise<TValues> {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
-    return this.toValueType(this.handleRangeTimeValue(form.values));
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    return this.toValueType(this.handleRangeTimeValue(handle.form.values));
   }
 
   /**
@@ -241,9 +262,9 @@ export class FormApi<
    * @throws {Error} 表单未挂载或挂载已失效。
    */
   async isFieldValid(fieldName: string) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
-    return form.isFieldValid(fieldName as Path<TValues>);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    return handle.form.isFieldValid(fieldName as Path<TValues>);
   }
 
   /** 创建表单组合视图，只有全部校验通过才返回聚合值。
@@ -305,6 +326,7 @@ export class FormApi<
    * 重复挂载直接忽略：第二次调用来自组件重渲染，不能覆盖已在使用的上下文与组件引用。
    * 上下文成员被复制进固定的 `form` 容器而不是替换容器引用，
    * 这样 setup 期解构出 `form` 并长期持有的消费方（如锁屏）在挂载后仍能读到真实上下文。
+   * 每次真正写入上下文前先自增挂载代次：容器引用恒定，异步操作只能靠代次识别自己是否已被重挂顶替。
    * @param formActions 由 `use-form-renderer` 提供的 vee-validate 表单上下文。
    * @param componentRefMap 字段名到组件实例的映射，用于聚焦定位与滚动定位。
    */
@@ -313,6 +335,8 @@ export class FormApi<
     componentRefMap = new Map<string, unknown>(),
   ) {
     if (!this.isMounted) {
+      // 必须先于写入自增：写入后任何异步回调读到的都应是本次挂载的代次。
+      this.mountGeneration++;
       Object.assign(this.form, formActions);
       this.wasUnmounted = false;
       this.setLatestSubmissionValues(
@@ -350,9 +374,9 @@ export class FormApi<
     state?: Partial<FormState<TValues>> | undefined,
     opts?: Partial<ResetFormOpts>,
   ) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
-    return form.resetForm(state, opts);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    return handle.form.resetForm(state, opts);
   }
 
   /**
@@ -361,12 +385,12 @@ export class FormApi<
    * @throws {Error} 表单未挂载或挂载已失效。
    */
   async resetValidate() {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
-    const fields = Object.keys(form.errors.value);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    const fields = Object.keys(handle.form.errors.value);
     fields.forEach(
       /** 逐个把错误置为 undefined，等价于清除该字段的校验状态。 */ (field) => {
-        form.setFieldError(field as Path<TValues>, undefined);
+        handle.form.setFieldError(field as Path<TValues>, undefined);
       },
     );
   }
@@ -430,10 +454,10 @@ export class FormApi<
    * @throws {Error} 表单未挂载或挂载已失效。
    */
   async setFieldValue(field: string, value: unknown, shouldValidate?: boolean) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
     // 字段名与取值都来自调用方的动态 schema，类型系统无法在此证明其属于 TValues 的某条路径。
-    form.setFieldValue(
+    handle.form.setFieldValue(
       field as Path<TValues>,
       value as PathValue<TValues, Path<TValues>>,
       shouldValidate,
@@ -492,8 +516,9 @@ export class FormApi<
     filterFields: boolean = true,
     shouldValidate: boolean = false,
   ) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    const form = handle.form;
     if (!filterFields) {
       form.setValues(this.toSetValuesArg(fields), shouldValidate);
       return;
@@ -543,23 +568,25 @@ export class FormApi<
   async submitForm(e?: Event): Promise<TValues | undefined> {
     e?.preventDefault();
     e?.stopPropagation();
-    const form = await this.getForm();
-    this.assertMountedForm(form);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
     // 提交回调必须在提交瞬间读取：提交期间页面可能已经更新了回调定义。
     const submit = this.state?.handleSubmit;
-    return form.handleSubmit(
+    return handle.form.handleSubmit(
       /** 只有全部规则通过才会执行本回调，非法值不会进入业务。 */
       async (validated) => {
-        this.assertMountedForm(form);
+        // 校验等待期间可能已经卸载重挂：旧提交不得进入新挂载的业务回调。
+        this.assertMountedForm(handle);
         const values = this.handleRangeTimeValue(validated);
         await submit?.(this.toValueType(values));
-        this.assertMountedForm(form);
+        // 业务回调等待期间同样可能卸载重挂：旧提交不得把旧值写回新挂载的提交快照。
+        this.assertMountedForm(handle);
         this.setLatestSubmissionValues(this.toValueType(values));
         return this.toValueType(values);
       },
       /** 校验失败只做定位提示，绝不调用业务提交回调。 */
       (invalid) => {
-        this.assertMountedForm(form);
+        this.assertMountedForm(handle);
         if (this.state?.scrollToFirstError)
           this.scrollToFirstError(invalid.errors);
       },
@@ -570,6 +597,7 @@ export class FormApi<
    * 结束实例并拒绝挂载等待，清理后的旧异步动作不能进入下次挂载。
    * 容器引用保持不变、只清空成员，解构持有 `form` 的消费方在卸载后读到的是“无上下文”，
    * 而不是上一次挂载遗留的失效实例；之后重新挂载会再次写入成员。
+   * 卸载不取消已经开始的外部请求，在途的校验与提交由挂载代次在各自的异步边界后判定失效。
    */
   unmount() {
     // 未挂载时容器内没有成员，取用成员会在调用时抛 TypeError，
@@ -638,11 +666,12 @@ export class FormApi<
    * @throws {Error} 表单未挂载或挂载已失效。
    */
   async validate(opts?: Partial<ValidationOptions>) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
 
-    const validateResult = await form.validate(opts);
-    this.assertMountedForm(form);
+    const validateResult = await handle.form.validate(opts);
+    // 校验等待期间可能已经卸载重挂：过期错误不得滚动定位到新挂载的表单上。
+    this.assertMountedForm(handle);
 
     if (Object.keys(validateResult?.errors ?? {}).length > 0) {
       console.error('validate error', validateResult?.errors);
@@ -671,13 +700,14 @@ export class FormApi<
    * @throws {Error} 表单未挂载或挂载已失效。
    */
   async validateField(fieldName: string, opts?: Partial<ValidationOptions>) {
-    const form = await this.getForm();
-    this.assertMountedForm(form);
-    const validateResult = await form.validateField(
+    const handle = await this.getFormHandle();
+    this.assertMountedForm(handle);
+    const validateResult = await handle.form.validateField(
       fieldName as Path<TValues>,
       opts,
     );
-    this.assertMountedForm(form);
+    // 校验等待期间可能已经卸载重挂：过期错误不得滚动定位到新挂载的表单上。
+    this.assertMountedForm(handle);
 
     if (Object.keys(validateResult?.errors ?? {}).length > 0) {
       console.error('validate error', validateResult?.errors);
@@ -689,13 +719,16 @@ export class FormApi<
     return validateResult;
   }
 
-  /** 在异步边界后确认仍是原表单实例。
-   * @param form 操作开始时捕获的实例。
-   * @throws {Error} 当前实例已卸载或被替换。
+  /** 在异步边界后确认仍是操作开始时的那一次挂载。
+   * 容器引用跨卸载重挂保持不变，只比较引用与 `isMounted` 会让旧结果在新挂载上生效，
+   * 因此这里同时比较挂载代次：卸载重挂后旧句柄的代次不再等于当前代次。
+   * @param handle 操作开始时捕获的挂载句柄。
+   * @throws {Error} 表单已卸载，或期间发生过卸载重挂导致挂载代次变化。
    */
-  private assertMountedForm(form: FormActions<TValues>) {
-    if (!this.isMounted || this.form !== form)
+  private assertMountedForm(handle: MountedFormHandle<TValues>) {
+    if (!this.isMounted || this.mountGeneration !== handle.generation) {
       throw new Error('表单挂载已失效');
+    }
   }
 
   /**
@@ -763,22 +796,23 @@ export class FormApi<
     throw new TypeError('时间区间值必须为日期、时间戳或文本');
   }
 
-  /** 等待首次挂载；销毁前的等待不能借用后续挂载实例。
-   * 容器始终存在，因此“没有上下文”只由挂载标记与代次判定，而不是由容器是否为空判定。
-   * @returns 当前挂载的真实 vee-validate FormContext。
+  /** 等待首次挂载并返回本次挂载的上下文句柄；销毁前的等待不能借用后续挂载实例。
+   * 容器始终存在，因此“没有上下文”只由挂载标记与卸载代次判定，而不是由容器是否为空判定；
+   * 返回前记录当前挂载代次，调用方据此在每个异步边界后识别卸载重挂。
+   * @returns 当前挂载的 vee-validate 表单上下文与本次挂载的代次标识。
    * @throws {Error} 表单已销毁、等待被取消或挂载代次已经变化。
    */
-  private async getForm(): Promise<FormActions<TValues>> {
+  private async getFormHandle(): Promise<MountedFormHandle<TValues>> {
     const lifecycle = this.lifecycle;
     if (!this.isMounted) {
       if (this.wasUnmounted) throw new Error('表单已卸载');
       await this.stateHandler.waitForCondition();
     }
-    const form = this.form;
     if (!this.isMounted || lifecycle !== this.lifecycle) {
       throw new Error('表单挂载已失效');
     }
-    return form;
+    // 检查与取值之间没有 await，读到的容器与代次一定属于同一次挂载。
+    return { form: this.form, generation: this.mountGeneration };
   }
 
   /**

@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import difflib
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 from scripts.code.java import check_staged_java_comments as java
 from scripts.code.python import check_staged_python_comments as python
+from scripts.tests.git_sandbox import GitSandbox, create_sandbox
 from scripts.security import scan_staged_secrets as secrets
 
 JAVA_HEADER = "/** 服务职责。\n * @author 李杰\n */\npublic class Demo {\n"
@@ -593,3 +595,217 @@ def test_sql_metadata_cannot_hide_fixed_credentials(monkeypatch: pytest.MonkeyPa
     source = "INSERT INTO other_table (token_count) VALUES ('" + "unit-" + "a" * 16 + "');\n"
     findings = scan_secret_source(monkeypatch, "数据库文件/fixture.sql", source)
     assert [item.rule for item in findings] == ["sql-sensitive-insert"]
+
+
+SCANNER_PATH = (
+    Path(__file__).resolve().parents[1] / "security" / "scan_staged_secrets.py"
+)
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+# 敏感字段名与合成取值拆成相邻字面量，运行期拼成完整语句；这样暂存文件本身
+# 不包含任何可被同一扫描器识别的完整凭据写法，同时保留真实语句的语义。
+# 变量名与“冒号加横线”默认值写法都拆开，避免测试文件自身包含可被扫描器命中的完整敏感赋值形态。
+SENSITIVE_FIELD = "pass" + "word"
+SHELL_DEFAULT_OPERATOR = ":" + "-"
+SECOND_FIELD = "api" + "_key"
+FIXTURE_SEAM_PASS = "RealSeam" + "Pass4c81"
+FIXTURE_SEAM_KEY = "RealSeam" + "Key7701"
+FIXTURE_FALLBACK_PASS = "ProdSeam" + "Pass51ac9e"
+
+
+def run_staged_cli(sandbox: GitSandbox) -> subprocess.CompletedProcess[str]:
+    """在隔离索引上运行真实暂存凭据扫描器，不修改当前工作区索引。
+
+    Args:
+        sandbox: 测试独占的 Git 仓库与不继承用户 Git 管理目录的环境。
+
+    Returns:
+        真实 CLI 的完成结果，包含退出码与标准输出/错误；断言不会读取被扫描内容。
+    """
+
+    environment = dict(sandbox.env)
+    environment["GIT_DIR"] = str(Path(sandbox.root) / ".git")
+    environment["GIT_WORK_TREE"] = str(sandbox.root)
+    return subprocess.run(
+        [sys.executable, "-B", "-X", "utf8", str(SCANNER_PATH)],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=120,
+    )
+
+
+def test_multi_field_literal_scans_every_field() -> None:
+    """多字段字面量必须逐字段检查，多一个敏感字段不能让前一个字段免检。
+
+    回归的是“命中后续敏感字段即整条字面量豁免”的漏报：同一行存在第二个敏感字段时，
+    前一个字段的固定取值也必须被检查；无后续字段的单字段字面量行为保持不变。
+    """
+
+    embedded = (
+        '\"' + SENSITIVE_FIELD + '\": \"'
+        + FIXTURE_SEAM_PASS + '\", \"'
+        + SECOND_FIELD + '\": \"'
+        + FIXTURE_SEAM_KEY + '\"}'
+    )
+    fields = secrets._split_top_level_fields(embedded)
+    assert len(fields) >= 2
+    single_field = '\"' + SENSITIVE_FIELD + '\": \"' + FIXTURE_SEAM_PASS + '\"}'
+    assert secrets._split_top_level_fields(single_field) == [single_field]
+    findings = secrets._scan_added_line(
+        "src/config.ts",
+        3,
+        "export const jdbc = `{" + embedded + "}`;",
+    )
+    assert "sensitive-assignment" in {finding.rule for finding in findings}
+    assert FIXTURE_SEAM_PASS not in repr(findings)
+    # JSON 键名本身带引号、取值在键名引号之外时同样必须检查。
+    quoted_key = secrets._scan_added_line(
+        "src/config.ts",
+        4,
+        "const cfg = {"
+        + embedded
+        + "};",
+    )
+    assert "sensitive-assignment" in {finding.rule for finding in quoted_key}
+
+
+def test_fixed_fallback_branch_is_checked() -> None:
+    """运行期表达式的固定回退分支必须按固定凭据检查，非空固定值不能放行。
+
+    回归的是 ``os.getenv("X", "固定值")``、``config.get("k", "固定值")``、
+    ``process.env.X ?? "固定值"`` 与 shell ``${X:-固定值}`` 四类回退分支；安全占位符
+    （空串、``null``、变量引用）仍然放行。
+    """
+
+    fixed = secrets._fixed_fallback_literal(
+        'os.getenv("APP_DB_PASSWORD", "' + FIXTURE_FALLBACK_PASS + '")'
+    )
+    assert fixed == FIXTURE_FALLBACK_PASS
+    mappings = secrets._fixed_fallback_literal(
+        'config.get("db.password", "' + FIXTURE_FALLBACK_PASS + '")'
+    )
+    assert mappings == FIXTURE_FALLBACK_PASS
+    nullish = secrets._fixed_fallback_literal(
+        'process.env.APP_DB_PASSWORD ?? "' + FIXTURE_FALLBACK_PASS + '"'
+    )
+    assert nullish == FIXTURE_FALLBACK_PASS
+    shell = secrets._fixed_fallback_literal(
+        "${APP_DB_" + "PASS" + "WORD:-" + FIXTURE_FALLBACK_PASS + "}"
+    )
+    assert shell == FIXTURE_FALLBACK_PASS
+    mixed = secrets._fixed_fallback_literal(
+        'process.env.APP_DB_PASSWORD ?? "' + FIXTURE_FALLBACK_PASS + '" ?? fallback'
+    )
+    assert mixed == FIXTURE_FALLBACK_PASS
+    trailing_call = secrets._fixed_fallback_literal(
+        'config.get("db.password", "' + FIXTURE_FALLBACK_PASS + '", extra)'
+    )
+    assert trailing_call == FIXTURE_FALLBACK_PASS
+    for safe in (
+        'os.getenv("APP_DB_PASSWORD", "")',
+        'os.environ["APP_DB_PASSWORD"]',
+        'process.env.APP_DB_PASSWORD ?? ""',
+        'process.env.APP_DB_PASSWORD ?? other.apiKey',
+        "${APP_DB_PASSWORD}",
+        "shutil.which(\"mysql\")",
+    ):
+        assert secrets._fixed_fallback_literal(safe) is None, safe
+    findings = secrets._scan_added_line(
+        "src/env_fallback.py",
+        4,
+        SENSITIVE_FIELD + ' = os.getenv("APP_DB_PASSWORD", "' + FIXTURE_FALLBACK_PASS + '")',
+    )
+    assert "sensitive-assignment" in {finding.rule for finding in findings}
+    assert FIXTURE_FALLBACK_PASS not in repr(findings)
+    # shell 展开的完整写法在运行期拼接，避免测试文件自身出现可被命中的赋值形态。
+    shell_name = "DB_" + "PASS" + "WORD"
+    quoted_shell = (
+        shell_name + '="${APP_DB_' + "PASS" + "WORD" + SHELL_DEFAULT_OPERATOR
+        + FIXTURE_FALLBACK_PASS + '}"'
+    )
+    blocked_shell = secrets._scan_added_line("scripts/run.sh", 5, quoted_shell)
+    assert "sensitive-assignment" in {finding.rule for finding in blocked_shell}
+    assert FIXTURE_FALLBACK_PASS not in repr(blocked_shell)
+    for allowed_shell in (
+        shell_name + '="${APP_DB_' + "PASS" + "WORD" + SHELL_DEFAULT_OPERATOR + '}"',
+        shell_name + '="${APP_DB_' + "PASS" + 'WORD}"',
+    ):
+        assert secrets._scan_added_line("scripts/run.sh", 6, allowed_shell) == []
+
+
+def test_real_staged_cli_blocks_multi_field_and_fallback_credentials(tmp_path: Path) -> None:
+    """真实暂存 CLI：多字段字面量与固定回退取值都必须阻断且不回显取值。
+
+    回归的是“命中后续敏感字段就整条字面量豁免”的漏报：同一行多一个敏感字段反而
+    让前一个字段免检，以及 ``os.getenv("X", "固定值")`` 的固定回退分支被当成运行期
+    取值放行。用例只使用合成值，并通过隔离 Git 索引驱动真实 CLI。
+    """
+
+    sandbox = create_sandbox(tmp_path / "secrets")
+    multiline_environment = (
+        "import os\n"
+        + SENSITIVE_FIELD
+        + ' = os.getenv("APP_DB_'
+        + "PASS"
+        + 'WORD", "'
+        + FIXTURE_FALLBACK_PASS
+        + '")\n'
+    )
+    sandbox.stage(
+        "src/config.ts",
+        "export const jdbc = `{\""
+        + SENSITIVE_FIELD
+        + "\": \""
+        + FIXTURE_SEAM_PASS
+        + "\", \""
+        + SECOND_FIELD
+        + "\": \""
+        + FIXTURE_SEAM_KEY
+        + "\"}`;\n",
+    )
+    sandbox.stage(
+        "src/embedded_sql.py",
+        'STATEMENT = ("INSERT INTO demo_user (id, " "'
+        + SENSITIVE_FIELD
+        + ", "
+        + SECOND_FIELD
+        + ") VALUES (1, '"
+        + FIXTURE_SEAM_PASS
+        + "', '"
+        + FIXTURE_SEAM_KEY
+        + "'))\n",
+    )
+    sandbox.stage("src/env_fallback.py", multiline_environment)
+    completed = run_staged_cli(sandbox)
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    for value in (FIXTURE_SEAM_PASS, FIXTURE_SEAM_KEY, FIXTURE_FALLBACK_PASS):
+        assert value not in completed.stdout + completed.stderr
+    assert "sensitive-assignment" in completed.stderr
+
+
+def test_real_staged_cli_keeps_placeholders_and_references_passing(tmp_path: Path) -> None:
+    """真实暂存 CLI：合法占位符与运行期引用表达式仍然放行，不放宽也不误报。
+
+    Args:
+        tmp_path: pytest 分配的独占临时目录。
+    """
+
+    sandbox = create_sandbox(tmp_path / "placeholders")
+    sandbox.stage(
+        "src/service.py",
+        "import os\n"
+        f"{SENSITIVE_FIELD}: str = os.getenv(\"APP_DB_PASSWORD\", \"\")\n"
+        "db_url = os.environ[\"AUTH_TEST_MYSQL_URL\"]\n",
+    )
+    sandbox.stage(
+        "src/settings.ts",
+        f"export const {SENSITIVE_FIELD} = process.env.APP_DB_PASSWORD;\n"
+        f"export const {SECOND_FIELD} = process.env.APP_API_KEY ?? \"\";\n",
+    )
+    sandbox.stage("部署/.env.example", "DB_PASSWORD=${DB_PASSWORD}\n")
+    completed = run_staged_cli(sandbox)
+    assert completed.returncode == 0, completed.stdout + completed.stderr

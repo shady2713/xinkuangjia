@@ -1,20 +1,23 @@
 """准备隔离 MySQL、种子管理员、真实后端与前端预览，并执行浏览器业务端到端测试。
 
-本入口只使用本次运行自建的随机库、专用 Redis 逻辑库与临时目录，退出时按记录的精确 PID
-回收进程并删除这些资源；缺少连接变量、后端、浏览器或构建产物时明确失败，不跳过用例。
+本入口只使用本次运行自建的随机库、临时目录与独占 Redis 逻辑库：Redis 目标只有在确认
+为空并成功写入本次运行的所有权标记后才算取得，回收时再次校验该标记，因此预置的外部数据
+和并发运行的数据都不会被清空。退出时按记录的精确 PID 跨平台回收进程并删除本次取得的
+资源，不使用按名匹配的进程清理；缺少连接变量、后端、浏览器或构建产物时明确失败，不跳过用例。
 
 运行（仓库根）：
 
     python -B -X utf8 scripts/e2e/run_business_e2e.py
 
 退出码：0 表示用例真实通过；1 表示用例失败或存在被跳过、依赖重试的用例；2 表示环境准备、
-依赖或资源编排失败。
+依赖、资源编排失败或本次取得的资源未能完整回收。
 
 连接变量从进程环境读取，凭据不写入仓库文件、日志或命令参数：
 AUTH_TEST_MYSQL_URL、AUTH_TEST_MYSQL_USERNAME、AUTH_TEST_MYSQL_PASSWORD、
 BF_TEST_REDIS_PORT、BF_TEST_REDIS_PASSWORD、
 BF_TEST_S3_ENDPOINT、BF_TEST_S3_ACCESS_KEY、BF_TEST_S3_SECRET_KEY。
 可选 BF_TEST_MYSQL_CLIENT 指定 MySQL 客户端入口，未设置时使用 PATH 上的 mysql。
+可选 --redis-database 显式指定 Redis 逻辑库；缺省在 1–15 中自动挑选空库。
 
 @author 李杰
 """
@@ -41,6 +44,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import BinaryIO, Callable
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_ROOT = REPOSITORY_ROOT / "前端代码" / "basic-framework-admin"
@@ -60,6 +64,13 @@ REQUIRED_REDIS = ("BF_TEST_REDIS_PORT", "BF_TEST_REDIS_PASSWORD")
 REQUIRED_S3 = ("BF_TEST_S3_ENDPOINT", "BF_TEST_S3_ACCESS_KEY", "BF_TEST_S3_SECRET_KEY")
 DATABASE_PREFIX = "bf_e2e_"
 DATABASE_PATTERN = re.compile(r"bf_e2e_[0-9a-f]{12}")
+# Redis 独占所有权：只有标记键的值等于本次运行随机令牌时，才允许清空该逻辑库。
+# 标记键带存活时间，异常退出后仍能在有效期内阻止其他运行把该库当成空库复用。
+REDIS_LOCK_KEY = "bf-business-e2e:owner"
+REDIS_LOCK_VALUE_PREFIX = "bf-business-e2e/v1:"
+REDIS_LOCK_TTL_SECONDS = 6 * 3600
+# 未显式指定逻辑库时的候选编号；0 号共享库始终排除，超出服务端 databases 的编号会被跳过。
+REDIS_DATABASE_CANDIDATES = tuple(range(1, 16))
 HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailer", "transfer-encoding", "upgrade",
@@ -176,51 +187,211 @@ def encode_resp_command(*parts: str) -> bytes:
     return b"".join(encoded)
 
 
-def read_resp_reply(stream) -> str:
-    """读取一条 Redis 简单回复，用于确认清理命令已被执行。
+def read_resp_value(stream: BinaryIO) -> str:
+    """读取一条 Redis 回复并转换为可直接比较的文本。
+
+    支持状态、整数与批量字符串回复；空批量回复（nil）返回空字符串，便于按值比较所有权标记。
 
     Args:
         stream: 已连接的 Redis 套接字文件对象。
     Returns:
-        去掉行结束符的回复行，以状态前缀开头。
+        状态与整数回复返回去前缀的文本，批量回复返回正文，nil 回复返回空字符串。
     Raises:
-        EnvironmentFailure: 连接提前结束或回复不是简单结果。
-    """
-    line = stream.readline()
-    if not line:
-        raise EnvironmentFailure("Redis 未返回清理结果")
-    text = line.decode("utf-8", "replace").strip()
-    if not text.startswith(("+", "-", ":")):
-        raise EnvironmentFailure("Redis 清理回复不是简单结果")
-    return text
-
-
-def flush_redis_database(host: str, port: int, password: str, database: int) -> None:
-    """清空本次运行使用的 Redis 逻辑库，不触碰其他库与其他键空间。
-
-    Args:
-        host: Redis 主机，仅限本次隔离环境。
-        port: Redis 端口。
-        password: 本次隔离环境的连接口令。
-        database: 本次运行独占的逻辑库编号。
-    Raises:
-        EnvironmentFailure: 连接失败或命令被拒绝。
+        EnvironmentFailure: 连接提前结束、回复格式不受支持或服务端返回错误。
     """
     try:
-        with socket.create_connection((host, port), timeout=5) as connection:
-            with connection.makefile("rb") as stream:
-                if password:
-                    connection.sendall(encode_resp_command("AUTH", password))
-                    if read_resp_reply(stream).startswith("-"):
-                        raise EnvironmentFailure("Redis 认证被拒绝")
-                connection.sendall(encode_resp_command("SELECT", str(database)))
-                if read_resp_reply(stream).startswith("-"):
-                    raise EnvironmentFailure("Redis 逻辑库选择被拒绝")
-                connection.sendall(encode_resp_command("FLUSHDB"))
-                if read_resp_reply(stream).startswith("-"):
-                    raise EnvironmentFailure("Redis 逻辑库清理被拒绝")
+        line = stream.readline()
     except OSError as error:
-        raise EnvironmentFailure("Redis 清理无法连接") from error
+        raise EnvironmentFailure("Redis 回复无法读取") from error
+    if not line:
+        raise EnvironmentFailure("Redis 未返回结果")
+    text = line.decode("utf-8", "replace").rstrip("\r\n")
+    if not text:
+        raise EnvironmentFailure("Redis 返回了空回复行")
+    prefix, payload = text[0], text[1:]
+    if prefix == "-":
+        raise EnvironmentFailure(f"Redis 拒绝了命令：{payload[:80]}")
+    if prefix in "+:":
+        return payload
+    if prefix == "$":
+        if payload == "-1":
+            return ""
+        if not payload.isdigit():
+            raise EnvironmentFailure("Redis 批量回复的长度不是数字")
+        length = int(payload)
+        try:
+            data = stream.read(length + 2)
+        except OSError as error:
+            raise EnvironmentFailure("Redis 批量回复无法读取") from error
+        if len(data) != length + 2 or not data.endswith(b"\r\n"):
+            raise EnvironmentFailure("Redis 批量回复不完整")
+        return data[:-2].decode("utf-8", "replace")
+    raise EnvironmentFailure("Redis 回复类型不受支持")
+
+
+def redis_command(connection: socket.socket, stream: BinaryIO, *parts: str) -> str:
+    """在已连接的 Redis 上发送一条命令并返回其文本回复。
+
+    Args:
+        connection: 已建立的 Redis 套接字。
+        stream: 同一套接字的读取文件对象。
+        parts: 命令名与参数，按发送顺序排列。
+    Returns:
+        回复文本；空批量回复返回空字符串。
+    Raises:
+        EnvironmentFailure: 命令为空、发送失败、回复不可解析或服务端返回错误。
+    副作用:
+        向 Redis 写入一条命令，可能修改当前所选逻辑库的状态。
+    """
+    if not parts or not parts[0]:
+        raise EnvironmentFailure("Redis 命令不能为空")
+    try:
+        connection.sendall(encode_resp_command(*parts))
+    except OSError as error:
+        raise EnvironmentFailure(f"Redis 命令 {parts[0]} 无法发送") from error
+    return read_resp_value(stream)
+
+
+def connect_redis(host: str, port: int, password: str) -> tuple[socket.socket, BinaryIO]:
+    """建立到隔离 Redis 的连接并按需认证，此时尚未选择逻辑库。
+
+    Args:
+        host: 隔离 Redis 主机，本次运行只访问环回地址。
+        port: Redis 端口。
+        password: 本次隔离环境的连接口令；为空时跳过认证。
+    Returns:
+        已连接的套接字与其二进制读取流；调用方负责关闭两者。
+    Raises:
+        EnvironmentFailure: 无法建立连接或认证被拒绝。
+    副作用:
+        打开一条 TCP 连接；认证失败时立即关闭，不留下半开连接。
+    """
+    try:
+        connection = socket.create_connection((host, port), timeout=5)
+        stream = connection.makefile("rb")
+    except OSError as error:
+        raise EnvironmentFailure("Redis 无法连接") from error
+    try:
+        if password:
+            redis_command(connection, stream, "AUTH", password)
+    except EnvironmentFailure:
+        stream.close()
+        connection.close()
+        raise
+    return connection, stream
+
+
+@dataclass(frozen=True)
+class RedisOwnership:
+    """记录本次运行已成功取得的 Redis 逻辑库独占所有权。
+
+    Attributes:
+        host: 隔离 Redis 主机。
+        port: Redis 端口。
+        password: 本次隔离环境的连接口令，只用于回收。
+        database: 已取得独占的逻辑库编号。
+        token: 写入所有权标记键的本次运行随机令牌，回收时用于确认归属。
+    """
+
+    host: str
+    port: int
+    password: str
+    database: int
+    token: str
+
+
+def claim_redis_database(host: str, port: int, password: str,
+                         requested: int | None) -> RedisOwnership:
+    """在可证明为空的逻辑库写入本次运行的所有权标记，取得该库的独占使用权。
+
+    全过程只读取键数量并写入一个带存活时间的标记键，不清空、不覆盖任何已有键：非空库
+    一律跳过（自动模式）或明确失败（显式指定），因此预置的外部数据不会被改动。
+    自动模式按候选顺序跳过非空、被占用或服务端不存在的逻辑库，找到第一个可用空库即停。
+
+    Args:
+        host: 隔离 Redis 主机。
+        port: Redis 端口。
+        password: 本次隔离环境的连接口令。
+        requested: 命令行显式指定的逻辑库编号；为空时自动挑选候选空库。
+    Returns:
+        已取得独占的逻辑库编号与本次运行随机令牌。
+    Raises:
+        EnvironmentFailure: 连接失败、指定 0 号共享库、指定库不可用或非空、
+            标记写入失败，以及候选库全部不可用。
+    副作用:
+        在选中的空库写入所有权标记键（带存活时间），不修改其他键与其他逻辑库。
+    """
+    if requested == 0:
+        raise EnvironmentFailure("拒绝使用共享的 Redis 0 号库，请指定专用逻辑库编号")
+    candidates = (requested,) if requested is not None else REDIS_DATABASE_CANDIDATES
+    token = REDIS_LOCK_VALUE_PREFIX + secrets.token_hex(16)
+    skipped: list[str] = []
+    connection, stream = connect_redis(host, port, password)
+    try:
+        for database in candidates:
+            try:
+                redis_command(connection, stream, "SELECT", str(database))
+            except EnvironmentFailure as error:
+                if requested is not None:
+                    raise EnvironmentFailure(
+                        f"Redis 逻辑库 {database} 不可用：{error}") from error
+                skipped.append(f"{database} 号不可用")
+                continue
+            size = redis_command(connection, stream, "DBSIZE")
+            if size != "0":
+                # 非空库一律不碰：标记键属于本次协议时说明是并发运行，否则是外部数据。
+                holder = redis_command(connection, stream, "GET", REDIS_LOCK_KEY)
+                reason = ("已被另一次业务端到端运行占用"
+                          if holder.startswith(REDIS_LOCK_VALUE_PREFIX)
+                          else f"已有 {size} 个键，不属于本次运行")
+                if requested is not None:
+                    raise EnvironmentFailure(
+                        f"Redis 逻辑库 {database} {reason}，拒绝清理或复用；"
+                        "请人工确认后改用其他库")
+                skipped.append(f"{database} 号被占用")
+                continue
+            reply = redis_command(connection, stream, "SET", REDIS_LOCK_KEY, token,
+                                  "NX", "EX", str(REDIS_LOCK_TTL_SECONDS))
+            if reply.upper() != "OK":
+                holder = redis_command(connection, stream, "GET", REDIS_LOCK_KEY)
+                owner = "另一次业务端到端运行" if holder.startswith(REDIS_LOCK_VALUE_PREFIX) \
+                    else "未知持有者"
+                raise EnvironmentFailure(
+                    f"Redis 逻辑库 {database} 已被{owner}占用，拒绝复用或清理")
+            return RedisOwnership(host, port, password, database, token)
+        raise EnvironmentFailure(
+            "没有可用的隔离 Redis 逻辑库：" + "、".join(skipped)
+            + "；请提供专用实例或人工清理残留标记")
+    finally:
+        stream.close()
+        connection.close()
+
+
+def release_redis_database(ownership: RedisOwnership) -> None:
+    """确认所有权标记仍属于本次运行后清空该逻辑库，未确认时拒绝清理。
+
+    标记键与本次运行写入的数据一同被清空，逻辑库恢复到取得所有权之前的空状态。
+    只有标记值仍等于本次运行令牌时才执行 FLUSHDB，避免清掉已被其他运行接管的库。
+
+    Args:
+        ownership: 本次运行成功取得的所有权记录。
+    Raises:
+        EnvironmentFailure: 连接失败、所有权标记已变更或清理命令被拒绝。
+    副作用:
+        仅当标记值等于本次运行令牌时清空该逻辑库，并随 FLUSHDB 删除标记键。
+    """
+    connection, stream = connect_redis(ownership.host, ownership.port, ownership.password)
+    try:
+        redis_command(connection, stream, "SELECT", str(ownership.database))
+        current = redis_command(connection, stream, "GET", REDIS_LOCK_KEY)
+        if current != ownership.token:
+            raise EnvironmentFailure(
+                f"Redis 逻辑库 {ownership.database} 的所有权标记已变更，"
+                "拒绝清理非本次运行的数据")
+        redis_command(connection, stream, "FLUSHDB")
+    finally:
+        stream.close()
+        connection.close()
 
 
 def free_port(port: int) -> bool:
@@ -266,39 +437,148 @@ def wait_for_http(url: str, timeout: int, process: subprocess.Popen | None = Non
     raise EnvironmentFailure(f"服务未在 {timeout} 秒内就绪：{last_error}")
 
 
-def terminate_process_group(process: subprocess.Popen | None, name: str, grace: int = 15) -> None:
-    """按记录的子进程精确回收其进程组，不使用按名匹配的进程清理。
+def running_on_windows() -> bool:
+    """判断当前平台是否为 Windows，用于选择受支持的进程回收分支。
+
+    Returns:
+        Windows 上为 True，其他平台为 False。
+    """
+    return os.name == "nt"
+
+
+def windows_tree_kill_command(pid: int) -> list[str] | None:
+    """构造 Windows 下按精确 PID 回收整棵进程树的 taskkill 命令。
 
     Args:
-        process: 由本次运行启动并持有 PID 的子进程；为空时不做任何操作。
+        pid: 本次运行启动的根进程 PID；命令只按该 PID 匹配，不按进程名匹配。
+    Returns:
+        可直接执行的命令数组；系统缺少 taskkill 时返回 None，由调用方回退到按 PID 结束。
+    """
+    executable = shutil.which("taskkill")
+    if not executable:
+        candidate = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "taskkill.exe"
+        executable = str(candidate) if candidate.is_file() else None
+    if not executable:
+        return None
+    return [executable, "/PID", str(pid), "/T", "/F"]
+
+
+def _terminate_posix_process(process: subprocess.Popen, pid: int, name: str, grace: int) -> None:
+    """在 POSIX 上结束子进程：独立进程组整组回收，否则只结束该 PID。
+
+    Args:
+        process: 本次运行启动并持有 PID 的子进程，调用前仍存活。
+        pid: 该子进程的 PID，也是它作为组长时的进程组编号。
         name: 回收对象的中文名称，用于输出。
-        grace: 等待优雅退出的秒数，超时后强制结束同一进程组。
+        grace: 每次等待退出的秒数，超时后升级为强制结束。
+    Raises:
+        EnvironmentFailure: 强制结束后仍未在宽限期内退出。
+    副作用:
+        先发送 SIGTERM，超时后发送 SIGKILL，并回收退出状态。
+    """
+    grouped = False
+    try:
+        grouped = os.getpgid(pid) == pid
+    except ProcessLookupError:
+        process.wait(timeout=grace)
+        return
+    except OSError:
+        grouped = False  # 无法确认组长身份时退化为只结束该 PID，避免误伤其他进程组。
+
+    def send(signum: int) -> None:
+        """向已确认归属的进程组或单个 PID 发送信号，目标已退出时静默返回。"""
+        try:
+            if grouped:
+                os.killpg(pid, signum)
+            else:
+                process.send_signal(signum)
+        except ProcessLookupError:
+            return
+        except OSError:
+            # 组信号不被允许时退回只结束根 PID，避免留下确定的残留进程。
+            try:
+                process.send_signal(signum)
+            except ProcessLookupError:
+                return
+
+    send(signal.SIGTERM)
+    try:
+        process.wait(timeout=grace)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    send(signal.SIGKILL)
+    try:
+        process.wait(timeout=grace)
+    except subprocess.TimeoutExpired as error:
+        raise EnvironmentFailure(f"{name}（PID {pid}）在强制结束后仍未退出") from error
+
+
+def _terminate_windows_process(process: subprocess.Popen, pid: int, name: str, grace: int) -> None:
+    """在 Windows 上结束子进程：先按 PID 回收进程树，再按 PID 强杀兜底。
+
+    Args:
+        process: 本次运行启动并持有 PID 的子进程，调用前仍存活。
+        pid: 该子进程的 PID；taskkill 只按该 PID 匹配。
+        name: 回收对象的中文名称，用于输出。
+        grace: 每次等待退出的秒数。
+    Raises:
+        EnvironmentFailure: 强制结束后仍未在宽限期内退出。
+    副作用:
+        执行 taskkill /PID <pid> /T /F 结束整棵进程树；缺少该命令或执行失败时
+        回退到 terminate/kill 精确结束该 PID，并回收退出状态。
+    """
+    command = windows_tree_kill_command(pid)
+    if command is None:
+        log(f"{name} 缺少 taskkill，改用按 PID 结束：PID {pid}")
+    else:
+        try:
+            result = subprocess.run(command, capture_output=True, check=False, timeout=grace)
+            if result.returncode != 0:
+                log(f"{name} 的进程树回收返回 {result.returncode}，改用按 PID 结束")
+        except (OSError, subprocess.TimeoutExpired) as error:
+            log(f"{name} 的进程树回收无法执行（{type(error).__name__}），改用按 PID 结束")
+    try:
+        process.wait(timeout=grace)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    process.terminate()
+    try:
+        process.wait(timeout=grace)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    process.kill()
+    try:
+        process.wait(timeout=grace)
+    except subprocess.TimeoutExpired as error:
+        raise EnvironmentFailure(f"{name}（PID {pid}）在强制结束后仍未退出") from error
+
+
+def terminate_process_tree(process: subprocess.Popen | None, name: str, grace: int = 15) -> None:
+    """按精确 PID 回收本次运行启动的子进程及其后代，不使用按名匹配的进程清理。
+
+    POSIX 上只在该 PID 是自己创建的进程组组长时整组回收，否则仅结束该 PID；
+    Windows 上使用 taskkill 按 PID 回收进程树，不可用时回退到按 PID 结束。
+
+    Args:
+        process: 由本次运行启动并持有 PID 的子进程；为空或已结束时不做任何操作。
+        name: 回收对象的中文名称，用于输出。
+        grace: 每次等待退出的秒数，超时后升级为强制结束。
+    Raises:
+        EnvironmentFailure: 强制结束后仍未退出，或无法确认进程已结束。
+    副作用:
+        向目标进程或进程组发送终止信号/执行进程树回收命令，并回收退出状态。
     """
     if process is None or process.poll() is not None:
         return
     pid = process.pid
-    try:
-        group = os.getpgid(pid)
-    except ProcessLookupError:
-        return
-    # 只有本次创建的独立进程组（组长即该 PID）才允许整组回收，否则只结束该 PID。
-    grouped = group == pid
-    try:
-        os.killpg(group, signal.SIGTERM) if grouped else os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=grace)
-        log(f"已结束{name}：PID {pid}")
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(group, signal.SIGKILL) if grouped else os.kill(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    process.wait(timeout=grace)
-    log(f"已强制结束{name}：PID {pid}")
+    if running_on_windows():
+        _terminate_windows_process(process, pid, name, grace)
+    else:
+        _terminate_posix_process(process, pid, name, grace)
+    log(f"已结束{name}：PID {pid}")
 
 
 class PreviewHandler(BaseHTTPRequestHandler):
@@ -418,7 +698,11 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
 @dataclass
 class RunningEnvironment:
-    """记录本次运行创建、必须由本进程回收的资源与精确进程。"""
+    """记录本次运行已成功取得、必须由本进程回收的资源与精确进程。
+
+    未成功取得的资源保持默认值；清理只依据这些字段，不依据运行前登记的候选目标，
+    因此预检或启动失败时不会去清理从未属于本次运行的对象。
+    """
 
     database: str = ""
     workspace: Path | None = None
@@ -426,7 +710,7 @@ class RunningEnvironment:
     preview: ThreadingHTTPServer | None = None
     preview_thread: threading.Thread | None = None
     admin_password: str = ""
-    redis: tuple[str, int, str, int] | None = None
+    redis: RedisOwnership | None = None
     mysql: dict[str, str] = field(default_factory=dict)
     backend_log: Path | None = None
 
@@ -632,7 +916,7 @@ def generate_admin_password() -> str:
     return f"E2e-{secrets.token_hex(10)}"
 
 
-def backend_environment(mysql: dict[str, str], database: str, redis: tuple[str, int, str, int],
+def backend_environment(mysql: dict[str, str], database: str, redis: RedisOwnership,
                         s3: dict[str, str], port: int, preview_port: int,
                         log_file: Path) -> dict[str, str]:
     """构造真实后端的运行环境，关闭验证码并固定本次隔离依赖。
@@ -640,7 +924,7 @@ def backend_environment(mysql: dict[str, str], database: str, redis: tuple[str, 
     Args:
         mysql: 已解析的 MySQL 客户端配置。
         database: 本次运行的随机库名。
-        redis: Redis 主机、端口、口令与专用逻辑库编号。
+        redis: 本次已取得独占所有权的 Redis 逻辑库记录。
         s3: 对象存储端点与凭据，来自本次隔离环境。
         port: 后端监听端口，使用非常规端口避免与开发服务冲突。
         preview_port: 前端预览端口，用于声明精确的同源白名单。
@@ -661,10 +945,10 @@ def backend_environment(mysql: dict[str, str], database: str, redis: tuple[str, 
         "DB_NAME": database,
         "DB_USERNAME": mysql["user"],
         "DB_PASSWORD": mysql["password"],
-        "REDIS_HOST": redis[0],
-        "REDIS_PORT": str(redis[1]),
-        "REDIS_DATABASE": str(redis[3]),
-        "REDIS_PASSWORD": redis[2],
+        "REDIS_HOST": redis.host,
+        "REDIS_PORT": str(redis.port),
+        "REDIS_DATABASE": str(redis.database),
+        "REDIS_PASSWORD": redis.password,
         "MINIO_ENDPOINT": s3["BF_TEST_S3_ENDPOINT"],
         "MINIO_ACCESS_KEY": s3["BF_TEST_S3_ACCESS_KEY"],
         "MINIO_SECRET_KEY": s3["BF_TEST_S3_SECRET_KEY"],
@@ -826,7 +1110,7 @@ def run_status(code: int, summary: dict[str, object]) -> str:
 def run_playwright(node: str, base_url: str, report: Path, timeout: int,
                    extra: list[str], seed_environment: dict[str, str] | None = None,
                    results: Path | None = None) -> int:
-    """执行浏览器用例并保留真实退出码，超时按精确进程组回收。
+    """执行浏览器用例并保留真实退出码，超时按精确 PID 回收其进程树。
 
     Args:
         node: Node.js 可执行文件。
@@ -853,46 +1137,116 @@ def run_playwright(node: str, base_url: str, report: Path, timeout: int,
     try:
         return process.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        terminate_process_group(process, "浏览器测试进程")
+        terminate_process_tree(process, "浏览器测试进程")
         return 124
 
 
-def cleanup(environment: RunningEnvironment) -> None:
-    """按启动顺序回收进程、隔离库、Redis 逻辑库与临时目录。
+def reclaim_redis_database(ownership: RedisOwnership) -> None:
+    """清空本次运行独占的 Redis 逻辑库并输出可核对结果。
 
     Args:
-        environment: 本次运行登记的资源；未创建的资源会被跳过。
+        ownership: 本次运行成功取得的所有权记录。
+    Raises:
+        EnvironmentFailure: 所有权标记已变更、连接失败或清理被拒绝。
+    副作用:
+        仅当标记仍属于本次运行时清空该逻辑库，并输出一条不含凭据的进度说明。
     """
-    terminate_process_group(environment.backend, "后端服务")
-    if environment.preview is not None:
-        environment.preview.shutdown()
-        environment.preview.server_close()
-        log("已停止前端预览服务")
-    if environment.mysql and environment.database:
-        drop_database(environment.mysql, environment.database)
+    release_redis_database(ownership)
+    log(f"已清空本次独占的 Redis 逻辑库 {ownership.database}")
+
+
+def stop_preview(server: ThreadingHTTPServer | None) -> None:
+    """停止本次运行启动的前端预览服务。
+
+    Args:
+        server: 已启动的预览服务；为空时不做任何操作。
+    副作用:
+        停止服务循环并关闭监听套接字。
+    """
+    if server is None:
+        return
+    server.shutdown()
+    server.server_close()
+    log("已停止前端预览服务")
+
+
+def close_process_stream(process: subprocess.Popen | None) -> None:
+    """关闭子进程在父进程中保留的标准输出文件对象，释放日志文件句柄。
+
+    Windows 上未关闭的句柄会阻止临时目录删除，因此必须在删除目录之前调用。
+
+    Args:
+        process: 本次运行启动的子进程；为空或未重定向输出时不做任何操作。
+    副作用:
+        关闭父进程侧的文件对象；已关闭时忽略。
+    """
+    if process is None or process.stdout is None:
+        return
+    try:
+        process.stdout.close()
+    except OSError:
+        return
+
+
+def remove_workspace(workspace: Path | None) -> None:
+    """删除本次运行创建的临时目录。
+
+    Args:
+        workspace: 已创建的临时目录；为空或已不存在时不做任何操作。
+    副作用:
+        递归删除该目录及其内容，不触碰其他路径。
+    """
+    if workspace is None or not workspace.exists():
+        return
+    shutil.rmtree(workspace, ignore_errors=True)
+    log("已删除本次临时目录")
+
+
+def cleanup(environment: RunningEnvironment) -> list[str]:
+    """按启动顺序回收本次运行已成功取得的资源，单项失败不中断其余回收。
+
+    Args:
+        environment: 本次运行登记的资源；未成功取得的字段保持默认值并被跳过。
+    Returns:
+        回收失败的中文说明列表；全部成功时为空列表，由调用方报告残留。
+    副作用:
+        结束子进程、停止预览服务、删除隔离库、清空已独占的 Redis 逻辑库并删除临时目录；
+        任一步骤失败只记录并继续，不抛出异常，避免覆盖运行本身的失败原因。
+    """
+    actions: list[tuple[str, Callable[[], None]]] = [
+        ("后端服务", lambda: terminate_process_tree(environment.backend, "后端服务")),
+        ("后端日志句柄", lambda: close_process_stream(environment.backend)),
+        ("前端预览服务", lambda: stop_preview(environment.preview)),
+    ]
+    if environment.database:
+        actions.append(("隔离库", lambda: drop_database(environment.mysql, environment.database)))
     if environment.redis is not None:
+        actions.append(("Redis 逻辑库", lambda: reclaim_redis_database(environment.redis)))
+    actions.append(("临时目录", lambda: remove_workspace(environment.workspace)))
+
+    failures: list[str] = []
+    for description, action in actions:
         try:
-            flush_redis_database(*environment.redis)
-            log("已清空本次专用 Redis 逻辑库")
-        except EnvironmentFailure as error:
-            log(f"Redis 清理失败：{error}")
-    if environment.workspace is not None and environment.workspace.exists():
-        shutil.rmtree(environment.workspace, ignore_errors=True)
-        log("已删除本次临时目录")
+            action()
+        except Exception as error:  # noqa: BLE001 - 逐项隔离失败，保证后续资源仍被回收。
+            failures.append(f"{description}回收失败：{error}")
+            log(f"{description}回收失败：{error}")
+    return failures
 
 
 def parse_arguments(arguments: list[str] | None) -> argparse.Namespace:
-    """解析命令行参数，默认构建当前工作区产物并使用非常规端口。
+    """解析命令行参数，默认构建当前工作区产物、使用非常规端口并自动挑选空 Redis 逻辑库。
 
     Args:
         arguments: 原始参数列表；为空时读取进程参数。
     Returns:
-        已解析的参数对象。
+        已解析的参数对象；`redis_database` 为空表示自动挑选空库。
     """
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--backend-port", type=int, default=48099, help="后端监听端口")
     parser.add_argument("--preview-port", type=int, default=4173, help="前端预览端口")
-    parser.add_argument("--redis-database", type=int, default=5, help="本次专用 Redis 逻辑库编号")
+    parser.add_argument("--redis-database", type=int,
+                        help="显式指定本次专用的 Redis 逻辑库编号；缺省自动挑选空库")
     parser.add_argument("--admin-username", default="e2eadmin", help="种子管理员账号名，4-30 位字母或数字")
     parser.add_argument("--java", help="本次使用的 java 路径；缺省取 JAVA_HOME 或 PATH")
     parser.add_argument("--maven", default="mvn", help="Maven 可执行文件")
@@ -904,19 +1258,136 @@ def parse_arguments(arguments: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=600, help="浏览器用例整组秒数上限")
     parser.add_argument("--summary", type=Path, help="写出本次真实用例摘要 JSON 的路径")
     parser.add_argument("--results", type=Path, help="失败痕迹目录；缺省落在本次临时目录内")
-    parser.add_argument("--keep", action="store_true", help="保留进程、隔离库与临时目录供诊断")
+    parser.add_argument("--keep", action="store_true",
+                        help="保留进程、隔离库、Redis 独占逻辑库与临时目录供诊断")
     parser.add_argument("--list", action="store_true", help="只列出浏览器用例，不启动任何环境")
     parser.add_argument("extra", nargs="*", help="追加到 Playwright 的额外参数")
     return parser.parse_args(arguments)
 
 
+def install_termination_handlers() -> None:
+    """把可捕获的终止信号转换为中断，使异常退出时仍走统一资源回收路径。
+
+    只注册当前平台存在的信号：SIGTERM 让外部停止请求与 CI 取消不会绕过回收，
+    SIGBREAK 覆盖 Windows 控制台关闭事件。重复调用覆盖为同一处理器。
+
+    副作用:
+        在进程范围注册信号处理器；`signal.signal` 只能由主线程调用。
+    """
+
+    def interrupt(signum: int, frame: object) -> None:
+        """把收到的终止信号转换为 KeyboardInterrupt，交由统一回收路径处理。"""
+        raise KeyboardInterrupt
+
+    for name in ("SIGTERM", "SIGBREAK"):
+        number = getattr(signal, name, None)
+        if number is None:
+            continue
+        try:
+            signal.signal(number, interrupt)
+        except (OSError, ValueError):
+            continue
+
+
+def orchestrate(arguments: argparse.Namespace, environment: RunningEnvironment, node: str,
+                java: str, redis_credentials: tuple[str, int, str],
+                s3_variables: dict[str, str]) -> int:
+    """按顺序执行预检、构建、隔离资源取得与浏览器用例。
+
+    只有真正成功的步骤才把资源登记到 environment：端口预检通过前不取得 Redis 所有权，
+    隔离库创建成功后才登记库名，因此失败路径不会留下可被误清理的对象。
+
+    Args:
+        arguments: 已解析的命令行参数。
+        environment: 本次运行的资源登记对象；已创建临时目录并配置好 MySQL 客户端。
+        node: 已确认存在的 Node.js 可执行文件。
+        java: 已确认可用的 java 可执行文件。
+        redis_credentials: 隔离 Redis 的主机、端口与口令。
+        s3_variables: 本次隔离对象存储的端点与凭据。
+    Returns:
+        浏览器用例的真实退出码；存在被跳过或依赖重试的用例时返回 1。
+    Raises:
+        EnvironmentFailure: 端口预检、构建、资源取得、就绪探针或用例报告核对失败。
+    副作用:
+        构建前后端产物、创建隔离库与种子账号、取得 Redis 独占所有权、启动后端与预览服务、
+        执行浏览器用例，并写出可选的用例摘要文件。
+    """
+    mysql = environment.mysql
+    workspace = environment.workspace
+    backend_log = environment.backend_log
+    if workspace is None or backend_log is None:
+        raise EnvironmentFailure("缺少本次运行的临时目录或后端日志路径")
+    preview_port = arguments.preview_port
+    for name, busy in (("后端端口", arguments.backend_port), ("前端预览端口", preview_port)):
+        if not free_port(busy):
+            raise EnvironmentFailure(f"{name} {busy} 已被占用，拒绝复用陈旧服务")
+    # 端口预检通过后才取得 Redis 所有权；此前失败不会登记也不会回收任何 Redis 资源。
+    environment.redis = claim_redis_database(*redis_credentials, arguments.redis_database)
+    log(f"已取得 Redis 逻辑库 {environment.redis.database} 的独占所有权")
+    if not arguments.skip_backend_build:
+        build_backend(arguments.maven, java, workspace / "maven-package.log")
+    if not arguments.jar.is_file():
+        raise EnvironmentFailure(f"缺少后端可执行 JAR：{arguments.jar}，请去掉 --skip-backend-build")
+    dist_root = FRONTEND_ROOT / "apps" / "web-ele" / "dist"
+    if not arguments.skip_frontend_build:
+        build_frontend(arguments.pnpm, workspace / "pnpm-build.log")
+    prepare_served_dist(dist_root, workspace / "dist")
+    database = DATABASE_PREFIX + secrets.token_hex(6)
+    log(f"隔离库 {database} 与种子账号 {arguments.admin_username} 准备中")
+    create_database(mysql, database)
+    environment.database = database  # 创建成功后才登记为本次运行可回收的资源。
+    import_schema(mysql, database)
+    bootstrap_admin(java, arguments.jar, mysql, database, arguments.admin_username,
+                    environment.admin_password, workspace / "bootstrap.log")
+    backend_env = backend_environment(mysql, database, environment.redis, s3_variables,
+                                     arguments.backend_port, preview_port, backend_log)
+    environment.backend = start_backend(java, arguments.jar, backend_env, backend_log)
+    log(f"后端已启动：PID {environment.backend.pid}")
+    wait_for_http(f"http://127.0.0.1:{arguments.backend_port}/actuator/health",
+                  180, environment.backend)
+    log(f"后端就绪：http://127.0.0.1:{arguments.backend_port}")
+    environment.preview, environment.preview_thread = start_preview(
+        workspace / "dist", preview_port, ("127.0.0.1", arguments.backend_port))
+    base_url = f"http://127.0.0.1:{preview_port}/admin/"
+    wait_for_http(base_url, 30)
+    verify_preview_configuration(base_url)
+    log(f"前端预览就绪：{base_url}")
+    report = workspace / "playwright-report.json"
+    # 只传变量名与本次运行生成的种子口令；口令值来自环境对象，不是固定凭据。
+    seed_account_variables = {"BF_E2E_ADMIN_USERNAME": arguments.admin_username,
+                              "BF_E2E_ADMIN_PASSWORD": environment.admin_password}
+    results = arguments.results or (workspace / "playwright-results")
+    code = run_playwright(node, base_url, report, arguments.timeout, arguments.extra,
+                          seed_account_variables, results)
+    summary = read_playwright_summary(report)
+    summary.update({"schema": "business-e2e/v1", "base_url": base_url,
+                    "database": database, "results": str(results)})
+    summary["status"] = run_status(code, summary)
+    if arguments.summary:
+        arguments.summary.parent.mkdir(parents=True, exist_ok=True)
+        arguments.summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+                                     encoding="utf-8")
+    log(f"用例统计：共 {summary['total']} 项，通过 {summary['passed']}，失败 {summary['failed']}，"
+        f"跳过 {summary['skipped']}，重试通过 {summary['flaky']}")
+    if summary["skipped"] or summary["flaky"]:
+        # 跳过与依赖重试的用例不构成浏览器业务证据，按用例失败而不是环境失败处理。
+        print("存在被跳过或依赖重试的用例，本次不计为通过。", file=sys.stderr)
+        return 1
+    if code != 0 or summary["failed"]:
+        return code or 1
+    return 0
+
+
 def execute(arguments: argparse.Namespace) -> int:
-    """按顺序准备隔离环境、执行浏览器用例并回收全部资源。
+    """准备隔离环境、执行浏览器用例，并保证只回收本次成功取得的资源。
 
     Args:
         arguments: 已解析的命令行参数。
     Returns:
-        浏览器用例的真实退出码；环境失败返回 2。
+        浏览器用例的真实退出码；环境失败或资源回收不完整时返回 2。
+    Raises:
+        EnvironmentFailure: 连接变量缺失或前置解析失败，由 main 统一转为退出码 2。
+        BaseException: 运行期异常与键盘中断在完成资源回收后原样抛出。
     """
     node = arguments.node or shutil.which("node")
     if not node:
@@ -936,84 +1407,39 @@ def execute(arguments: argparse.Namespace) -> int:
     mysql = {"client": mysql_client, "host": host, "port": str(port),
              "user": mysql_variables["AUTH_TEST_MYSQL_USERNAME"],
              "password": mysql_variables["AUTH_TEST_MYSQL_PASSWORD"]}
-    redis_port = int(redis_variables["BF_TEST_REDIS_PORT"])
-    redis = ("127.0.0.1", redis_port, redis_variables["BF_TEST_REDIS_PASSWORD"], arguments.redis_database)
     if arguments.redis_database == 0:
         raise EnvironmentFailure("拒绝使用共享的 Redis 0 号库，请指定专用逻辑库编号")
-
     if not re.fullmatch(r"[A-Za-z0-9]{4,30}", arguments.admin_username):
         raise EnvironmentFailure("种子管理员账号名必须为 4-30 位字母或数字")
     java = resolve_java(arguments.java)
-    environment = RunningEnvironment(mysql=mysql, redis=redis)
-    environment.database = DATABASE_PREFIX + secrets.token_hex(6)
+    redis_credentials = ("127.0.0.1", int(redis_variables["BF_TEST_REDIS_PORT"]),
+                         redis_variables["BF_TEST_REDIS_PASSWORD"])
+    environment = RunningEnvironment(mysql=mysql)
     environment.admin_password = os.environ.get("BF_E2E_ADMIN_PASSWORD") or generate_admin_password()
+    # 临时目录一经创建即归本次运行所有并必须回收；其他资源在真正取得后才登记。
     environment.workspace = Path(tempfile.mkdtemp(prefix="bf-business-e2e-"))
     environment.backend_log = environment.workspace / "backend.log"
-    preview_port = arguments.preview_port
+
+    pending: BaseException | None = None
+    result = 2
     try:
-        for name, busy in (("后端端口", arguments.backend_port), ("前端预览端口", preview_port)):
-            if not free_port(busy):
-                raise EnvironmentFailure(f"{name} {busy} 已被占用，拒绝复用陈旧服务")
-        if not arguments.skip_backend_build:
-            build_backend(arguments.maven, java, environment.workspace / "maven-package.log")
-        if not arguments.jar.is_file():
-            raise EnvironmentFailure(f"缺少后端可执行 JAR：{arguments.jar}，请去掉 --skip-backend-build")
-        dist_root = FRONTEND_ROOT / "apps" / "web-ele" / "dist"
-        if not arguments.skip_frontend_build:
-            build_frontend(arguments.pnpm, environment.workspace / "pnpm-build.log")
-        prepare_served_dist(dist_root, environment.workspace / "dist")
-        log(f"隔离库 {environment.database} 与种子账号 {arguments.admin_username} 准备中")
-        create_database(mysql, environment.database)
-        import_schema(mysql, environment.database)
-        bootstrap_admin(java, arguments.jar, mysql, environment.database,
-                        arguments.admin_username, environment.admin_password,
-                        environment.workspace / "bootstrap.log")
-        flush_redis_database(*redis)
-        backend_env = backend_environment(mysql, environment.database, redis, s3_variables,
-                                         arguments.backend_port, preview_port,
-                                         environment.backend_log)
-        environment.backend = start_backend(java, arguments.jar, backend_env, environment.backend_log)
-        log(f"后端已启动：PID {environment.backend.pid}")
-        wait_for_http(f"http://127.0.0.1:{arguments.backend_port}/actuator/health",
-                      180, environment.backend)
-        log(f"后端就绪：http://127.0.0.1:{arguments.backend_port}")
-        environment.preview, environment.preview_thread = start_preview(
-            environment.workspace / "dist", preview_port, ("127.0.0.1", arguments.backend_port))
-        base_url = f"http://127.0.0.1:{preview_port}/admin/"
-        wait_for_http(base_url, 30)
-        verify_preview_configuration(base_url)
-        log(f"前端预览就绪：{base_url}")
-        report = environment.workspace / "playwright-report.json"
-        # 只传变量名与本次运行生成的种子口令；口令值来自环境对象，不是固定凭据。
-        seed_account_variables = {"BF_E2E_ADMIN_USERNAME": arguments.admin_username,
-                                  "BF_E2E_ADMIN_PASSWORD": environment.admin_password}
-        results = arguments.results or (environment.workspace / "playwright-results")
-        code = run_playwright(node, base_url, report, arguments.timeout, arguments.extra,
-                              seed_account_variables, results)
-        summary = read_playwright_summary(report)
-        summary.update({"schema": "business-e2e/v1", "base_url": base_url,
-                        "database": environment.database, "results": str(results)})
-        summary["status"] = run_status(code, summary)
-        if arguments.summary:
-            arguments.summary.parent.mkdir(parents=True, exist_ok=True)
-            arguments.summary.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
-                                         encoding="utf-8")
-        log(f"用例统计：共 {summary['total']} 项，通过 {summary['passed']}，失败 {summary['failed']}，"
-            f"跳过 {summary['skipped']}，重试通过 {summary['flaky']}")
-        if summary["skipped"] or summary["flaky"]:
-            # 跳过与依赖重试的用例不构成浏览器业务证据，按用例失败而不是环境失败处理。
-            print("存在被跳过或依赖重试的用例，本次不计为通过。", file=sys.stderr)
-            return 1
-        if code != 0 or summary["failed"]:
-            return code or 1
-        return 0
-    finally:
-        if arguments.keep:
-            log(f"按 --keep 保留资源：库 {environment.database}，临时目录 {environment.workspace}，"
-                f"后端 PID {environment.backend.pid if environment.backend else '未启动'}，"
-                f"前端预览端口 {preview_port}（随本进程结束）")
-        else:
-            cleanup(environment)
+        result = orchestrate(arguments, environment, node, java, redis_credentials, s3_variables)
+    except BaseException as error:  # 运行期异常与中断都先完成回收，再原样抛出。
+        pending = error
+    cleanup_failures: list[str] = []
+    if arguments.keep:
+        log(f"按 --keep 保留资源：库 {environment.database or '未创建'}，"
+            f"Redis 逻辑库 {environment.redis.database if environment.redis else '未取得'}，"
+            f"临时目录 {environment.workspace}，"
+            f"后端 PID {environment.backend.pid if environment.backend else '未启动'}，"
+            f"前端预览端口 {arguments.preview_port}（随本进程结束）")
+    else:
+        cleanup_failures = cleanup(environment)
+    if pending is not None:
+        raise pending
+    for failure in cleanup_failures:
+        print(f"资源回收未完整：{failure}", file=sys.stderr)
+    return 2 if cleanup_failures else result
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -1022,9 +1448,10 @@ def main(arguments: list[str] | None = None) -> int:
     Args:
         arguments: 原始命令行参数；为空时读取进程参数。
     Returns:
-        进程退出码。
+        进程退出码；被中断或收到终止信号时返回 130。
     """
     parsed = parse_arguments(arguments)
+    install_termination_handlers()
     try:
         return execute(parsed)
     except EnvironmentFailure as error:

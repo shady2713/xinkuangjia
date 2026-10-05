@@ -66,6 +66,10 @@ SYNTHETIC_PLACEHOLDER_MARKERS = (
     "REDACTED",
     "REPLACE",
 )
+# 嵌在源码字符串里的 SQL 语句：列名列表中的敏感列后跟写死取值，普通配置文本不适用。
+EMBEDDED_SQL_STATEMENT_PATTERN = re.compile(
+    r"(?i)\b(?:insert\s+into|update|delete\s+from|alter\s+table|create\s+table|set)\b"
+)
 PRIVATE_KEY_BLOCK_PATTERN = re.compile(
     r"-----BEGIN (?P<key_type>(?:RSA |EC |OPENSSH )?PRIVATE KEY)-----"
     r"(?P<body>.*?)"
@@ -473,7 +477,8 @@ def _is_dynamic_expression(value: str, path: str) -> bool:
 
     固定凭据必须是单一字面量；自增、成员取值、空值合并、模板插值和字符串拼接
     都属于运行期计算，不能按固定值阻断。仅在源码路径生效，配置文件与 Python
-    保持原有保守口径。
+    保持原有保守口径。带固定回退分支的表达式不能整体放行：回退值本身是写死的
+    常量，仍按固定凭据口径检查。
 
     Args:
         value: 已规范化的赋值右侧。
@@ -481,6 +486,22 @@ def _is_dynamic_expression(value: str, path: str) -> bool:
 
     Returns:
         右侧不是单一固定字面量时返回 ``True``。
+    """
+
+    if _fixed_fallback_literal(value) is not None:
+        return False
+    return _is_plain_dynamic_expression(value, path)
+
+
+def _is_plain_dynamic_expression(value: str, path: str) -> bool:
+    """判断赋值右侧是否为不含可判定固定回退分支的运行期表达式。
+
+    Args:
+        value: 已规范化的赋值右侧。
+        path: 语法路径。
+
+    Returns:
+        右侧属于运行期计算或结构化字面量时返回 ``True``。
     """
 
     if not _is_code_path(path) or not value:
@@ -523,6 +544,130 @@ def _has_label_literal_prefix(value: str) -> bool:
     for start, end in _string_literal_spans(remainder):
         remainder = remainder[:start] + " " * (end - start) + remainder[end:]
     return re.search(r"[A-Za-z_$]", remainder) is not None
+
+
+# shell 变量展开：``${NAME}`、``${NAME:-默认值}``、``${NAME:=默认值}``；带引号时
+# 整体被正则截成 ``:`` 赋值的写法必须先按展开还原，再判断默认值是否为固定凭据。
+SHELL_EXPANSION_PATTERN = re.compile(
+    r"\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?::(?P<operator>[-=?+])(?P<default>[^{}]*))?\}"
+)
+FALLBACK_OPERATOR_PATTERN = re.compile(r"(?<![?:\w])(?:\?\?|\|\||:-|\bor\b)(?![:?\w])")
+
+
+def _unwrap_literal_text(text: str) -> str:
+    """反复剥掉外围引号，取出字面量文本。
+
+    取值可能是 ``"fixed"``、``'fixed'`` 或源码字符串里的 ``\\"fixed\\"`` 转义写法；
+    只有层层都是引号包裹时才算单一字面量，带运算符或拼接的表达式原样返回。
+
+    Args:
+        text: 已去除左侧空白的片段。
+
+    Returns:
+        去掉外围引号后的文本；不是引号包裹的单一字面量时原样返回。
+    """
+
+    current = text.strip()
+    while len(current) >= 2 and current[0] == current[-1] and current[0] in "\"'`":
+        current = current[1:-1].strip()
+    return current
+
+
+def _single_quoted_literal(segment: str) -> str | None:
+    """取出片段内唯一的引号字符串字面量内容。
+
+    Args:
+        segment: 已经过顶层分隔符切分的片段。
+
+    Returns:
+        整段只有一个引号字符串时返回其内容；带拼接、运算符或裸标识符时返回 ``None``。
+    """
+
+    text = segment.strip()
+    if not text or re.search(r"[&|<>/]", text):
+        return None
+    if text[0] not in "\"'`":
+        return None
+    spans = _string_literal_spans(text)
+    if len(spans) != 1:
+        return None
+    start, end = spans[0]
+    if start != 0 or end != len(text):
+        return None
+    return _unwrap_literal_text(text)
+
+
+def _fixed_fallback_literal(value: str) -> str | None:
+    """提取运行期表达式中固定回退分支的字面量。
+
+    环境变量与配置取值本身来自运行期，但其固定回退分支是写死常量：``os.getenv``、
+    ``config.get`` 的默认值参数、``??`` / ``||`` / 分号或冒号加横线写法以及模板
+    表达式的回退段都属于同一类取值。只有确认回退分支是显式字符串字面量且不是安全
+    占位符时才返回，供调用方按固定凭据继续判定；变量引用、复合表达式与安全占位符
+    仍按运行期取值放行。
+
+    Args:
+        value: 已规范化的赋值右侧。
+
+    Returns:
+        固定回退分支的字面量文本；找不到可判定的固定回退分支时返回 ``None``。
+    """
+
+    text = value.strip()
+    if not text:
+        return None
+    unwrapped = _unwrap_literal_text(text)
+    if unwrapped == text and re.fullmatch(
+        r"\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`]*`", text, flags=re.DOTALL
+    ):
+        # 整段就是一个字符串字面量，没有回退分支语法。
+        return None
+    # shell 写法允许把整个展开式用引号包起来，引号不影响回退值的语义。
+    shell = re.fullmatch(r"\$\{([^{}\r\n]*?):-([^{}\r\n]*)\}", unwrapped)
+    if shell is not None:
+        fallback = shell.group(2).strip()
+        if not fallback or re.search(r"[\"'`&|<>]", fallback):
+            return None
+        return None if _is_safe_placeholder(fallback) else fallback
+    call = re.match(r"([A-Za-z_$][A-Za-z0-9_$.]*)\s*\(", text)
+    if call is not None and text.endswith(")"):
+        callee = call.group(1).rsplit(".", 1)[-1]
+        if re.search(
+            r"(?i)(?:password|passwd|passphrase|secret|token|credential)", callee
+        ):
+            # 调用名本身是敏感标识符（如 ``getPassword``）时无法确认语义，
+            # 交回原有规则判定；参数里的 ``APP_DB_PASSWORD`` 属于键名，不在此列。
+            return None
+        if text[call.end() : -1].strip().startswith("${"):
+            # ``"${DB_PASSWORD:-}"`` 等变量展开被正则截成了 ``:`` 赋值；键名只是
+            # 环境变量名，取值由运行期提供，不是固定凭据。
+            return None
+        arguments = _split_top_level_fields(text[call.end() : -1])
+        for argument in arguments[1:]:
+            keyword = re.fullmatch(
+                r"[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.+)", argument, re.DOTALL
+            )
+            if keyword is not None:
+                argument = keyword.group(1)
+            candidate = _single_quoted_literal(argument)
+            if candidate is None or not candidate or _is_safe_placeholder(candidate):
+                continue
+            return candidate
+        return None
+    operators = list(FALLBACK_OPERATOR_PATTERN.finditer(text))
+    if not operators:
+        return None
+    cursor = len(text)
+    while True:
+        previous = [item for item in operators if item.end() <= cursor]
+        if not previous:
+            return None
+        operator = previous[-1]
+        segment = text[operator.end() : cursor].strip()
+        candidate = _single_quoted_literal(segment)
+        if candidate is not None and candidate and not _is_safe_placeholder(candidate):
+            return candidate
+        cursor = operator.start()
 
 
 def _is_embedded_source_operand(
@@ -1074,14 +1219,61 @@ def _is_unit_test_credential(path: str, raw_value: str) -> bool:
     )
 
 
-def _is_multi_field_literal_text(
-    path: str, line_number: int, inner_value: str
-) -> bool:
-    """判断字面量内部的命中值是否只是更大文本里的一个片段。
+def _split_top_level_fields(text: str) -> list[str]:
+    """按引号外的逗号或分号把嵌入文本拆成独立字段。
 
-    字面量内部可能嵌入 SQL 或配置文本；只有当前片段后面还跟着**另一个敏感赋值**时，
-    才能确认命中的不是单一取值。形如 ``api_key='realkey'`` 的单独赋值仍按固定凭据
-    处理，避免用“文本片段”放行真实凭据。
+    字符串字面量内部可能嵌入 SQL、JSON 或配置文本；只有位于引号外层的分隔符才
+    划分字段，引号内的逗号（``'2026, Q1'``）与反斜杠转义不能切断取值。拆出的片段
+    仍保留原有引号与语法，供逐字段检查复用同一套规则。
+
+    Args:
+        text: 字面量内部的文本片段。
+
+    Returns:
+        去掉空白的字段片段列表；没有顶层分隔符时返回单一原片段。
+    """
+
+    fields: list[str] = []
+    current: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        character = text[index]
+        if character in "\"'`":
+            delimiter = character
+            current.append(character)
+            index += 1
+            while index < length:
+                if text[index] == "\\":
+                    current.append(text[index : index + 2])
+                    index += 2
+                    continue
+                current.append(text[index])
+                if text[index] == delimiter:
+                    index += 1
+                    break
+                index += 1
+            continue
+        if character in ",;":
+            fields.append("".join(current).strip())
+            current = []
+            index += 1
+            continue
+        current.append(character)
+        index += 1
+    fields.append("".join(current).strip())
+    return [field for field in fields if field]
+
+
+def _scan_embedded_literal_fields(
+    path: str, line_number: int, inner_value: str
+) -> list[Finding] | None:
+    """逐字段检查字符串字面量内部的嵌入文本，不再因出现后续字段而整体豁免。
+
+    字面量里嵌入 SQL 或 JSON 时，同一行会包含多个敏感赋值。此时必须保留引号与
+    语法语义按字段分别检查：``{"password": "realkey", "api_key": "other"}`` 中的
+    每个取值都由各自字段独立判定，多一个敏感字段不会让前一个字段免检。文本没有
+    顶层分隔符时返回 ``None``，由调用方继续原有单字段规则。
 
     Args:
         path: 仓库相对路径。
@@ -1089,18 +1281,66 @@ def _is_multi_field_literal_text(
         inner_value: 字面量内部的赋值右侧文本。
 
     Returns:
-        当前片段之后仍有敏感赋值时返回 ``True``。
+        嵌入了多个字段时返回逐字段检查得到的去重结果（可为空列表，表示各字段均
+        合法）；没有顶层字段分隔符时返回 ``None``。
     """
 
     if not any(character in inner_value for character in "\"'`"):
-        return False
-    prefix = _truncate_at_separator(inner_value)
-    if prefix == inner_value:
-        return False
-    remainder = inner_value[len(prefix) :].lstrip(",;").strip()
-    if not remainder:
-        return False
-    return bool(_scan_added_line(path, line_number, remainder))
+        return None
+    fields = _split_top_level_fields(inner_value)
+    if len(fields) < 2:
+        return None
+    findings: list[Finding] = []
+    for field in fields:
+        # 片段来自字符串内容，仍按字面量语义解析，避免把嵌入的源码语法当真实赋值。
+        assignment = SENSITIVE_ASSIGNMENT_PATTERN.search(field)
+        if assignment is not None:
+            literal, quoted = _normalized_literal(assignment.group("value"))
+            if quoted and (
+                _is_self_describing_label(assignment.group("key"), literal)
+                or _is_fixture_placeholder(literal)
+            ):
+                # 取值只是按字段名自述的标签或短夹具占位标识，不构成固定凭据。
+                continue
+        findings.extend(_scan_added_line(path, line_number, field, literal_text=True))
+    return list(dict.fromkeys(findings))
+
+
+def _scan_embedded_sql_credentials(path: str, line_number: int, text: str) -> list[Finding]:
+    """检查嵌在源码字符串里的 SQL 语句中与敏感字段对应的写死取值。
+
+    语句可能没有任何源级赋值语法，例如 ``INSERT INTO t (id, password, api_key)
+    VALUES (1, 'fixed', 'other')``。这里只按列名与取值的对应关系取出敏感字段的取值，
+    再复用固定凭据规则判定：绑定参数、显式占位符与相邻元数据（``'/home'``、
+    ``'Bearer'``）仍由原有规则放行，写死凭据照常阻断。
+
+    Args:
+        path: 仓库相对路径。
+        line_number: 暂存版本中的行号。
+        text: 单行嵌入 SQL 文本。
+
+    Returns:
+        该语句中写死凭据产生的去重问题列表；没有可判定取值时返回空列表。
+    """
+
+    findings: list[Finding] = []
+    for key, raw_value in _sensitive_sql_assignments(text):
+        # ``@name`` 是 MySQL 会话变量/绑定参数写法，取值由运行期提供，不是写死凭据。
+        operand = raw_value.strip()
+        if re.fullmatch(r"@{1,2}[A-Za-z_][A-Za-z0-9_]*", operand):
+            continue
+        # 取值只是按字段名自述的标签（``api_key = 'keyA'``）或仓库约定的短夹具
+        # 占位值（``secretA``）时不构成固定凭据；判断必须基于 SQL 里的真实字段名，
+        # 不能借用外层源码行里的其他字段名。
+        literal, quoted = _normalized_literal(operand)
+        if quoted and (
+            _is_self_describing_label(key, literal) or _is_fixture_placeholder(literal)
+        ):
+            continue
+        findings.extend(_scan_added_line(
+            path, line_number, f"{key} = {raw_value}", literal_text=True,
+        ))
+    return list(dict.fromkeys(findings))
 
 
 def _remainder_has_credential(path: str, line_number: int, raw_value: str) -> bool:
@@ -1228,14 +1468,33 @@ def _scan_added_line(
                 line, literal, assignment.start("value"), assignment.end("value")
             )
             if inner_value is not None:
-                if _is_code_path(path) and (
-                    not inner_value.strip()
-                    or _is_multi_field_literal_text(path, line_number, inner_value)
-                ):
-                    return findings
+                if _is_code_path(path):
+                    if not inner_value.strip():
+                        return findings
+                    # 嵌入文本含多个字段时逐字段检查：先前字段不能因为有后续敏感
+                    # 赋值而被整体豁免，逐字段结果本身就是本行的最终结论。
+                    embedded = _scan_embedded_literal_fields(
+                        path, line_number, inner_value
+                    )
+                    if embedded is not None:
+                        return list(dict.fromkeys([*findings, *embedded]))
                 raw_value = inner_value
                 from_literal = True
                 enclosing_literal_text = line[literal[0] : literal[1]]
+            elif _is_code_path(path):
+                # 取值落在字面量之外（如 JSON 键名在引号内、取值在键名引号之外）时，
+                # 不能因捕获跨过引号边界就整行放行。键名后紧跟赋值符说明引号外就是
+                # 该字段的取值，按同一套规则继续判定；否则只把引号之后的剩余文本按
+                # 源码检查，长度严格递减。
+                tail = line[literal[1] :]
+                if re.match(r"\s*(?::(?!:)|=(?!=))", tail) is not None:
+                    raw_value = tail
+                    from_literal = True
+                elif tail.strip():
+                    findings.extend(_scan_added_line(
+                        path, line_number, tail, is_python_code=is_python_code,
+                    ))
+                    return list(dict.fromkeys(findings))
     if syntax_path.lower().endswith(".py"):
         parsed_value = _python_assignment_value(line, key)
         if parsed_value is not None:
@@ -1249,19 +1508,45 @@ def _scan_added_line(
     ):
         return findings
     value, quoted = _normalized_literal(raw_value)
+    # shell 的 ``${NAME:-}``、``${NAME:=}`` 等展开会被正则截成 ``:`` 赋值；键名只是
+    # 环境变量名，取值由运行期提供，不是固定凭据。带非空默认值的写法由固定回退
+    # 分支规则单独处理。
+    shell_expansion = SHELL_EXPANSION_PATTERN.fullmatch(value)
+    if shell_expansion is None and not quoted and raw_value.strip().endswith("}"):
+        # 带引号的展开会被正则截成 ``-"`` 之外的取值；``-1`` 之类普通数值不以
+        # 右花括号结尾，不会命中该分支。
+        truncated = re.fullmatch(r"-(?P<default>[^{}]*?)[\s\"'`]*\}", raw_value.strip())
+        if truncated is not None:
+            shell_expansion = truncated
+    if shell_expansion is not None:
+        default = shell_expansion.groupdict().get("default") or ""
+        if not _is_safe_placeholder(default):
+            findings.append(Finding(
+                path, line_number, "sensitive-assignment",
+                f"敏感字段 {key} 使用固定回退值",
+            ))
+        return list(dict.fromkeys(findings))
+    # 环境变量与配置取值本身由运行期决定，但其固定回退分支是写死常量。回退值必须在
+    # 规范化把调用参数截成第一个字段之前取出，后续按固定凭据判定；空串、null 与
+    # 显式占位符返回 None，仍按运行期语义放行。
+    fixed_fallback = _fixed_fallback_literal(raw_value)
     # 整段取值本身是否为显式字符串字面量：源码里的 ``"realkey"`` 与字面量内部的
     # ``'realkey'`` 都算，字面量内部的裸源码文本（``url``）不算。
     explicit_string = quoted
     # 字面量内部的文本按字符串内容处理；测试夹具嵌入的源码片段由运行期操作数规则
     # 单独识别，见 _is_embedded_source_operand。
     quoted = quoted or from_literal
-    if single_assignment and re.fullmatch(r"\[\s*]|\{\s*}|\(\s*\)", value):
+    if single_assignment and fixed_fallback is None and re.fullmatch(
+        r"\[\s*]|\{\s*}|\(\s*\)", value
+    ):
         return findings
-    if single_assignment and _is_noncredential_setting(key, value, quoted=quoted):
+    if single_assignment and fixed_fallback is None and _is_noncredential_setting(
+        key, value, quoted=quoted
+    ):
         return findings
     # Token 计量名称必须同时匹配数量值或未加引号的中文字段说明，不能仅凭
     # 名称放行固定字符串。前面的密钥前缀与 URL 检查结果仍然保留。
-    if single_assignment and _is_noncredential_token_measurement(
+    if single_assignment and fixed_fallback is None and _is_noncredential_token_measurement(
         _normalized_field_name(key)
     ) and (
         re.fullmatch(r"[0-9]+(?:_[0-9]+)*", value)
@@ -1274,13 +1559,14 @@ def _scan_added_line(
         )
     ):
         return findings
-    if single_assignment and _is_safe_placeholder(value):
+    if single_assignment and fixed_fallback is None and _is_safe_placeholder(value):
         return findings
     # SQL 文本里的绑定参数不是固定值：``SET refresh_token = ? WHERE id = ?`` 的取值
     # 由运行期参数提供，占位符之后的语句文本不属于当前字段。写死的字面量不以占位符
     # 开头，仍按固定凭据拦截；源码里整段带引号的显式字符串不适用这条规则。
     if (
         single_assignment
+        and fixed_fallback is None
         and not explicit_string
         and _is_sql_binding_placeholder(value)
     ):
@@ -1291,9 +1577,14 @@ def _scan_added_line(
     ):
         return findings
     # 字段名或字面量本身声明该值不是凭据时，只有单一固定字符串会被放行；
-    # 密钥前缀、URL 与私钥规则已在前面的独立检查中生效。
-    if single_assignment and quoted and not _is_config_path(syntax_path) and (
-        _is_declared_noncredential_name(key) or _is_self_describing_label(key, value)
+    # 密钥前缀、URL 与私钥规则已在前面的独立检查中生效。固定回退分支已确认是写死
+    # 取值，字段名自述或规范化截断都不能把它当成标签整体放行。
+    if (
+        single_assignment
+        and fixed_fallback is None
+        and quoted
+        and not _is_config_path(syntax_path)
+        and (_is_declared_noncredential_name(key) or _is_self_describing_label(key, value))
     ):
         return findings
     # 运行期表达式与结构化字面量不是固定凭据；显式字符串与配置文本仍需拦截。
@@ -1306,8 +1597,10 @@ def _scan_added_line(
     ):
         return findings
     # Java/Python/TypeScript 中的变量或方法调用不是固定凭据；显式字符串仍需拦截。
+    # 已确认固定回退分支的表达式不能按运行期调用整体放行，回退值仍按固定凭据判定。
     if (
         single_assignment
+        and fixed_fallback is None
         and not quoted
         and not _is_config_path(syntax_path)
         and (re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_.]*", value) or "(" in value)
@@ -1361,8 +1654,13 @@ def _python_assignment_candidates(source: str) -> list[tuple[int, int, str, bool
         if isinstance(value, ast.Dict) and not value.keys:
             return
         # 调用或引用并非固定赋值；其内部的关键字、字典和强信号仍独立检查。
+        # 例外是带固定回退分支的取值函数：``os.getenv("X", "固定值")`` 的默认值
+        # 是写死常量，必须按固定凭据继续判定，不能因整体是调用而免检。
         if isinstance(value, (ast.Call, ast.Name, ast.Attribute, ast.Subscript)):
-            return
+            if not isinstance(value, ast.Call):
+                return
+            if _fixed_fallback_literal(ast.unparse(value)) is None:
+                return
         text = f"{name} = {ast.unparse(value)}"
         candidates.append((target.lineno, value.end_lineno or value.lineno, text, False))
 
@@ -1386,11 +1684,114 @@ def _python_assignment_candidates(source: str) -> list[tuple[int, int, str, bool
                 if value is not None:
                     add_assignment(argument, value, argument.arg)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings:
+            sql_source = bool(EMBEDDED_SQL_STATEMENT_PATTERN.search(node.value))
             for text in node.value.splitlines():
-                if SENSITIVE_ASSIGNMENT_PATTERN.search(text):
+                if EMBEDDED_SQL_STATEMENT_PATTERN.search(text):
+                    # 字符串内容本身是 SQL 语句时，列名列表里的敏感列名后面跟的是
+                    # 逗号或括号而不是赋值语法；取值写在同一行的 VALUES 与 SET 中，
+                    # 必须按语句文本检查，不能把语句当成源码字符串整体放行。
+                    if _sensitive_sql_assignments(text):
+                        candidates.append((node.lineno, node.end_lineno or node.lineno, text, True))
+                elif SENSITIVE_ASSIGNMENT_PATTERN.search(text):
                     # 转义换行与相邻字符串合并后无法精确映射列号，报告原始字面量范围。
-                    candidates.append((node.lineno, node.end_lineno or node.lineno, text, True))
+                    skipped = sql_source and not _sensitive_sql_assignments(text)
+                    if not skipped:
+                        candidates.append((node.lineno, node.end_lineno or node.lineno, text, True))
     return candidates
+
+
+def _inside_quote_literal(text: str, offset: int) -> bool:
+    """判断偏移是否落在引号字符串内部。
+
+    SQL 的 VALUES 里也可能出现与敏感字段同名的字面量（例如标签文本
+    ``'refresh_token'``）；这类命中不是列名或赋值目标，必须排除。按偏移之前的
+    引号数量判断是否位于字符串内部，不依赖正则字符类。
+
+    Args:
+        text: 单行嵌入 SQL 文本。
+        offset: 命中在文本中的起始偏移。
+
+    Returns:
+        偏移位于字符串字面量内部时返回 ``True``。
+    """
+
+    prefix = text[:offset]
+    return bool(prefix.count("'") % 2 or prefix.count('"') % 2)
+
+
+def _sensitive_sql_assignments(text: str) -> list[tuple[str, str]]:
+    """取出嵌入 SQL 文本里与敏感字段配对的字符串取值。
+
+    语句可能没有源级赋值语法，例如 ``INSERT INTO t (id, password) VALUES (1,
+    'fixed')``：此时先按列名列表与取值列表的先后顺序逐项配对，只有敏感列对应的取值
+    才作为候选。同时按赋值符识别 ``UPDATE t SET password = 'fixed'`` 与
+    ``WHERE password = 'fixed'``，位于引号内部的同名字面量（标签文本）会被排除。
+
+    Args:
+        text: 源码字符串中的一行文本。
+
+    Returns:
+        ``(字段名, 取值文本)`` 列表；绑定参数、表达式与列定义不返回。
+    """
+
+    statement = text.strip()
+    if not EMBEDDED_SQL_STATEMENT_PATTERN.search(statement):
+        return []
+    pairs: list[tuple[str, str]] = []
+    columns = re.match(r"(?is)\binsert\s+into\b[^(]*\((?P<columns>[^()]*)\)", statement)
+    if columns is not None:
+        tuples = re.match(r"(?is)[^()]*\((?P<values>[^()]*)\)", statement[columns.end() :])
+        if tuples is not None:
+            names = _split_top_level_fields(columns.group("columns"))
+            entries = _split_top_level_fields(tuples.group("values"))
+            if len(names) == len(entries):
+                pairs.extend(
+                    (name.strip("`\"' "), entry)
+                    for name, entry in zip(names, entries)
+                    if _is_credential_field(name.strip("`\"' "))
+                )
+    for assignment in SENSITIVE_ASSIGNMENT_PATTERN.finditer(statement):
+        key = assignment.group("key")
+        if not _is_credential_field(key):
+            continue
+        if _inside_quote_literal(statement, assignment.start("key")):
+            continue
+        pairs.append((key, _first_sql_assignment_operand(assignment.group("value"))))
+    return pairs
+
+
+def _is_fixture_placeholder(value: str) -> bool:
+    """判断取值是否为测试夹具约定的短占位标识。
+
+    仓库夹具用字母加单个大写字母或数字的短标识区分同形字段，例如 ``keyA``、
+    ``secretA``；这类 1 至 24 字符、不含其他大写字母的标识不是可用凭据。真实凭据
+    通常包含混合大小写、数字分隔或更长随机串，不满足该形态。
+
+    Args:
+        value: 已去除外围引号的取值文本。
+
+    Returns:
+        取值符合短夹具占位标识时返回 ``True``。
+    """
+
+    return re.fullmatch(r"[a-z][a-z0-9_]{0,20}[A-Z][a-z0-9]{0,2}", value) is not None
+
+
+def _first_sql_assignment_operand(raw_value: str) -> str:
+    """取赋值右侧到第一个顶层分隔符之前的文本。
+
+    同一行可能还有后续赋值或子句：``SET password = 'fixed', api_key = 'other'
+    WHERE id = 1``。只要第一个取值，才能让后续字段按各自规则独立判定，而不是把整段
+    语句当成一个畸形取值。
+
+    Args:
+        raw_value: 敏感赋值右侧的原始文本。
+
+    Returns:
+        第一个逗号或分号之前的文本；没有分隔符时原样返回。
+    """
+
+    return _truncate_at_separator(raw_value).strip()
 
 
 def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
@@ -1479,7 +1880,18 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
                 and not (path == SELF_TEST_PATH and SELF_TEST_ALLOW_MARKER in original)
             ]
             if changed:
-                findings.extend(_scan_added_line(path, min(changed), text, literal_text=literal_text))
+                line_number = min(changed)
+                if (
+                    literal_text
+                    and EMBEDDED_SQL_STATEMENT_PATTERN.search(text)
+                    and _sensitive_sql_assignments(text)
+                ):
+                    # SQL 列名列表没有源级赋值语法；按列名与取值的配对检查写死取值。
+                    # 同一行仍可能有普通赋值，不能因此跳过原有敏感赋值检查。
+                    findings.extend(
+                        _scan_embedded_sql_credentials(path, line_number, text)
+                    )
+                findings.extend(_scan_added_line(path, line_number, text, literal_text=literal_text))
         findings.extend(_scan_added_private_keys(path, added_lines))
     return list(dict.fromkeys(findings))
 
@@ -1745,6 +2157,27 @@ def _test_semantic_recognition_regressions() -> None:
             "src/api/auth.test.ts",
             "const fixture = { accessToken: 'DUMMY-test-access', refreshToken: 'DUMMY-test-refresh' };",  # secret-scan: allow-test
         ),
+        # 固定回退分支的安全占位符与变量引用仍按运行期取值放行。
+        (
+            "src/env_fallback.py",
+            'service_token: str = os.getenv("SERVICE_TOKEN", "")',  # secret-scan: allow-test
+        ),
+        (
+            "src/config.ts",
+            'export const apiKey = process.env.API_KEY ?? "";',  # secret-scan: allow-test
+        ),
+        (
+            "src/config.ts",
+            'export const apiKey = process.env.API_KEY ?? other.apiKey;',  # secret-scan: allow-test
+        ),
+        (
+            "scripts/run.sh",
+            'DB_PASSWORD="${APP_DB_' + "PASS" + 'WORD:-}"',  # secret-scan: allow-test
+        ),
+        (
+            "scripts/run.sh",
+            'DB_PASSWORD="${APP_DB_' + "PASS" + 'WORD}"',  # secret-scan: allow-test
+        ),
     )
     for path, line in safe_samples:
         findings = _scan_added_line(path, 1, line)
@@ -1791,6 +2224,36 @@ def _test_semantic_recognition_regressions() -> None:
         (
             "src/api/auth.test.ts",
             "const fixture = { accessToken: 'RealPass123', refreshToken: 'RealPass456' };",  # secret-scan: allow-test
+        ),
+        # 同一行多一个敏感字段不能让前一个字段免检：字面量内每个取值独立判定。
+        (
+            "src/config.ts",
+            'export const jdbc = `{"password": "RealPass123", "api_key": "RealKey456"}`;',  # secret-scan: allow-test
+        ),
+        (
+            "src/config.ts",
+            'const cfg = {"password": "RealPass123", "api_key": "RealKey456"};',  # secret-scan: allow-test
+        ),
+        # 环境变量与配置取值的固定回退分支是写死常量，必须按固定凭据阻断。
+        (
+            "src/env_fallback.py",
+            'db_password = os.getenv("APP_DB_PASSWORD", "RealPass123")',  # secret-scan: allow-test
+        ),
+        (
+            "src/env_fallback.py",
+            'db_password = config.get("db.password", "RealPass123")',  # secret-scan: allow-test
+        ),
+        (
+            "src/config.ts",
+            'export const dbPassword = process.env.APP_DB_PASSWORD ?? "RealPass123";',  # secret-scan: allow-test
+        ),
+        (
+            "src/config.ts",
+            'export const dbPassword = process.env.APP_DB_PASSWORD ?? "RealPass123" ?? fallback;',  # secret-scan: allow-test
+        ),
+        (
+            "scripts/run.sh",
+            'DB_PASSWORD="${APP_DB_' + "PASS" + 'WORD:-RealPass123}"',  # secret-scan: allow-test
         ),
     )
     for path, line in unsafe_samples:
