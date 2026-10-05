@@ -119,11 +119,18 @@ describe('dateUtils', /** 日期工具测试：格式化、时区与表格列 fo
   // ===============================
   // getSystemTimezone
   // ===============================
-  describe('getSystemTimezone', () => {
-    it('should return a valid IANA timezone string', () => {
+  describe('getSystemTimezone', /** 系统时区只要求非空且被运行时接受，不绑定具体时区。 */ () => {
+    /**
+     * dayjs 在 UTC 配置的机器上返回 'UTC'，而 UTC、GMT、EST 都是合法 IANA 名称，
+     * 强制要求 `区域/城市` 形式会把正确的运行结果判成失败。改用 Intl 构造做真实校验：
+     * 非法时区名会直接抛 RangeError，比原来的正则更严格，同时不依赖具体时区。
+     */
+    it('should return a non-empty timezone supported by the runtime', /** 时区名必须被运行时接受且非空。 */ () => {
       const tz = getSystemTimezone();
       expect(typeof tz).toBe('string');
-      expect(tz).toMatch(/^[A-Z]+\/[A-Z_]+/i);
+      expect(tz.trim()).not.toBe('');
+      const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      expect(formatter.resolvedOptions().timeZone).not.toBe('');
     });
   });
 
