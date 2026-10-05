@@ -76,25 +76,39 @@ def state_file(root: Path, owner: str = OWNER) -> Path:
 
 
 class TestImageSources:
-    """镜像必须按摘要固定；来源无法证实的服务不得使用写死默认值。"""
+    """镜像必须按摘要固定；上游已停止匿名分发的服务改用本机实测过的摘要固定默认值。"""
 
     def test_verified_defaults_are_digest_pinned(self) -> None:
-        """已证实的 mysql、redis 默认值必须通过自身的摘要校验。"""
-        resolved = services.images({"BF_CI_IMAGE_MINIO": f"minio/minio@{DIGEST}"})
-        assert resolved["mysql"] == services.VERIFIED_IMAGES["mysql"]
-        assert resolved["redis"] == services.VERIFIED_IMAGES["redis"]
+        """已证实的 mysql、redis、minio 默认值都必须通过自身的摘要校验。"""
+        resolved = services.images({})
+        for kind in services.KINDS:
+            assert resolved[kind] == services.VERIFIED_IMAGES[kind]
+            assert services.pinned(kind, resolved[kind]) == resolved[kind]
 
-    def test_minio_has_no_baked_default(self) -> None:
-        """MinIO 来源在本环境无法证实，仓库不得代为断言一个看似确定的值。"""
-        assert "minio" not in services.VERIFIED_IMAGES
+    def test_minio_default_comes_from_the_verified_image(self) -> None:
+        """MinIO 上游已拒绝匿名拉取，默认值必须指向本机真实拉取并启动过的摘要固定镜像。"""
+        default = services.VERIFIED_IMAGES["minio"]
+        assert default.startswith("coollabsio/minio@sha256:")
+        assert services.pinned("minio", default) == default
+
+    def test_minio_override_wins_and_is_still_checked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """显式配置覆盖默认值，但未按摘要固定的覆盖值仍被拒绝。"""
+        monkeypatch.setenv("BF_CI_IMAGE_MINIO", f"example/minio@{DIGEST}")
+        assert services.images()["minio"] == f"example/minio@{DIGEST}"
+        monkeypatch.setenv("BF_CI_IMAGE_MINIO", "minio/minio:latest")
         with pytest.raises(ValueError) as failure:
-            services.images({})
-        assert "BF_CI_IMAGE_MINIO" in str(failure.value)
+            services.images()
+        assert "minio" in str(failure.value)
 
-    def test_minio_accepted_when_explicitly_configured(self) -> None:
-        """显式给出 MinIO 摘要后即可解析，仍需通过摘要校验。"""
-        environment = {"BF_CI_IMAGE_MINIO": f"minio/minio@{DIGEST}"}
-        assert services.images(environment)["minio"] == f"minio/minio@{DIGEST}"
+    def test_render_images_lists_pinned_references_without_credentials(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """预检输出必须给出每个服务的摘要固定引用，且不含任何凭据字段。"""
+        for name in list(os.environ):
+            if name.startswith("BF_CI_IMAGE_"):
+                monkeypatch.delenv(name, raising=False)
+        text = services.render_images()
+        for kind in services.KINDS:
+            assert f"{kind}={services.VERIFIED_IMAGES[kind]}" in text
+        assert "PASSWORD" not in text and "DUMMY" not in text
 
     @pytest.mark.parametrize("kind", services.KINDS)
     def test_environment_overrides_default(self, kind: str, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -362,6 +376,27 @@ class TestFailureRedaction:
         assert result.returncode == 2
         assert "Traceback" not in result.stderr
         assert "凭据" in result.stderr
+
+    def test_cli_images_verifies_sources_without_starting_containers(self) -> None:
+        """预检子命令必须在任何 runner 上下文之外成功，并逐项打印摘要固定引用。"""
+        environment = {name: value for name, value in os.environ.items()
+                       if not name.startswith("BF_CI_IMAGE_")}
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(SCRIPT), "images"],
+                                cwd=ROOT, capture_output=True, text=True, timeout=60,
+                                check=False, env=environment)
+        assert result.returncode == 0, result.stderr
+        for kind in services.KINDS:
+            assert f"{kind}={services.VERIFIED_IMAGES[kind]}" in result.stdout
+
+    def test_cli_images_rejects_unpinned_override(self) -> None:
+        """反例：覆盖值只带标签时预检必须返回 2，且不打印任何 Traceback。"""
+        environment = dict(os.environ, BF_CI_IMAGE_MINIO="minio/minio:latest")
+        result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(SCRIPT), "images"],
+                                cwd=ROOT, capture_output=True, text=True, timeout=60,
+                                check=False, env=environment)
+        assert result.returncode == 2
+        assert "Traceback" not in result.stderr
+        assert "minio/minio:latest" not in result.stdout
 
 
 class TestMavenInstaller:

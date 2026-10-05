@@ -20,13 +20,21 @@ from pathlib import Path
 
 # 三个服务种类固定；顺序决定启动顺序、状态文件登记顺序与客户端镜像选择。
 KINDS = ("mysql", "redis", "minio")
-# 只有实际解析过 linux/amd64 清单的来源才允许写死摘要，更新版本需重新核对并重跑真实集成测试。
+# 只有实际解析过 linux/amd64 清单并真实启动过的来源才允许写死摘要，更新版本需重新核对并重跑真实集成测试。
 # 下列 mysql、redis 摘要已用 `docker manifest inspect <引用>` 核对过 amd64 清单。
-# MinIO 在本仓库开发环境无法证实：Docker Hub 匿名访问返回 401，dl.min.io 官方二进制端点返回 410，
-# 因此不提供默认值；必须由 BF_CI_IMAGE_MINIO 显式给出并通过摘要校验，仓库不代为断言其可下载。
+# MinIO 上游已不再提供匿名可拉取的官方镜像（2026-10-04 实测：Docker Hub `minio/minio` 匿名 token
+# 不含 pull 权限、`docker manifest inspect` 与 `docker pull` 均返回 denied/exists not，
+# quay.io/minio/minio 返回 401，dl.min.io 官方二进制端点返回 410）。
+# 因此默认改用与上游官方镜像元数据一致的公开镜像：标签 RELEASE.2025-10-15T17-29-55Z，
+# 其 labels 记录 maintainer=MinIO Inc <dev@min.io>、源码 github.com/minio/minio、
+# revision da2e68be8d27b8fc647e4849048e9b39990407c6，entrypoint/Cmd 与官方镜像相同。
+# 校验方式：`docker pull --platform linux/amd64 <引用>` 解析回同一 sha256，再按本文件的启动命令
+# `server /data` 加 MINIO_ROOT_USER/MINIO_ROOT_PASSWORD 实际运行，`/minio/health/ready` 返回 200。
+# BF_CI_IMAGE_MINIO 仍可覆盖默认值（例如改用自有镜像仓库），覆盖值同样必须按 sha256 摘要固定。
 VERIFIED_IMAGES = {
     "mysql": "mysql@sha256:6b143fc1f4eab6fc9d20f383cd108c680170ff22678c5cd28551d35247fed0b3",  # 8.0.39
     "redis": "redis@sha256:28bd5e15c3674c48a472a3dd475ba446d0a3cd876e7addb988b5840a286b2256",  # 7.4.7
+    "minio": "coollabsio/minio@sha256:69b55a1c1c5dc285ce04db96689f5b2102317fc77a50680a1874ca6efd1c87f9",
 }
 LABEL = "basic-framework.ci-owner"
 PORTS = {"mysql": 13306, "redis": 16379, "minio": 19000}
@@ -69,6 +77,23 @@ def images(environment: dict[str, str] | None = None) -> dict[str, str]:
             raise ValueError(f"{kind} 镜像来源未证实，必须显式设置 {variable}")
         resolved[kind] = pinned(kind, value)
     return resolved
+
+
+def render_images(environment: dict[str, str] | None = None) -> str:
+    """把本次运行解析到的镜像来源格式化为一行核验结论，供 CI 在启动容器前核对。
+
+    真实 CI 需要先确认后端与浏览器作业用的是已按摘要固定的镜像，而不是每次漂移的标签；
+    该结论只含公开镜像引用与摘要，不包含任何凭据，可安全写入流水线日志。
+
+    Args:
+        environment: 覆盖用环境映射；缺省读取进程环境。
+    Returns:
+        形如 `mysql=<引用>；redis=<引用>；minio=<引用>` 的固定顺序文本。
+    Raises:
+        ValueError: 某服务既无已证实默认值又未显式配置，或来源不是摘要固定的引用。
+    """
+    resolved = images(environment)
+    return "；".join(f"{kind}={resolved[kind]}" for kind in KINDS)
 
 
 def docker(arguments: list[str], environment: dict[str, str] | None = None, timeout: int = 180) -> subprocess.CompletedProcess[str]:
@@ -235,11 +260,16 @@ def start(root: Path, state: Path) -> None:
 
 
 def main() -> int:
-    """执行显式启动或清理；错误信息不带容器输出、凭据或完整环境。"""
+    """执行显式启动、清理或镜像核验；错误信息不带容器输出、凭据或完整环境。"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("start", "stop"))
+    parser.add_argument("command", choices=("start", "stop", "images"))
     args = parser.parse_args()
     try:
+        # images 是启动前的预检：只核对镜像来源已按摘要固定，不需要 runner 上下文，
+        # 也不创建任何资源，未配置或未固定时以退出码 2 如实红灯。
+        if args.command == "images":
+            print("CI 服务镜像已按 sha256 固定：" + render_images())
+            return 0
         root, state = context()
         if args.command == "start":
             start(root, state)

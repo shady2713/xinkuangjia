@@ -40,3 +40,10 @@ PyYAML==6.0.3 \
     --hash=sha256:3c5677e12444c15717b902a5798264fa7909e41153cdf9ef7ad571b704a63dd9 \
     --hash=sha256:0150219816b6a1fa26fb4699fb7daa9caf09eb1999f3b70fb6e786805e80375a \
     --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f
+# 文档检查（md-links、doc-refs、doc-structure、doc-policy、mermaid）经 markdown_support.py
+# 导入 markdown_it，缺它时这些检查以环境错误退出 2；docs_tools 作业必须安装本文件。
+# 版本与本机检查实际验证的版本一致，避免云端与本地解析行为漂移。
+# 摘要取自 PyPI JSON 接口，覆盖 py3-none-any wheel。
+markdown-it-py==3.0.0 --hash=sha256:355216845c60bd96232cd8d8c40e8f9765cc86f46880e43a8fd22dc1a1a8cab1
+# mdurl 是 markdown-it-py 的唯一运行时依赖（mdurl~=0.1），缺失时导入同样失败。
+mdurl==0.1.2 --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8

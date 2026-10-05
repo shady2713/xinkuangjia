@@ -1,20 +1,28 @@
 # basic-framework CI 门禁。
 #
 # 重要状态（维护者必读，勿据此推断 CI 曾经通过）：
-#   1. 本文件从未在 GitHub Actions 云端运行过，仓库内没有任何一次真实流水线运行记录。
-#   2. 本地仅验证了编排语义与所用命令：run_checks.py、ci_gate.py、ci_services.py、
-#      vitest JSON 报告、coverage_gate.py 都在本机实际执行过；云端 runner 行为未验证。
-#   3. MinIO 镜像来源在本环境无法证实（Docker Hub 匿名 401、dl.min.io 官方端点 410），
-#      因此没有写死默认值。backend 作业必须由仓库变量 BF_CI_IMAGE_MINIO 显式提供
-#      已按 sha256 固定的引用；未配置时该作业与门禁如实红灯，不做任何降级。
-#   4. docs_tools 的 skills 检查需要 PyYAML，requirements-ci.txt 未固定该依赖，本文件
-#      也不安装它；云端该检查是否因缺依赖红灯未验证，本地不具备 GitHub runner 环境。
+#   1. 本文件已在云端真实运行过：提交 36da1d3 的 run 37187078778 结论为 failure，
+#      docs_tools、backend、frontend、browser_e2e 与门禁汇总全部红灯，原因见下面各条。
+#   2. 本轮修复只在本机 Linux 验证到依赖与命令层：docs_tools 的检查在干净环境中缺依赖时
+#      退出 2、补齐锁定依赖后退出 0；ci_services.py 的镜像预检与 MinIO 容器在本机真实 Docker
+#      上拉取并启动通过。云端 runner 行为要等下一次真实运行确认，本文件不据此声明通过。
+#   3. MinIO 上游已不再提供匿名可拉取的官方镜像（Docker Hub 的 minio/minio 与 quay.io 均拒绝
+#      匿名访问，dl.min.io 官方端点返回 410），因此 ci_services.py 内置了经本机拉取、按
+#      `server /data` 启动并校验 /minio/health/ready 的摘要固定默认值，同时保留
+#      BF_CI_IMAGE_MINIO 覆盖。默认值与覆盖值都必须按 sha256 固定：预检步骤
+#      `ci_services.py images` 在启动容器前拒绝缺失或未固定的来源，不做任何降级。
+#   4. docs_tools 的 md-links、doc-refs、doc-structure、doc-policy、mermaid、skills 等检查需要
+#      markdown-it-py 与 PyYAML，两者都锁定在 scripts/workflow/requirements-ci.txt 并由该作业
+#      自己安装；不能依赖其他作业的 pip 环境，也不能只装在一处。
 #   5. 发布阶段的前端覆盖率裁决调用 coverage_declarations.mjs，该脚本用 readFileSync(0)
 #      读取完整源码清单。本机 Linux（Node 24.15.0）实测：清单超过管道缓冲时间歇报
 #      EAGAIN，裁决以环境错误退出 2 红灯；修复位置在前端桥接脚本，本次未改，云端未验证。
 #   6. 浏览器业务端到端（browser_e2e）在 runner 内真实构建前后端、创建随机隔离库与种子
-#      管理员并执行 Playwright 用例。它同样依赖 BF_CI_IMAGE_MINIO；缺少该变量、缺少
-#      Chromium 或任何一步环境失败都会让作业红灯，没有跳过或忽略分支。
+#      管理员并执行 Playwright 用例。缺少 Chromium 或任何一步环境失败都会让作业红灯，
+#      没有跳过或忽略分支。
+#   7. 36da1d3 的云端前端单元测试退出 1，失败用例写入 runner 临时 JSON 却没有上传，无法定位。
+#      现在四个作业都用 if: always() 上传本次真实产出的测试摘要与必要日志，重跑后可据此
+#      定位真实失败用例；上传步骤不改变作业结论，也不把失败包装成通过。
 #
 # 门禁语义（与 scripts/workflow/ci_gate.py 的强制规则一致）：
 #   * docs_tools、backend、frontend、browser_e2e 四个作业都是必需作业，必须 result == success。
@@ -64,6 +72,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      # 文档检查自身就消费 markdown-it-py 与 PyYAML：本作业必须自己安装锁定依赖，
+      # 只靠其他作业安装 requirements-ci.txt 不会进入本作业的运行环境。
+      - name: 安装固定版本的 CI 工具依赖
+        run: python -m pip install --require-hashes -r scripts/workflow/requirements-ci.txt
+
       # 文档检查里的 Mermaid 解析使用管理前端已安装依赖，与本地要求一致。
       - name: 安装管理前端依赖
         working-directory: 前端代码/basic-framework-admin
@@ -79,6 +92,18 @@ jobs:
       - name: 复核证据
         run: |
           python -B -X utf8 scripts/workflow/verify_report.py "$RUNNER_TEMP/docs-report.json" --json
+
+      # 失败也要留下真实报告：$RUNNER_TEMP/docs-report.json 由上面的 run_checks.py 实际写出，
+      # 记录每项检查的真实状态与诊断。依赖安装等更早的失败会让该文件不存在，此时只用
+      # warn 记录缺文件，不改变作业结论，也不把失败包装成通过。
+      - name: 上传文档与工具检查报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-tools-report
+          path: ${{ runner.temp }}/docs-report.json
+          if-no-files-found: warn
+          retention-days: 7
 
       # 只统计真实通过检查的对象数；零对象必须失败，不能用空报告冒充通过。
       # 输出文件必须取 runner 注入的 GITHUB_OUTPUT 环境变量：不存在的 context 属性会
@@ -166,6 +191,18 @@ jobs:
           test -s "$REPORT" || { echo "前端没有产出 JSON 测试报告"; exit 1; }
           exit $status
 
+      # 前端失败原因只存在于这份 JSON 报告里：无论用例成败都用 if: always() 取回，
+      # 路径就是上面 vitest 步骤真实写入的 $RUNNER_TEMP/frontend-vitest.json。
+      # 依赖安装等更早的失败会让文件不存在，此时用 warn 记录而不改变作业结论。
+      - name: 上传前端测试摘要
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vitest-report
+          path: ${{ runner.temp }}/frontend-vitest.json
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: 汇总真实用例数
         id: count
         env:
@@ -208,6 +245,13 @@ jobs:
         if: inputs.stage == 'release'
         working-directory: 前端代码/basic-framework-admin
         run: pnpm quality:prod-scan
+
+      # 发布阶段必须真实执行完整前端静态检查（ESLint、Prettier、Stylelint）并写出证据：
+      # 下面的覆盖率裁决会复核该证据，缺失、跳过或任何违规都会让作业失败，不会静默通过。
+      - name: 完整静态检查（发布阶段）
+        if: inputs.stage == 'release'
+        working-directory: 前端代码/basic-framework-admin
+        run: python -B -X utf8 ../../scripts/workflow/static_gate.py --kind web --execute
 
       # 发布门槛由覆盖率先按可读方式裁决：未达标时日志直接给出缺口，不写出任何证据；
       # 只有真实通过才再产出机器证据，避免把失败或审计结论写成发布证据。
@@ -294,11 +338,10 @@ jobs:
       - name: 安装固定 Maven
         run: bash scripts/workflow/install_ci_maven.sh
 
-      - name: 校验 MinIO 镜像来源已显式配置
-        run: |
-          test -n "$BF_CI_IMAGE_MINIO" || {
-            echo "未配置 BF_CI_IMAGE_MINIO：MinIO 镜像来源未证实，backend 不计为通过"; exit 1; }
-          echo "BF_CI_IMAGE_MINIO=${BF_CI_IMAGE_MINIO%%@sha256:*}@sha256:<已配置摘要>"
+      # 镜像来源由 ci_services.py 统一核验：内置默认值与 BF_CI_IMAGE_MINIO 覆盖值都必须
+      # 已按 sha256 摘要固定，未配置或未固定时这一步以退出码 2 红灯，不启动任何容器。
+      - name: 核验 CI 服务镜像来源
+        run: python -B -X utf8 scripts/workflow/ci_services.py images
 
       - name: 启动真实 MySQL、Redis、MinIO
         run: python -B -X utf8 scripts/workflow/ci_services.py start
@@ -379,6 +422,19 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # 无论成败都取回各模块 Surefire 报告：失败用例与堆栈只在这里，
+      # 路径是 Maven 测试真实写出的 target/surefire-reports；测试未启动时用 warn 记录。
+      - name: 上传后端测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: |
+            后端代码/basic-framework-boot/**/target/surefire-reports/*.xml
+            后端代码/basic-framework-boot/**/target/surefire-reports/*.txt
+          if-no-files-found: warn
+          retention-days: 7
+
       # 无论测试成败都回收本次运行自建的容器；所有权不匹配时拒绝删除并保留证据。
       - name: 停止真实服务
         if: always()
@@ -409,11 +465,10 @@ jobs:
       - name: 安装固定 Maven
         run: bash scripts/workflow/install_ci_maven.sh
 
-      - name: 校验 MinIO 镜像来源已显式配置
-        run: |
-          test -n "$BF_CI_IMAGE_MINIO" || {
-            echo "未配置 BF_CI_IMAGE_MINIO：MinIO 镜像来源未证实，browser_e2e 不计为通过"; exit 1; }
-          echo "BF_CI_IMAGE_MINIO=${BF_CI_IMAGE_MINIO%%@sha256:*}@sha256:<已配置摘要>"
+      # 镜像来源由 ci_services.py 统一核验：内置默认值与 BF_CI_IMAGE_MINIO 覆盖值都必须
+      # 已按 sha256 摘要固定，未配置或未固定时这一步以退出码 2 红灯，不启动任何容器。
+      - name: 核验 CI 服务镜像来源
+        run: python -B -X utf8 scripts/workflow/ci_services.py images
 
       - name: 启动真实 MySQL、Redis、MinIO
         run: python -B -X utf8 scripts/workflow/ci_services.py start
@@ -446,14 +501,17 @@ jobs:
           RESULTS: ${{ runner.temp }}/business-e2e-results
         run: python -B -X utf8 scripts/e2e/run_business_e2e.py --summary "$SUMMARY" --results "$RESULTS"
 
-      # 失败痕迹只在用例失败时取回，便于定位真实原因；没有痕迹时不阻断结论。
-      - name: 上传失败痕迹
-        if: failure()
+      # 失败痕迹与用例摘要都要在失败时也取回：business-e2e.json 由本次运行实际写出，
+      # 痕迹目录来自 --results。两者都是真实路径；未产生时用 warn 记录，不改变作业结论。
+      - name: 上传浏览器用例摘要与失败痕迹
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: business-e2e-results
-          path: ${{ runner.temp }}/business-e2e-results
-          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/business-e2e.json
+            ${{ runner.temp }}/business-e2e-results
+          if-no-files-found: warn
           retention-days: 7
 
       # 只统计本次真实执行的用例数；跳过、重试通过与零用例都不算通过。
