@@ -158,7 +158,11 @@ def web_configs(root: Path) -> list[Path]:
     if missing:
         raise StaticEvidenceError(f"缺少前端静态检查配置：{'、'.join(missing)}")
     config_root = frontend / "internal/lint-configs"
-    for folder, directories, filenames in sorted(os.walk(config_root, followlinks=False)):
+    # 必须直接迭代 os.walk 的生成器：用 sorted() 包裹会先把整个遍历消费完，之后对 directories
+    # 的剪枝不再影响已产出的目录，等于没有剪枝——实测会走进 dist 与 node_modules/.cache/jiti，
+    # 把构建产物当成"决定 lint 结论的配置"。产物字节随构建环境与时机变化，汇总作业又是独立
+    # 检出（不跑 pnpm install），指纹必然不一致，release 阶段的静态证据会因此无法复核。
+    for folder, directories, filenames in os.walk(config_root, followlinks=False):
         directories[:] = [name for name in directories if name not in {"node_modules", "dist", ".turbo"}]
         for filename in sorted(filenames):
             path = Path(folder) / filename

@@ -351,3 +351,35 @@ def test_evidence_written_with_lf_and_utf8(tmp_path: Path) -> None:
     assert b"\r\n" not in raw
     assert json.loads(raw.decode("utf-8"))["schema"] == gate.SCHEMA
     assert ET.fromstring("<pmd/>") is not None
+
+
+def test_web_configs_excludes_generated_artifacts(tmp_path: Path) -> None:
+    """前端配置枚举必须剪掉生成产物，否则 release 证据在独立检出上无法复核。
+
+    `os.walk` 的剪枝依赖调用方原地修改 `directories`；一旦用 `sorted()` 包裹生成器，整个遍历
+    会被先消费完，剪枝对已产出的目录不再生效，`dist` 与 `node_modules/.cache` 会被当成"决定
+    lint 结论的配置"。这些文件由构建生成、字节随环境与时机变化，而汇总作业是独立检出（不跑
+    `pnpm install`），指纹必然不一致，release 阶段的静态证据会因此被判"配置与当前仓库不一致"。
+    """
+    frontend_tree(tmp_path)
+    frontend = tmp_path / FRONTEND
+    generated = [
+        frontend / "internal/lint-configs/eslint-config/dist/index.mjs",
+        frontend / "internal/lint-configs/eslint-config/dist/index.d.ts",
+        frontend / "internal/lint-configs/eslint-config/node_modules/.cache/jiti/config.mjs",
+        frontend / "internal/lint-configs/eslint-config/.turbo/cache.mjs",
+    ]
+    for path in generated:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("export const generated = 1;\n", encoding="utf-8")
+    listed = {gate.repository_path(tmp_path, path) for path in gate.web_configs(tmp_path)}
+    for path in generated:
+        assert gate.repository_path(tmp_path, path) not in listed, f"生成产物不得进入配置枚举：{path}"
+    # 负对照一：真实共享规则源码仍必须被枚举，剪枝不能把配置一起剪掉。
+    assert gate.repository_path(tmp_path, frontend / "internal/lint-configs/eslint-config/src/index.ts") in listed
+    # 负对照二：真实配置内容变化仍必须改变指纹，判定没有被放宽。
+    shared = frontend / "internal/lint-configs/eslint-config/src/index.ts"
+    before = gate.digest(shared)
+    shared.write_text("export const demo = 2;\n", encoding="utf-8")
+    assert gate.digest(shared) != before
+    assert len(gate.web_configs(tmp_path)) == len(listed)
