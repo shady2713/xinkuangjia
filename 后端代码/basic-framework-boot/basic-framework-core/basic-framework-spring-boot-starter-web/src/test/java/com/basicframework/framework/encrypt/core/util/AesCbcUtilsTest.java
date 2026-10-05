@@ -2,10 +2,12 @@ package com.basicframework.framework.encrypt.core.util;
 
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.BadPaddingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -25,10 +27,38 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AesCbcUtilsTest {
 
     private static final String KEY = "CHANGE_ME_KEY_16";
+
+    /** 与 {@link #KEY} 等长但内容不同的错误密钥，两条固定夹具共用它，使路径差异只来自载荷本身。 */
+    private static final String WRONG_KEY = "OTHER_KEY_16BYTE";
+
     private static final String PLAIN_TEXT =
             "{\"username\":\"admin\",\"password\":\"CHANGE_ME_PASSWORD\"}";
+
+    /**
+     * 固定夹具 1：错误密钥下必然解密失败的共享格式载荷。
+     *
+     * <p>零 IV 载荷，正确密钥解出的正是 {@link #PLAIN_TEXT}；换成 {@link #WRONG_KEY} 后末块明文被打乱，
+     * 其末字节不是合法的 PKCS5 填充长度，因此解密必然失败，而不是“可能失败”。</p>
+     */
     private static final String KNOWN_AES_CBC_PAYLOAD =
             "AAAAAAAAAAAAAAAAAAAAAJK53R6JFZD06lutwGl1JYX1fk5EwcDU25SEX3tm4CD13fEAVUy5NuIiziSrad56n+/D/+Olfg2EZBLTJtWiOg4=";
+
+    /**
+     * 固定夹具 2：错误密钥下必然解密成功但结果与原明文不同的共享格式载荷。
+     *
+     * <p>与夹具 1 共用同一明文、同一正确密钥、同一错误密钥，只有 IV 不同：
+     * {@code 00000000000000000000000000000238}。该 IV 使错误密钥解出的填充块末字节恰好为 {@code 0x01}，
+     * 即 PKCS5 填充合法，因此“解密成功”这条路径每次都确定命中。夹具按如下方式离线构造：固定明文与两个
+     * 密钥，令 IV 从 0 递增枚举，对每个 IV 生成合法载荷并用错误密钥试解，取第一个填充合法者（本例为第
+     * 569 个），把载荷与解出结果固化成常量；AES-CBC 的解密结果是（密文，密钥）的确定函数，所以固化后
+     * 永远走同一条路径，不依赖随机 IV 去碰约 0.4% 的合法填充概率。</p>
+     */
+    private static final String WRONG_KEY_DECRYPTABLE_PAYLOAD =
+            "AAAAAAAAAAAAAAAAAAACON0yzYzUqXXF4NXr9mXixzf/dOqMV8WbGDUsMV5Hb2Fv7xVHG7WtD7/h2loHLTl2KRmlqeqeMlHXWiJObDeay/w=";
+
+    /** 夹具 2 在错误密钥下解出的确切字节（Base64），用于把“解密成功但结果不同”的路径逐字节锁死。 */
+    private static final String WRONG_KEY_DECRYPTED_BASE64 =
+            "9njVt3JiU3uF2VPfK6iAmYQ56ZX0w0FDmWIPSP1Bbzn6wWxnr3VtW7D3rRUe88ascz6Rxlk0rC8wAVlYcEMe";
 
     /**
      * 验证相同明文因随机 IV 产生不同密文，且均可正确解密。
@@ -181,12 +211,72 @@ class AesCbcUtilsTest {
     }
 
     /**
-     * 验证错误密钥不能还原出原明文。
+     * 验证固定夹具 1 在错误密钥下必然走“解密失败”路径。
+     *
+     * <p>夹具本身先用正确密钥自证：同一份载荷必须还原出确切明文，否则它就不是共享格式的合法载荷，
+     * 错误密钥下的失败也就没有意义。错误密钥下的失败还必须落在 PKCS5 填充校验上（cause 为
+     * {@link BadPaddingException}），才能排除“失败其实来自格式或 Base64”的误判。</p>
+     */
+    @Test
+    void decryptFromBase64_shouldFailOnFixedPayloadWithWrongKey() {
+        assertArrayEquals(PLAIN_TEXT.getBytes(StandardCharsets.UTF_8),
+                AesCbcUtils.decryptFromBase64(KNOWN_AES_CBC_PAYLOAD, KEY));
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> AesCbcUtils.decryptFromBase64(KNOWN_AES_CBC_PAYLOAD, WRONG_KEY));
+
+        assertEquals("AES 解密失败", failure.getMessage());
+        assertThat(failure.getCause())
+                .as("错误密钥下必须因 PKCS5 填充非法而失败")
+                .isInstanceOf(BadPaddingException.class);
+    }
+
+    /**
+     * 验证固定夹具 2 在错误密钥下必然走“解密成功但结果与原明文不同”路径。
+     *
+     * <p>夹具同样先用正确密钥自证可还原确切明文；再用错误密钥解密时必须成功返回，且结果既不能等于原
+     * 明文，也不能是别的随机值——固定载荷下解出结果逐字节唯一，因此直接锁定其确切字节，把这条路径从
+     * “0.4% 概率偶发命中”变成每次都命中的确定性覆盖。</p>
+     */
+    @Test
+    void decryptFromBase64_shouldReturnDifferentPlainTextOnFixedPayloadWithWrongKey() {
+        byte[] plainBytes = PLAIN_TEXT.getBytes(StandardCharsets.UTF_8);
+        assertArrayEquals(plainBytes, AesCbcUtils.decryptFromBase64(WRONG_KEY_DECRYPTABLE_PAYLOAD, KEY));
+
+        byte[] recovered = AesCbcUtils.decryptFromBase64(WRONG_KEY_DECRYPTABLE_PAYLOAD, WRONG_KEY);
+
+        assertThat(recovered)
+                .as("错误密钥绝不能还原出原明文")
+                .isNotEqualTo(plainBytes);
+        assertThat(Base64.getEncoder().encodeToString(recovered))
+                .as("错误密钥下的解出结果由固定载荷唯一确定，必须逐字节等于该值")
+                .isEqualTo(WRONG_KEY_DECRYPTED_BASE64);
+    }
+
+    /**
+     * 验证固定夹具 2 确实是“错误密钥必然解密失败”这一朴素断言的反例。
+     *
+     * <p>偶发通过不能当契约：只有把反例固化下来，“错误密钥”用例才不会退化成每次都会抛错的假覆盖。
+     * 夹具 2 一旦因实现或常量变化退回失败路径，本用例立即失败，提示维护者重新构造命中成功路径的夹具。</p>
+     */
+    @Test
+    void wrongKeyFixture_shouldDisproveNeverRecoveredAssertion() {
+        assertThatThrownBy(() -> assertThrows(IllegalArgumentException.class,
+                () -> AesCbcUtils.decryptFromBase64(WRONG_KEY_DECRYPTABLE_PAYLOAD, WRONG_KEY)))
+                .as("夹具 2 必须让“错误密钥必然解密失败”的断言失败，否则它没有覆盖成功路径")
+                .isInstanceOf(AssertionError.class);
+    }
+
+    /**
+     * 验证随机载荷下错误密钥不能还原出原明文。
      *
      * <p>AES-CBC 只保证机密性，不保证错误密钥一定解密失败：错误密钥下明文块是随机的，
-     * PKCS5 填充恰好合法的概率实测约 0.42%（20000 次有 84 次解密"成功"并返回随机字节）。
-     * 因此这里断言真正成立的密码学性质——要么解密失败，要么结果与原明文不同，
-     * 绝不会还原出原明文；断言"必然抛错"会把随机通过当成契约，造成偶发红灯。</p>
+     * PKCS5 填充恰好合法的概率实测约 0.4%（两次 20000 次随机 IV 分别成功 84 次与 74 次）。
+     * 因此这里断言真正成立的密码学性质——要么解密失败，要么结果与原明文不同，绝不会还原出原明文；
+     * 断言“必然抛错”会把随机通过当成契约，造成偶发红灯。两条路径本身已由固定夹具用例
+     * {@code decryptFromBase64_shouldFailOnFixedPayloadWithWrongKey} 与
+     * {@code decryptFromBase64_shouldReturnDifferentPlainTextOnFixedPayloadWithWrongKey} 确定覆盖，
+     * 本用例只负责随机载荷下的性质不被破坏。</p>
      */
     @Test
     void decryptFromBase64_shouldNeverRecoverPlainTextWithWrongKey() {
@@ -195,7 +285,7 @@ class AesCbcUtilsTest {
 
         byte[] recovered = null;
         try {
-            recovered = AesCbcUtils.decryptFromBase64(cipherText, "OTHER_KEY_16BYTE");
+            recovered = AesCbcUtils.decryptFromBase64(cipherText, WRONG_KEY);
         } catch (IllegalArgumentException failure) {
             assertEquals("AES 解密失败", failure.getMessage());
         }

@@ -130,16 +130,28 @@ public class RateLimiterRedisDAO {
      * 请求可能已经按同一份新参数完成重建，此时直接复用新窗口；若再次重建，Redisson 的 Lua 会删除消费
      * 记录，把新配额重新放大一遍。</p>
      *
-     * <p>未能取得锁或等待被中断时都不重建，直接沿用服务端已落盘配置：重建是清空已用配额的破坏性操作，
-     * 宁可让新参数由后续请求的慢路径落地，也不能重复执行；期间放行次数仍受已落盘配置约束，不会超过
-     * 任何一次声明过的配额。副作用是本次调用可能仍按旧配置放行，且不会刷新限流器过期时间。</p>
+     * <p>写入前还必须校验重建锁的租约此刻仍属于当前线程：锁用固定租约且不做看门狗续期，持有者若被长
+     * 时间挂起（GC、线程调度、下游阻塞），锁会在租约到期后自动释放并被后继请求取得；旧持有者挂起结束
+     * 继续写入时，服务端配置已被后继请求按同一份新参数写过一次，它的 {@code setRate} 会再次删除消费
+     * 记录，把后继请求已经消耗掉的额度凭空还回去，{@code count=1} 也会放行两次。因此写入前用服务端持有
+     * 关系（{@code HEXISTS 锁 Key 线程标识}，即 Redisson 的 {@code isHeldByCurrentThread}）确认自己仍是
+     * 持有者；租约已失效就放弃重建，让新参数由后续请求的慢路径落地。</p>
+     *
+     * <p>未能取得锁、等待被中断或租约已失效时都不重建，直接沿用服务端已落盘配置：重建是清空已用配额的
+     * 破坏性操作，宁可让新参数由后续请求的慢路径落地，也不能重复执行；期间放行次数仍受已落盘配置约束，
+     * 不会超过任何一次声明过的配额。副作用是本次调用可能仍按旧配置放行，且不会刷新限流器过期时间。</p>
+     *
+     * <p>持有关系校验与写入之间仍隔着一次 Redis 往返，属于无法用 Redisson 公开 API 完全消除的窗口；但
+     * 租约失效的真实成因是“持有者长时间挂起”，挂起结束后的第一次校验就会失败并放弃写入，因此该窗口
+     * 只在客户端与 Redis 恰好于校验后瞬时失联时才可能出现。校验与释放各一次 {@code HEXISTS} 只发生在
+     * 配置真变化的慢路径上，常规请求的 Redis 往返次数不变。</p>
      *
      * @param rateLimiter  待重建的限流器
      * @param redisKey     限流器 Redis Key，用于派生重建锁名称
      * @param count        本次声明的限流周期内允许次数
      * @param rateInterval 本次声明的限流周期（秒）
      * @param duration     本次声明的限流周期，用于重建速率与刷新过期时间
-     * @return 配置为本次声明速率的限流器；未取得锁或等待被中断时返回沿用旧配置的限流器
+     * @return 配置为本次声明速率的限流器；未取得锁、等待被中断或租约已失效时返回沿用旧配置的限流器
      */
     private RRateLimiter rebuildRate(RRateLimiter rateLimiter, String redisKey, long count,
                                      long rateInterval, Duration duration) {
@@ -162,6 +174,11 @@ public class RateLimiterRedisDAO {
         try {
             // 锁内二次比较：先到请求可能已完成同一份新参数的重建，此时复用新窗口而不是再清空一次
             if (matchesDeclaredRate(rateLimiter.getConfig(), count, rateInterval)) {
+                return rateLimiter;
+            }
+            // 写前校验持有者令牌：租约可能已到期并把锁交给后继请求，此时再写会清空后继已消耗的配额
+            if (!rebuildLock.isHeldByCurrentThread()) {
+                log.warn("[rebuildRate][限流器({}) 重建锁租约已失效，放弃本次重建，沿用已落盘配置]", redisKey);
                 return rateLimiter;
             }
             rateLimiter.setRate(RateType.OVERALL, count, duration);

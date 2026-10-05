@@ -4,6 +4,7 @@ import com.basicframework.framework.protection.support.ProtectionRedisTestSuppor
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RLock;
 import org.redisson.api.RRateLimiter;
 import org.redisson.api.RateType;
 import org.redisson.api.RedissonClient;
@@ -26,6 +27,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -54,6 +56,14 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
 
     /** 动态改参前使用的旧配额，取大于 1 以便先耗尽旧窗口，使放行只可能来自重建。 */
     private static final int CHANGED_FROM_COUNT = 2;
+
+    /**
+     * 等待重建锁租约真实到期的上限（秒）
+     *
+     * 被测实现的固定租约是 10 秒，这里只作为轮询上限：用例断言的是“锁 Key 真的消失了”，
+     * 而不是“睡了固定时长”，租约取值变化时用例仍能给出准确结论。
+     */
+    private static final long LOCK_EXPIRE_WAIT_SECONDS = 30;
 
     /** 被测 DAO，全部方法都走真实 Redisson 客户端。 */
     private RateLimiterRedisDAO rateLimiterRedisDAO;
@@ -460,6 +470,95 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
     }
 
     /**
+     * 验证重建锁租约到期、旧持有者仍继续写入时，不得重置后继请求已经消耗掉的额度。
+     *
+     * <p>重建锁用固定租约（不使用看门狗续期）：持有者若在临界区内被长时间挂起，锁会在租约到期后由 Redis
+     * 自动删除，后继请求随即可以进入同一临界区。此时两者都持有“重建前”的配置判断，若旧持有者醒来后照样
+     * 调用 {@code setRate}，Redisson 的重建 Lua 会再次删除消费记录，把后继请求已经消耗掉的令牌凭空还回来，
+     * {@code count=1} 也会放行两次——这正是“锁租约失效后旧持有者继续写入”的真实缺陷。</p>
+     *
+     * <p>本用例不靠并发碰运气，而是用门闩固定交错：旧持有者在锁内读完旧配置后挂起 → 断言此刻锁 Key 真实
+     * 存在 → 轮询等 Redis 按 TTL 真正删除锁 Key（真实租约到期，不是替身模拟）→ 后继请求取锁、重建并消耗
+     * 新配额 → 放行旧持有者继续执行。因此放行次数与重建次数都只可能来自“旧持有者是否在租约失效后写了
+     * 一次”，普通并发用例无法区分这两种结果。</p>
+     *
+     * @throws Exception 线程等待超时或任务执行失败时抛出，避免把并发故障当成通过
+     */
+    @Test
+    @DisplayName("重建锁租约到期后旧持有者继续写入，不得重置后继请求已消耗的额度")
+    void shouldNotResetConsumedQuotaWhenStaleHolderOutlivesRebuildLockLease() throws Exception {
+        String key = nextKey("rate-lease-expired");
+        String redisKey = "rate_limiter:" + key;
+        String rebuildLockKey = redisKey + ":rebuild";
+        int newCount = 1;
+
+        // 1. 先用旧配额建立真实限流器并耗尽旧窗口，此后任何一次放行都只可能来自“重建清空了已消费的令牌”
+        RRateLimiter realLimiter = redissonClient.getRateLimiter(redisKey);
+        assertThat(realLimiter.trySetRate(RateType.OVERALL, CHANGED_FROM_COUNT, Duration.ofSeconds(PERIOD_SECONDS)))
+                .as("旧配置必须由本用例真实建立")
+                .isTrue();
+        realLimiter.expire(Duration.ofSeconds(PERIOD_SECONDS));
+        for (int index = 0; index < CHANGED_FROM_COUNT; index++) {
+            assertThat(realLimiter.tryAcquire()).as("旧配额第 %s 次应放行", index + 1).isTrue();
+        }
+        assertThat(realLimiter.tryAcquire()).as("旧配额必须已经耗尽，否则无法证明放行只来自重建").isFalse();
+
+        // 2. 旧持有者读到旧配置后在锁内挂起，挂起期间等待真实租约到期
+        StaleHolderHandler handler = new StaleHolderHandler(realLimiter, redissonClient.getLock(rebuildLockKey));
+        RRateLimiter staleLimiter = (RRateLimiter) Proxy.newProxyInstance(RRateLimiter.class.getClassLoader(),
+                new Class<?>[] {RRateLimiter.class}, handler);
+        RedissonClient client = mock(RedissonClient.class);
+        when(client.getRateLimiter(redisKey)).thenReturn(staleLimiter);
+        when(client.getLock(anyString())).thenAnswer(invocation -> redissonClient.getLock((String) invocation.getArgument(0)));
+        RateLimiterRedisDAO dao = new RateLimiterRedisDAO(client);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<Boolean> staleHolderResult = pool.submit(() -> {
+                handler.staleHolder.set(Thread.currentThread());
+                return dao.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS);
+            });
+
+            assertThat(handler.enteredRebuildSection.await(30, TimeUnit.SECONDS))
+                    .as("旧持有者必须进入重建临界区并挂起")
+                    .isTrue();
+            assertThat(redissonClient.getKeys().countExists(rebuildLockKey))
+                    .as("旧持有者挂起时重建锁必须真实存在，否则不构成租约失效场景")
+                    .isEqualTo(1);
+
+            // 3. 轮询到 Redis 按 TTL 真正删除锁 Key：租约失效是真实发生的，而不是被替身模拟出来的
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(LOCK_EXPIRE_WAIT_SECONDS);
+            while (System.nanoTime() < deadline && redissonClient.getKeys().countExists(rebuildLockKey) > 0) {
+                Thread.sleep(50);
+            }
+            assertThat(redissonClient.getKeys().countExists(rebuildLockKey))
+                    .as("锁必须在租约到期后由 Redis 释放，后继请求才能在旧持有者仍挂起时进入临界区")
+                    .isZero();
+
+            // 4. 后继请求取得已失效的锁，按同一份新参数重建并消耗掉新配额
+            assertThat(dao.tryAcquire(key, newCount, PERIOD_SECONDS, TimeUnit.SECONDS))
+                    .as("后继请求应在锁释放后完成重建并消耗掉新配额中的 1 次")
+                    .isTrue();
+
+            // 5. 放行旧持有者：它手上是“重建前”的配置，若不做租约内持有者校验就会再重建一次
+            handler.releaseStaleHolder.countDown();
+            assertThat(staleHolderResult.get(30, TimeUnit.SECONDS))
+                    .as("新配额已被后继请求用尽，旧持有者醒来后必须继续被拒绝")
+                    .isFalse();
+        } finally {
+            handler.releaseStaleHolder.countDown();
+            pool.shutdownNow();
+        }
+
+        assertThat(handler.rebuiltRateCount.get())
+                .as("同一份新参数只允许重建一次，旧持有者不得在租约失效后再次重建")
+                .isEqualTo(1);
+        assertThat(realLimiter.getConfig().getRate()).isEqualTo((long) newCount);
+        assertThat(realLimiter.tryAcquire())
+                .as("旧持有者不得把后继请求已消耗的额度还回来")
+                .isFalse();
+    }
+
+    /**
      * 验证并发改参期间的真实流量合计放行次数恰好等于新配额，改参完成后窗口继续按新配额拒绝。
      *
      * <p>与同步代理用例互补：这里不注入任何顺序控制，用屏障把 {@value #CONCURRENT_REQUESTS} 个请求同时压到
@@ -713,6 +812,77 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
             } catch (InvocationTargetException exception) {
                 throw exception.getCause();
             }
+        }
+    }
+
+    /**
+     * 租约失效场景的同步代理：让旧持有者在锁内读完配置后挂起，直到后继请求完成重建与消费。
+     *
+     * <p>代理先把真实配置读回来再挂起，使旧持有者手上保留的是“重建前”的判断，醒来后必然继续走重建分支；
+     * 只有旧持有者线程会被挂起，后继请求不受影响。令牌计算、锁租约与放行判定仍由真实 Redisson 与 Redis
+     * 完成，代理只改变配置读取与速率重建之间的先后顺序。</p>
+     */
+    private static final class StaleHolderHandler implements InvocationHandler {
+
+        /** 旧持有者线程，用于把挂起精确限制在它身上。 */
+        private final AtomicReference<Thread> staleHolder = new AtomicReference<>();
+
+        /** 旧持有者已在锁内读完配置的信号。 */
+        private final CountDownLatch enteredRebuildSection = new CountDownLatch(1);
+
+        /** 允许旧持有者离开临界区的信号。 */
+        private final CountDownLatch releaseStaleHolder = new CountDownLatch(1);
+
+        /** 实际发生的速率重建次数，用于断言租约失效后没有第二次重建。 */
+        private final AtomicInteger rebuiltRateCount = new AtomicInteger();
+
+        /** 真实 Redisson 限流器，除顺序外不做任何替换。 */
+        private final RRateLimiter real;
+
+        /** 真实 Redisson 重建锁，用于判断当前线程是否正处于重建临界区内。 */
+        private final RLock rebuildLock;
+
+        /**
+         * 绑定真实限流器与真实重建锁。
+         *
+         * @param real        真实 Redisson 限流器
+         * @param rebuildLock 真实 Redisson 重建锁
+         */
+        private StaleHolderHandler(RRateLimiter real, RLock rebuildLock) {
+            this.real = real;
+            this.rebuildLock = rebuildLock;
+        }
+
+        /**
+         * 统计重建次数，并让旧持有者在锁内读完配置后挂起，其余调用原样委托真实限流器。
+         *
+         * @param proxy  代理对象
+         * @param method 被调用的接口方法
+         * @param args   调用参数
+         * @return 真实限流器的返回值
+         * @throws Throwable 真实调用抛出的异常原样传播
+         */
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            if ("setRate".equals(method.getName())) {
+                rebuiltRateCount.incrementAndGet();
+            }
+            Object result;
+            try {
+                result = method.invoke(real, args);
+            } catch (InvocationTargetException exception) {
+                throw exception.getCause();
+            }
+            if ("getConfig".equals(method.getName())
+                    && Thread.currentThread() == staleHolder.get()
+                    && rebuildLock.isHeldByCurrentThread()) {
+                // 配置已按“重建前”的值读回，此刻挂起：挂起期间固定租约会真实到期
+                enteredRebuildSection.countDown();
+                if (!releaseStaleHolder.await(60, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("旧持有者未被放行，租约失效场景无法继续");
+                }
+            }
+            return result;
         }
     }
 
