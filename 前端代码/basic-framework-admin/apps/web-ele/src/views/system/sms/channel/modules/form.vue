@@ -29,20 +29,18 @@ const formData = ref<SystemSmsChannelApi.Channel>();
 const [Form, formApi] = useVbenForm<
   ComponentType,
   SystemSmsChannelApi.ChannelSaveReq
->(
-  {
-    commonConfig: {
-      componentProps: {
-        class: 'w-full',
-      },
-      formItemClass: 'col-span-2',
-      labelWidth: 100,
+>({
+  commonConfig: {
+    componentProps: {
+      class: 'w-full',
     },
-    layout: 'horizontal',
-    schema: useFormSchema(),
-    showDefaultActions: false,
+    formItemClass: 'col-span-2',
+    labelWidth: 100,
   },
-);
+  layout: 'horizontal',
+  schema: useFormSchema(),
+  showDefaultActions: false,
+});
 
 const [Modal, modalApi] = useVbenModal({
   /** 校验并保存短信渠道，成功后关闭弹窗并通知列表刷新；失败时释放弹窗锁。 */
