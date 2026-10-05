@@ -22,7 +22,13 @@ export default defineConfig({
         'packages/**/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue}',
         'internal/**/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,vue}',
       ],
-      provider: 'v8',
+      // v8 提供者用 V8 区间反查源码映射统计分母：SFC 的 setup 包装行与模板渲染函数声明行由
+      // 编译器生成、映射里没有对应段，端点无法回查会让整个函数区间连同分支被静默丢弃，
+      // 语句计数停在默认值 1，形成"全部命中、函数数为 0"的假通过。校准包装只把这类端点
+      // 对齐到区间内最近的真实映射列，命中数与区间层级不变；换 istanbul 会让类型与桶文件
+      // 因插桩后没有语句而从报告里整体消失，反而破坏报告完整性，故不采用。
+      customProviderModule: './vitest.coverage-provider.mjs',
+      provider: 'custom',
       reportOnFailure: true,
       reporter: ['text-summary', 'json', 'html'],
       reportsDirectory: './coverage',
