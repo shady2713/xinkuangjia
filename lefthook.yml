@@ -1,0 +1,61 @@
+# 仓库级提交钩子配置（lefthook）。
+#
+# 与根钩子 `.githooks/pre-commit` 的统一约定：
+#   * 仓库级暂存检查（密钥、语言注释、文档、被删除目标的入站引用）只有一份实现：
+#     `scripts/workflow/check_staged_quality.py`。两种入口都调用它，不各自实现规则。
+#   * 本文件里的检查**只读**：不使用 `--write`/`--fix`，不使用任何自动暂存或自动提交选项。
+#     质量检查不得隐式修改提交内容；需要格式化时显式执行 `pnpm lint`（格式修复模式）。
+#   * 不使用 `vsh code-workspace`：它只有 `--spaces` 与 `--auto-commit`，是生成器而非检查器，
+#     放在提交钩子里会改写未跟踪的 `vben-admin.code-workspace` 并自动提交。
+#   * `.vue` 只由 `lint-vue` 负责；`lint-style` 的 glob 已排除 `vue`，避免同一文件被两条命令重复执行。
+#
+# 两种入口互斥：Git 每个仓库只读取一个钩子目录，设置 `core.hooksPath` 后 `.git/hooks` 下的钩子会被
+# **静默忽略**。默认入口是根钩子（低成本），由 `scripts/workflow/install_git_hooks.py` 安装；该脚本
+# 在检测到 `.git/hooks` 下已有其他管理器写入的钩子时以退出码 2 明确报错，避免静默覆盖。
+# 启用 lefthook 的步骤：先 `git config --unset core.hooksPath`，再执行 `lefthook install`。
+#
+# 本文件必须位于 Git 根目录：lefthook 只在根目录查找配置，放在前端子目录里永远不会被发现。
+
+pre-commit:
+  parallel: true
+  commands:
+    # 与根钩子等价的仓库级暂存检查；选择 lefthook 不会因此丢失这项检查。
+    staged-quality:
+      root: .
+      run: python -B -X utf8 scripts/workflow/check_staged_quality.py --root .
+    lint-md:
+      root: 前端代码/basic-framework-admin
+      glob: '*.md'
+      run: pnpm prettier --cache --ignore-unknown --check {staged_files}
+    lint-vue:
+      root: 前端代码/basic-framework-admin
+      glob: '*.vue'
+      run: pnpm prettier --check {staged_files} && pnpm eslint --cache {staged_files} && pnpm stylelint --allow-empty-input {staged_files}
+    lint-js:
+      root: 前端代码/basic-framework-admin
+      glob: '*.{js,jsx,ts,tsx}'
+      run: pnpm prettier --cache --ignore-unknown --check {staged_files} && pnpm eslint --cache {staged_files}
+    lint-style:
+      root: 前端代码/basic-framework-admin
+      glob: '*.{scss,less,styl,html,css}'
+      run: pnpm prettier --cache --ignore-unknown --check {staged_files} && pnpm stylelint --allow-empty-input {staged_files}
+    lint-package:
+      root: 前端代码/basic-framework-admin
+      glob: 'package.json'
+      run: pnpm prettier --cache --check {staged_files}
+    lint-json:
+      root: 前端代码/basic-framework-admin
+      glob: '{!(package)*.json,*.code-snippets,.!(browserslist)*rc}'
+      run: pnpm prettier --cache --check --parser json {staged_files}
+
+post-merge:
+  commands:
+    install:
+      root: 前端代码/basic-framework-admin
+      run: pnpm install
+
+commit-msg:
+  commands:
+    commitlint:
+      root: 前端代码/basic-framework-admin
+      run: pnpm exec commitlint --edit {1}
