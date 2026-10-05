@@ -4,7 +4,8 @@
  * `registerComponent` 把后端菜单给的组件路径映射成 views 下的异步组件：路径匹配写错会让
  * 菜单点击后加载不到页面，匹配不到时必须返回 undefined 让调用方兜底；`getRawRoute`
  * 用于路由记录快照，裁剪规则写错会把整棵匹配链或额外字段带进缓存。用例使用真实
- * glob 结果与真实路由对象，只断言外部可观察的组件定义与裁剪结果。
+ * glob 结果与真实路由对象，只断言外部可观察的组件定义与裁剪结果；视图 SFC 的首次
+ * 编译放在模块作用域完成，不占用单个用例的超时预算。
  *
  * 注意：本文件不能放在 `router/routes/modules/` 下——该目录被生产入口以 eager glob
  * 收集，测试文件会被打进产物。
@@ -57,6 +58,10 @@ function matchedRouteRecord() {
     path: '/system/user',
   };
 }
+
+// 首次解析真实视图会编译并求值对应 SFC，属于测试初始化成本；在模块作用域完成，
+// 避免把冷加载计入用例的 5000ms 预算。用例仍调用真实加载函数并断言解析结果。
+await loaderOf(registerComponent(FALLBACK_PATH))();
 
 describe('registerComponent 注册异步组件', /** 菜单点击后的页面加载完全依赖该路径到视图文件的映射。 */ () => {
   it('命中视图路径时加载到对应页面组件', /** 返回 undefined 或加载到别的页面都会让菜单点击后渲染错误内容。 */ async () => {

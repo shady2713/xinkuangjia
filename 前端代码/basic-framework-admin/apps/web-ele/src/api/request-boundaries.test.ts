@@ -160,6 +160,11 @@ async function loadBoundary() {
   return { requestClient, session };
 }
 
+// 首次导入请求客户端会构建整条拦截器、加密与提示模块图，属于测试初始化成本。
+// 这里在模块作用域完成首次转换，避免把它计入首个用例的 5000ms 预算；每个用例仍
+// 按各自代次重新导入，断言使用的实例与调用链不受影响。
+await loadBoundary();
+
 describe('请求边界真实行为', /** 认证失效、刷新与加解密链路的漏洞会直接泄漏数据或让请求卡死。 */ () => {
   /** 每例恢复被替换的传输适配器，避免真实网络请求外泄。 */
   let restoreAdapter: RestoreAdapter | undefined;

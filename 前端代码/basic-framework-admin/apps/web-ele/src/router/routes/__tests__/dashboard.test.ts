@@ -1,10 +1,12 @@
 /** 概览与个人中心静态路由测试：验证路由元信息契约，并确认懒加载组件指向真实存在的页面。
  *
+ * 页面模块的首次编译与求值放在模块作用域完成，属于测试初始化成本，不计入用例预算。
+ *
  * 本文件刻意放在 `__tests__/` 而不是被测源码同目录：`routes/index.ts` 用 eager 的
  * `import.meta.glob` 收集 `modules` 目录下的全部 TS 文件，测试文件若落在该目录下
  * 会被打进生产产物（实测曾把 vitest 一并打包）。
  */
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import routes from '../modules/dashboard';
 
@@ -38,17 +40,21 @@ async function loadComponent(path: string) {
   return module.default;
 }
 
-beforeAll(
-  /** 页面模块在导入期读取运行时配置，先提供与 app.config.js 同形状的测试值。 */ () => {
-    (
-      globalThis as unknown as { _VBEN_ADMIN_PRO_APP_CONF_: unknown }
-    )._VBEN_ADMIN_PRO_APP_CONF_ = {
-      VITE_APP_CAPTCHA_ENABLE: 'false',
-      VITE_APP_STORE_SECURE_KEY: 'test-store-key',
-      VITE_GLOB_API_URL: 'https://example.test/admin-api',
-    };
-  },
-);
+// 页面模块在导入期读取运行时配置，必须在首次解析之前提供与 app.config.js 同形状的
+// 测试值；这里在模块作用域赋值，既早于下面的首次解析，也早于任何用例钩子。测试文件
+// 各自隔离运行环境，因此该替身不会影响其他文件。
+(
+  globalThis as unknown as { _VBEN_ADMIN_PRO_APP_CONF_: unknown }
+)._VBEN_ADMIN_PRO_APP_CONF_ = {
+  VITE_APP_CAPTCHA_ENABLE: 'false',
+  VITE_APP_STORE_SECURE_KEY: 'test-store-key',
+  VITE_GLOB_API_URL: 'https://example.test/admin-api',
+};
+
+// 首次解析会编译并求值概览页与个人中心的页面模块，属于测试初始化成本；在模块作用域
+// 完成，避免把它计入用例的 5000ms 预算。用例仍调用真实懒加载组件并断言解析结果。
+await loadComponent('/dashboard');
+await loadComponent('/profile');
 
 describe('dashboard 静态路由', /** 概览、个人中心与地址重定向是菜单外的基础入口，契约变化会直接影响登录后的首屏。 */ () => {
   it('分析页与个人中心都指向真实存在的页面组件', /** 懒加载路径写错时只会在运行时 404，必须在单元测试里真实导入验证。 */ async () => {

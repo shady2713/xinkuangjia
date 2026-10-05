@@ -373,87 +373,111 @@ describe('cron 生成器面板展示', /** 分区展示值与类型联动决定�
     expect(wrapper.findComponent(ElDialog).props('modelValue')).toBe(true);
   });
 
-  it('七个分区的类型单选按各自口径刷新展示值', /** 类型切换写错会让面板展示别的分区的值。 */ async () => {
+  it('打开生成器后按初始表达式展示七个分区', /** 初始档位解析错误会让面板展示与输入框不一致。 */ async () => {
     const wrapper = await mountCronTab('* * * * * ?');
     await clickGeneratorOption(wrapper, CUSTOM_OPTION);
+
     expect(requireSectionValues()).toEqual(['*', '*', '*', '*', '*', '?', '']);
+  });
 
-    /** 各分区依次点击的类型值，顺序即点击顺序。 */
-    const types = [
-      ['1', '2', '3', '0'],
-      ['1', '2', '3', '0'],
-      ['1', '2', '3', '0'],
-      ['1', '2', '3', '4', '5'],
-      ['1', '2', '3', '0'],
-      ['1', '2', '3', '4', '5', '0'],
-      ['1', '0', '2', '3', '-1'],
-    ];
-    /** 各分区依次点击后应展示的值，与 types 一一对应。 */
-    const sweep: SectionExpectation[][] = [
-      [
-        { index: 0, value: '1-2' },
-        { index: 0, value: '0/2' },
-        { index: 0, value: '5,10' },
-        { index: 0, value: '*' },
-      ],
-      [
-        { index: 1, value: '3-4' },
-        { index: 1, value: '1/3' },
-        { index: 1, value: '15,20' },
-        { index: 1, value: '*' },
-      ],
-      [
-        { index: 2, value: '5-6' },
-        { index: 2, value: '2/4' },
-        { index: 2, value: '25,30' },
-        { index: 2, value: '*' },
-      ],
-      [
-        { index: 3, value: '7-8' },
-        { index: 3, value: '3/5' },
-        { index: 3, value: '1,3' },
-        { index: 3, value: 'L' },
-        { index: 3, value: '?' },
-      ],
-      [
-        { index: 4, value: '9-10' },
-        { index: 4, value: '4/6' },
-        { index: 4, value: '1,3' },
-        { index: 4, value: '*' },
-      ],
-      [
-        { index: 5, value: '2-3' },
-        { index: 5, value: '5#2' },
-        { index: 5, value: '1,3' },
-        { index: 5, value: '4L' },
-        { index: 5, value: '?' },
-        { index: 5, value: '*' },
-      ],
-      [
-        { index: 6, value: '2020-2030' },
-        { index: 6, value: '*' },
-        { index: 6, value: '5/2020' },
-        { index: 6, value: '2020,2021' },
-        { index: 6, value: '' },
-      ],
-    ];
+  /** 各分区依次点击的类型值，顺序即点击顺序。 */
+  const types = [
+    ['1', '2', '3', '0'],
+    ['1', '2', '3', '0'],
+    ['1', '2', '3', '0'],
+    ['1', '2', '3', '4', '5'],
+    ['1', '2', '3', '0'],
+    ['1', '2', '3', '4', '5', '0'],
+    ['1', '0', '2', '3', '-1'],
+  ];
+  /** 各分区依次点击后应展示的值，与 types 一一对应。 */
+  const sweep: SectionExpectation[][] = [
+    [
+      { index: 0, value: '1-2' },
+      { index: 0, value: '0/2' },
+      { index: 0, value: '5,10' },
+      { index: 0, value: '*' },
+    ],
+    [
+      { index: 1, value: '3-4' },
+      { index: 1, value: '1/3' },
+      { index: 1, value: '15,20' },
+      { index: 1, value: '*' },
+    ],
+    [
+      { index: 2, value: '5-6' },
+      { index: 2, value: '2/4' },
+      { index: 2, value: '25,30' },
+      { index: 2, value: '*' },
+    ],
+    [
+      { index: 3, value: '7-8' },
+      { index: 3, value: '3/5' },
+      { index: 3, value: '1,3' },
+      { index: 3, value: 'L' },
+      { index: 3, value: '?' },
+    ],
+    [
+      { index: 4, value: '9-10' },
+      { index: 4, value: '4/6' },
+      { index: 4, value: '1,3' },
+      { index: 4, value: '*' },
+    ],
+    [
+      { index: 5, value: '2-3' },
+      { index: 5, value: '5#2' },
+      { index: 5, value: '1,3' },
+      { index: 5, value: '4L' },
+      { index: 5, value: '?' },
+      { index: 5, value: '*' },
+    ],
+    [
+      { index: 6, value: '2020-2030' },
+      { index: 6, value: '*' },
+      { index: 6, value: '5/2020' },
+      { index: 6, value: '2020,2021' },
+      { index: 6, value: '' },
+    ],
+  ];
+  /** 分区类型扫描夹具：分区名、类型点击序列与对应展示值。 */
+  const typeSweeps = types.map(
+    /** 按下标把类型序列与展示值配成一条夹具。 */ (
+      sectionTypes,
+      sectionIndex,
+    ) => ({
+      expectations: sweep[sectionIndex] ?? [],
+      name: SECTION_NAMES[sectionIndex] ?? String(sectionIndex),
+      sectionIndex,
+      sectionTypes,
+    }),
+  );
 
-    for (const [sectionIndex, sectionTypes] of types.entries()) {
-      const expectations = sweep[sectionIndex] ?? [];
-      expect(
-        sectionTypes,
-        `分区 ${SECTION_NAMES[sectionIndex]} 的类型与预期条数不一致`,
-      ).toHaveLength(expectations.length);
+  // 每个分区的类型扫描独立成例：35 次真实单选点击集中在一个用例体内会累计占满
+  // 5000ms 预算（并行采集下复审实测超时），且首个失败分区会掩盖其余分区。
+  it.each(typeSweeps)(
+    '分区 $name 的类型单选按各自口径刷新展示值',
+    /** 类型切换写错会让面板展示别的分区的值。 */ async ({
+      expectations,
+      name,
+      sectionIndex,
+      sectionTypes,
+    }) => {
+      expect(sectionTypes, `分区 ${name} 的类型与预期条数不一致`).toHaveLength(
+        expectations.length,
+      );
+
+      const wrapper = await mountCronTab('* * * * * ?');
+      await clickGeneratorOption(wrapper, CUSTOM_OPTION);
+
       for (const [typeIndex, type] of sectionTypes.entries()) {
         await clickTypeRadio(sectionIndex, type);
         const values = requireSectionValues();
-        expect(
-          values[sectionIndex],
-          `${SECTION_NAMES[sectionIndex]} 分区类型 ${type} 的展示值`,
-        ).toBe(expectations[typeIndex]?.value);
+        expect(values[sectionIndex], `${name} 分区类型 ${type} 的展示值`).toBe(
+          expectations[typeIndex]?.value,
+        );
       }
-    }
-  });
+    },
+  );
 
   it('切换日的类型会把已填写的周收敛为不指定', /** 日与周互斥口径失效会让表达式同时带上两个字段。 */ async () => {
     const wrapper = await mountCronTab('* * * ? * 1-2');
@@ -538,28 +562,81 @@ describe('cron 生成器控件写回', /** 面板子控件写回决定用户改�
     },
   ];
 
-  it('范围、间隔与指定控件写回后展示值与提交表达式一致', /** 子控件未绑定面板状态会让用户改动丢失或提交出别的值。 */ async () => {
+  /**
+   * 对一个写回分支切换类型、写回子控件并等待面板刷新。
+   * @param wrapper 已挂载的组件包装器。
+   * @param item 该分支的类型与子控件写回值。
+   */
+  async function applyWriteBack(wrapper: VueWrapper, item: WriteBackCase) {
+    await clickTypeRadio(item.section, item.type);
+    for (const [index, value] of (item.numbers ?? []).entries()) {
+      await numberInputInSection(wrapper, item.section, index).vm.$emit(
+        'update:modelValue',
+        value,
+      );
+    }
+    for (const [index, value] of (item.selects ?? []).entries()) {
+      await selectInSection(wrapper, item.section, index).vm.$emit(
+        'update:modelValue',
+        value,
+      );
+    }
+    await flushPromises();
+  }
+
+  /**
+   * 验证单个写回分支：展示值与提交表达式都必须来自本次写回。
+   * @param item 该分支的类型、写回值与期望展示值。
+   */
+  async function verifyWriteBack(item: WriteBackCase) {
     const wrapper = await mountCronTab('* * * * * ?');
     await clickGeneratorOption(wrapper, CUSTOM_OPTION);
 
-    for (const item of writeBackCases) {
-      await clickTypeRadio(item.section, item.type);
-      for (const [index, value] of (item.numbers ?? []).entries()) {
-        await numberInputInSection(wrapper, item.section, index).vm.$emit(
-          'update:modelValue',
-          value,
-        );
-      }
-      for (const [index, value] of (item.selects ?? []).entries()) {
-        await selectInSection(wrapper, item.section, index).vm.$emit(
-          'update:modelValue',
-          value,
-        );
-      }
-      await flushPromises();
+    await applyWriteBack(wrapper, item);
+
+    expect(
+      requireSectionValues()[item.section],
+      `${SECTION_NAMES[item.section]} 分区类型 ${item.type} 写回后的展示值`,
+    ).toBe(item.display);
+
+    const sections = requireSectionValues();
+    await clickFooterButton('确认');
+    expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toBe(
+      joinSections(sections),
+    );
+  }
+
+  // 每个写回分支独立成例：17 条分支在同一个用例体内串行执行时，真实重渲染会累计
+  // 占满 5000ms 预算（并行采集下复审实测超时），且首个失败分支会掩盖其余分支。
+  it.each(writeBackCases)(
+    '分区 $section 类型 $type 写回后展示值与提交表达式一致',
+    /** 子控件未绑定面板状态会让用户改动丢失或提交出别的值。 */ async (
+      item,
+    ) => {
+      await verifyWriteBack(item);
+    },
+  );
+
+  it('七个分区依次写回后一次提交为累积表达式', /** 后写的分区覆盖先前写回会让用户改动在提交时丢失。 */ async () => {
+    const wrapper = await mountCronTab('* * * * * ?');
+    await clickGeneratorOption(wrapper, CUSTOM_OPTION);
+    /** 每个分区各取一条写回分支，用于核对跨分区的累积状态。 */
+    const accumulated = SECTION_NAMES.map(
+      /** 取该分区的第一条写回分支。 */ (_, section) =>
+        writeBackCases.find(
+          /** 按分区下标定位分支。 */ (item) => item.section === section,
+        ),
+    ).filter(
+      /** 过滤缺失分区，保留可核对的分支。 */ (item): item is WriteBackCase =>
+        item !== undefined,
+    );
+
+    for (const item of accumulated) {
+      await applyWriteBack(wrapper, item);
+      // 逐分区即时核对：日与周互斥会在写入另一分区时收敛先前取值，累积断言必须紧跟本次写回。
       expect(
         requireSectionValues()[item.section],
-        `${SECTION_NAMES[item.section]} 分区类型 ${item.type} 写回后的展示值`,
+        `${SECTION_NAMES[item.section]} 分区累积写回后的展示值`,
       ).toBe(item.display);
     }
 

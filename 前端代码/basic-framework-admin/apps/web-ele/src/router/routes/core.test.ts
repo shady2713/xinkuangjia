@@ -1,10 +1,13 @@
-/** 校验核心静态路由的路径、名称、跳转目标与懒加载组件工厂，防止登录前后页面外壳装配错误。 */
+/** 校验核心静态路由的路径、名称、跳转目标与懒加载组件工厂，防止登录前后页面外壳装配错误。
+ *
+ * 布局与页面模块的首次编译与求值放在模块作用域完成，属于测试初始化成本，不计入用例预算。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 
@@ -41,7 +44,10 @@ function authChildren() {
   return children;
 }
 
-/** 断言懒加载工厂能解析出 Vue 组件定义。 */
+/**
+ * 断言懒加载工厂能解析出 Vue 组件定义。
+ * @param route 目标路由声明。
+ */
 async function expectResolvableComponent(route: RouteRecordRaw) {
   const module = (await componentLoader(route)()) as { default?: unknown };
   const component = module.default ?? module;
@@ -49,19 +55,39 @@ async function expectResolvableComponent(route: RouteRecordRaw) {
   expect(component).not.toBeNull();
 }
 
-beforeAll(
-  /** 布局与页面在导入期读取运行时配置，先提供与 app.config.js 同形状的测试值。 */ () => {
-    (
-      globalThis as unknown as { _VBEN_ADMIN_PRO_APP_CONF_: unknown }
-    )._VBEN_ADMIN_PRO_APP_CONF_ = {
-      VITE_APP_CAPTCHA_ENABLE: 'false',
-      VITE_APP_STORE_SECURE_KEY: 'DUMMY-store-key',
-      VITE_GLOB_API_URL: 'https://example.test/admin-api',
-      VITE_GLOB_AUTH_DINGDING_CLIENT_ID: '',
-      VITE_GLOB_AUTH_DINGDING_CORP_ID: '',
-    };
-  },
-);
+// 核心路由的布局与页面在导入期读取运行时配置，必须在首次解析之前提供与 app.config.js
+// 同形状的测试值；这里在模块作用域赋值，既早于下面的首次解析，也早于任何用例钩子。
+// 测试文件各自隔离运行环境，因此该替身不会影响其他文件。
+(
+  globalThis as unknown as { _VBEN_ADMIN_PRO_APP_CONF_: unknown }
+)._VBEN_ADMIN_PRO_APP_CONF_ = {
+  VITE_APP_CAPTCHA_ENABLE: 'false',
+  VITE_APP_STORE_SECURE_KEY: 'DUMMY-store-key',
+  VITE_GLOB_API_URL: 'https://example.test/admin-api',
+  VITE_GLOB_AUTH_DINGDING_CLIENT_ID: '',
+  VITE_GLOB_AUTH_DINGDING_CORP_ID: '',
+};
+
+/**
+ * 在用例预算之外完成核心路由布局与页面的首次解析。
+ *
+ * 这些模块的编译与求值属于测试初始化成本：放在用例体内时，并行采集下的冷启动会占用
+ * 5000ms 用例预算；用例随后仍调用同一批真实懒加载工厂，只是命中已完成的模块缓存。
+ * @throws 任一核心路由缺少懒加载工厂时抛出，与用例使用同一入口判定。
+ */
+async function warmCoreRouteComponents() {
+  const routes = [
+    fallbackNotFoundRoute,
+    coreRouteAt(0),
+    coreRouteAt(1),
+    ...authChildren(),
+  ];
+  for (const route of routes) {
+    await componentLoader(route)();
+  }
+}
+
+await warmCoreRouteComponents();
 
 describe('核心静态路由声明', /** 这组路由是应用骨架，任何字段变化都会直接影响登录跳转与兜底页面。 */ () => {
   it('全局兜底路由匹配任意剩余路径并隐藏于菜单与页签', /** 通配路径保证未知地址不会白屏，隐藏标记保证它不出现在导航中。 */ async () => {

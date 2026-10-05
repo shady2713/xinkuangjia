@@ -4,8 +4,12 @@
  * 该模块把页面加载的 `_app.config.js` 固定配置映射成框架偏好：后端路由模式、固定
  * 概览首页与认证失效策略属于业务硬约束；字符串 'true'/'false' 必须真实转成布尔值，
  * 否则偏好开关会永远为假。用例注入受控运行时配置后导入模块，断言真实映射结果。
+ * 模块图首次加载属于测试初始化成本，用静态导入完成（`vi.hoisted` 已在导入前建立
+ * 替身），避免把它计入用例的 5000ms 预算。
  */
 import { afterAll, describe, expect, it, vi } from 'vitest';
+
+import { overridesPreferences } from './preferences';
 
 vi.hoisted(
   /**
@@ -33,9 +37,7 @@ describe('运行时配置到框架偏好的映射', /** 映射错误会让路由
     },
   );
 
-  it('固定业务口径与字符串开关都映射为真实偏好值', /** 后端路由模式与固定首页是硬约束，字符串开关不转换会永远为假。 */ async () => {
-    const { overridesPreferences } = await import('./preferences');
-
+  it('固定业务口径与字符串开关都映射为真实偏好值', /** 后端路由模式与固定首页是硬约束，字符串开关不转换会永远为假。 */ () => {
     expect(overridesPreferences).toMatchObject({
       app: {
         accessMode: 'backend',

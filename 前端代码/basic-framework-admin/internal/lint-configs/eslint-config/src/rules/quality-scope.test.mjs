@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -162,8 +163,10 @@ describe('git 调用边界', /** Git 是所有发现与增量逻辑的基础，�
     const nested = join(root, 'packages', 'app');
     mkdirSync(nested, { recursive: true });
 
+    // Git 在 Windows 上按正斜杠输出仓库根，且不保证与文件系统同一大小写或长短名形式；
+    // 两侧都归一到真实路径后比较，核对的是"同一个目录"而不是平台路径写法。
     expect(repositoryRoot(nested)).toBe(
-      runGit(nested, ['rev-parse', '--show-toplevel']).trim(),
+      realpathSync(runGit(nested, ['rev-parse', '--show-toplevel']).trim()),
     );
   });
 

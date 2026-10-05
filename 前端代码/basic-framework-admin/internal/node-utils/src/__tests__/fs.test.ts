@@ -92,20 +92,48 @@ describe('ensureFile 建立占位文件', /** 占位文件用于把构建输出�
     expect(readFileSync(target, 'utf8')).toBe('已有内容');
   });
 
-  it('目标不可写时留痕并向调用方抛出原错误', /** 静默失败会让后续写出落到不存在的路径上。 */ async () => {
+  it('目标不是普通文件时留痕并抛出跨平台稳定的 EISDIR', /** 目录在 POSIX 上由内核以 EISDIR 拒绝，Windows 允许打开目录句柄且零字节写入不保证失败；占位文件守卫必须在写入前给出同一错误码。 */ async () => {
     const consoleError = vi
       .spyOn(console, 'error')
       .mockImplementation(/** 屏蔽预期内的输出，只保留调用记录。 */ () => {});
     const directoryAsFile = join(workspace, 'as-directory');
     mkdirSync(directoryAsFile);
 
-    await expect(ensureFile(directoryAsFile)).rejects.toMatchObject({
-      code: 'EISDIR',
-    });
-    expect(consoleError).toHaveBeenCalledWith(
-      'Error ensuring file:',
-      expect.any(Error),
+    const error: unknown = await ensureFile(directoryAsFile).catch(
+      /** 保留真实拒绝原因用于核验错误来源。 */ (error_: unknown) => error_,
     );
+
+    expect(error).toBeInstanceOf(Error);
+    // syscall 为 write 说明拒绝来自占位文件守卫，而不是平台自己的 open 语义。
+    expect(error).toMatchObject({
+      code: 'EISDIR',
+      path: directoryAsFile,
+      syscall: 'write',
+    });
+    expect(consoleError).toHaveBeenCalledWith('Error ensuring file:', error);
+  });
+
+  it('父路径不是目录时留痕并向调用方抛出底层原错误', /** 目录创建失败被包装或吞掉会让调用方拿不到真实失败原因。 */ async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(/** 屏蔽预期内的输出，只保留调用记录。 */ () => {});
+    const blocker = join(workspace, 'blocker.txt');
+    writeFileSync(blocker, 'DUMMY-已有文件');
+    const target = join(blocker, 'placeholder.txt');
+
+    const error: unknown = await ensureFile(target).catch(
+      /** 保留底层 fs 错误用于核验传播路径。 */ (error_: unknown) => error_,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    // 递归 mkdir 在目标已存在且不是目录时由 Node 自身判定并抛出 EEXIST，
+    // 与平台 errno 无关，因此这里可以精确断言而不是放宽错误码范围。
+    expect(error).toMatchObject({
+      code: 'EEXIST',
+      path: blocker,
+      syscall: 'mkdir',
+    });
+    expect(consoleError).toHaveBeenCalledWith('Error ensuring file:', error);
   });
 });
 
