@@ -8,7 +8,10 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
 /**
- * SmsChannelRespVO 响应对象，承载接口输出数据。
+ * 管理后台短信渠道响应。
+ *
+ * <p>响应不得包含短信 API 密钥；密钥只在新增或修改时由调用方提交，服务端不提供反向读取。
+ * 读取接口只返回 {@code apiKey} 与回调地址等非秘密字段，查询权限不构成获取第三方服务凭据的依据。</p>
  *
  * @author 李杰
  */
@@ -54,12 +57,6 @@ public class SmsChannelRespVO {
     @Schema(description = "短信 API 的账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "sms-access-key")
     @NotNull(message = "短信 API 的账号不能为空")
     private String apiKey;
-
-    /**
-     * 短信 API 的密钥。
-     */
-    @Schema(description = "短信 API 的密钥", example = "yuanma")
-    private String apiSecret;
 
     /**
      * 短信发送回调 URL。

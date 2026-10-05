@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 /**
  * 短信渠道新增/修改弹窗：按是否已存在主键决定走新增还是修改接口。
+ *
+ * 读取接口不返回 API Secret，编辑时密钥输入框保持为空，留空提交即保持服务端已保存的密钥。
  */
 import type { ComponentType } from '#/adapter/component';
 import type { SystemSmsChannelApi } from '#/api/system/sms/channel';
@@ -24,7 +26,10 @@ import { useFormSchema } from '../data';
 const emit = defineEmits(['success']);
 const formData = ref<SystemSmsChannelApi.Channel>();
 
-const [Form, formApi] = useVbenForm<ComponentType, SystemSmsChannelApi.Channel>(
+const [Form, formApi] = useVbenForm<
+  ComponentType,
+  SystemSmsChannelApi.ChannelSaveReq
+>(
   {
     commonConfig: {
       componentProps: {

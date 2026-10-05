@@ -213,7 +213,7 @@ describe('短信渠道表单字段', /** 字段名与校验决定渠道配置能
     });
     expect(findField('apiSecret').rules).toBeUndefined();
     expect(componentProps(findField('apiSecret')).placeholder).toBe(
-      '请输入 API Secret',
+      '留空表示保持原密钥',
     );
     expect(findField('callbackUrl')).toMatchObject({
       component: 'Input',

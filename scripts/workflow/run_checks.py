@@ -82,6 +82,9 @@ GATES = (
         zero_reason="没有适用的 Java 增量文件，未验证 Java 声明",
         scope="worktree-private-index-incremental",
     ),
+    Gate("backend-boundaries", "code/java/verify_backend_boundaries.py", "boundaries"),
+    Gate("workspace-layering", "code/web/verify_workspace_layering.py", "boundaries"),
+    Gate("api-contracts", "code/java/verify_api_contracts.py", "boundaries"),
     Gate(
         "python-comments",
         "code/python/check_worktree_python_comments.py",
@@ -387,7 +390,9 @@ def main() -> int:
     """输出检查清单或运行已选择检查，并保留完整汇总状态。"""
     arguments = argparse.ArgumentParser(description=__doc__)
     arguments.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    arguments.add_argument("--group", choices=("all", "docs", "comments"), default="all")
+    arguments.add_argument(
+        "--group", choices=("all", "docs", "comments", "boundaries"), default="all"
+    )
     arguments.add_argument("--checks", nargs="+", default=[], help="指定检查名，自动补齐前置检查")
     arguments.add_argument("--jobs", type=positive_integer, default=3)
     arguments.add_argument("--timeout", type=positive_integer, default=180)

@@ -3,7 +3,12 @@ import type { PageParam, PageResult } from '@vben/request';
 import { requestClient } from '#/api/request';
 
 export namespace SystemSmsChannelApi {
-  /** 短信渠道 */
+  /**
+   * 短信渠道响应模型。
+   *
+   * 读取接口不返回短信 API 密钥，因此这里没有 apiSecret 字段；创建与修改改传
+   * {@link ChannelSaveReq}，避免把响应类型当作请求类型使用。
+   */
   export interface Channel {
     id?: number;
     code: string;
@@ -11,9 +16,19 @@ export namespace SystemSmsChannelApi {
     signature: string;
     remark: string;
     apiKey: string;
-    apiSecret: string;
     callbackUrl: string;
-    createTime?: string;
+    /** 创建时间；后端按毫秒时间戳序列化。 */
+    createTime?: number;
+  }
+
+  /**
+   * 新增/修改短信渠道的请求模型。
+   *
+   * apiSecret 只在提交时上行；编辑时留空表示保持服务端已保存的密钥不变，
+   * 提交空值不会把已有密钥覆盖为空。
+   */
+  export interface ChannelSaveReq extends Omit<Channel, 'createTime'> {
+    apiSecret?: string;
   }
 }
 
@@ -32,13 +47,21 @@ export function getSmsChannel(id: number) {
   );
 }
 
-/** 新增短信渠道 */
-export function createSmsChannel(data: SystemSmsChannelApi.Channel) {
+/**
+ * 新增短信渠道。
+ * @param data 渠道表单数据，含只在提交时上行的 API Secret
+ * @returns 新建渠道的编号
+ */
+export function createSmsChannel(data: SystemSmsChannelApi.ChannelSaveReq) {
   return requestClient.post('/system/sms-channel/create', data);
 }
 
-/** 修改短信渠道 */
-export function updateSmsChannel(data: SystemSmsChannelApi.Channel) {
+/**
+ * 修改短信渠道。
+ * @param data 渠道表单数据；apiSecret 留空表示保持服务端已保存的密钥
+ * @returns 更新结果
+ */
+export function updateSmsChannel(data: SystemSmsChannelApi.ChannelSaveReq) {
   return requestClient.put('/system/sms-channel/update', data);
 }
 

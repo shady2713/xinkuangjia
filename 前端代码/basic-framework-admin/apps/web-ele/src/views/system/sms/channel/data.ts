@@ -6,7 +6,10 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * 构造新增/修改短信渠道的表单定义。
+ * @returns 渠道表单字段定义，API Secret 留空表示保持原密钥
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -59,7 +62,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'apiSecret',
       label: 'API Secret',
       componentProps: {
-        placeholder: '请输入 API Secret',
+        placeholder: '留空表示保持原密钥',
       },
     },
     {
