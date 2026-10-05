@@ -43,7 +43,10 @@ describe('提示封装渲染', /** 触发插槽与内容决定用户能否看到
     expect(document.querySelector('.custom-content')?.className).toContain(
       'side-content',
     );
-    expect(document.querySelector('.custom-content')?.dataset.side).toBe('top');
+    expect(
+      (document.querySelector('.custom-content') as HTMLElement | null)?.dataset
+        .side,
+    ).toBe('top');
   });
 
   it('帮助提示未传触发插槽时渲染默认问号图标', /** 缺少默认图标会让帮助入口变成空白。 */ () => {

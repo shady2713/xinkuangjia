@@ -80,7 +80,7 @@ describe('浮层封装渲染与开合', /** 触发件与内容决定筛选面板
     expect(mounted.find('button').attributes('data-state')).toBe('open');
     const content = document.querySelector('.custom-content');
     expect(content).not.toBeNull();
-    expect(content?.dataset.align).toBe('end');
+    expect((content as HTMLElement | null)?.dataset.align).toBe('end');
     expect(document.body.textContent).toContain('筛选项');
   });
 });

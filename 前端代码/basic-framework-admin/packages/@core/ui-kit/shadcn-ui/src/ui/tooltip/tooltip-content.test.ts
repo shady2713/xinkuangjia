@@ -80,9 +80,9 @@ describe('提示内容渲染与定位', /** 内容与定位决定用户能否看
     expect(content?.textContent).toContain('这是字段说明');
     expect(content?.className).toContain('rounded-sm');
     expect(content?.className).toContain('z-popup');
-    expect(content?.dataset.side).toBe('right');
+    expect((content as HTMLElement | null)?.dataset.side).toBe('right');
     // 首帧直接打开时 reka-ui 用 instant-open 跳过进入动画，状态串仍表示已打开。
-    expect(content?.dataset.state).toContain('open');
+    expect((content as HTMLElement | null)?.dataset.state).toContain('open');
   });
 
   it('关闭时不渲染提示内容', /** 关闭仍渲染会在页面上留下残留提示。 */ async () => {
@@ -131,6 +131,9 @@ describe('提示内容渲染与定位', /** 内容与定位决定用户能否看
     await nextTick();
     await nextTick();
 
-    expect(document.querySelector('.top-tooltip')?.dataset.side).toBe('top');
+    expect(
+      (document.querySelector('.top-tooltip') as HTMLElement | null)?.dataset
+        .side,
+    ).toBe('top');
   });
 });
