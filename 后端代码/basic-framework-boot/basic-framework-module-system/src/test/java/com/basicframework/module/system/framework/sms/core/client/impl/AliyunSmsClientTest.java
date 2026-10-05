@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 
 /**
  * 验证阿里云短信客户端的配置校验、请求签名、URL 编码、响应解析与状态映射契约。
@@ -133,6 +134,29 @@ class AliyunSmsClientTest {
         assertThat(result.getApiRequestId()).isEqualTo("DUMMY-REQUEST-ID");
         assertThat(result.getApiCode()).isEqualTo("OK");
         assertThat(result.getApiMsg()).isEqualTo("OK");
+    }
+
+    /**
+     * 查询串百分号编码失败必须原样抛出，且不得发出任何请求。
+     *
+     * <p>签名依赖完整查询串：编码失败时若继续请求，发出去的会是缺参数或未签名的报文，
+     * 云端会以业务失败返回，而真实原因（本地编码异常）被掩盖。这里让编码器抛错，
+     * 断言异常类型与消息保持不变，并确认 HTTP 调用一次都没有发生。</p>
+     */
+    @Test
+    void percentEncodingFailurePropagatesWithoutSendingRequest() {
+        AliyunSmsClient client = new AliyunSmsClient(properties());
+        try (MockedStatic<HttpUtils> httpUtils = mockStatic(HttpUtils.class)) {
+            httpUtils.when(() -> HttpUtils.encodeUtf8(anyString()))
+                    .thenThrow(new IllegalStateException("DUMMY-ENCODE-FAILURE"));
+
+            assertThatThrownBy(() -> client.sendSms(1024L, "13800000000", "DUMMY-TEMPLATE-CODE", List.of()))
+                    .as("本地编码失败必须显式失败，不能发出不完整请求")
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("DUMMY-ENCODE-FAILURE");
+
+            httpUtils.verify(() -> HttpUtils.post(anyString(), anyMap(), anyString()), never());
+        }
     }
 
     /** 云端返回非 OK 业务码时必须判为失败并保留错误信息。 */

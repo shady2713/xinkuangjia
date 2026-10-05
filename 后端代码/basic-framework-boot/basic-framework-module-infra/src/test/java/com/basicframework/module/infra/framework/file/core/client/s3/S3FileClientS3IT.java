@@ -490,6 +490,33 @@ class S3FileClientS3IT {
         }
     }
 
+    /**
+     * 预签名客户端构建失败时必须关闭刚建立的 S3 客户端并原样抛出，不能留下半初始化的客户端。
+     *
+     * <p>初始化会先建立 S3 客户端再建立预签名器；预签名器失败若直接抛出，已建立的客户端会泄漏
+     * 连接与线程，并且字段里会留下一个没有配套预签名器的半成品。这里让
+     * {@code S3Presigner.builder()} 抛错，断言异常原样透出且客户端与预签名器字段都没有被替换。</p>
+     */
+    @Test
+    void initFailureClosesNewClientAndPropagatesOriginalException() {
+        S3FileClient client = new S3FileClient(10L, probeConfig("https://s3.amazonaws.com", "us-east-1"));
+        IllegalStateException failure = new IllegalStateException("DUMMY-PRESIGNER-FAILURE");
+
+        try (org.mockito.MockedStatic<software.amazon.awssdk.services.s3.presigner.S3Presigner> presigner =
+                     org.mockito.Mockito.mockStatic(software.amazon.awssdk.services.s3.presigner.S3Presigner.class)) {
+            presigner.when(software.amazon.awssdk.services.s3.presigner.S3Presigner::builder).thenThrow(failure);
+
+            assertThatThrownBy(client::init)
+                    .as("预签名器构建失败必须原样抛出同一个异常")
+                    .isSameAs(failure);
+        }
+
+        assertThat(ReflectionTestUtils.getField(client, "client"))
+                .as("构建失败不得把新建的 S3 客户端装进字段").isNull();
+        assertThat(ReflectionTestUtils.getField(client, "presigner"))
+                .as("构建失败不得留下预签名器").isNull();
+    }
+
     /** 缺少协议头的节点地址必须补全协议头，并按其拼接访问域名。 */
     @Test
     void buildDomainAndEndpointCompleteMissingScheme() {

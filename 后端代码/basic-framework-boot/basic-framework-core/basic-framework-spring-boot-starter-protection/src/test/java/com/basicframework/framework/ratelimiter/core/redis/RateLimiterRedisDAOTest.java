@@ -31,7 +31,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -309,6 +312,82 @@ class RateLimiterRedisDAOTest extends ProtectionRedisTestSupport {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    /**
+     * 等待重建锁被中断时必须恢复中断标记并沿用已落盘配置，不得把中断伪装成成功改参。
+     *
+     * <p>改参走的是慢路径：先读落盘配置判断确实变化，再在分布式锁内重建。若在等锁时被中断，
+     * 重建既没有发生也不允许被当成成功；同时必须把中断标记放回线程，调用方才能感知取消。
+     * 这里用真实重建分支（落盘速率与本次声明不同）加可控的锁替身精确注入中断。</p>
+     */
+    @Test
+    @DisplayName("等待重建锁被中断时恢复中断标记并沿用已落盘配置")
+    void shouldKeepStoredRateAndRestoreInterruptWhenRebuildLockWaitIsInterrupted() throws Exception {
+        String key = nextKey("rate-rebuild-interrupted");
+        RRateLimiter rateLimiter = mock(RRateLimiter.class);
+        RLock rebuildLock = mock(RLock.class);
+        RedissonClient client = mock(RedissonClient.class);
+        when(rateLimiter.trySetRate(org.mockito.ArgumentMatchers.eq(RateType.OVERALL), anyLong(),
+                org.mockito.ArgumentMatchers.any(Duration.class))).thenReturn(false);
+        when(rateLimiter.getConfig()).thenReturn(storedConfig(CHANGED_FROM_COUNT, PERIOD_SECONDS));
+        when(rateLimiter.tryAcquire()).thenReturn(true);
+        when(client.getRateLimiter("rate_limiter:" + key)).thenReturn(rateLimiter);
+        when(client.getLock("rate_limiter:" + key + ":rebuild")).thenReturn(rebuildLock);
+        when(rebuildLock.tryLock(3L, 10L, TimeUnit.SECONDS)).thenThrow(new InterruptedException("DUMMY-CANCEL"));
+        RateLimiterRedisDAO dao = new RateLimiterRedisDAO(client);
+
+        boolean acquired;
+        try {
+            acquired = dao.tryAcquire(key, COUNT, PERIOD_SECONDS, TimeUnit.SECONDS);
+        } finally {
+            // 中断标记必须由被测实现放回，这里负责清理，避免污染后续用例。
+            assertThat(Thread.interrupted()).as("等待锁被中断后必须恢复线程中断标记").isTrue();
+        }
+
+        assertThat(acquired).as("未重建成功时仍按已落盘配置放行").isTrue();
+        verify(rateLimiter, never()).setRate(org.mockito.ArgumentMatchers.any(), anyLong(),
+                org.mockito.ArgumentMatchers.any(Duration.class));
+        verify(rateLimiter, never()).expire(org.mockito.ArgumentMatchers.any(Duration.class));
+    }
+
+    /**
+     * 未在等待时间内取得重建锁时必须沿用已落盘配置，且不触碰锁与速率。
+     *
+     * <p>拿不到锁说明其它节点正在重建或租约尚未释放；此时重建会清空已消耗配额，必须放弃。</p>
+     */
+    @Test
+    @DisplayName("未取得重建锁时沿用已落盘配置且不重建")
+    void shouldKeepStoredRateWhenRebuildLockIsNotAcquired() throws Exception {
+        String key = nextKey("rate-rebuild-busy");
+        RRateLimiter rateLimiter = mock(RRateLimiter.class);
+        RLock rebuildLock = mock(RLock.class);
+        RedissonClient client = mock(RedissonClient.class);
+        when(rateLimiter.trySetRate(org.mockito.ArgumentMatchers.eq(RateType.OVERALL), anyLong(),
+                org.mockito.ArgumentMatchers.any(Duration.class))).thenReturn(false);
+        when(rateLimiter.getConfig()).thenReturn(storedConfig(CHANGED_FROM_COUNT, PERIOD_SECONDS));
+        when(rateLimiter.tryAcquire()).thenReturn(true);
+        when(client.getRateLimiter("rate_limiter:" + key)).thenReturn(rateLimiter);
+        when(client.getLock("rate_limiter:" + key + ":rebuild")).thenReturn(rebuildLock);
+        when(rebuildLock.tryLock(3L, 10L, TimeUnit.SECONDS)).thenReturn(false);
+        RateLimiterRedisDAO dao = new RateLimiterRedisDAO(client);
+
+        assertThat(dao.tryAcquire(key, COUNT, PERIOD_SECONDS, TimeUnit.SECONDS)).isTrue();
+        verify(rateLimiter, never()).setRate(org.mockito.ArgumentMatchers.any(), anyLong(),
+                org.mockito.ArgumentMatchers.any(Duration.class));
+        verify(rebuildLock, never()).unlock();
+    }
+
+    /**
+     * 构造与本次声明不一致的已落盘限流配置，用于稳定进入重建慢路径。
+     *
+     * @param rate 已落盘速率
+     * @param intervalSeconds 已落盘周期（秒）
+     * @return 已落盘配置
+     */
+    private static org.redisson.api.RateLimiterConfig storedConfig(long rate, long intervalSeconds) {
+        return new org.redisson.api.RateLimiterConfig(RateType.OVERALL, rate,
+                TimeUnit.SECONDS.toMillis(intervalSeconds));
     }
 
     /**

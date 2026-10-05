@@ -13,6 +13,7 @@ import com.basicframework.module.infra.dal.mysql.file.FileMapper;
 import com.basicframework.module.infra.enums.ErrorCodeConstants;
 import com.basicframework.module.infra.framework.file.config.FileUploadProperties;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
+import com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,33 @@ class FileServiceImplUploadAndReadTest {
     }
 
     /** 清理登录身份与请求上下文，避免归属在用例之间泄漏。 */
+    /**
+     * 探测出的 MIME 超出长度上限时必须拒绝登记，不能把无界文本写进文件元数据。
+     *
+     * <p>最终 MIME 会写进 {@code infra_file.type} 并作为下载响应头返回：异常长的类型既可能是
+     * 探测器的异常输出，也可能被用来在响应头里注入额外内容，因此必须在登记前按元数据合法性拒绝。
+     * 这里让内容探测返回一个超长类型（真实 Tika 不会产出这种结果，属于对防御分支的故障注入），
+     * 断言拒绝分类是 {@code FILE_METADATA_INVALID} 且完全没有触达存储与登记。</p>
+     */
+    @Test
+    void createFileRejectsOversizedDetectedMimeType() {
+        try (org.mockito.MockedStatic<FileTypeUtils> fileTypeUtils =
+                     org.mockito.Mockito.mockStatic(FileTypeUtils.class)) {
+            String oversized = "x".repeat(FilePathUtils.MAX_MIME_TYPE_LENGTH + 1);
+            fileTypeUtils.when(() -> FileTypeUtils.getMineType(any(byte[].class), anyString())).thenReturn(oversized);
+            fileTypeUtils.when(() -> FileTypeUtils.isAllowedUploadType(any(byte[].class), anyString())).thenReturn(true);
+
+            assertThatThrownBy(() -> service.createFile(new byte[] {1, 2, 3}, "probe.png", "dir", null))
+                    .isInstanceOf(ServiceException.class)
+                    .extracting(exception -> ((ServiceException) exception).getCode())
+                    .isEqualTo(ErrorCodeConstants.FILE_METADATA_INVALID.getCode());
+        }
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(lifecycle);
+    }
+
+    /** 清理本类用例写入的线程上下文，避免登录身份与请求对象泄漏到后续用例。 */
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();

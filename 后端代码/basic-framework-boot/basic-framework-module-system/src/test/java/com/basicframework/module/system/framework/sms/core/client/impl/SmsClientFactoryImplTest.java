@@ -274,6 +274,34 @@ class SmsClientFactoryImplTest {
     }
 
     /**
+     * 配置摘要必须同时覆盖「没有配置」与「有配置」两种取值，且只暴露渠道编号与编码。
+     *
+     * <p><b>白盒直调：</b>该摘要是私有方法，公开路径只会在「枚举新增渠道但开关未补分支」的
+     * 防御分支里调用（见 {@code createSmsClient} 尾部的兜底）。生产代码当前的
+     * {@link SmsChannelEnum} 只有阿里云与腾讯云两个常量且开关已全部覆盖，因此这条公开路径
+     * 在本版本不可达；此处直接校验该方法自身声明的形参域，确认它不会把 apiKey / apiSecret
+     * 等凭据写进日志摘要，并在入参为空时给出稳定的 "null" 文本。</p>
+     */
+    @Test
+    void summarizePropertiesNeverLeaksCredentialsAndHandlesNullChannel() {
+        SmsClientFactoryImpl factory = new SmsClientFactoryImpl();
+        SmsChannelProperties properties = aliyunProperties(0L, "DUMMY-ACCESS-KEY", "DUMMY-ACCESS-SECRET");
+
+        Object summary = ReflectionTestUtils.invokeMethod(factory, "summarizeProperties", properties);
+
+        assertThat(summary).isEqualTo("id(0) code(ALIYUN)");
+        assertThat((String) summary)
+                .as("配置摘要写入日志，绝不能包含任何凭据")
+                .doesNotContain("DUMMY-ACCESS-KEY")
+                .doesNotContain("DUMMY-ACCESS-SECRET");
+        Object nullSummary = ReflectionTestUtils.invokeMethod(factory, "summarizeProperties",
+                (SmsChannelProperties) null);
+        assertThat(nullSummary)
+                .as("空配置必须给出稳定文本，而不是抛出空指针")
+                .isEqualTo("null");
+    }
+
+    /**
      * 读取客户端当前生效的配置。
      *
      * <p>生产配置字段是抽象类的受保护状态，没有公开读取入口，

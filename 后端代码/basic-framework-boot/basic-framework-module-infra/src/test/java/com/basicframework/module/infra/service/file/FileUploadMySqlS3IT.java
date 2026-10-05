@@ -18,6 +18,7 @@ import com.basicframework.module.infra.framework.file.config.FileUploadPropertie
 import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileClientFactoryImpl;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
+import com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -619,6 +620,33 @@ class FileUploadMySqlS3IT {
         assertNoMetadata(oversized);
         assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
                 oversized.getId())).isEqualTo("PENDING");
+    }
+
+    /**
+     * 内容探测出的 MIME 超出长度上限时必须在写元数据前拒绝。
+     *
+     * <p>该类型会写进文件表并作为下载响应头返回；无界文本既可能是探测器的异常输出，
+     * 也可能被用来在响应头里附加内容。这里对内容探测做故障注入（真实 Tika 不会产出超长类型），
+     * 断言拒绝分类为 {@code FILE_METADATA_INVALID}、没有落库，且预约仍停留在可重试的 PENDING。</p>
+     */
+    @Test
+    void oversizedDetectedMimeTypeIsRejectedBeforeMetadata() throws Exception {
+        byte[] body = bytes("valid text");
+        FileUploadDO upload = reserve(body, false);
+        try (org.mockito.MockedStatic<FileTypeUtils> fileTypeUtils =
+                     org.mockito.Mockito.mockStatic(FileTypeUtils.class)) {
+            fileTypeUtils.when(() -> FileTypeUtils.isAllowedUploadType(any(byte[].class), anyString())).thenReturn(true);
+            fileTypeUtils.when(() -> FileTypeUtils.getMineType(any(byte[].class), anyString()))
+                    .thenReturn("x".repeat(FilePathUtils.MAX_MIME_TYPE_LENGTH + 1));
+
+            assertThatThrownBy(() -> lifecycle.complete(upload.getPath(), owner, body))
+                    .isInstanceOfSatisfying(ServiceException.class,
+                            failure -> assertThat(failure.getCode()).isEqualTo(FILE_METADATA_INVALID.getCode()));
+        }
+
+        assertNoMetadata(upload);
+        assertThat(jdbc.queryForObject("SELECT status FROM infra_file_upload WHERE id = ?", String.class,
+                upload.getId())).isEqualTo("PENDING");
     }
 
     /**

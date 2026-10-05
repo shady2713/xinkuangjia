@@ -142,4 +142,25 @@ class BootstrapBoundaryTest {
         environment.put("DB_PASSWORD", UUID.randomUUID().toString());
         return environment;
     }
+
+    /**
+     * 命名锁摘要算法不可用时必须显式拒绝，不能退化成可预测或不唯一的锁名。
+     *
+     * <p>命名锁用来串行化多个初始化进程；锁名由目标库摘要派生，因此摘要算法缺失时没有任何
+     * 安全替代品——退化成库名或固定值会让两个不同目标互相干扰，甚至让并发初始化同时拿到"锁"。
+     * 这里让 {@code MessageDigest} 取算法失败，断言拒绝分类是运行时错误而不是继续执行。</p>
+     */
+    @Test
+    void lockNameFailsWhenDigestAlgorithmIsUnavailable() {
+        try (org.mockito.MockedStatic<java.security.MessageDigest> digest =
+                     org.mockito.Mockito.mockStatic(java.security.MessageDigest.class)) {
+            digest.when(() -> java.security.MessageDigest.getInstance("SHA-256"))
+                    .thenThrow(new java.security.NoSuchAlgorithmException("DUMMY-NO-DIGEST"));
+
+            assertThatThrownBy(() -> BootstrapAdminService.lockName("app"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Required database lock digest unavailable");
+        }
+    }
+
 }

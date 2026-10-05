@@ -52,6 +52,7 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
@@ -188,6 +189,70 @@ class AdminBootstrapMySqlIT {
         assertThat(jdbc.queryForObject("SELECT IS_USED_LOCK(?)", Long.class, BootstrapAdminService.lockName(schema))).isNull();
         jdbc.execute("DROP TRIGGER bootstrap_reject_grant");
         assertThat(create()).isPositive();
+    }
+
+    /**
+     * 命名锁被其它会话持有时必须在等待超时后拒绝初始化，而不是继续写入身份数据。
+     *
+     * <p>真实并发下另一个初始化进程可能正在建库写身份；拿不到锁就写入会与对方交错，
+     * 产生重复账号或半个关联。这里用一个真实连接持有同名锁，断言拒绝分类为 BOOTSTRAP_BUSY
+     * 且目标库仍无任何身份数据。</p>
+     */
+    @Test
+    void initializationIsRejectedWhileAnotherSessionHoldsNamedLock() throws Exception {
+        String lock = BootstrapAdminService.lockName(schema);
+        try (Connection holder = dataSource.getConnection()) {
+            namedLock(holder, "GET_LOCK(?, 0)", lock);
+
+            assertThatThrownBy(this::create).hasMessage("BOOTSTRAP_BUSY");
+            assertEmptyIdentity();
+        }
+    }
+
+    /**
+     * 回滚本身失败时必须以抑制异常保留原始失败，且原失败不被替换或吞掉。
+     *
+     * <p>回滚失败是二次故障：调用方需要按原始 SQLException 判断失败原因（入口据此输出
+     * 固定分类），回滚异常只能作为 suppressed 附加信息，不能覆盖原始异常。</p>
+     *
+     * <p>故障注入方式：先取真实连接，再代理它在 {@code rollback()} 上抛错，
+     * 并通过 {@code DriverManager} 静态替身把该连接交给被测服务，
+     * 使事务与锁定仍在真实 MySQL 上执行。</p>
+     */
+    @Test
+    void rollbackFailureIsSuppressedWithoutReplacingOriginalFailure() throws Exception {
+        jdbc.execute("CREATE TRIGGER bootstrap_reject_grant BEFORE INSERT ON system_user_role"
+                + " FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'controlled test failure'");
+        Connection real = DriverManager.getConnection(databaseUrl, databaseUser, databasePassword);
+        Connection failingRollback = (Connection) java.lang.reflect.Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (proxy, method, arguments) -> {
+                    if ("rollback".equals(method.getName())) {
+                        throw new SQLException("DUMMY-ROLLBACK-FAILURE");
+                    }
+                    try {
+                        return method.invoke(real, arguments);
+                    } catch (java.lang.reflect.InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                });
+        SQLException failure;
+        try (org.mockito.MockedStatic<DriverManager> mocked = org.mockito.Mockito.mockStatic(DriverManager.class)) {
+            mocked.when(() -> DriverManager.getConnection(org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.any(java.util.Properties.class))).thenReturn(failingRollback);
+
+            failure = catchThrowableOfType(this::create, SQLException.class);
+        } finally {
+            failingRollback.close();
+            jdbc.execute("DROP TRIGGER IF EXISTS bootstrap_reject_grant");
+        }
+
+        assertThat((Object) failure).as("原始写入失败必须仍以 SQLException 抛出").isNotNull();
+        assertThat(failure.getSuppressed())
+                .as("回滚失败只能作为抑制异常附加，不能替换原始失败")
+                .hasSize(1);
+        assertThat(failure.getSuppressed()[0]).isInstanceOf(SQLException.class)
+                .hasMessage("DUMMY-ROLLBACK-FAILURE");
+        assertEmptyIdentity();
     }
 
     /** 两个初始化连接真实等待同一命名锁，释放后仅一个提交，另一个读到已存在身份。 */

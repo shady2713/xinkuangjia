@@ -62,6 +62,20 @@ class FileTypeUtilsTest {
                 .as("不可识别的内容返回通用二进制类型").isEqualTo("application/octet-stream");
     }
 
+    /**
+     * 内容为 null 时按内容识别必须显式失败，不能静默返回通用二进制类型。
+     *
+     * <p>调用方（上传校验与直传完成校验）都先确认内容非空，因此这里锁定的是方法自身的边界：
+     * 传 null 属于调用错误，静默回退成 {@code application/octet-stream} 会让后续白名单校验
+     * 拿到一个看似合法的类型。</p>
+     */
+    @Test
+    void getMineTypeByContentRejectsNullContent() {
+        assertThatThrownBy(() -> FileTypeUtils.getMineType((byte[]) null))
+                .as("null 内容必须显式失败，不得静默回退为通用类型")
+                .isInstanceOf(NullPointerException.class);
+    }
+
     /** 按文件名识别扩展名对应的 MIME，用于只拿到文件名的场景。 */
     @Test
     void getMineTypeByNameUsesExtension() {

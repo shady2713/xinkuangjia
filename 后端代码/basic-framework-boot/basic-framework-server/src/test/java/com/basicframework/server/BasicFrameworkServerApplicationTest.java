@@ -1,6 +1,8 @@
 package com.basicframework.server;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
@@ -11,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mockStatic;
 
 /**
  * 验证后端启动入口的装配声明。
@@ -19,8 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 仍能启动，但 server 与 module 下的控制器、服务和配置都不会生效，表现为接口全部 404 或配置缺失。
  * 因此这里同时锁定扫描范围的声明与解析结果——解析出的两个包必须真实存在于类路径上。</p>
  *
- * <p>{@code main} 本身依赖完整运行时（真实 MySQL、Redis、MinIO 与端口绑定），
- * 由打包产物的人工启动探针验证，不在本用例内启动整个应用。</p>
+ * <p>{@code main} 会把入口类与启动参数交给 Spring Boot，用静态替身拦截
+ * {@code SpringApplication.run} 后即可在不拉起完整运行时的前提下验证这次委托：
+ * 传错入口类会让组件扫描失效，丢掉参数会让 {@code --server.port} 之类的启动参数静默失效。</p>
  *
  * @author shady2713
  */
@@ -68,6 +72,23 @@ class BasicFrameworkServerApplicationTest {
                 .isEqualTo(BasicFrameworkServerApplication.class);
         assertThat(Class.forName(resolved.get(1) + ".infra.framework.file.config.MinioFileProperties"))
                 .as("module 扫描范围必须包含业务模块组件").isNotNull();
+    }
+
+    /**
+     * 静态入口必须把入口类本身与原始启动参数交给 Spring Boot。
+     *
+     * <p>替换 {@code SpringApplication.run} 静态方法后调用 {@code main}，
+     * 断言调用参数与传入参数完全一致；这样既不启动真实运行时，也能发现“传错类”或“吞掉参数”。</p>
+     */
+    @Test
+    void mainDelegatesEntryClassAndArgumentsToSpringApplication() {
+        String[] arguments = {"--server.port=0", "--spring.profiles.active=probe"};
+
+        try (MockedStatic<SpringApplication> springApplication = mockStatic(SpringApplication.class)) {
+            BasicFrameworkServerApplication.main(arguments);
+
+            springApplication.verify(() -> SpringApplication.run(BasicFrameworkServerApplication.class, arguments));
+        }
     }
 
     /**

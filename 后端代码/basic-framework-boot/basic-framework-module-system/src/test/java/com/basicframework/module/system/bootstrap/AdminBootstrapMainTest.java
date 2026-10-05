@@ -3,6 +3,8 @@ package com.basicframework.module.system.bootstrap;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * 验证一次性管理员入口的拒绝与错误分类出口：参数、配置与意外失败都不输出环境值。
@@ -28,6 +31,30 @@ class AdminBootstrapMainTest {
     private final ByteArrayOutputStream output = new ByteArrayOutputStream();
     /** 固定错误分类输出流，用于断言对外可见的失败文案。 */
     private final ByteArrayOutputStream error = new ByteArrayOutputStream();
+
+    /**
+     * 无终端环境下读取口令必须按配置拒绝，而不是回退到回显 stdin。
+     *
+     * <p><b>白盒直调：</b>{@code readConsolePassword} 是私有方法，公开入口 {@code main} 会
+     * 调用 {@code System.exit}，无法在测试 JVM 内直接执行。这里直接校验该方法的真实契约：
+     * 通过 {@code System.console()} 读取无回显口令，重定向 stdin 或没有终端时必须抛出
+     * {@link BootstrapFailure} 的 {@code INVALID_CONFIGURATION} 分类，绝不读取普通 stdin。
+     * 本用例只在确实没有终端的测试 JVM 中运行，避免卡在交互读取上。</p>
+     */
+    @Test
+    void consolePasswordReadIsRejectedWithoutTerminal() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.console() == null,
+                "存在真实终端时无法在测试内验证无回显拒绝路径");
+        Method read = AdminBootstrapMain.class.getDeclaredMethod("readConsolePassword", String.class);
+        read.setAccessible(true);
+
+        InvocationTargetException thrown = catchThrowableOfType(() -> read.invoke(null, "Administrator password: "),
+                InvocationTargetException.class);
+
+        assertThat(thrown).as("无终端时必须抛出拒绝分类").isNotNull();
+        assertThat(thrown.getCause()).isInstanceOf(BootstrapFailure.class)
+                .hasMessage(BootstrapFailure.Reason.INVALID_CONFIGURATION.name());
+    }
 
     /** 命令行参数必须被拒绝，避免口令或连接信息出现在进程列表。 */
     @Test
