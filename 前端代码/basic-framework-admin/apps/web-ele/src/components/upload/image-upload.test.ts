@@ -129,6 +129,24 @@ async function previewByIcon(target: VueWrapper, index: number) {
   await flushPromises();
 }
 
+/** 读取事件回调契约：接收失败原因或读取结果。 */
+type ReaderListener = (event: unknown) => void;
+
+/** 组件声明的拒绝提示节流窗口为 1000 毫秒；这里留出余量等它真实到期。 */
+const REJECT_COOLDOWN_MS = 1100;
+
+/**
+ * 真实等待拒绝提示的节流窗口结束，让组件内注册的复位回调真正执行。
+ */
+async function waitForRejectCooldown() {
+  await new Promise(
+    /** 以真实宏任务等待组件注册的定时器到期。 */ (resolve) => {
+      setTimeout(resolve, REJECT_COOLDOWN_MS);
+    },
+  );
+  await flushPromises();
+}
+
 describe('图片上传完成项标识', /** 同一毫秒完成的多图片上传必须各自持有唯一标识，删除只影响目标图片。 */ () => {
   it('同一毫秒完成的两张图片 uid 不同，删除一张不影响另一张（缺陷回归）', /** 用固定毫秒时间戳复现 Date.now() 冲突，再通过真实删除图标验证只删掉目标项。 */ async () => {
     vi.spyOn(Date, 'now').mockReturnValue(SAME_MILLISECOND);
@@ -478,5 +496,125 @@ describe('返回值格式', /** 返回格式由单值/多值与绑定参数共�
     await removeByIcon(wrapper, 0);
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toBe('');
+  });
+});
+
+describe('拒绝提示的延时复位', /** 拒绝后声明的 1 秒复位必须真实执行，否则节流标记会永久停留在拒绝态。 */ () => {
+  it('类型拒绝满一秒后复位且不影响后续合法图片上传', /** 延时回调丢失会让组件在提示消失后仍无法继续接收合法图片。 */ async () => {
+    const api = vi
+      .fn()
+      .mockImplementation(
+        /** 上传接口替身：按文件名返回稳定地址，不发起真实网络请求。 */ async (
+          file: File,
+        ) => `https://files.test/${file.name}`,
+      );
+    wrapper = mount(ImageUpload, {
+      props: { accept: ['png'], api, maxNumber: 2 },
+    });
+
+    await selectFiles(wrapper, [
+      new File(['a'], 'a.txt', { type: 'text/plain' }),
+    ]);
+    expect(showErrorMessage).toHaveBeenCalledWith('ui.upload.acceptUpload');
+
+    await waitForRejectCooldown();
+
+    await selectFiles(wrapper, [
+      new File(['b'], 'b.png', { type: 'image/png' }),
+    ]);
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(readFileList(wrapper)).toHaveLength(1);
+  });
+
+  it('大小拒绝满一秒后复位且不影响后续合法图片上传', /** 大小分支的复位同样必须落到真实定时器上，否则大图被拒后组件失去响应。 */ async () => {
+    const api = vi
+      .fn()
+      .mockImplementation(
+        /** 上传接口替身：按文件名返回稳定地址，不发起真实网络请求。 */ async (
+          file: File,
+        ) => `https://files.test/${file.name}`,
+      );
+    wrapper = mount(ImageUpload, {
+      props: { accept: ['png'], api, maxNumber: 2, maxSize: 0.001 },
+    });
+
+    await selectFiles(wrapper, [
+      new File(['x'.repeat(2048)], 'big.png', { type: 'image/png' }),
+    ]);
+    expect(showErrorMessage).toHaveBeenCalledWith('ui.upload.maxSizeMultiple');
+
+    await waitForRejectCooldown();
+
+    await selectFiles(wrapper, [
+      new File(['b'], '小图.png', { type: 'image/png' }),
+    ]);
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(readFileList(wrapper)).toHaveLength(1);
+  });
+});
+
+describe('本地文件读取失败', /** 读取失败必须留在"未打开预览"的状态，不能展示空白弹窗骗过用户。 */ () => {
+  it('fileReader 读取失败时不打开预览并上报错误', /** 读取失败分支未被真实执行时，错误会被静默吞掉且用户看到空白预览。 */ async () => {
+    const originalFileReader = globalThis.FileReader;
+    const errors: unknown[] = [];
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        /**
+         * 注册读取事件监听器；失败路径只回调 error，不产生任何读取结果。
+         * @param type 事件类型，仅 error 需要立即失败。
+         * @param handler 读取结果回调。
+         */
+        addEventListener(type: string, handler: ReaderListener) {
+          if (type === 'error') {
+            queueMicrotask(
+              /** 以真实读取失败原因触发错误监听器。 */ () =>
+                handler(new Error('DUMMY-reader-failure')),
+            );
+          }
+        }
+
+        /** 失败替身不做真实转换，读取动作本身不产生结果。 */
+        readAsDataURL() {}
+      },
+    );
+    wrapper = mount(ImageUpload, {
+      global: {
+        config: {
+          /** 收集事件处理器抛出的异步失败，证明失败原因没有被组件吞掉。 */
+          errorHandler: (error: unknown) => errors.push(error),
+        },
+      },
+      props: {
+        api: vi.fn(
+          /**
+           * 上传接口保持挂起，使列表项停留在"有原始文件、无地址"的状态。
+           * @returns 永不结算的上传结果。
+           */
+          () =>
+            new Promise<never>(/** 永不结算，模拟上传仍在进行中。 */ () => {}),
+        ),
+        maxNumber: 1,
+        // 文本列表不会为上传中的文件生成 blob 地址，才能走本地文件的读取分支。
+        listType: 'text',
+      },
+    });
+
+    try {
+      await selectFiles(wrapper, [
+        new File(['png-bytes'], 'raw.png', { type: 'image/png' }),
+      ]);
+      const files = readFileList(wrapper);
+      expect(files[0]?.raw).toBeDefined();
+
+      await wrapper.get('.el-upload-list__item-name').trigger('click');
+      await flushPromises();
+      await flushPromises();
+
+      expect(wrapper.find('.el-dialog').exists()).toBe(false);
+      expect(errors).toHaveLength(1);
+    } finally {
+      vi.stubGlobal('FileReader', originalFileReader);
+    }
   });
 });

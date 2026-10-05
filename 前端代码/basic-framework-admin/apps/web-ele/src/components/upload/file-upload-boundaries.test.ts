@@ -104,6 +104,21 @@ function readFileList(target: VueWrapper): UploadFile[] {
   return target.getComponent(ElUpload).props('fileList') as UploadFile[];
 }
 
+/** 组件声明的拒绝提示节流窗口为 1000 毫秒；这里留出余量等它真实到期。 */
+const REJECT_COOLDOWN_MS = 1100;
+
+/**
+ * 真实等待拒绝提示的节流窗口结束，让组件内注册的复位回调真正执行。
+ */
+async function waitForRejectCooldown() {
+  await new Promise(
+    /** 以真实宏任务等待组件注册的定时器到期。 */ (resolve) => {
+      setTimeout(resolve, REJECT_COOLDOWN_MS);
+    },
+  );
+  await flushPromises();
+}
+
 /**
  * 点击真实列表项上的关闭图标，走 ElUpload 的 uid 过滤删除链路。
  * @param target 已挂载的上传组件。
@@ -446,5 +461,59 @@ describe('上传说明', /** 说明文案让用户在上传前知道限制，缺
     expect(wrapper.text()).not.toContain('请上传不超过');
 
     wrapper.unmount();
+  });
+});
+
+describe('拒绝提示的延时复位', /** 拒绝后声明的 1 秒复位必须真实执行，否则节流标记会永久停留在拒绝态。 */ () => {
+  it('类型拒绝满一秒后复位且不影响后续合法上传', /** 延时回调丢失会让组件在提示消失后仍无法继续接收合法文件。 */ async () => {
+    const api = vi
+      .fn()
+      .mockImplementation(
+        /** 上传接口替身：按文件名返回稳定地址，不发起真实网络请求。 */ async (
+          file: File,
+        ) => `https://files.test/${file.name}`,
+      );
+    wrapper = mount(FileUpload, {
+      props: { accept: ['png'], api, maxNumber: 2 },
+    });
+
+    await selectFiles(wrapper, [
+      new File(['a'], 'a.txt', { type: 'text/plain' }),
+    ]);
+    expect(showErrorMessage).toHaveBeenCalledWith('ui.upload.acceptUpload');
+
+    await waitForRejectCooldown();
+
+    await selectFiles(wrapper, [
+      new File(['b'], 'b.png', { type: 'image/png' }),
+    ]);
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(readFileList(wrapper)).toHaveLength(1);
+  });
+
+  it('大小拒绝满一秒后复位且不影响后续合法上传', /** 大小分支的复位同样必须落到真实定时器上，否则大文件被拒后组件失去响应。 */ async () => {
+    const api = vi
+      .fn()
+      .mockImplementation(
+        /** 上传接口替身：按文件名返回稳定地址，不发起真实网络请求。 */ async (
+          file: File,
+        ) => `https://files.test/${file.name}`,
+      );
+    wrapper = mount(FileUpload, {
+      props: { accept: ['txt'], api, maxNumber: 2, maxSize: 0.001 },
+    });
+
+    await selectFiles(wrapper, [
+      new File(['x'.repeat(2048)], 'big.txt', { type: 'text/plain' }),
+    ]);
+    expect(showErrorMessage).toHaveBeenCalledWith('ui.upload.maxSizeMultiple');
+
+    await waitForRejectCooldown();
+
+    await selectFiles(wrapper, [
+      new File(['b'], '小文件.txt', { type: 'text/plain' }),
+    ]);
+    expect(api).toHaveBeenCalledTimes(1);
+    expect(readFileList(wrapper)).toHaveLength(1);
   });
 });

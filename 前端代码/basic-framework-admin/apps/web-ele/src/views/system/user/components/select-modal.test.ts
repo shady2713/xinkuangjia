@@ -632,6 +632,22 @@ describe('用户选择弹窗确认与取消', /** 确认与取消决定交回调
     expect(modalProbe.api.close).toHaveBeenCalledTimes(1);
   });
 
+  it('勾选在按钮状态刷新前被清空时确认不交回空结果', /** 空勾选守卫是按钮禁用之外的兜底：竞态下点击不能让调用方拿到空的人员范围。 */ async () => {
+    const wrapper = await mountOpened();
+    await changeTransfer(wrapper, [2]);
+    const confirmButton = wrapper.findAll('.modal-footer button').at(1);
+    expect(confirmButton?.attributes('disabled')).toBeUndefined();
+
+    // 先清空勾选再立刻点击：此时 DOM 上的按钮尚未随 Vue 的异步刷新变成禁用态，
+    // 处理器会带着空勾选被执行，正是组件内空值守卫要拦住的场景。
+    wrapper.findComponent(ElTransfer).vm.$emit('update:modelValue', []);
+    await confirmButton?.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('confirm')).toBeUndefined();
+    expect(modalProbe.api.close).not.toHaveBeenCalled();
+  });
+
   it('取消时派发取消事件并关闭弹窗', /** 未派发会让调用方无法区分取消与确认。 */ async () => {
     const wrapper = await mountOpened();
     await changeTransfer(wrapper, [2]);

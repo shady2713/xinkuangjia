@@ -302,3 +302,32 @@ describe('createRouterGuard 导航契约', /** 进度、放行、重定向、诊
     expect(useAccessStore().isAccessChecked).toBe(false);
   });
 });
+
+describe('无令牌访问无名登录页', /** 目标就是登录页时若返回同一 location，Vue Router 4 会判为自重定向并终止导航。 */ () => {
+  it('登录路由未登记名字且无令牌时显式放行', /** 该分支正是自重定向缺陷的回归点：改回 return to 会让本用例挂死。 */ async () => {
+    setActivePinia(createPinia());
+    const localRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { component: {}, name: 'Root', path: '/' },
+        // 登录页刻意不登记名字：生产路由表登记了 Login，这里复现名字缺失的边界。
+        { component: {}, path: LOGIN_PATH },
+      ],
+    });
+    createRouterGuard(localRouter);
+
+    try {
+      await localRouter.push('/');
+      await localRouter.push(LOGIN_PATH);
+
+      expect(localRouter.currentRoute.value.path).toBe(LOGIN_PATH);
+      expect(localRouter.currentRoute.value.name).toBeUndefined();
+      expect(useAccessStore().isAccessChecked).toBe(false);
+    } finally {
+      resetAccessibleRoutes(localRouter);
+      localRouter.options.history.destroy();
+      const pinia = getActivePinia();
+      if (pinia) disposePinia(pinia);
+    }
+  });
+});
