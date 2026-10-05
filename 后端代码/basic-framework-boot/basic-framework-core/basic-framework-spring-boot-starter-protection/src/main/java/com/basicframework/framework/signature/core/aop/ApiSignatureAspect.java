@@ -35,6 +35,9 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 @AllArgsConstructor
 public class ApiSignatureAspect {
 
+    /** nonce 最小长度：过短的随机串不足以对抗重放。 */
+    private static final int MIN_NONCE_LENGTH = 10;
+
     private final ApiSignatureRedisDAO signatureRedisDAO;
 
     /**
@@ -115,7 +118,7 @@ public class ApiSignatureAspect {
             return false;
         }
         String nonce = request.getHeader(signature.nonce());
-        if (StrUtil.length(nonce) < 10) {
+        if (StrUtil.length(nonce) < MIN_NONCE_LENGTH) {
             return false;
         }
         String sign = request.getHeader(signature.sign());

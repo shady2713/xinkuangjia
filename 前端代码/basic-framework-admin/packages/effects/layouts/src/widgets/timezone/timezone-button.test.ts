@@ -160,7 +160,11 @@ describe('时区入口渲染与弹窗打开', /** 入口或选项缺失会让用
     // 时区 store 的初值取自运行环境的 dayjs.tz.guess()，而默认选项列表只含 5 个固定时区；
     // 在 UTC 主机（CI）上该初值不在列表内，弹窗不会有任何选项被选中。先显式写入一个列表内的
     // 时区，使"默认选中当前时区"这一断言只取决于实现，不取决于运行环境。
-    await useTimezoneStore(pinia).setTimezone(timezoneOptions[0]!.value);
+    const [preferredTimezone] = timezoneOptions;
+    if (!preferredTimezone) {
+      throw new Error('默认时区选项为空，无法建立用例前置条件');
+    }
+    await useTimezoneStore(pinia).setTimezone(preferredTimezone.value);
     const wrapper = await mountAndOpen();
 
     expect(wrapper.find('button').exists()).toBe(true);

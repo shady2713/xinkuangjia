@@ -71,7 +71,7 @@ public class WebProperties {
             URI uri = URI.create(origin);
             return ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()))
                     && uri.getHost() != null && uri.getUserInfo() == null
-                    && uri.getPort() >= -1 && uri.getPort() != 0 && uri.getPort() <= 65535
+                    && uri.getPort() >= -1 && uri.getPort() != 0 && uri.getPort() <= 65_535
                     && origin.equals(uri.getScheme() + "://" + uri.getRawAuthority());
         } catch (IllegalArgumentException exception) {
             return false;

@@ -16,8 +16,10 @@ import java.util.Arrays;
 @Getter
 public enum UserTypeEnum implements ArrayValuable<Integer> {
 
-    MEMBER(1, "会员"), // 面向 c 端，普通用户
-    ADMIN(2, "管理员"); // 面向 b 端，管理后台
+    /** 会员，值 1；面向 C 端的普通用户，框架当前未实现其用户信息读取。 */
+    MEMBER(1, "会员"),
+    /** 管理员，值 2；面向 B 端管理后台，用户编号对应系统用户表（AdminUserDO）。 */
+    ADMIN(2, "管理员");
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(UserTypeEnum::getValue).toArray(Integer[]::new);
 

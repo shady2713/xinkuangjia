@@ -15,10 +15,15 @@ import java.util.Arrays;
 @Getter
 public enum TerminalEnum implements ArrayValuable<Integer> {
 
-    UNKNOWN(0, "未知"), // 目的：在无法解析到 terminal 时，使用它
+    /** 未知终端，编码 0；请求头缺失或取值无法解析时的兜底值，统计与筛选依赖它避免落空。 */
+    UNKNOWN(0, "未知"),
+    /** 微信小程序端，编码 10。 */
     WECHAT_MINI_PROGRAM(10, "微信小程序"),
+    /** 微信公众号网页端，编码 11。 */
     WECHAT_WAP(11, "微信公众号"),
+    /** H5 网页端，编码 20；手机浏览器直接访问的页面。 */
     H5(20, "H5 网页"),
+    /** 手机 App 端，编码 31。 */
     APP(31, "手机 App"),
     ;
 

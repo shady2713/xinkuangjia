@@ -5,7 +5,6 @@ import type {
   RouteLocationNormalizedLoadedGeneric,
 } from 'vue-router';
 
-import { computed } from 'vue';
 import { RouterView } from 'vue-router';
 
 import { preferences, usePreferences } from '@vben/preferences';
@@ -22,21 +21,19 @@ const { getCachedTabs, getExcludeCachedTabs, renderRouteView } =
   storeToRefs(tabbarStore);
 
 /**
- * 是否使用动画
+ * 解析页面切换动画名。
+ *
+ * 动画名同时决定"是否套用过渡"与"过渡用哪个名字"：返回空值即表示本次不套用过渡。
+ * 模板只读这一个入口，避免"是否启用"与"动画名"各判一次而在关闭动画时留下永不求值的分支。
+ * @param _route 当前路由；动画名只由偏好设置决定，此参数为模板调用保持一致而保留
+ * @returns 启用且配置了动画名时返回动画名，否则返回 undefined
  */
-const getEnabledTransition = computed(() => {
-  const { transition } = preferences;
-  const transitionName = transition.name;
-  return transitionName && transition.enable;
-});
-
-// 页面切换动画
 function getTransitionName(_route: RouteLocationNormalizedLoaded) {
   // 如果偏好设置未设置，则不使用动画
   const { tabbar, transition } = preferences;
   const transitionName = transition.name;
   if (!transitionName || !transition.enable) {
-    return;
+    return undefined;
   }
 
   // 标签页未启用或者未开启缓存，则使用全局配置动画
@@ -83,13 +80,14 @@ function transformComponent(
   const componentType = component.type as undefined | { name?: string };
   const componentName = componentType?.name;
 
-  // 已经设置过 name，则直接返回
-  if (componentName) {
+  // 视图组件已经按路由名命名时无需补名；先判同名，再判"已声明过 name"，
+  // 两条判定都能在真实路由表上命中，且都只返回原节点、不改写组件名。
+  if (componentName === routeName) {
     return component;
   }
 
-  // componentName 与 routeName 一致，则直接返回
-  if (componentName === routeName) {
+  // 已经设置过 name，则直接返回
+  if (componentName) {
     return component;
   }
 
@@ -106,7 +104,7 @@ function transformComponent(
     <IFrameRouterView />
     <RouterView v-slot="{ Component, route }">
       <Transition
-        v-if="getEnabledTransition"
+        v-if="getTransitionName(route)"
         :name="getTransitionName(route)"
         appear
         mode="out-in"

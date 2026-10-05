@@ -1,5 +1,9 @@
 package com.basicframework.module.system.framework.sms.core.client.impl;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.basicframework.framework.common.core.KeyValue;
 import com.basicframework.module.system.framework.sms.core.client.SmsClient;
 import com.basicframework.module.system.framework.sms.core.client.dto.SmsReceiveRespDTO;
@@ -8,6 +12,7 @@ import com.basicframework.module.system.framework.sms.core.client.dto.SmsTemplat
 import com.basicframework.module.system.framework.sms.core.enums.SmsChannelEnum;
 import com.basicframework.module.system.framework.sms.core.property.SmsChannelProperties;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.LinkedHashMap;
@@ -299,6 +304,82 @@ class SmsClientFactoryImplTest {
         assertThat(nullSummary)
                 .as("空配置必须给出稳定文本，而不是抛出空指针")
                 .isEqualTo("null");
+    }
+
+    /**
+     * 渠道解析结果为空时必须拒绝，且日志与异常都只带脱敏摘要。
+     *
+     * <p><b>补测动机：</b>当前 {@link SmsChannelEnum} 只有阿里云与腾讯云两个常量且实现分支
+     * 已一一对应，公开路径上不存在「枚举解析成功却没有客户端实现」的输入，因此创建失败兜底
+     * 在公开入口不可达。该兜底是新增或改名渠道而漏补实现分支时的唯一拦截点，一旦被改成
+     * 返回空客户端，未实现的渠道会带着空实现进入按编号注册表，直到真正发送才以无关的空指针
+     * 暴露；这里直接驱动提取出的真实校验方法，锁定「错误日志 + 拒绝 + 摘要脱敏」三件事。</p>
+     *
+     * <p><b>输入契约：</b>{@code requireClient} 接受可为 null 的解析结果，不要求枚举实例、
+     * 不依赖 ordinal，也不新增任何对外配置项；用例只替换日志收集器这一依赖边界，
+     * 真实判断、拒绝与异常契约都由被测实现执行。</p>
+     */
+    @Test
+    void unmatchedChannelResultIsRejectedWithMaskedSummaryOnly() {
+        SmsClientFactoryImpl factory = new SmsClientFactoryImpl();
+        SmsChannelProperties properties = aliyunProperties(41L, "DUMMY-ACCESS-KEY", "DUMMY-ACCESS-SECRET");
+        ListAppender<ILoggingEvent> appender = attachAppender();
+        try {
+            assertThatThrownBy(() -> factory.requireClient(null, properties))
+                    .as("没有实现分支时必须拒绝，而不是返回空客户端")
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("配置摘要(id(41) code(ALIYUN)) 找不到合适的客户端实现");
+
+            assertThat(appender.list).as("拒绝必须留下一条可供定位的错误日志").hasSize(1);
+            ILoggingEvent event = appender.list.get(0);
+            assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+            assertThat(event.getFormattedMessage())
+                    .isEqualTo("[createSmsClient][配置摘要(id(41) code(ALIYUN)) 找不到合适的客户端实现]")
+                    .as("日志摘要绝不能包含渠道凭据")
+                    .doesNotContain("DUMMY-ACCESS-KEY", "DUMMY-ACCESS-SECRET");
+
+            assertThatThrownBy(() -> factory.requireClient(null, null))
+                    .as("连配置都为空时仍必须给出稳定摘要，而不是空指针")
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("配置摘要(null) 找不到合适的客户端实现");
+            assertThat(appender.list).hasSize(2);
+        } finally {
+            detachAppender(appender);
+        }
+    }
+
+    /** 解析出客户端时必须原样返回，新增校验不得替换实例或改变注册行为。 */
+    @Test
+    void matchedChannelResultIsReturnedUnchanged() {
+        SmsClientFactoryImpl factory = new SmsClientFactoryImpl();
+        AbstractSmsClient client = new AliyunSmsClient(aliyunProperties(42L, "key-4", "secret-4"));
+
+        assertThat(factory.requireClient(client, aliyunProperties(42L, "key-4", "secret-4")))
+                .as("已有实现必须原样通过校验").isSameAs(client);
+    }
+
+    /**
+     * 为当前用例挂载日志收集器，观察工厂真实写入的拒绝日志。
+     *
+     * @return 已启动并挂到工厂 logger 上的收集器
+     */
+    private static ListAppender<ILoggingEvent> attachAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(SmsClientFactoryImpl.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    /**
+     * 移除并停止本用例的日志收集器，避免污染后续测试的日志观察结果。
+     *
+     * @param appender 本用例挂载的收集器
+     */
+    private static void detachAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(SmsClientFactoryImpl.class);
+        logger.detachAppender(appender);
+        appender.stop();
     }
 
     /**

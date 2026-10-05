@@ -84,6 +84,10 @@ public class BasicFrameworkWebSecurityConfigurerAdapter {
     /**
      * 由于 Spring Security 创建 AuthenticationManager 对象时，没声明 @Bean 注解，导致无法被注入
      * 通过覆写父类的该方法，添加 @Bean 注解，解决该问题
+     *
+     * @param authenticationConfiguration Spring Security 的认证配置对象
+     * @return 由认证配置构建的 AuthenticationManager
+     * @throws Exception 由 {@code AuthenticationConfiguration#getAuthenticationManager()} 向上传递的失败，本方法不捕获也不转换
      */
     @Bean
     public AuthenticationManager authenticationManagerBean(AuthenticationConfiguration authenticationConfiguration) throws Exception {
@@ -106,6 +110,10 @@ public class BasicFrameworkWebSecurityConfigurerAdapter {
      * permitAll           |   用户可以任意访问
      * rememberMe          |   允许通过remember-me登录的用户访问
      * authenticated       |   用户登录后可访问
+     *
+     * @param httpSecurity 待配置的 Spring Security 过滤器链构建器
+     * @return 已装配令牌过滤器与授权规则的安全过滤器链
+     * @throws Exception 构建过滤器链时由 {@code HttpSecurity#build()} 向上传递的失败，本方法不捕获也不转换
      */
     @Bean
     protected SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {

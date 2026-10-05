@@ -54,10 +54,10 @@ function involved(file, start, end) {
  * 获取紧邻声明的注释，阻止隔着其他语句复用旧注释。
  * @param node - 声明或承载箭头函数的语句节点。
  * @param sourceFile - TypeScript 语法树。
+ * @param start - 声明起始字符位置；由调用方显式给出，便于独立复核被代码隔开的兜底判定。
  * @returns 原始注释、说明文字、起始字符及是否为 JSDoc。
  */
-function documentation(node, sourceFile) {
-  const start = node.getStart(sourceFile);
+export function documentation(node, sourceFile, start) {
   // 参数列表中的回调注释属于同一物理行的 trivia，需同时读取 trailing 范围。
   const ranges = [
     ...(ts.getLeadingCommentRanges(sourceFile.text, node.getFullStart()) ?? []),
@@ -294,7 +294,7 @@ function checkScript(file, source, offset, language) {
           1,
       ))
   ) {
-    const doc = documentation(first, tree);
+    const doc = documentation(first, tree, first.getStart(tree));
     if (!meaningful(doc.text))
       fail(0, 'web-module-doc', '模块或组件顶部缺少中文职责说明');
   }
@@ -326,7 +326,7 @@ function checkScript(file, source, offset, language) {
       (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
     if (callable || structure || publicVariable) {
       const owner = ownerOf(node);
-      const doc = documentation(owner, tree);
+      const doc = documentation(owner, tree, owner.getStart(tree));
       const start =
         tree.getLineAndCharacterOfPosition(doc.start).line + offset + 1;
       // 类或接口只检查头部，内部方法的改动由方法自身承担，避免把旧类注释一并阻断。

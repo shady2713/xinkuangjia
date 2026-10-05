@@ -24,6 +24,9 @@
         <!-- DB 相关 -->
         <druid.version>1.2.28</druid.version>
         <mybatis.version>3.5.19</mybatis.version>
+        <mybatis-spring.version>3.0.5</mybatis-spring.version>
+        <error-prone-annotations.version>2.50.0</error-prone-annotations.version>
+        <commons-io.version>2.22.0</commons-io.version>
         <mybatis-plus.version>3.5.17</mybatis-plus.version>
         <mybatis-plus-join.version>1.5.9</mybatis-plus-join.version>
         <dynamic-datasource.version>4.5.0</dynamic-datasource.version>
@@ -147,6 +150,29 @@
                 <groupId>org.mybatis</groupId>
                 <artifactId>mybatis</artifactId>
                 <version>${mybatis.version}</version>
+            </dependency>
+            <dependency>
+                <!-- 依赖收敛：tika-core 带 2.22.0，fastexcel→commons-csv 带 2.16.1。
+                     按最近优先生效的一直是 2.22.0；显式钉住同一版本，避免仲裁结果漂移。 -->
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+            </dependency>
+            <dependency>
+                <!-- 依赖收敛：guava 带 2.50.0，caffeine（经 easy-trans）带 2.49.0。
+                     两者只是编译期注解，按最近优先生效的一直是 guava 的 2.50.0；
+                     显式钉住同一版本，让 enforcer 的 dependencyConvergence 能通过。 -->
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_annotations</artifactId>
+                <version>${error-prone-annotations.version}</version>
+            </dependency>
+            <dependency>
+                <!-- 依赖收敛：mybatis-plus-spring-boot3-starter 带 3.0.5，dynamic-datasource-spring 带 2.1.2。
+                     按「最近优先」，实际生效的一直是 3.0.5；这里显式钉住同一版本，
+                     让 enforcer 的 dependencyConvergence 能通过，也避免将来仲裁结果漂移。 -->
+                <groupId>org.mybatis</groupId>
+                <artifactId>mybatis-spring</artifactId>
+                <version>${mybatis-spring.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.baomidou</groupId>

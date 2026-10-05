@@ -30,6 +30,9 @@ import java.util.function.LongSupplier;
 @Slf4j
 public class InfraStorageStatisticsService {
 
+    /** 采集状态：存储后端不可用，统计值不代表真实占用。 */
+    private static final String STATUS_UNAVAILABLE = "unavailable";
+
     /** 最大扫描对象数为 100 页乘以客户端每页 1000 条。 */
     private static final int MAX_PAGES = 100;
     /** 扫描预算使用单调时钟，避免系统校时影响资源边界。 */
@@ -100,12 +103,12 @@ public class InfraStorageStatisticsService {
     private InfraStorageStatisticsDTO collectingSnapshot(Snapshot snapshot) {
         if (snapshot == null) {
             InfraStorageStatisticsDTO result = emptyStatistics();
-            result.setCollectionStatus("unavailable");
+            result.setCollectionStatus(STATUS_UNAVAILABLE);
             result.setCollectionMessage("对象容量正在采集，尚无可用快照；未知容量不显示为零。");
             return result;
         }
         InfraStorageStatisticsDTO result = copy(snapshot.statistics());
-        if (!"unavailable".equals(result.getCollectionStatus())) {
+        if (!STATUS_UNAVAILABLE.equals(result.getCollectionStatus())) {
             result.setCollectionStatus("partial");
         }
         result.setCollectionMessage("对象容量正在更新，当前展示上次采集结果；请结合采集时间判断，不作为当前桶总量。");
@@ -126,7 +129,7 @@ public class InfraStorageStatisticsService {
         try {
             do {
                 if (pages >= MAX_PAGES || nanoClock.getAsLong() - started >= SCAN_NANOS) {
-                    statistics.setCollectionStatus(pages == 0 ? "unavailable" : "partial");
+                    statistics.setCollectionStatus(pages == 0 ? STATUS_UNAVAILABLE : "partial");
                     statistics.setCollectionMessage("达到单次采集上限，仅展示已扫描对象；不能作为桶总量。");
                     break;
                 }
@@ -141,7 +144,7 @@ public class InfraStorageStatisticsService {
                 }
             } while (token != null);
         } catch (RuntimeException exception) {
-            statistics.setCollectionStatus(pages == 0 ? "unavailable" : "partial");
+            statistics.setCollectionStatus(pages == 0 ? STATUS_UNAVAILABLE : "partial");
             statistics.setCollectionMessage(pages == 0
                     ? "对象存储采集失败，请检查存储连通性与列举权限；未知容量不显示为零。"
                     : "对象存储采集中断，仅展示已扫描对象；不能作为桶总量。");

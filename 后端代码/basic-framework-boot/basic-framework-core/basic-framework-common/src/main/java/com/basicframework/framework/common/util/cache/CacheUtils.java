@@ -23,7 +23,7 @@ public final class CacheUtils {
      *
      * @see <a href="">本地缓存 CacheUtils 工具类建议</a>
      */
-    private static final int CACHE_MAX_SIZE = 10000;
+    private static final int CACHE_MAX_SIZE = 10_000;
 
     /** 缓存刷新线程数 JVM 参数名。 */
     private static final String ASYNC_RELOAD_POOL_SIZE_PROPERTY = "basic.cache.async-reload.pool-size";

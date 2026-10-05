@@ -28,7 +28,7 @@ public class RedisStreamMessageCleanupJob {
     /**
      * 保留的消息数量，默认保留最近 10000 条消息
      */
-    private static final long MAX_COUNT = 10000;
+    private static final long MAX_COUNT = 10_000;
 
     private final List<AbstractRedisStreamMessageListener<?>> listeners;
     private final RedisMQTemplate redisTemplate;

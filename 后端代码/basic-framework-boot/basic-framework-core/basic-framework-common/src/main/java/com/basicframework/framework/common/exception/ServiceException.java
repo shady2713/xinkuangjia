@@ -28,6 +28,7 @@ public final class ServiceException extends RuntimeException {
      * 空构造方法，避免反序列化问题
      */
     public ServiceException() {
+        // 保留无参构造：Jackson 反序列化与框架反射实例化都要求存在它。
     }
 
     /**

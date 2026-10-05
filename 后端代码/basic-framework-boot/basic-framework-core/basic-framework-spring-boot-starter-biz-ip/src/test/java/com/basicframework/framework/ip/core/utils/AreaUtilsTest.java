@@ -9,15 +9,18 @@ import org.mockito.MockedStatic;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mockStatic;
 
 /**
@@ -228,6 +231,127 @@ class AreaUtilsTest {
                     .hasMessage("读取区域数据 area.csv 失败")
                     .hasRootCauseInstanceOf(IOException.class);
             mocked.verify(() -> ResourceUtil.getUtf8Reader("area.csv"));
+        }
+    }
+
+    /**
+     * 自身作为父节点的非法数据必须被拒绝，而不是建成自引用节点后静默继续加载。
+     *
+     * <p>父节点指向自身会让区域树出现自环：{@code format} 与 {@code getParentIdByType}
+     * 只能靠迭代次数上限退出，归属地展示与统计归属都会出现难以定位的错误结果。这里用受控的
+     * CSV 读取边界把这样一行喂给真实加载器，断言它在建立父子关系前就以固定消息拒绝。</p>
+     *
+     * <p><b>边界替身：</b>只替换 {@link ResourceUtil#getUtf8Reader} 这一读取边界，CSV 解析、
+     * 节点构造、自父判定与拒绝行为都真实执行；被测加载器本身没有被整体替换。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void loadAreasRejectsSelfParentedRow() throws Exception {
+        String csv = """
+                id,name,type,parentId
+                110000,北京市,2,110000
+                """;
+        try (MockedStatic<ResourceUtil> mocked = mockStatic(ResourceUtil.class)) {
+            mocked.when(() -> ResourceUtil.getUtf8Reader(eq("area.csv")))
+                    .thenReturn(new BufferedReader(new StringReader(csv)));
+
+            Method method = AreaUtils.class.getDeclaredMethod("loadAreas");
+            method.setAccessible(true);
+            InvocationTargetException thrown = catchThrowableOfType(() -> method.invoke(null),
+                    InvocationTargetException.class);
+
+            assertThat(thrown).as("自父节点必须被拒绝，不能建成自引用节点").isNotNull();
+            assertThat(thrown.getCause()).isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("北京市")
+                    .hasMessageContaining("父子节点相同");
+        }
+    }
+
+    /**
+     * 合法的 CSV 必须建出可用的父子索引与只读索引结果。
+     *
+     * <p>本用例与自父拒绝用例共用同一条受控读取边界：同样的 CSV 读取方式、同样的反射直调，
+     * 只有数据是否合法不同。它证明“自父被拒绝”来自数据判定而不是读取边界替身让加载器整体失效，
+     * 同时锁定加载结果不可变这一契约。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void loadAreasBuildsReadOnlyIndexForValidRows() throws Exception {
+        String csv = """
+                id,name,type,parentId
+                1,中国,1,0
+                110000,北京市,2,1
+                110100,北京市,3,110000
+                """;
+        try (MockedStatic<ResourceUtil> mocked = mockStatic(ResourceUtil.class)) {
+            mocked.when(() -> ResourceUtil.getUtf8Reader(eq("area.csv")))
+                    .thenReturn(new BufferedReader(new StringReader(csv)));
+
+            Map<Integer, Area> areas = invokeLoadAreas();
+
+            Area province = areas.get(110000);
+            Area city = areas.get(110100);
+            assertThat(province).isNotNull();
+            assertThat(city).as("子节点必须挂到父节点的子列表上").isSameAs(province.getChildren().get(0));
+            assertThat(city.getParent()).isSameAs(province);
+            assertThat(province.getParent()).as("父节点必须来自 CSV 中的父编号").isSameAs(areas.get(Area.ID_CHINA));
+            assertThat(province.getParent().getParent()).as("国家级父节点挂到预置的全球根节点")
+                    .isSameAs(areas.get(Area.ID_GLOBAL));
+            assertThat(areas).as("加载结果必须是只读索引").isNotInstanceOf(java.util.HashMap.class);
+            assertThatThrownBy(() -> areas.put(1, city)).isInstanceOf(UnsupportedOperationException.class);
+        }
+    }
+
+    /**
+     * 区域父引用成环时必须由有界回溯退出并返回 null，不得让调用方无限等待。
+     *
+     * <p>公开的 {@code setParent} 允许把任意节点接成环；一旦成环，按类型回溯就没有“找到根节点”
+     * 这一出口，只能依赖迭代次数上限。若上限出口被删掉，归属地查询会变成死循环并拖垮请求线程。
+     * 用例取得真实索引里的节点，破坏父引用后调用真实的公开回溯方法，并在 finally 中恢复。</p>
+     *
+     * <p><b>真实索引接缝：</b>{@code AREAS} 是私有静态只读索引，方法内部直接读取它；
+     * 用例不替换索引、不替换被测方法，只用真实公开 setter 构造环输入，结束后原样恢复父引用，
+     * 避免污染同 JVM 内其它区域用例。</p>
+     *
+     * @throws Exception 反射查找或索引检查失败时抛出
+     */
+    @Test
+    void getParentIdByTypeReturnsNullWhenParentReferenceCycles() throws Exception {
+        Area province = AreaUtils.getArea(BEIJING_PROVINCE_ID);
+        assertThat(province).as("真实索引必须包含北京市节点").isNotNull();
+        assertThat(province.getParent()).as("真实索引中北京市的父节点必须是中国").isNotNull();
+        Area originalParent = province.getParent();
+        try {
+            province.setParent(province);
+
+            assertThat(AreaUtils.getParentIdByType(BEIJING_PROVINCE_ID, AreaTypeEnum.DISTRICT))
+                    .as("父引用成环时必须由迭代上限退出并返回 null，而不是死循环")
+                    .isNull();
+        } finally {
+            province.setParent(originalParent);
+        }
+        assertThat(AreaUtils.getParentIdByType(BEIJING_PROVINCE_ID, AreaTypeEnum.PROVINCE))
+                .as("恢复真实父引用后正常回溯必须仍然可用")
+                .isEqualTo(BEIJING_PROVINCE_ID);
+    }
+
+    /**
+     * 反射调用真实加载器并返回它建出的索引。
+     *
+     * @return 加载器返回的区域索引
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<Integer, Area> invokeLoadAreas() throws Exception {
+        Method method = AreaUtils.class.getDeclaredMethod("loadAreas");
+        method.setAccessible(true);
+        try {
+            return (Map<Integer, Area>) method.invoke(null);
+        } catch (InvocationTargetException exception) {
+            throw (Exception) exception.getCause();
         }
     }
 

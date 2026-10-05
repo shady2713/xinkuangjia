@@ -49,6 +49,19 @@ interface InnerFlattenItem<T = Recordable<unknown>, P = number | string> {
 }
 
 /**
+ * reka-ui 树节点抛出的 select 事件。
+ * detail 携带原始事件与本次是否选中；preventDefault 用于阻止 reka-ui 的内部选中。
+ */
+type TreeSelectEvent = {
+  /** 事件负载：原始事件类型用于区分点击与键盘，isSelected 表示本次是否为选中。 */
+  detail: { isSelected: boolean; originalEvent: Event };
+  /** 阻止 reka-ui 继续处理本次选中。 */
+  preventDefault: () => void;
+  /** 阻止事件继续向外冒泡。 */
+  stopPropagation: () => void;
+};
+
+/**
  * 深度优先把树形数据拍平成一维数组，供渲染、取值和联动勾选共用。
  * @param items 当前层级的节点数组。
  * @param childrenField 子节点数组在节点上的字段名，缺失时按叶子节点处理。
@@ -93,7 +106,16 @@ function flatten<T = Recordable<unknown>, P = number | string>(
 
 const flattenData = ref<Array<InnerFlattenItem>>([]);
 const modelValue = defineModel<Arrayable<number | string>>();
-const expanded = ref<Array<number | string>>(props.defaultExpandedKeys ?? []);
+
+/**
+ * 当前展开的节点键集合。键口径必须与渲染层的 `get-key` 一致：渲染层统一返回字符串
+ * （`String(nodeValue(...))`），所以写入这里的标识一律用 `String()` 归一。
+ * 主键为数值时（后端下发的部门/菜单 id 通常就是数值）写入的数字键与渲染层的字符串键
+ * 严格比较不相等，展开集合整体失效，「展开全部」「按层级展开」与默认展开都会点了没反应。
+ */
+const expanded = ref<Array<number | string>>(
+  (props.defaultExpandedKeys ?? []).map(String),
+);
 
 // defaultExpandedKeys 允许调用方异步下发，深度监听保证外部改动能覆盖本地展开状态。
 watch(
@@ -103,7 +125,8 @@ watch(
    * @param newVal 调用方最新下发的展开键集合；为空或 undefined 表示全部收起。
    */
   (newVal) => {
-    expanded.value = newVal ?? [];
+    // 外部下发的键同样按展开集合的字符串口径归一，否则数值键与渲染层键比较不相等。
+    expanded.value = (newVal ?? []).map(String);
   },
   { deep: true },
 );
@@ -269,7 +292,7 @@ function updateModelValue(val: Arrayable<TreeNode>) {
  * @param level 目标展开层级，从 1 起算；1 表示只展开根节点。
  */
 function expandToLevel(level: number) {
-  // 展开键与 expanded 保持同一类型：树节点的键既可能是数字也可能是字符串。
+  // 展开键统一成渲染层的字符串口径，数值主键才不会与字符串键比较不相等。
   const keys: Array<number | string> = [];
   flattenData.value.forEach(
     /**
@@ -279,7 +302,7 @@ function expandToLevel(level: number) {
     (item) => {
       const value = nodeValue(item.value);
       if (item.level <= level - 1 && value !== undefined) {
-        keys.push(value);
+        keys.push(String(value));
       }
     },
   );
@@ -291,13 +314,14 @@ function expandToLevel(level: number) {
  * @param value 需要收起的节点标识或标识集合。
  */
 function collapseNodes(value: Arrayable<number | string>) {
-  const keys = new Set(Array.isArray(value) ? value : [value]);
+  // 调用方可以按原始类型传数值标识，比较前统一成展开集合的字符串口径。
+  const keys = new Set((Array.isArray(value) ? value : [value]).map(String));
   expanded.value = expanded.value.filter(
     /**
      * 从展开集合中剔除被指定收起的标识，其余保持不变。
      * @param key 当前展开集合中的标识。
      */
-    (key) => !keys.has(key),
+    (key) => !keys.has(String(key)),
   );
 }
 
@@ -313,10 +337,12 @@ function expandNodes(value: Arrayable<number | string>) {
      * @param key 待展开的节点标识。
      */
     (key) => {
-      if (expanded.value.includes(key)) return;
+      // 反查按调用方传入的原始标识比较，写入则统一成渲染层的字符串键。
+      const expandedKey = String(key);
+      if (expanded.value.includes(expandedKey)) return;
       const item = getItemByValue(key);
       if (item) {
-        expanded.value.push(key);
+        expanded.value.push(expandedKey);
       }
     },
   );
@@ -346,8 +372,10 @@ function expandAll() {
        * 丢弃取不到标识的节点，保证展开集合只含合法标识。
        * @param key 换算后的候选展开键。
        */
-      (key): key is string => key !== undefined,
-    );
+      (key): key is number | string => key !== undefined,
+    )
+    // 统一成渲染层的字符串键，数值主键写数字键会让整次展开失效。
+    .map(String);
 }
 
 /**
@@ -420,13 +448,27 @@ function onToggle(item: FlattenedItem<TreeNode>) {
 
 /**
  * 处理节点勾选：先拦截禁用节点，再按 autoCheckParent 联动父级，最后同步受控值并抛出事件。
+ *
+ * 禁用节点的拦截点只能是本函数：reka-ui 的树节点不识别 `disabled` 属性（该属性只作用于表单
+ * 元素），点击禁用节点同样会抛出 select 事件，因此这里必须在转发之前拦下，并调用
+ * preventDefault 阻止 reka-ui 更新它自己的内部选中集合，保证禁用节点不会被内部选中。
+ *
  * @param item 被操作的扁平节点。
- * @param isSelected 本次操作是勾选还是取消勾选。
+ * @param event reka-ui 抛出的 select 事件，detail 携带原始事件与本次是否选中。
  */
-function onSelect(item: FlattenedItem<TreeNode>, isSelected: boolean) {
+function onSelect(item: FlattenedItem<TreeNode>, event: TreeSelectEvent) {
   if (isNodeDisabled(item)) {
+    event.preventDefault();
+    event.stopPropagation();
     return;
   }
+
+  // 点击场景下由本组件自己维护选中集合，阻止 reka-ui 的内部选中。
+  if (event.detail.originalEvent.type === 'click') {
+    event.preventDefault();
+  }
+
+  const isSelected = event.detail.isSelected;
 
   // 勾选时自下而上补齐父级，保证父节点状态与已选子节点一致。
   if (
@@ -634,15 +676,7 @@ defineExpose({
         "
         @select="
           (event: any) => {
-            if (isNodeDisabled(item)) {
-              event.preventDefault();
-              event.stopPropagation();
-              return;
-            }
-            if (event.detail.originalEvent.type === 'click') {
-              event.preventDefault();
-            }
-            onSelect(item, event.detail.isSelected);
+            onSelect(item, event);
           }
         "
         @toggle="

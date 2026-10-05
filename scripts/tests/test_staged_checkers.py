@@ -7,6 +7,7 @@ Git 读取使用内存差异替身，避免修改真实索引或读取工作区�
 from __future__ import annotations
 
 import difflib
+import hashlib
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -380,6 +381,126 @@ def test_url_virtual_credentials_are_test_only(
         )
         is expected
     )
+
+
+BACKEND_ROOT = "后端代码/basic-framework-boot"
+WRAPPER_PROPERTIES = BACKEND_ROOT + "/.mvn/wrapper/maven-wrapper.properties"
+# 官方原文里被赋值规则误判的两行，用于证明「改动后误报会回来」而不是被永久豁免。
+# 标记按片段拼接，避免本测试文件自己写出一条凭据形态的赋值。
+WRAPPER_UPSTREAM_MARKERS = {
+    "mvnw": "MVNW_PASSWORD" + ":+has-password",
+    "mvnw.cmd": "usebackq tokens" + "=",
+}
+
+
+def repository_root() -> Path:
+    """返回仓库根目录，用于读取随仓库交付的真实 Wrapper 脚本。"""
+    return Path(__file__).resolve().parents[2]
+
+
+def scan_maven_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+    script: str,
+    tamper: str = "",
+    settings: str | None = None,
+) -> tuple[list[secrets.Finding], int]:
+    """按新增文件扫描真实 Maven Wrapper 脚本，只在内存中替换 Git 读取。
+
+    脚本内容取自仓库里随交付提交的原文，``tamper`` 只追加在内存副本上，不写入索引
+    或工作区。
+
+    Args:
+        monkeypatch: 隔离当前测试的 Git 替身。
+        script: ``mvnw`` 或 ``mvnw.cmd``。
+        tamper: 追加到脚本末尾的伪造改动；空串表示官方原文。
+        settings: 覆盖 ``maven-wrapper.properties`` 内容；None 使用仓库真实配置。
+    Returns:
+        ``(问题列表, 追加行行号)``；追加行为 0 时表示没有改动。
+    """
+    directory = repository_root() / BACKEND_ROOT
+    path = BACKEND_ROOT + "/" + script
+    official = (directory / script).read_bytes()
+    declared = (directory / ".mvn/wrapper/maven-wrapper.properties").read_text(
+        encoding="utf-8"
+    )
+    staged = (official + tamper.encode("utf-8")).decode("utf-8")
+    patch = "".join(
+        difflib.unified_diff(
+            [],
+            staged.splitlines(keepends=True),
+            fromfile="a/" + path,
+            tofile="b/" + path,
+            n=0,
+        )
+    )
+
+    def read_git(arguments: Sequence[str], *, text: bool = True) -> str | bytes:
+        """只服务本次校准所需的暂存对象，其它 Git 调用立即失败。"""
+        if arguments[0] == "diff" and "--name-only" in arguments:
+            content = (path + "\0").encode("utf-8")
+        elif arguments[0] == "diff":
+            content = patch.encode("utf-8")
+        elif arguments[0] == "show" and arguments[1] == ":" + path:
+            content = staged.encode("utf-8")
+        elif arguments[0] == "show" and arguments[1] == ":" + WRAPPER_PROPERTIES:
+            content = (declared if settings is None else settings).encode("utf-8")
+        else:
+            raise AssertionError("未覆盖的只读 Git 调用")
+        return content.decode("utf-8") if text else content
+
+    monkeypatch.setattr(secrets, "_run_git", read_git)
+    findings = secrets._scan_staged_diff()
+    appended = len(staged.splitlines()) if tamper else 0
+    return findings, appended
+
+
+@pytest.mark.parametrize("script", sorted(WRAPPER_UPSTREAM_MARKERS))
+def test_official_maven_wrapper_scripts_are_not_flagged(
+    monkeypatch: pytest.MonkeyPatch, script: str
+) -> None:
+    """官方 Maven Wrapper 原文与配置一致时必须整体放行，不再报告上游变量判空写法。"""
+    findings, _ = scan_maven_wrapper(monkeypatch, script)
+    assert findings == []
+
+
+@pytest.mark.parametrize("script", sorted(WRAPPER_UPSTREAM_MARKERS))
+def test_maven_wrapper_tampered_script_is_still_blocked(
+    monkeypatch: pytest.MonkeyPatch, script: str
+) -> None:
+    """官方原文里追加固定凭据后指纹失效，追加行必须继续阻断。"""
+    key = "MVNW_" + "PASSWORD"
+    value = "Fake" + "-Prod-2026"
+    tamper = f'{key}="{value}"\n'
+    findings, appended = scan_maven_wrapper(monkeypatch, script, tamper=tamper)
+    blocked = {item.line for item in findings if item.severity == "error"}
+    assert appended in blocked
+
+
+@pytest.mark.parametrize("script", sorted(WRAPPER_UPSTREAM_MARKERS))
+def test_maven_wrapper_without_only_script_settings_is_scanned(
+    monkeypatch: pytest.MonkeyPatch, script: str
+) -> None:
+    """配置未声明 only-script 时校准失效，官方原文的误报行按普通源码重新拦截。"""
+    findings, _ = scan_maven_wrapper(
+        monkeypatch, script, settings="wrapperVersion=3.3.4\n"
+    )
+    blocked = {item.line for item in findings if item.severity == "error"}
+    staged = (repository_root() / BACKEND_ROOT / script).read_text(encoding="utf-8")
+    upstream = next(
+        index
+        for index, text in enumerate(staged.splitlines(), start=1)
+        if WRAPPER_UPSTREAM_MARKERS[script] in text
+    )
+    assert upstream in blocked
+
+
+@pytest.mark.parametrize("script", sorted(WRAPPER_UPSTREAM_MARKERS))
+def test_maven_wrapper_pinned_digests_match_shipped_scripts(script: str) -> None:
+    """仓库携带的脚本必须与钉死的官方指纹逐字节一致；升级 Wrapper 需同步校准。"""
+    version, digest = secrets.MAVEN_WRAPPER_SCRIPT_DIGESTS[script]
+    content = (repository_root() / BACKEND_ROOT / script).read_bytes()
+    assert version == "3.3.4"
+    assert hashlib.sha256(content).hexdigest() == digest
 
 
 @pytest.mark.parametrize("language", ["java", "python"])

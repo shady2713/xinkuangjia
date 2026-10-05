@@ -215,7 +215,7 @@ def test_fresh_install_matches_snapshot_and_contains_no_accounts(mysql: MysqlSan
         assert mysql.rows(fresh, f"SELECT COUNT(*) FROM `{table}`") == ((0,),)
     assert mysql.rows(fresh, "SELECT COUNT(*) FROM system_role WHERE code='super_admin' AND role_type='super_admin'") == ((1,),)
     assert mysql.rows(fresh, "SELECT COUNT(*) FROM system_menu")[0][0] > 0
-    assert mysql.rows(fresh, "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1") == ((6,),)
+    assert mysql.rows(fresh, "SELECT COUNT(*) FROM flyway_schema_history WHERE success=1") == ((7,),)
     # default 客户端不得保留机器主体授权，否则新装库会直接产生越权读取入口。
     assert mysql.rows(
         fresh, "SELECT JSON_CONTAINS(authorized_grant_types, '\"client_credentials\"') "

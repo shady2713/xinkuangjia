@@ -27,6 +27,7 @@ public final class PageResult<T> implements Serializable {
      * 创建空分页结果。
      */
     public PageResult() {
+        // 保留无参构造：分页结果需要支持 JSON 反序列化与空对象构造。
     }
 
     /**

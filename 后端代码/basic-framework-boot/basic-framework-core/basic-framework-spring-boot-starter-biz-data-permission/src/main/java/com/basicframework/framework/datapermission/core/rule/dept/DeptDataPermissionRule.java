@@ -24,10 +24,10 @@ import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
 import net.sf.jsqlparser.expression.operators.relational.ParenthesedExpressionList;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 基于部门的 {@link DataPermissionRule} 数据权限规则实现
@@ -67,7 +67,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      * key：表名
      * value：字段名
      */
-    private final Map<String, String> deptColumns = new HashMap<>();
+    private final Map<String, String> deptColumns = new ConcurrentHashMap<>();
     /**
      * 基于用户的表字段配置
      * 一般情况下，每个表的部门编号字段是 dept_id，通过该配置自定义。
@@ -75,11 +75,11 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      * key：表名
      * value：字段名
      */
-    private final Map<String, String> userColumns = new HashMap<>();
+    private final Map<String, String> userColumns = new ConcurrentHashMap<>();
     /**
      * 所有表名，是 {@link #deptColumns} 和 {@link #userColumns} 的合集
      */
-    private final Set<String> TABLE_NAMES = new HashSet<>();
+    private final Set<String> tableNames = new HashSet<>();
 
     /**
      * 获取TableNames。
@@ -88,7 +88,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      */
     @Override
     public Set<String> getTableNames() {
-        return TABLE_NAMES;
+        return tableNames;
     }
 
     /**
@@ -219,7 +219,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      */
     public void addDeptColumn(String tableName, String columnName) {
         deptColumns.put(tableName, columnName);
-        TABLE_NAMES.add(tableName);
+        tableNames.add(tableName);
     }
 
     /**
@@ -250,7 +250,7 @@ public class DeptDataPermissionRule implements DataPermissionRule {
      */
     public void addUserColumn(String tableName, String columnName) {
         userColumns.put(tableName, columnName);
-        TABLE_NAMES.add(tableName);
+        tableNames.add(tableName);
     }
 
 }

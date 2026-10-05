@@ -100,10 +100,33 @@ public class SmsClientFactoryImpl implements SmsClientFactory {
     private AbstractSmsClient createSmsClient(SmsChannelProperties properties) {
         SmsChannelEnum channelEnum = SmsChannelEnum.getByCode(properties.getCode());
         Assert.notNull(channelEnum, String.format("渠道类型(%s) 为空", channelEnum));
-        // 创建客户端
-        switch (channelEnum) {
-            case ALIYUN: return new AliyunSmsClient(properties);
-            case TENCENT: return new TencentSmsClient(properties);
+        // 创建客户端；枚举与实现分支当前一一对应，解析结果仍统一交给防御校验确认。
+        AbstractSmsClient client = switch (channelEnum) {
+            case ALIYUN -> new AliyunSmsClient(properties);
+            case TENCENT -> new TencentSmsClient(properties);
+        };
+        return requireClient(client, properties);
+    }
+
+    /**
+     * 校验渠道解析结果确实对应一个客户端实现，未匹配时记录脱敏摘要并拒绝。
+     *
+     * <p><b>输入契约：</b>{@code client} 是渠道枚举解析出的客户端，允许为 null —— 表示
+     * {@link SmsChannelEnum} 新增（或改名）了渠道常量却没有补上对应实现分支。这是必须在
+     * 初始化与注册之前拦下的配置级错误：若放行，未实现的渠道会以空客户端进入按编号注册表，
+     * 故障点会推迟到真正发送时才以无关的空指针暴露。</p>
+     *
+     * <p>拒绝输出只包含渠道编号与编码组成的摘要，绝不包含 apiKey / apiSecret；调用方的
+     * 允许类型集合与对外配置项都不因该校验改变。</p>
+     *
+     * @param client 渠道解析结果，可为 null
+     * @param properties 触发解析的渠道配置，仅用于生成脱敏摘要
+     * @return 非空的渠道解析结果
+     * @throws IllegalArgumentException 解析结果为空时固定抛出，消息仅含脱敏摘要
+     */
+    AbstractSmsClient requireClient(AbstractSmsClient client, SmsChannelProperties properties) {
+        if (client != null) {
+            return client;
         }
         // 创建失败，错误日志 + 抛出异常
         String configSummary = summarizeProperties(properties);

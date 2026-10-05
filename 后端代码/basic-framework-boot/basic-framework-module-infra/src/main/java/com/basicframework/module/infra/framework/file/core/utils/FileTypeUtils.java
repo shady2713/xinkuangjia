@@ -132,6 +132,23 @@ public final class FileTypeUtils {
             return false;
         }
         String mineType = StrUtil.nullToDefault(getMineType(data, fileName), "").toLowerCase(Locale.ROOT);
+        return isMimeTypeMatchingExtension(extension, mineType);
+    }
+
+    /**
+     * 校验「已标准化的后缀」与「按内容识别出的 MIME」是否互相匹配。
+     *
+     * <p><b>输入契约：</b>{@code extension} 是任意小写后缀，不要求已在
+     * {@link #ALLOWED_EXTENSIONS} 中；{@code mineType} 是任意小写 MIME，未知时应传空串。
+     * 方法对无法归类的后缀按未知类型保守拒绝，因此白名单收紧或新增后缀时不会因为漏改
+     * 这里的分类而放行未声明的内容类型。图片只接受栅格 MIME（拒绝 SVG 等可执行标记内容），
+     * 视频仍要求内容与容器匹配，避免单纯改后缀绕过白名单。</p>
+     *
+     * @param extension 已转小写的文件后缀，不含点号
+     * @param mineType 已转小写的 MIME 类型，未知时为空串
+     * @return 后缀声明的类型与内容 MIME 是否一致；后缀不在任何已知类别时为 false
+     */
+    static boolean isMimeTypeMatchingExtension(String extension, String mineType) {
         // 仅接受栅格图片 MIME，拒绝改后缀的 SVG 等可执行标记内容。
         if (IMAGE_EXTENSIONS.contains(extension)) {
             return Set.of("image/jpeg", "image/png", "image/gif", "image/bmp", "image/x-ms-bmp", "image/webp").contains(mineType);
@@ -157,9 +174,13 @@ public final class FileTypeUtils {
     /**
      * 将文件内容按附件方式写回响应；图片走 inline，其他文件走 attachment。
      *
+     * <p>副作用：会设置 Content-Type、Content-Disposition，视频类型还会补 Accept-Ranges 与
+     * Content-Length 响应头，并把内容写入响应输出流。</p>
+     *
      * @param response 响应对象
      * @param filename 文件名
      * @param content 文件内容
+     * @throws IOException 获取响应输出流时由 Servlet API 抛出（响应已提交或客户端已断开）；此时响应头已经设置，异常原样向上传递
      */
     public static void writeAttachment(HttpServletResponse response, String filename, byte[] content) throws IOException {
         String mineType = getMineType(content, filename);

@@ -4,9 +4,10 @@
  * RSA 通道下请求加密与响应解密都依赖底层 RSA 包装器：密钥非法或数据不可解时包装器直接
  * 抛错，ApiEncrypt 只把同一个错误继续上抛，调用方据此中断请求，绝不会把明文发到服务端。
  * 用例用真实 JSEncrypt 生成的一次性密钥与真实错误对象固定这条失败面，并留下证据：包装器
- * 的签名虽声明 `false | string`，但失败时一律抛出、从不返回 false，因此 ApiEncrypt 内部
- * `result === false` / `decryptedData === false` 的兜底分支在真实链路上不可达
- * （对应未覆盖行 320-321、271-272，已如实上报，不改源码凑覆盖率）。
+ * 的签名虽声明 `false | string`，但失败时一律抛出、从不返回 false。包装器的返回类型允许
+ * false，因此 ApiEncrypt 内部 `result === false` / `decryptedData === false` 的失败标记判定
+ * 必须保留；该判定已按 [裁决 D9] 的口径用受控替身把包装器置为 false 返回后真实驱动
+ * （见下方两条用例），不再属于不可达分支。
  */
 import type { ApiEncryptConfig } from '../encrypt';
 
@@ -90,8 +91,9 @@ describe('rSA 通道的失败面', /** 加密失败必须中断请求，失败�
   );
 
   afterEach(
-    /** 恢复被替换的 console.error，避免影响其它用例。 */ () => {
+    /** 恢复被替换的 console.error 与包装器替身，避免影响其它用例。 */ () => {
       consoleError.mockRestore();
+      vi.restoreAllMocks();
     },
   );
 
@@ -141,5 +143,36 @@ describe('rSA 通道的失败面', /** 加密失败必须中断请求，失败�
     );
 
     expect(error.message).toContain(WRAPPER_DECRYPT_HINT);
+  });
+
+  it('包装器交出 false 时请求加密必须中断而不是放行明文', /** 签名允许 false，一旦漏判就会把失败标记当成密文发到服务端。 */ () => {
+    // 用受控替身把包装器置为契约允许的 false 返回，验证 ApiEncrypt 侧的失败标记判定。
+    const encryptSpy = vi.spyOn(RSA, 'encrypt').mockReturnValue(false);
+    const api = new ApiEncrypt(
+      rsaConfig({ privateKey: 'DUMMY-私钥', publicKey: 'DUMMY-公钥' }),
+    );
+
+    const error = captureError(
+      /** 走一次请求加密入口，包装器此时返回失败标记。 */ () =>
+        api.encryptRequest({ account: 'DUMMY-账号' }),
+    );
+
+    expect(error.message).toBe('RSA 加密失败');
+    expect(encryptSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('包装器交出 false 时响应解密必须中断而不是把密文当业务数据', /** 漏判 false 会让调用方拿着失败标记继续解析，异常报文被当成业务数据。 */ () => {
+    const decryptSpy = vi.spyOn(RSA, 'decrypt').mockReturnValue(false);
+    const api = new ApiEncrypt(
+      rsaConfig({ privateKey: 'DUMMY-私钥', publicKey: 'DUMMY-公钥' }),
+    );
+
+    const error = captureError(
+      /** 走一次响应解密入口，包装器此时返回失败标记。 */ () =>
+        api.decryptResponse('QUJD'),
+    );
+
+    expect(error.message).toBe('RSA 解密失败');
+    expect(decryptSpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -22,6 +22,9 @@ import java.util.stream.Stream;
 @Data
 public class OAuth2ClientSaveReqVO {
 
+    /**
+     * 集合类字段序列化为 JSON 后允许的最大长度，与数据库 varchar(255) 对齐。
+     */
     private static final int SERIALIZED_LIST_MAX_LENGTH = 255;
 
     /**

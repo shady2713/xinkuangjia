@@ -126,6 +126,7 @@ public class ApiEncryptResponseWrapper extends HttpServletResponseWrapper {
              */
             @Override
             public void setWriteListener(WriteListener writeListener) {
+                // 同步写出语义：响应体在写完时才加密，异步写出通知无需实现。
             }
 
             /**

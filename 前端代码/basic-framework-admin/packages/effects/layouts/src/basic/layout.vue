@@ -250,9 +250,6 @@ const headerSlots = computed(() => {
     @update:sidebar-collapse="
       (value: boolean) => updatePreferences({ sidebar: { collapsed: value } })
     "
-    @update:sidebar-enable="
-      (value: boolean) => updatePreferences({ sidebar: { enable: value } })
-    "
     @update:sidebar-expand-on-hover="
       (value: boolean) =>
         updatePreferences({ sidebar: { expandOnHover: value } })
@@ -313,9 +310,6 @@ const headerSlots = computed(() => {
         </template>
         <template #notification>
           <slot name="notification"></slot>
-        </template>
-        <template #timezone>
-          <slot name="timezone"></slot>
         </template>
         <template v-for="item in headerSlots" #[item]>
           <slot :name="item"></slot>

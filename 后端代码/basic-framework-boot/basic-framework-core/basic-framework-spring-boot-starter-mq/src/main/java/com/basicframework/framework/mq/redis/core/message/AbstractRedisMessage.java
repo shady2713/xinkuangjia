@@ -2,8 +2,8 @@ package com.basicframework.framework.mq.redis.core.message;
 
 import lombok.Data;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Redis 消息抽象基类
@@ -16,7 +16,7 @@ public abstract class AbstractRedisMessage {
     /**
      * 头
      */
-    private Map<String, String> headers = new HashMap<>();
+    private Map<String, String> headers = new ConcurrentHashMap<>();
 
     /**
      * 读取指定名称的消息头。

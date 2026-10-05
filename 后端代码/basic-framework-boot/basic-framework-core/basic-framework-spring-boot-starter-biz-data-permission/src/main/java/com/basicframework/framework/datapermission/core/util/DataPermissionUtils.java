@@ -13,20 +13,37 @@ import java.util.concurrent.Callable;
  */
 public class DataPermissionUtils {
 
-    private static DataPermission DATA_PERMISSION_DISABLE;
+    private static DataPermission dataPermissionDisable;
 
     /**
      * 获取禁用标记数据权限禁用标记。
      */
     @DataPermission(enable = false)
-    @SneakyThrows
-    private static DataPermission getDisableDataPermissionDisable() {
-        if (DATA_PERMISSION_DISABLE == null) {
-            DATA_PERMISSION_DISABLE = DataPermissionUtils.class
-                    .getDeclaredMethod("getDisableDataPermissionDisable")
-                    .getAnnotation(DataPermission.class);
+    private static synchronized DataPermission getDisableDataPermissionDisable() {
+        if (dataPermissionDisable == null) {
+            dataPermissionDisable = readDisableDataPermission(
+                    DataPermissionUtils.class, "getDisableDataPermissionDisable");
         }
-        return DATA_PERMISSION_DISABLE;
+        return dataPermissionDisable;
+    }
+
+    /**
+     * 内部可测边界：反射取得指定方法上的 {@link DataPermission} 元数据，查找失败时原样透传受检异常。
+     *
+     * <p>失败透传契约与既有 {@code @SneakyThrows} 生成的
+     * 「{@code catch Throwable -> athrow}」指令完全一致：{@link NoSuchMethodException} 不包装、
+     * 不吞掉，也不转成运行时异常。把反射取得与失败透传独立出来后，失败边界可以用真实异常输入
+     * 断言，而调用方 {@link #getDisableDataPermissionDisable()} 仍保持「先查询后缓存」的行为，
+     * 数据权限上下文的新增与移除生命周期不变。</p>
+     *
+     * @param declaringType 声明目标方法的类型
+     * @param methodName 目标方法名
+     * @return 目标方法上的注解实例；方法上确实没有该注解时同样返回 null
+     * @throws NoSuchMethodException 目标类型上不存在该方法时原样抛出
+     */
+    @SneakyThrows
+    static DataPermission readDisableDataPermission(Class<?> declaringType, String methodName) {
+        return declaringType.getDeclaredMethod(methodName).getAnnotation(DataPermission.class);
     }
 
     /**

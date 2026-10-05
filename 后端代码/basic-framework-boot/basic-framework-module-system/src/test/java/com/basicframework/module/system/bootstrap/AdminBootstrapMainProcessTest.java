@@ -33,15 +33,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 质量阶段（{@code -Pquality-audit}）会把 JaCoCo 代理挂到子进程的同一个
  * {@code target/jacoco.exec} 上，因此第二条用例真实执行的终端读取分支会计入覆盖率。</p>
  *
- * <p><b>覆盖率边界（实测结论）：</b>{@code main} 本身无法被任何执行覆盖。该方法编译后只有一条
- * {@code System.exit(...)} 调用与一条紧随其后的 {@code return}，JaCoCo 在该方法里只插入了
- * 一个探针，且它落在 {@code return} 上；而 {@code System.exit} 永不返回，所以探针永远不会命中。
- * 实测证据：两个子进程都确实执行了 {@code main}（否则不可能命中只有入口能到达的
- * {@code console.readPassword}），但它们写入的会话中该探针仍为未覆盖（探针映射实验显示
- * 只有这一个探针覆盖 {@code main} 的两行）。Mockito 明确拒绝对 {@code java.lang.System}
- * 的静态方法打桩（{@code It is not possible to mock static methods of java.lang.System}），
- * 因此也无法把 {@code System.exit} 变成可返回调用。本用例保留进程级断言以验证真实退出码，
- * 但不声称覆盖这两行。</p>
+ * <p><b>覆盖率边界：</b>{@code main} 通过内部终止动作引用结束进程，默认为 {@code System::exit}。
+ * 子进程回归固定使用默认值，因此这里断言的是「默认终止动作真的结束进程，并且退出码来自执行结果」：
+ * 进程若正常返回会以 0 结束，而断言要求 2，只有 {@code System.exit(2)} 被执行才可能满足。
+ * 「{@code main} 传出的退出码」另由 {@code AdminBootstrapMainTest} 在隔离作用域内替换终止动作后
+ * 直接断言，两者互补：本用例证明默认行为没有被接缝改坏，单元用例证明接缝传出的值正确。</p>
  *
  * @author shady2713
  */

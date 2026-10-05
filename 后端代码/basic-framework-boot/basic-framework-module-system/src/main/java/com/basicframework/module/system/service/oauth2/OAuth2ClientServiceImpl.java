@@ -198,7 +198,7 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
         client.setDescription("第三方开放接口客户授权");
         client.setStatus(status);
         client.setAccessTokenValiditySeconds(7200);
-        client.setRefreshTokenValiditySeconds(2592000);
+        client.setRefreshTokenValiditySeconds(2_592_000);
         client.setRedirectUris(List.of());
         client.setAuthorizedGrantTypes(List.of(CLIENT_CREDENTIALS.getGrantType()));
         client.setScopes(List.of("alert:read", "alert:subscribe"));

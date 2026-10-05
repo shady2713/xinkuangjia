@@ -22,6 +22,9 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class DeptDO extends BaseDO {
 
+    /**
+     * 根部门的父编号；parentId 等于该值表示顶级部门，校验上级时直接跳过。
+     */
     public static final Long PARENT_ID_ROOT = 0L;
 
     /**

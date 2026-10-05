@@ -31,6 +31,9 @@ import java.util.Base64;
  */
 public class EncryptTypeHandler extends BaseTypeHandler<String> {
 
+    /** 密文无法解密时的固定错误消息：不携带原文或密钥信息。 */
+    private static final String MSG_INVALID_CIPHERTEXT = "字段密文无效";
+
     private static final String ENCRYPTOR_PROPERTY_NAME = "mybatis-plus.encryptor.password";
 
     private static final String VERSION_PREFIX = "v1:";
@@ -113,18 +116,18 @@ public class EncryptTypeHandler extends BaseTypeHandler<String> {
             return null;
         }
         if (!value.startsWith(VERSION_PREFIX)) {
-            throw new IllegalArgumentException("字段密文无效");
+            throw new IllegalArgumentException(MSG_INVALID_CIPHERTEXT);
         }
         byte[] payload;
         try {
             payload = Base64.getDecoder().decode(value.substring(VERSION_PREFIX.length()));
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("字段密文无效", exception);
+            throw new IllegalArgumentException(MSG_INVALID_CIPHERTEXT, exception);
         }
         int cipherLength = payload.length - IV_LENGTH - MAC_LENGTH;
         // 空串加密也产生一个填充块，缺 IV、认证标签或完整密文块都不能视为合法值。
         if (cipherLength < IV_LENGTH || cipherLength % IV_LENGTH != 0) {
-            throw new IllegalArgumentException("字段密文无效");
+            throw new IllegalArgumentException(MSG_INVALID_CIPHERTEXT);
         }
         byte[] key = getKeyBytes();
         try {
@@ -132,7 +135,7 @@ public class EncryptTypeHandler extends BaseTypeHandler<String> {
             byte[] authenticatedBytes = Arrays.copyOf(payload, authenticatedLength);
             byte[] storedMac = Arrays.copyOfRange(payload, authenticatedLength, payload.length);
             if (!MessageDigest.isEqual(storedMac, authenticate(key, authenticatedBytes))) {
-                throw new IllegalArgumentException("字段密文无效");
+                throw new IllegalArgumentException(MSG_INVALID_CIPHERTEXT);
             }
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
@@ -140,7 +143,7 @@ public class EncryptTypeHandler extends BaseTypeHandler<String> {
             byte[] plainBytes = cipher.doFinal(payload, IV_LENGTH, cipherLength);
             return new String(plainBytes, StandardCharsets.UTF_8);
         } catch (GeneralSecurityException exception) {
-            throw new IllegalArgumentException("字段密文无效", exception);
+            throw new IllegalArgumentException(MSG_INVALID_CIPHERTEXT, exception);
         }
     }
 

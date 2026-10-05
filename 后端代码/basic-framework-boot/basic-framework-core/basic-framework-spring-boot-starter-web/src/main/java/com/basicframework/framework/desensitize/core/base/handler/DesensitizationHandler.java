@@ -28,6 +28,7 @@ public interface DesensitizationHandler<T extends Annotation> {
      * @param annotation 注解信息
      * @return 是否禁用脱敏的 Spring EL 表达式
      */
+    @SuppressWarnings("PMD.GenericExceptionSwallowed") // 注解未声明 disable() 时反射必然失败，属探测语义；失败即表示「不额外禁用脱敏」，不是吞掉故障。
     default String getDisable(T annotation) {
         // 约定：默认就是 enable() 属性。如果不符合，子类重写
         try {

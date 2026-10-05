@@ -12,6 +12,8 @@ import type { VueWrapper } from '@vue/test-utils';
 
 import type { ExtendedModalApi } from '@vben-core/popup-ui';
 
+import process from 'node:process';
+
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils';
 import { defineComponent, h, nextTick } from 'vue';
 
@@ -275,6 +277,119 @@ describe('锁屏解锁弹窗', /** 密码提交链路直接决定用户能否解
     await openModal();
 
     expect((passwordInput().element as HTMLInputElement).value).toBe('');
+  });
+
+  it('默认关闭即销毁时重新打开不会产生未处理的表单重置拒绝', /** 重新打开时表单还没重建就先重置，会把「表单已卸载」变成未处理拒绝。 */ async () => {
+    /** 本用例捕获到的未处理拒绝原因。 */
+    const rejections: unknown[] = [];
+    /** 记录未处理拒绝的原因，供用例判定。 */
+    const onUnhandledRejection = (reason: unknown) => {
+      rejections.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    /** 重置链路的错误日志：既不能有未处理拒绝，也不能靠兜底日志掩盖重置失败。 */
+    const consoleError = vi.spyOn(console, 'error');
+    consoleError.mockImplementation(
+      /** 拦截错误日志，避免污染用例输出。 */ () => {},
+    );
+
+    try {
+      // 不传 destroyOnClose：走默认值（弹窗关闭即销毁内容并在下次打开时重建）。
+      mountHost({
+        attrs: {
+          /** 记录内层弹窗抛出的解锁密码。 */
+          onSubmit: (value: string) => submitted.push(value),
+        },
+      });
+      await openModal();
+      // 先在重建前的实例上留下校验错误，重新打开时重置必须真实执行。
+      await clickUnlock();
+      expect(document.body.textContent).toContain(PASSWORD_PLACEHOLDER);
+
+      requireModalApi().close();
+      await nextTick();
+      await flushPromises();
+
+      // 重新打开：内容被销毁后重建，表单在打开回调触发时尚未挂载。
+      await openModal();
+      // 未处理拒绝要等微任务队列清空后才由运行环境判定，这里推进一个宏任务。
+      await new Promise(
+        /** 让出一个宏任务，使未处理拒绝有机会被上报。 */ (resolve) => {
+          setTimeout(resolve, 0);
+        },
+      );
+
+      expect(rejections).toEqual([]);
+      // 重置真实完成：没有走到「重置失败」的兜底日志（校验失败等其它日志与本断言无关）。
+      const resetFailureLogged = consoleError.mock.calls.some(
+        /** 只匹配重置链路的兜底日志。 */ (call) =>
+          String(call[0]).includes('Failed to reset lock screen form'),
+      );
+      expect(resetFailureLogged).toBe(false);
+      // 重建后的表单仍然是干净的：上一次的校验错误随重置一起清空。
+      expect(document.body.textContent).not.toContain(PASSWORD_PLACEHOLDER);
+
+      // 重建后的表单仍然可用：重新输入并解锁仍然走同一条链路。
+      await typePassword('DUMMY-新密码');
+      await clickUnlock();
+      expect(submitted).toEqual(['DUMMY-新密码']);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+      consoleError.mockRestore();
+    }
+  });
+
+  it('打开后立即关闭导致表单在重置前销毁时只记录日志', /** 这条竞态的拒绝若没有接收方，会变成未处理拒绝上抛到运行环境。 */ async () => {
+    /** 本用例捕获到的未处理拒绝原因。 */
+    const rejections: unknown[] = [];
+    /** 记录未处理拒绝的原因，供用例判定。 */
+    const onUnhandledRejection = (reason: unknown) => {
+      rejections.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    const consoleError = vi.spyOn(console, 'error');
+    consoleError.mockImplementation(
+      /** 拦截错误日志，避免污染用例输出。 */ () => {},
+    );
+
+    try {
+      mountHost({
+        attrs: {
+          /** 记录内层弹窗抛出的解锁密码。 */
+          onSubmit: (value: string) => submitted.push(value),
+        },
+      });
+
+      // 同一个 tick 内打开又关闭：表单挂载后立刻被销毁，等待挂载的重置链路
+      // 在真正重置前发现挂载代次已变化（内部抛出的原因是「表单挂载已失效」）。
+      requireModalApi().open();
+      requireModalApi().close();
+      await nextTick();
+      await flushPromises();
+      // 未处理拒绝要等微任务队列清空后才由运行环境判定，这里推进一个宏任务。
+      await new Promise(
+        /** 让出一个宏任务，使未处理拒绝有机会被上报。 */ (resolve) => {
+          setTimeout(resolve, 0);
+        },
+      );
+
+      // 重置失败必须留下可定位的日志，且不能中断弹窗自身的开合流程。
+      const failureLog = consoleError.mock.calls.find(
+        /** 只匹配重置链路的兜底日志。 */ (call) =>
+          String(call[0]).includes('Failed to reset lock screen form'),
+      );
+      expect(failureLog).toBeDefined();
+      expect((failureLog?.[1] as Error).message).toBe('表单挂载已失效');
+      // 关键契约：拒绝被真实接收，不会变成未处理拒绝。
+      expect(rejections).toEqual([]);
+      // 开合流程没有被中断：弹窗已关闭，也没有把任何密码下发出去。
+      // 关闭结果读公开的 store.state（ModalApi 的 state 是私有副本，store 才是对外可读的状态源）。
+      expect(requireModalApi().store.state.isOpen).toBe(false);
+      expect(submitted).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+      consoleError.mockRestore();
+    }
   });
 
   it('打开动画结束后聚焦密码输入框', /** 打开完成回调漏接会让用户每次都要手动点击输入框。 */ async () => {

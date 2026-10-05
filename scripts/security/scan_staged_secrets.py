@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import re
 import subprocess
 import sys
@@ -66,6 +67,24 @@ SYNTHETIC_PLACEHOLDER_MARKERS = (
     "REDACTED",
     "REPLACE",
 )
+# 官方 Maven Wrapper 脚本指纹：仓库内 Maven Wrapper 的 mvnw / mvnw.cmd 是上游工具链
+# 原文（``wrapper:wrapper -Dtype=only-script`` 的解包产物），其中的变量判空与命令行
+# 解析会被赋值规则误判。这里按「发行版本 + 脚本 SHA-256」逐个钉死：只有同级
+# ``.mvn/wrapper/maven-wrapper.properties`` 声明同一版本与 ``only-script`` 类型，
+# 且脚本暂存内容与上游发行物逐字节一致时才放行。改动任意一个字节（例如写入真实口令）
+# 指纹即失效，仍按普通源码扫描。
+MAVEN_WRAPPER_PROPERTIES_NAME = "maven-wrapper.properties"
+MAVEN_WRAPPER_DISTRIBUTION_TYPE = "only-script"
+MAVEN_WRAPPER_SCRIPT_DIGESTS = {
+    "mvnw": (
+        "3.3.4",
+        "cae96cef89ebea3531221f4ae17c23cf8edf67d00eae8306d4186ae1bbed4d02",
+    ),
+    "mvnw.cmd": (
+        "3.3.4",
+        "46eedb8419bd14fe70d5bb2916d7b6f51806e51b39d5b76a42610384ca929c1c",
+    ),
+}
 # 嵌在源码字符串里的 SQL 语句：列名列表中的敏感列后跟写死取值，普通配置文本不适用。
 EMBEDDED_SQL_STATEMENT_PATTERN = re.compile(
     r"(?i)\b(?:insert\s+into|update|delete\s+from|alter\s+table|create\s+table|set)\b"
@@ -1323,6 +1342,63 @@ def _is_unit_test_credential(path: str, raw_value: str) -> bool:
     )
 
 
+def _read_maven_wrapper_settings(declared: str) -> dict[str, str]:
+    """把 ``maven-wrapper.properties`` 的暂存文本解析成键值映射。
+
+    Args:
+        declared: 属性文件全文，按 ``key=value`` 逐行读取。
+
+    Returns:
+        忽略空行与 ``#`` 注释后的键值映射；同一键重复时以最后一次声明为准。
+    """
+
+    settings: dict[str, str] = {}
+    for line in declared.splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#") or "=" not in entry:
+            continue
+        key, _, value = entry.partition("=")
+        settings[key.strip()] = value.strip()
+    return settings
+
+
+def _is_official_maven_wrapper_script(path: str) -> bool:
+    """判断暂存路径是否为未改动的官方 Maven Wrapper 脚本。
+
+    只对 Maven Wrapper 布局中的 ``mvnw`` / ``mvnw.cmd`` 生效，且必须同时满足三个条件：
+    同级 ``.mvn/wrapper/maven-wrapper.properties`` 声明了钉死的 ``wrapperVersion`` 与
+    ``distributionType``，脚本暂存内容与上游发行物的 SHA-256 逐字节一致。任一条件不成立
+    （脚本被改动、配置缺失、版本升级或 Git 读取失败）都返回 ``False``，继续按普通源码
+    扫描；因此写入真实凭据的变体不会借助该校准绕过检查。调用方只跳过赋值启发式，
+    密钥前缀、URL 凭据与私钥等强信号检查仍然执行。
+
+    Args:
+        path: 仓库相对路径，使用正斜杠。
+
+    Returns:
+        可证明是官方原文的工具链脚本时返回 ``True``。
+    """
+
+    script = PurePosixPath(path)
+    pinned = MAVEN_WRAPPER_SCRIPT_DIGESTS.get(script.name)
+    if pinned is None:
+        return False
+    version, digest = pinned
+    properties = script.parent / ".mvn" / "wrapper" / MAVEN_WRAPPER_PROPERTIES_NAME
+    try:
+        declared = _run_git(["show", f":{properties.as_posix()}"])
+        staged = _run_git(["show", f":{path}"], text=False)
+    except RuntimeError:
+        return False
+    assert isinstance(declared, str) and isinstance(staged, bytes)
+    settings = _read_maven_wrapper_settings(declared)
+    if settings.get("wrapperVersion") != version:
+        return False
+    if settings.get("distributionType") != MAVEN_WRAPPER_DISTRIBUTION_TYPE:
+        return False
+    return hashlib.sha256(staged).hexdigest() == digest
+
+
 def _split_top_level_fields(text: str) -> list[str]:
     """按引号外的逗号或分号把嵌入文本拆成独立字段。
 
@@ -1490,7 +1566,8 @@ def _scan_added_line(
         line: 不包含 Git diff 前缀的新增内容。
         is_docstring: 由完整暂存源码确认的纯 Docstring 行，仅跳过赋值规则。
         is_python_code: 当前行是否位于 Markdown 的 Python 围栏内。
-        scan_assignment: 完整 Python AST 已负责赋值时，原始行只扫描强信号。
+        scan_assignment: 赋值语义已由别的证据覆盖（完整 Python AST，或整份文件已由官方
+            Maven Wrapper 指纹确认）时，原始行只扫描强信号。
         literal_text: 当前文本来自字符串内容，冒号表达式不能当成类型注解。
 
     Returns:
@@ -1950,6 +2027,7 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
     current_line = 0
     docstring_lines: set[int] = set()
     python_code_lines: set[int] = set()
+    official_wrapper_script = False
     added_lines_by_path: dict[str, list[tuple[int, str]]] = {}
     python_candidates: dict[str, list[tuple[int, int, str, bool]] | None] = {}
     sql_sources: dict[str, str] = {}
@@ -1958,6 +2036,9 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
             current_path = diff_line[6:]
             docstring_lines = set()
             python_code_lines = set()
+            # 指纹确认过整份内容的官方 Maven Wrapper 脚本只跳过赋值启发式；该判定对普通
+            # 文件名立即返回，不产生额外 Git 读取。
+            official_wrapper_script = _is_official_maven_wrapper_script(current_path)
             if current_path.lower().endswith(".py"):
                 # 必须读取暂存版本；工作区中未暂存的引号变化不能影响提交判定。
                 source = _run_git(["show", f":{current_path}"])
@@ -1987,7 +2068,8 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
                     added_line,
                     is_docstring=current_line in docstring_lines,
                     is_python_code=current_line in python_code_lines,
-                    scan_assignment=python_candidates.get(current_path) is None,
+                    scan_assignment=python_candidates.get(current_path) is None
+                    and not official_wrapper_script,
                 )
             )
             added_lines_by_path.setdefault(current_path, []).append(
@@ -2625,6 +2707,69 @@ def _test_declarative_permission_code_regressions() -> None:
             raise AssertionError(f"真实形态凭据未被拦截：{path}")
 
 
+def _test_official_maven_wrapper_script_regressions() -> None:
+    """验证官方 Maven Wrapper 指纹校准的放行与拦截边界，样本均为伪造值。"""
+
+    global _run_git
+
+    path = "tooling/mvnw"
+    properties = "tooling/.mvn/wrapper/maven-wrapper.properties"
+    version = MAVEN_WRAPPER_SCRIPT_DIGESTS["mvnw"][0]
+    official = b"#!/bin/sh\nMVNW_PASSWORD=''\n"
+    served = {
+        "script": official,
+        "settings": (
+            f"wrapperVersion={version}\n"
+            f"distributionType={MAVEN_WRAPPER_DISTRIBUTION_TYPE}\n"
+        ),
+    }
+
+    def read_git(arguments: list[str], *, text: bool = True) -> str | bytes:
+        """返回伪造的 Wrapper 暂存对象，未声明的 Git 调用立即失败。"""
+        if arguments[0] != "show":
+            raise AssertionError("自检未覆盖的只读 Git 调用")
+        target = arguments[1][1:]
+        if target == path:
+            content = served["script"]
+        elif target == properties:
+            content = served["settings"].encode("utf-8")
+        else:
+            raise AssertionError("自检未覆盖的只读 Git 调用")
+        return content.decode("utf-8") if text else content
+
+    original_run_git = _run_git
+    original_digests = dict(MAVEN_WRAPPER_SCRIPT_DIGESTS)
+    MAVEN_WRAPPER_SCRIPT_DIGESTS["mvnw"] = (
+        version,
+        hashlib.sha256(official).hexdigest(),
+    )
+    _run_git = read_git
+    try:
+        if not _is_official_maven_wrapper_script(path):
+            raise AssertionError("与发行物逐字节一致的工具链脚本被误报")
+        if _is_official_maven_wrapper_script("tooling/pom.xml"):
+            raise AssertionError("非 Wrapper 脚本不应进入指纹校准")
+        # 官方原文里追加一条固定凭据：指纹失效，必须退回普通源码扫描口径。
+        served["script"] = official + b'MVNW_PASSWORD="Fake-Prod-2026"\n'  # secret-scan: allow-test
+        if _is_official_maven_wrapper_script(path):
+            raise AssertionError("写入固定凭据的变体不得借指纹校准放行")
+        served["script"] = official
+        served["settings"] = f"wrapperVersion={version}\n"
+        if _is_official_maven_wrapper_script(path):
+            raise AssertionError("缺少 only-script 声明的脚本不得放行")
+        served["settings"] = (
+            "wrapperVersion=0.0.0\n"
+            f"distributionType={MAVEN_WRAPPER_DISTRIBUTION_TYPE}\n"
+        )
+        if _is_official_maven_wrapper_script(path):
+            raise AssertionError("版本不匹配的脚本不得放行")
+    finally:
+        served["script"] = official
+        _run_git = original_run_git
+        MAVEN_WRAPPER_SCRIPT_DIGESTS.clear()
+        MAVEN_WRAPPER_SCRIPT_DIGESTS.update(original_digests)
+
+
 def _run_self_test() -> None:
     """使用伪造样本验证放行和拦截规则，避免测试中包含真实凭据。"""
 
@@ -2634,6 +2779,7 @@ def _run_self_test() -> None:
     _test_semantic_recognition_regressions()
     _test_sql_and_embedded_source_regressions()
     _test_declarative_permission_code_regressions()
+    _test_official_maven_wrapper_script_regressions()
     safe_cases = (
         ("src/service.py", 'token_type = "Bearer"'),  # secret-scan: allow-test
         ("config.yaml", "password_min_length: 8"),  # secret-scan: allow-test

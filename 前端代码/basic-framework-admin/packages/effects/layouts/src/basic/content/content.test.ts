@@ -59,7 +59,7 @@ function createView(name: string | undefined, testId: string, label: string) {
  * 创建带真实路由表的测试路由并导航到指定地址。
  * 每次调用都重新生成视图组件，避免外壳补名对组件对象的改写泄漏到其他用例。
  * @param path 初始导航到的地址。
- * @returns 路由实例与匿名路由视图组件。
+ * @returns 路由实例、匿名路由视图组件与"组件名与路由名一致"的视图组件。
  */
 async function createRouterAt(path: string) {
   const anonymousView = createView(
@@ -67,6 +67,8 @@ async function createRouterAt(path: string) {
     'anonymous-view',
     'DUMMY-匿名视图',
   );
+  // 组件名与路由名一致的视图：用于验证外壳不会重复改写组件名。
+  const sameNameView = createView('OtherView', 'other-view', 'DUMMY-其他视图');
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -87,7 +89,7 @@ async function createRouterAt(path: string) {
         path: '/anonymous',
       },
       {
-        component: createView('OtherView', 'other-view', 'DUMMY-其他视图'),
+        component: sameNameView,
         name: 'OtherView',
         path: '/other',
       },
@@ -118,7 +120,7 @@ async function createRouterAt(path: string) {
   });
   await router.push(path);
   await router.isReady();
-  return { anonymousView, router };
+  return { anonymousView, router, sameNameView };
 }
 
 /**
@@ -316,6 +318,32 @@ describe('内容区路由视图补名与异常分支', /** 补名与异常处理
     expect(wrapper.get('[data-test="no-name-view"]').text()).toBe(
       'DUMMY-无名路由',
     );
+    wrapper.unmount();
+  });
+
+  it('组件名与路由名一致时不再改写组件名', /** 同名改写会让缓存索引与组件实际名字错位，页面反复重挂载。 */ async () => {
+    const { router, sameNameView } = await createRouterAt('/other');
+    const pinia = await setupStores();
+    // 用访问器记录组件名的改写：同名时外壳必须直接返回，不能写入 name。
+    const declaredName = (sameNameView as { name?: string }).name;
+    const nameWrites: unknown[] = [];
+    Object.defineProperty(sameNameView, 'name', {
+      configurable: true,
+      /** 读取组件声明的名字，供外壳判定是否已命名。 */
+      get: () => declaredName,
+      /** 记录外壳对组件名的改写。 */
+      set: (value: unknown) => {
+        nameWrites.push(value);
+      },
+    });
+
+    const wrapper = mountContent(router, pinia);
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="other-view"]').exists()).toBe(true);
+    expect(wrapper.findComponent({ name: 'OtherView' }).exists()).toBe(true);
+    // 同名早退必须真实发生：组件名一次都没有被改写。
+    expect(nameWrites).toEqual([]);
     wrapper.unmount();
   });
 

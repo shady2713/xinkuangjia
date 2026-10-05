@@ -3,13 +3,17 @@ package com.basicframework.module.system.bootstrap;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -170,6 +174,75 @@ class BootstrapAdminServiceJdbcTest {
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(connection).prepareStatement(sql.capture(), eq(Statement.RETURN_GENERATED_KEYS));
         return sql.getValue();
+    }
+
+    /**
+     * 角色查询返回两行时必须按“内置管理员角色不唯一”拒绝，不能只取第一行继续初始化。
+     *
+     * <p>唯一索引只约束合规数据库；被代理改写的结果集、指向已有库的连接、读库与写库不一致，
+     * 都可能让同一条 SQL 返回两行。此时若沿用第一行，初始化出来的账号会绑定到不确定的角色上，
+     * 而权限审计看到的是一条“成功”记录，现场无法回放。这里锁定“第二行存在即拒绝”的分类。</p>
+     *
+     * <p><b>边界替身：</b>{@link ResultSet} 用 JDK 动态代理实现，只替换 JDBC 依赖边界；
+     * 真实执行的是 {@code selectAdminRoleForUpdate} 自身的行判定、字段校验、异常抛出与
+     * try-with-resources 资源关闭。用例同时统计 {@code next()} 的调用次数，
+     * 证明拒绝来自第二行而不是字段校验——整体 Mock 被测方法无法产生这种区分。</p>
+     *
+     * @throws Exception 反射查找或结果集构造失败时抛出
+     */
+    @Test
+    void selectAdminRoleForUpdateRejectsSecondRow() throws Exception {
+        long adminRoleId = 7L;
+        List<String> nextCalls = new ArrayList<>();
+        ResultSet twoRows = (ResultSet) Proxy.newProxyInstance(
+                BootstrapAdminServiceJdbcTest.class.getClassLoader(),
+                new Class<?>[]{ResultSet.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "next" -> {
+                        nextCalls.add("next");
+                        yield nextCalls.size() <= 2;
+                    }
+                    case "getString" -> adminPlatform();
+                    // 第一行的状态与类型都必须合法，否则会在字段校验处提前拒绝；
+                    // 本用例要证明的是“第二行存在”这一独立出口。
+                    case "getInt" -> "status".equals(args[0]) ? 0 : 1;
+                    case "getBoolean" -> false;
+                    case "getLong" -> adminRoleId;
+                    case "close" -> null;
+                    case "isWrapperFor" -> false;
+                    case "toString" -> "ResultSet(two admin role rows)";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException("未预期的结果集调用：" + method.getName());
+                });
+        PreparedStatement statement = mock(PreparedStatement.class);
+        Connection connection = mock(Connection.class);
+        when(connection.prepareStatement(anyString())).thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(twoRows);
+
+        Method method = BootstrapAdminService.class.getDeclaredMethod("selectAdminRoleForUpdate", Connection.class);
+        method.setAccessible(true);
+        InvocationTargetException thrown = catchThrowableOfType(
+                () -> method.invoke(null, connection), InvocationTargetException.class);
+
+        assertThat(thrown).as("两行内置管理员角色必须拒绝").isNotNull();
+        assertThat(thrown.getCause()).isInstanceOf(BootstrapFailure.class)
+                .hasMessage(BootstrapFailure.Reason.INVALID_ADMIN_ROLE.name());
+        assertThat(nextCalls).as("第一行字段全部合法，必须读到第二行才拒绝").hasSize(2);
+        verify(statement).setString(1, adminPlatform());
+        verify(statement).close();
+    }
+
+    /**
+     * 读取被测类内置的管理员平台编码，避免在用例中复制一份可能与生产实现漂移的字面量。
+     *
+     * @return 内置管理员平台编码
+     * @throws Exception 字段查找或读取失败时抛出
+     */
+    private static String adminPlatform() throws Exception {
+        Field field = BootstrapAdminService.class.getDeclaredField("ADMIN_PLATFORM");
+        field.setAccessible(true);
+        return (String) field.get(null);
     }
 
 }

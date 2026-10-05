@@ -20,6 +20,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 let isCheckingUpdates = false;
+/** 组件是否已卸载：卸载后在途检查的续接逻辑一律不再安装定时器。 */
+let disposed = false;
 const currentVersionTag = ref('');
 const lastVersionTag = ref('');
 const timer = ref<ReturnType<typeof setInterval>>();
@@ -80,10 +82,18 @@ function handleNotice(versionTag: string) {
   modalApi.open();
 }
 
+/**
+ * 启动版本轮询：间隔配置为非正数时视为关闭轮询，不安装定时器。
+ * 挂载与「页面恢复可见」都会走到这里，重复调用必须只留下一个定时器。
+ */
 function start() {
   if (props.checkUpdatesInterval <= 0) {
     return;
   }
+
+  // 挂载与「页面恢复可见」都会调用 start()，可能先后落在同一个仍存活的定时器上。
+  // 直接覆盖句柄会让旧定时器失去引用后继续轮询，stop() 也再停不掉它，因此先清掉既有定时器。
+  stop();
 
   // 每 checkUpdatesInterval(默认值为1) 分钟检查一次
   timer.value = setInterval(
@@ -92,16 +102,30 @@ function start() {
   );
 }
 
+/**
+ * 文档可见性变化的处理入口：隐藏时停表，避免后台标签页继续发请求；
+ * 重新可见时先补做一次检查，用进行中标记挡住并发的重复检查，结束后再恢复轮询。
+ */
 function handleVisibilitychange() {
   if (document.hidden) {
     stop();
   } else {
     if (!isCheckingUpdates) {
       isCheckingUpdates = true;
-      checkForUpdates().finally(() => {
-        isCheckingUpdates = false;
-        start();
-      });
+      checkForUpdates().finally(
+        /**
+         * 收尾这次补偿检查：先复位进行中标记，
+         * 组件若已在检查期间卸载则直接返回，不再安装无人清理的定时器。
+         */
+        () => {
+          isCheckingUpdates = false;
+          // 检查期间组件可能已被卸载：此时再安装定时器会留下一个无人清理的轮询。
+          if (disposed) {
+            return;
+          }
+          start();
+        },
+      );
     }
   }
 }
@@ -115,10 +139,17 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilitychange);
 });
 
-onUnmounted(() => {
-  stop();
-  document.removeEventListener('visibilitychange', handleVisibilitychange);
-});
+onUnmounted(
+  /**
+   * 卸载收尾：先标记组件已销毁，让在途检查不再续接定时器，
+   * 再停掉当前轮询并移除文档级可见性监听，避免已销毁的实例继续发请求。
+   */
+  () => {
+    disposed = true;
+    stop();
+    document.removeEventListener('visibilitychange', handleVisibilitychange);
+  },
+);
 </script>
 <template>
   <UpdateNoticeModal

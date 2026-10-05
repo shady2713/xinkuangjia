@@ -24,6 +24,34 @@ DIRECTORY = Path(".cache/build-record")
 ARTIFACTS = Path("apps/web-ele/dist")
 
 
+def git_failure_reason(root: Path, result: subprocess.CompletedProcess) -> str:
+    """解释只读 Git 查询失败的原因，优先识别"没有 Git 工作树"。
+
+    只在 Git 已经失败后调用，因此额外探针不会影响正常路径；源码压缩包没有 `.git`，
+    这里必须直接说明该前提，不能让使用者只看到笼统的"构建记录未完成"。
+
+    Args:
+        root: 当前独立前端根目录。
+        result: 已经失败的那次只读 Git 命令结果。
+    Returns:
+        可打印的失败原因；缺少 `.git` 时明确指出压缩包无法产出交付记录。
+    """
+    probe = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    if probe.returncode or probe.stdout.strip() != b"true":
+        return (
+            "缺少 Git 工作树（没有 .git 目录）：构建记录要求真实提交、工作区状态与文件清单，"
+            "源码压缩包或已删除 .git 的目录无法产出交付记录；"
+            "请在完整 Git 检出中执行 pnpm build:recorded"
+        )
+    detail = result.stderr.decode("utf-8", errors="replace").strip().splitlines()
+    return f"无法读取 Git 构建来源：{detail[0]}" if detail else "无法读取 Git 构建来源"
+
+
 def git(root: Path, *arguments: str) -> bytes:
     """执行固定参数的只读 Git 查询；失败或超时不伪造来源信息。"""
     result = subprocess.run(
@@ -33,7 +61,7 @@ def git(root: Path, *arguments: str) -> bytes:
         check=False,
     )
     if result.returncode:
-        raise workspace.InputError("无法读取 Git 构建来源")
+        raise workspace.InputError(git_failure_reason(root, result))
     return result.stdout
 
 
@@ -215,9 +243,10 @@ def main() -> int:
         report = run(Path(__file__).resolve().parents[2], args.action)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
-    except (workspace.InputError, ValueError, OSError, subprocess.TimeoutExpired):
+    except (workspace.InputError, ValueError, OSError, subprocess.TimeoutExpired) as error:
+        print(f"构建记录未完成：{error}", file=sys.stderr)
         print(
-            "构建记录未完成：来源、记录或产物校验失败，请重新检查构建流程。",
+            "来源、记录或产物校验失败，请重新检查构建流程。",
             file=sys.stderr,
         )
         return 2

@@ -32,6 +32,11 @@
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
+        <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
+        <!-- R06「固定支持的 JDK 和 Maven 工具链」：由 maven-enforcer-plugin 在 validate 阶段强制，
+             版本不符时直接失败，而不是产出一个「看起来成功」的构建。范围与下方 enforcement 一起维护。 -->
+        <maven.required.version>[3.9.0,4.0.0)</maven.required.version>
+        <java.required.version>[17,18)</java.required.version>
         <!-- maven-surefire-plugin 暂时无法通过 bom 的依赖查找（兼容老版本 IDEA 2024 及以前版本） -->
         <lombok.version>1.18.46</lombok.version>
         <spring.boot.version>3.5.16</spring.boot.version>
@@ -195,6 +200,40 @@
         </pluginManagement>
 
         <plugins>
+            <!-- R06：构建级工具链强制。支持范围之外的工具链必须立即失败，不能只在文档里约定。
+                 范围定义在 <properties>（maven.required.version / java.required.version）。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-toolchain</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <fail>true</fail>
+                            <failFast>true</failFast>
+                            <rules>
+                                <requireMavenVersion>
+                                    <version>${maven.required.version}</version>
+                                    <message>本项目只支持 Maven ${maven.required.version}；请改用该范围内的 Maven（仓库根提供 mvnw 包装器）。</message>
+                                </requireMavenVersion>
+                                <requireJavaVersion>
+                                    <version>${java.required.version}</version>
+                                    <message>本项目只支持 JDK ${java.required.version}（编译目标 release 17）；请把 JAVA_HOME 指向该范围内的 JDK。</message>
+                                </requireJavaVersion>
+                                <!-- 同一 pom 内不得对同一依赖重复声明版本，否则版本来源不唯一。 -->
+                                <banDuplicatePomDependencyVersions/>
+                                <dependencyConvergence/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- 统一 revision 版本 -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>

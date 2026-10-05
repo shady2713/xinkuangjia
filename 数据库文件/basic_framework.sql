@@ -553,6 +553,25 @@ INSERT INTO `system_menu` VALUES (1103, '短信模板更新', 'system:sms-templa
 INSERT INTO `system_menu` VALUES (1104, '短信模板删除', 'system:sms-template:delete', 3, 'super_admin', 4, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1105, '短信模板导出', 'system:sms-template:export', 3, 'super_admin', 5, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1106, '发送测试短信', 'system:sms-template:send-sms', 3, 'super_admin', 6, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '1', '2021-04-11 00:26:40', '1', '2026-10-01 19:42:37', b'0');
+-- 以下 17 行由 202610020006 迁移同步：菜单、OAuth2 客户端、OAuth2 令牌与文件管理的页面菜单及权限行。
+-- 保留区间 90001-90017 避免与 AUTO_INCREMENT 新建菜单冲突；create_time/update_time 固定，便于与升级库逐行核对。
+INSERT INTO `system_menu` VALUES (90001, '菜单管理', '', 2, 'super_admin', 11, 1, 'menu', 'ep:menu', 'system/menu/index', 'SystemMenu', 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90002, 'OAuth2 管理', '', 1, 'super_admin', 12, 1, 'oauth2', 'ep:key', NULL, NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90003, 'OAuth2 客户端', '', 2, 'super_admin', 1, 90002, 'client', 'ep:connection', 'system/oauth2/client/index', 'SystemOauth2Client', 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90004, 'OAuth2 令牌', '', 2, 'super_admin', 2, 90002, 'token', 'ep:ticket', 'system/oauth2/token/index', 'SystemOauth2Token', 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90005, '文件管理', '', 2, 'super_admin', 9, 2, 'file', 'ep:folder', 'infra/file/index', 'InfraFile', 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90006, '菜单查询', 'system:menu:query', 3, 'super_admin', 1, 90001, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90007, '菜单新增', 'system:menu:create', 3, 'super_admin', 2, 90001, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90008, '菜单修改', 'system:menu:update', 3, 'super_admin', 3, 90001, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90009, '菜单删除', 'system:menu:delete', 3, 'super_admin', 4, 90001, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90010, 'OAuth2 客户端查询', 'system:oauth2-client:query', 3, 'super_admin', 1, 90003, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90011, 'OAuth2 客户端新增', 'system:oauth2-client:create', 3, 'super_admin', 2, 90003, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90012, 'OAuth2 客户端修改', 'system:oauth2-client:update', 3, 'super_admin', 3, 90003, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90013, 'OAuth2 客户端删除', 'system:oauth2-client:delete', 3, 'super_admin', 4, 90003, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90014, 'OAuth2 令牌查询', 'system:oauth2-token:page', 3, 'super_admin', 1, 90004, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90015, 'OAuth2 令牌删除', 'system:oauth2-token:delete', 3, 'super_admin', 2, 90004, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90016, '文件查询', 'infra:file:query', 3, 'super_admin', 1, 90005, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_menu` VALUES (90017, '文件删除', 'infra:file:delete', 3, 'super_admin', 2, 90005, '', '', '', NULL, 0, b'1', b'1', b'1', 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
 
 -- ----------------------------
 -- Table structure for system_oauth2_access_token
@@ -815,6 +834,25 @@ INSERT INTO `system_role_menu` VALUES (6379, 1, 1103, '1', '2026-04-07 08:30:13'
 INSERT INTO `system_role_menu` VALUES (6380, 1, 1104, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6381, 1, 1105, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6382, 1, 1106, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+-- 以下 17 行由 202610020006 迁移同步：把新增的 90001-90017 菜单授予内置超管角色。
+-- 自增编号紧随种子最大编号 6382，与升级库执行同一迁移后的结果逐行一致。
+INSERT INTO `system_role_menu` VALUES (6383, 1, 90001, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6384, 1, 90002, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6385, 1, 90003, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6386, 1, 90004, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6387, 1, 90005, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6388, 1, 90006, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6389, 1, 90007, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6390, 1, 90008, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6391, 1, 90009, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6392, 1, 90010, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6393, 1, 90011, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6394, 1, 90012, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6395, 1, 90013, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6396, 1, 90014, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6397, 1, 90015, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6398, 1, 90016, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
+INSERT INTO `system_role_menu` VALUES (6399, 1, 90017, 'framework-202610020006', '2026-10-06 00:00:00', 'framework-202610020006', '2026-10-06 00:00:00', b'0');
 
 -- ----------------------------
 -- Table structure for system_sms_channel

@@ -6,6 +6,10 @@
  * 切换更新会让日期与组件文案语言不一致，缺省语言必须取偏好设置，调用方显式传入的
  * 选项要能覆盖缺省值。用例使用真实核心 i18n 装配、真实语言包动态导入与真实 dayjs，
  * 断言翻译结果、组件库语言对象、dayjs 当前语言与 html lang。
+ *
+ * dayjs 语言包的应用动作按 [裁决 D9] 的口径提取为接收显式语言包的 applyDayjsLocale：
+ * 动态导入的返回值由调用方传入，因此"语言包缺失"这一上游边界可以被直接构造与断言，
+ * 不必依赖动态导入真的交出空值。
  */
 import type { App } from 'vue';
 
@@ -19,7 +23,7 @@ import { preferences } from '@vben/preferences';
 import dayjs from 'dayjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { elementLocale, setupI18n } from './index';
+import { applyDayjsLocale, elementLocale, setupI18n } from './index';
 
 /** 不在支持列表中的语言编码；用于验证兜底分支的真实行为。 */
 const unsupportedLocale = 'ja-JP' as SupportedLanguagesType;
@@ -114,6 +118,43 @@ describe('缺省按键告警', /** 缺省按键告警由宿主选项控制，关
     });
     i18n.global.t('not.exist.key');
 
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('dayjs 语言包应用', /** 语言包缺失时的处置决定日期格式会不会悄悄退回默认语言。 */ () => {
+  it('语言包缺失时只告警并保持当前语言', /** 把空值交给 dayjs.locale 会重置语言，用户切换语言后日期格式会莫名回退。 */ () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(
+        /** 静默预期内的警告输出，避免污染测试结果。 */ () => {},
+      );
+    dayjs.locale('zh-cn');
+
+    applyDayjsLocale(undefined, 'en-US');
+
+    // 语言必须保持在切换前的值，不能被空值重置回内置默认语言。
+    expect(dayjs.locale()).toBe('zh-cn');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '[i18n:dayjs-locale] Failed to load dayjs locale for en-US',
+      ),
+    );
+    warn.mockRestore();
+  });
+
+  it('语言包可用时真实切换 dayjs 语言', /** 语言包被丢弃会让日期与组件文案停留在上一种语言。 */ async () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(
+        /** 静默预期内的警告输出，避免污染测试结果。 */ () => {},
+      );
+    dayjs.locale('zh-cn');
+
+    applyDayjsLocale(await import('dayjs/locale/en'), 'en-US');
+
+    expect(dayjs.locale()).toBe('en');
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });

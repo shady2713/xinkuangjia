@@ -209,6 +209,69 @@ async function clickAndSettle(text: string) {
   await settleClosingDialog();
 }
 
+/**
+ * 点击按钮并等待关闭状态落到真实 DOM，但不补发动画结束事件。
+ *
+ * 容器已被摘除时弹窗不会被卸载，关闭动画结束事件改由用例显式控制派发次数，
+ * 用于验证"重复通知只结算一次"。
+ * @param text 按钮可见文案。
+ * @returns 关闭状态落到 DOM 后兑现的 Promise。
+ * @throws 按钮缺失或关闭状态始终未出现时抛出，避免断言落在假象上。
+ */
+async function clickAndWaitClosed(text: string) {
+  const button = findButton(text);
+  if (!button) {
+    throw new Error(`未渲染出按钮 ${text}`);
+  }
+  button.click();
+  for (let tick = 0; tick < 3; tick += 1) {
+    await nextTick();
+    const content = document.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!content || content.dataset.state === 'closed') {
+      return;
+    }
+  }
+  throw new Error(`弹窗未进入关闭状态：${text}`);
+}
+
+/**
+ * 在同一个 tick 内派发两次关闭动画结束事件。
+ *
+ * 真实浏览器对同一元素可能重复派发 animationend；二次通知不能二次结算。
+ * @returns 事件派发与响应式更新完成后兑现的 Promise。
+ * @throws 弹窗内容缺失时抛出，避免事件派发到空目标上。
+ */
+async function dispatchAnimationEndTwice() {
+  const content = document.querySelector<HTMLElement>('[role="alertdialog"]');
+  if (!content) {
+    throw new Error('未渲染出弹窗内容，无法派发动画结束事件');
+  }
+  content.dispatchEvent(new Event('animationend', { bubbles: true }));
+  content.dispatchEvent(new Event('animationend', { bubbles: true }));
+  await nextTick();
+  await nextTick();
+}
+
+/**
+ * 把 vbenAlert 新建的弹窗容器从文档中摘除。
+ *
+ * 模拟页面切换整块移除 DOM、但命令式弹窗组件仍处于挂载状态的场景：
+ * 此时 dispose 的"容器已不在文档中"守卫是唯一的安全网。
+ * @param before 调用 vbenAlert 之前记录的 body 子节点集合。
+ * @returns 被摘除的容器元素。
+ * @throws 找不到新建容器时抛出，避免用例在错误的元素上断言。
+ */
+function detachAlertContainer(before: Set<Element>) {
+  const container = [...document.body.children].find(
+    /** 只挑出 vbenAlert 新追加的容器。 */ (element) => !before.has(element),
+  );
+  if (!container) {
+    throw new Error('未找到 vbenAlert 新建的弹窗容器');
+  }
+  container.remove();
+  return container;
+}
+
 afterEach(
   /** 清理残留弹窗与全局替身，避免用例之间互相影响。 */ () => {
     clearAllAlerts();
@@ -344,6 +407,66 @@ describe('vbenAlert 取消与清理', /** 取消必须被识别成取消，强�
     await expect(pending).rejects.toThrow('dialog cancelled');
     expect(rejections).toHaveLength(1);
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it('容器已被外部摘除时确认与重复关闭事件只结算一次', /** 页面切换摘走容器后弹窗仍挂载，二次结算会让业务重复执行危险操作。 */ async () => {
+    /** 按到达顺序记录真实的结算结果。 */
+    const settlements: string[] = [];
+    const containersBefore = new Set(document.body.children);
+    const pending = vbenAlert({
+      content: 'DUMMY-容器已摘除',
+      showCancel: true,
+    });
+    pending.then(
+      /** 记录真实兑现。 */ () => {
+        settlements.push('resolve');
+      },
+      /** 记录真实拒绝。 */ (error: unknown) => {
+        settlements.push(`reject:${(error as Error).message}`);
+      },
+    );
+    await waitForDialog();
+
+    // 容器被外部整块摘除：dispose 的"容器已不在文档中"守卫必须拦下重复卸载。
+    const container = detachAlertContainer(containersBefore);
+    findButton('确认')?.click();
+    await nextTick();
+    // 二次确认：结算守卫必须拦下第二次兑现。
+    findButton('确认')?.click();
+    await nextTick();
+    await nextTick();
+    // 关闭动画重复结束：onClosed 只按"已确认"分支处理，不再走到取消分支。
+    await dispatchAnimationEndTwice();
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(settlements).toEqual(['resolve']);
+    // 已被摘除的容器不能被重新挂回文档。
+    expect(document.body.contains(container)).toBe(false);
+  });
+
+  it('容器已被外部摘除时重复关闭事件只拒绝一次', /** 重复的关闭通知若二次拒绝，会让调用方把一次取消当成两次失败。 */ async () => {
+    /** 按到达顺序记录真实的结算结果。 */
+    const settlements: string[] = [];
+    const containersBefore = new Set(document.body.children);
+    const pending = vbenAlert({ content: 'DUMMY-重复取消', showCancel: true });
+    pending.then(
+      /** 确认路径不应出现兑现。 */ () => {
+        settlements.push('resolve');
+      },
+      /** 记录真实拒绝。 */ (error: unknown) => {
+        settlements.push(`reject:${(error as Error).message}`);
+      },
+    );
+    await waitForDialog();
+
+    const container = detachAlertContainer(containersBefore);
+    // 取消后补发两次关闭动画结束：第二次必须被结算守卫拦下。
+    await clickAndWaitClosed('取消');
+    await dispatchAnimationEndTwice();
+
+    await expect(pending).rejects.toThrow('dialog cancelled');
+    expect(settlements).toEqual(['reject:dialog cancelled']);
+    expect(document.body.contains(container)).toBe(false);
   });
 
   it('强制清理时移除页面上全部弹窗容器', /** 页面切换后残留的弹窗会挡住整个界面且无人能关闭。 */ async () => {

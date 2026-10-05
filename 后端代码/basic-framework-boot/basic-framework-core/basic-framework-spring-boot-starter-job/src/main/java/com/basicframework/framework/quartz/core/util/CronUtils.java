@@ -47,7 +47,8 @@ public class CronUtils {
         try {
             cron = new CronExpression(cronExpression);
         } catch (ParseException e) {
-            throw new IllegalArgumentException(e.getMessage());
+            // 保留原始 cause：调用方需要从堆栈定位到底哪一段 CRON 表达式不合法。
+            throw new IllegalArgumentException(e.getMessage(), e);
         }
         // 2. 从当前开始计算，n 个满足条件的
         Date now = DateUtil.date();

@@ -144,9 +144,8 @@ const leftListState = ref({
   },
 });
 
-// 右侧列表状态
+// 右侧列表状态；检索由 ElTransfer 的 filterable 面板负责，本状态只保留分页与数据源
 const rightListState = ref({
-  searchValue: '',
   dataSource: [] as SystemUserApi.User[],
   pagination: {
     current: 1,
@@ -319,18 +318,10 @@ function updateRightListData() {
     (user) => user.id !== undefined && uniqueSelectedIds.has(user.id),
   );
 
-  // 应用搜索过滤
-  const filteredUsers = rightListState.value.searchValue
-    ? selectedUsers.filter((user) =>
-        user.nickname
-          .toLowerCase()
-          .includes(rightListState.value.searchValue.toLowerCase()),
-      )
-    : selectedUsers;
-
+  // 已选用户的检索由 ElTransfer 自身的 filterable 面板完成，这里只按勾选集合汇总。
   // 更新总数（使用 Set 确保唯一性）
   rightListState.value.pagination.total = new Set(
-    filteredUsers.map((user) => user.id),
+    selectedUsers.map(/** 只取主键用于去重计数。 */ (user) => user.id),
   ).size;
 
   // 应用分页
@@ -338,7 +329,7 @@ function updateRightListData() {
   const startIndex = (current - 1) * pageSize;
   const endIndex = startIndex + pageSize;
 
-  rightListState.value.dataSource = filteredUsers.slice(startIndex, endIndex);
+  rightListState.value.dataSource = selectedUsers.slice(startIndex, endIndex);
 }
 
 // 处理左侧分页变化
@@ -386,7 +377,6 @@ function resetData() {
   };
 
   rightListState.value = {
-    searchValue: '',
     dataSource: [],
     pagination: {
       current: 1,

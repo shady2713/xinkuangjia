@@ -103,6 +103,10 @@ const calculateImageFitSize = () => {
 
 /**
  * 验证并解析比例字符串
+ *
+ * 校验分两步：先判"两段纯数字且没有前导零"的格式，再判解析结果必须为正整数。
+ * 两步各自给出准确的告警文案——`0:9` 这类比例格式正确但取值非法，必须落在取值校验上，
+ * 而不是被格式校验一并吞掉；两条判定都是可到达的真实路径。
  * @returns {number|null} 比例值 (width/height)，解析失败返回null
  */
 const parseAndValidateAspectRatio = (): null | number => {
@@ -111,17 +115,24 @@ const parseAndValidateAspectRatio = (): null | number => {
     return null;
   }
 
-  // 验证比例格式
-  const ratioRegex = /^[1-9]\d*:[1-9]\d*$/;
-  if (!ratioRegex.test(props.aspectRatio)) {
+  // 验证比例格式：必须是两段纯数字，且不允许前导零（"09" 不是合法的比例段）
+  const ratioParts = props.aspectRatio.split(':');
+  const ratioPartRegex = /^(?:0|[1-9]\d*)$/;
+  if (
+    ratioParts.length !== 2 ||
+    ratioParts.some(
+      /** 任一段不是合法的比例段即为格式非法。 */ (part) =>
+        !ratioPartRegex.test(part),
+    )
+  ) {
     console.warn('裁剪比例格式错误，应为 "数字:数字" 格式，如 "16:9"');
     return null;
   }
 
   // 解析比例
-  const [width, height] = props.aspectRatio.split(':').map(Number);
+  const [width, height] = ratioParts.map(Number);
 
-  // 验证解析结果有效性
+  // 验证解析结果有效性：宽高都必须是正整数，任何一边为 0 都构不成比例
   if (Number.isNaN(width) || Number.isNaN(height) || !width || !height) {
     console.warn('裁剪比例解析失败，宽高必须为正整数');
     return null;
@@ -282,6 +293,11 @@ const handleMouseMove = (e: MouseEvent) => {
   }
 };
 
+/**
+ * 整体平移裁剪框：只改位置不改尺寸，并把四条边夹在容器内。
+ * @param diffX 水平位移。
+ * @param diffY 垂直位移。
+ */
 const handleMoveCropBox = (diffX: number, diffY: number) => {
   const newDimension = [...startDimension.value] as Dimension;
 
@@ -310,18 +326,6 @@ const handleMoveCropBox = (diffX: number, diffY: number) => {
   );
   // 右侧边界：right = 容器宽度 - left - 裁剪宽度（由left推导，无需额外计算）
   newDimension[1] = containerWidth.value - newDimension[3] - cropWidth;
-
-  // 强制保证尺寸不变（兜底）
-  const finalWidth = containerWidth.value - newDimension[3] - newDimension[1];
-  const finalHeight = containerHeight.value - newDimension[0] - newDimension[2];
-
-  if (finalWidth !== cropWidth) {
-    newDimension[1] = containerWidth.value - newDimension[3] - cropWidth;
-  }
-
-  if (finalHeight !== cropHeight) {
-    newDimension[2] = containerHeight.value - newDimension[0] - cropHeight;
-  }
 
   // 更新裁剪区域（仅位置变化，尺寸/比例完全不变）
   setDimension(newDimension);

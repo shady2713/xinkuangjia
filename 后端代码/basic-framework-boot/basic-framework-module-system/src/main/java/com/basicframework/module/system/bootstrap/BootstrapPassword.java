@@ -18,6 +18,9 @@ import java.util.HexFormat;
  */
 final class BootstrapPassword {
 
+    /** 口令必须覆盖的字符类别数下限（大写、小写、数字、特殊字符）。 */
+    private static final int MIN_CHARACTER_CATEGORIES = 3;
+
     /** 工具类不允许实例化。 */
     private BootstrapPassword() {
     }
@@ -80,7 +83,7 @@ final class BootstrapPassword {
                 categories |= 8;
             }
         }
-        if (Integer.bitCount(categories) < 3) {
+        if (Integer.bitCount(categories) < MIN_CHARACTER_CATEGORIES) {
             throw new BootstrapFailure(BootstrapFailure.Reason.PASSWORD_POLICY);
         }
     }

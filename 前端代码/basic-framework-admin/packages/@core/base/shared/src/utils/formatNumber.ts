@@ -23,37 +23,56 @@ export function formatToFraction(num: number | string | undefined): string {
 }
 
 /**
+ * 把已格式化的数字串补齐成两位小数的展示形式。
+ *
+ * 小数位数由调用方解析后显式传入：`toFixed(2)` 的正常结果只有 0 或 2 位小数，
+ * 但指数写法（如 `1.5e+21`）与上游实现变更都可能交出其他位数，因此这里按传入位数
+ * 逐一约定结果，位数未知时退回默认展示串而不是交出残缺文本。
+ *
+ * @param formatted 已格式化的数字串，作为补齐的基串原样使用
+ * @param decimalLength formatted 小数部分的长度，由调用方从该串解析得到
+ * @returns 0 位小数补 `.00`；1 位小数补一个 `0`；2 位小数原样返回；
+ * 其余长度无法补齐，返回默认串 `0.00`
+ */
+export function padFractionToTwoDigits(
+  formatted: string,
+  decimalLength: number,
+): string {
+  switch (decimalLength) {
+    case 0: {
+      return `${formatted}.00`;
+    }
+    case 1: {
+      return `${formatted}0`;
+    }
+    case 2: {
+      return formatted;
+    }
+    default: {
+      return '0.00';
+    }
+  }
+}
+
+/**
  * 将一个数转换为 1.00 这样
  * 数据呈现的时候使用
  *
  * @param num 整数
+ * @returns 固定两位小数的展示串；入参未定义或无法补齐时返回 '0.00'
  */
 export function floatToFixed2(num: number | string | undefined): string {
-  let str = '0.00';
-  if (isUndefined(num)) return str;
+  if (isUndefined(num)) return '0.00';
   const f = formatToFraction(num);
   const decimalPart = f.toString().split('.')[1];
   const len = decimalPart ? decimalPart.length : 0;
-  switch (len) {
-    case 0: {
-      str = `${f.toString()}.00`;
-      break;
-    }
-    case 1: {
-      str = `${f.toString()}0`;
-      break;
-    }
-    case 2: {
-      str = f.toString();
-      break;
-    }
-  }
-  return str;
+  return padFractionToTwoDigits(f.toString(), len);
 }
 
 /**
  * 将一个分数转换为整数
- * @param num
+ * @param num 分值，允许数字或文本形式的数字
+ * @returns 四舍五入后的整数分值；入参未定义时为 0
  */
 export function convertToInteger(num: number | string | undefined): number {
   if (isUndefined(num)) return 0;

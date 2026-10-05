@@ -14,7 +14,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SmsChannelEnum {
 
+    /** 阿里云短信，渠道编码 ALIYUN；回执地址 /admin-api/system/sms/callback/aliyun。 */
     ALIYUN("ALIYUN", "阿里云"),
+    /** 腾讯云短信，渠道编码 TENCENT；回执地址 /admin-api/system/sms/callback/tencent。 */
     TENCENT("TENCENT", "腾讯云"),
     ;
 

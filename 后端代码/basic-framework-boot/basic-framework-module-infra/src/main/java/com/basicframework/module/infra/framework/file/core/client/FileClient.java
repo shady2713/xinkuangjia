@@ -12,6 +12,9 @@ import java.util.List;
  */
 public interface FileClient extends AutoCloseable {
 
+    /** 客户端未实现该能力时的固定错误消息。 */
+    String MSG_UNSUPPORTED_OPERATION = "不支持的操作";
+
     /**
      * 获得客户端编号
      *
@@ -87,7 +90,7 @@ public interface FileClient extends AutoCloseable {
      * @throws Exception 查询对象存储目录失败时抛出
      */
     default List<String> listPrefixes(String prefix, String delimiter) throws Exception {
-        throw new UnsupportedOperationException("不支持的操作");
+        throw new UnsupportedOperationException(MSG_UNSUPPORTED_OPERATION);
     }
 
     /**
@@ -98,7 +101,7 @@ public interface FileClient extends AutoCloseable {
      * @throws Exception 删除对象存储目录失败时抛出
      */
     default int deletePrefix(String prefix) throws Exception {
-        throw new UnsupportedOperationException("不支持的操作");
+        throw new UnsupportedOperationException(MSG_UNSUPPORTED_OPERATION);
     }
 
     // ========== 文件签名，目前仅 S3 支持 ==========
@@ -111,7 +114,7 @@ public interface FileClient extends AutoCloseable {
      * @return 文件预签名地址
      */
     default String presignPutUrl(String path, long size) {
-        throw new UnsupportedOperationException("不支持的操作");
+        throw new UnsupportedOperationException(MSG_UNSUPPORTED_OPERATION);
     }
 
     /**
@@ -122,7 +125,7 @@ public interface FileClient extends AutoCloseable {
      * @return 文件预签名地址
      */
     default String presignGetUrl(String url, Integer expirationSeconds) {
-        throw new UnsupportedOperationException("不支持的操作");
+        throw new UnsupportedOperationException(MSG_UNSUPPORTED_OPERATION);
     }
 
     /**
@@ -132,6 +135,7 @@ public interface FileClient extends AutoCloseable {
      */
     @Override
     default void close() {
+        // 无状态文件客户端不持有连接池或 SDK 句柄，默认无需释放。
     }
 
 }

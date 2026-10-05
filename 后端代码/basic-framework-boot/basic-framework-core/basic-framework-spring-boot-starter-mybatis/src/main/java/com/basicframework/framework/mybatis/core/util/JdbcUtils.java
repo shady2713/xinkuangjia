@@ -5,6 +5,7 @@ import com.basicframework.framework.common.util.spring.SpringUtils;
 import com.basicframework.framework.mybatis.core.enums.DbTypeEnum;
 import com.baomidou.dynamic.datasource.DynamicRoutingDataSource;
 import com.baomidou.mybatisplus.annotation.DbType;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 import javax.sql.DataSource;
@@ -17,6 +18,7 @@ import java.sql.SQLException;
  *
  * @author 李杰
  */
+@Slf4j
 public class JdbcUtils {
 
     /**
@@ -31,6 +33,8 @@ public class JdbcUtils {
         try (Connection ignored = DriverManager.getConnection(url, username, password)) {
             return true;
         } catch (Exception ex) {
+            // 只记录异常本身，不记录 URL/账号，避免把连接串里的凭据写进日志。
+            log.warn("[isConnectionOK][数据库连接失败]", ex);
             return false;
         }
     }

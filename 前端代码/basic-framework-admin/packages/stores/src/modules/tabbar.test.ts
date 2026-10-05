@@ -12,7 +12,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useTabbarStore } from './tabbar';
+import { cloneTab, shouldCloseOtherTab, useTabbarStore } from './tabbar';
 
 /** 用例可覆盖的标签页字段；meta 只写关心的键，title 由 createTab 统一补默认值。 */
 type TabOverrides = Omit<Partial<TabDefinition>, 'meta'> & {
@@ -363,5 +363,51 @@ describe('useAccessStore', /** 覆盖标签页 store 的新增去重、按位置
 
     expect(store.excludeCachedTabs.has('Dashboard')).toBe(false);
     expect(store.renderRouteView).toBe(true);
+  });
+});
+
+describe('标签页克隆与关闭判定的显式契约', /** 空值入参的处置决定标签栏会不会因外部构造的脏数据整块失败。 */ () => {
+  it('克隆标签时入参为空则原样返回', /** 空值被解构会让标签栏在恢复历史或热更新时抛错，整块标签不可用。 */ () => {
+    // 类型上标签定义必填，但外部构造（恢复的访问历史、热更新期间的旧状态）可能交出空值。
+    expect(cloneTab(undefined as unknown as TabDefinition)).toBeUndefined();
+    expect(cloneTab(null as unknown as TabDefinition)).toBeNull();
+  });
+
+  it('克隆标签时深拷贝 matched 与 meta 且不改动原对象', /** 直接复用原对象会让后续改动污染真实路由记录。 */ () => {
+    const tab = createTab({
+      fullPath: '/clone',
+      key: '/clone',
+      matched: [
+        {
+          meta: { title: '原始标题' },
+          name: 'Clone',
+          path: '/clone',
+        },
+      ] as TabDefinition['matched'],
+      meta: { title: '克隆' },
+      name: 'Clone',
+      path: '/clone',
+    });
+
+    const cloned = cloneTab(tab);
+
+    expect(cloned).not.toBe(tab);
+    expect(cloned.meta).not.toBe(tab.meta);
+    expect(cloned.matched).not.toBe(tab.matched);
+    expect(cloned.matched?.[0]?.path).toBe('/clone');
+    expect(cloned.fullPath).toBe('/clone');
+  });
+
+  it('关闭其他标签时未命中的键不计入待关闭集合', /** 未命中的键被当成可关闭标签会误关调用方没有指定的页面。 */ () => {
+    expect(shouldCloseOtherTab(undefined)).toBe(false);
+  });
+
+  it('关闭其他标签时固定标签不计入待关闭集合', /** 固定标签被关闭会让用户失去常驻入口。 */ () => {
+    expect(shouldCloseOtherTab(createTab({ key: '/normal' }))).toBe(true);
+    expect(
+      shouldCloseOtherTab(
+        createTab({ key: '/affix', meta: { affixTab: true } }),
+      ),
+    ).toBe(false);
   });
 });

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.lionsoul.ip2region.xdb.Searcher;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * IP 工具类
@@ -19,24 +20,28 @@ import java.io.IOException;
 public class IPUtils {
 
     /**
-     * 初始化 SEARCHER
+     * IP 查询器持有者，构造期写入一次，之后只读。
+     *
+     * <p>用 {@link AtomicReference} 而不是裸静态字段：写入发生在构造期、读取发生在任意业务线程，
+     * 裸字段存在可见性竞态；AtomicReference 保证安全发布。载入失败时保持 null，
+     * 查询侧按「无查询器」降级，不抛异常打断调用方。</p>
+     */
+    private static final AtomicReference<Searcher> SEARCHER_HOLDER = new AtomicReference<>();
+
+    /**
+     * 类初始化时构造一次，用于触发查询器载入。
      */
     @SuppressWarnings("InstantiationOfUtilityClass")
-    private final static IPUtils INSTANCE = new IPUtils();
+    private static final IPUtils INSTANCE = new IPUtils();
 
     /**
-     * IP 查询器，启动加载到内存中
-     */
-    private static Searcher SEARCHER;
-
-    /**
-     * 私有化构造
+     * 私有化构造：载入 ip2region 数据，失败只记录并降级，不向外抛出。
      */
     private IPUtils() {
         try {
             long now = System.currentTimeMillis();
             byte[] bytes = ResourceUtil.readBytes("ip2region.xdb");
-            SEARCHER = Searcher.newWithBuffer(bytes);
+            SEARCHER_HOLDER.set(Searcher.newWithBuffer(bytes));
             log.info("启动加载 IPUtils 成功，耗时 ({}) 毫秒", System.currentTimeMillis() - now);
         } catch (IOException e) {
             log.error("启动加载 IPUtils 失败", e);
@@ -51,7 +56,7 @@ public class IPUtils {
      */
     @SneakyThrows
     public static Integer getAreaId(String ip) {
-        return Integer.parseInt(SEARCHER.search(ip.trim()));
+        return Integer.parseInt(SEARCHER_HOLDER.get().search(ip.trim()));
     }
 
     /**
@@ -62,7 +67,7 @@ public class IPUtils {
      */
     @SneakyThrows
     public static Integer getAreaId(long ip) {
-        return Integer.parseInt(SEARCHER.search(ip));
+        return Integer.parseInt(SEARCHER_HOLDER.get().search(ip));
     }
 
     /**

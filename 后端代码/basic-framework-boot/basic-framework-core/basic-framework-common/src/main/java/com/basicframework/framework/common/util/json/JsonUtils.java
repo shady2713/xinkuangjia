@@ -31,6 +31,9 @@ import java.util.List;
 @Slf4j
 public class JsonUtils {
 
+    /** JSON 解析失败的日志模板：输入摘要 + 目标类型，不打印原文。 */
+    private static final String LOG_PARSE_ERROR_TARGET = "json parse err,input:{} target:{}";
+
     @Getter
     private static ObjectMapper objectMapper = new ObjectMapper();
 
@@ -103,7 +106,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, clazz);
         } catch (IOException e) {
-            log.error("json parse err,input:{} target:{}", summarizeInput(text), clazz.getName(), e);
+            log.error(LOG_PARSE_ERROR_TARGET, summarizeInput(text), clazz.getName(), e);
             throw new RuntimeException(e);
         }
     }
@@ -144,7 +147,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, objectMapper.getTypeFactory().constructType(type));
         } catch (IOException e) {
-            log.error("json parse err,input:{} target:{}", summarizeInput(text), type.getTypeName(), e);
+            log.error(LOG_PARSE_ERROR_TARGET, summarizeInput(text), type.getTypeName(), e);
             throw new RuntimeException(e);
         }
     }
@@ -163,7 +166,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(text, objectMapper.getTypeFactory().constructType(type));
         } catch (IOException e) {
-            log.error("json parse err,input:{} target:{}", summarizeInput(text), type.getTypeName(), e);
+            log.error(LOG_PARSE_ERROR_TARGET, summarizeInput(text), type.getTypeName(), e);
             throw new RuntimeException(e);
         }
     }
@@ -198,7 +201,7 @@ public class JsonUtils {
         try {
             return objectMapper.readValue(bytes, clazz);
         } catch (IOException e) {
-            log.error("json parse err,input:{} target:{}", summarizeInput(bytes), clazz.getName(), e);
+            log.error(LOG_PARSE_ERROR_TARGET, summarizeInput(bytes), clazz.getName(), e);
             throw new RuntimeException(e);
         }
     }

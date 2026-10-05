@@ -68,6 +68,33 @@ function departments() {
 }
 
 /**
+ * 标识为数值的部门树夹具：与 departments() 同构，只是 valueField 取数值。
+ * 后端下发的部门/菜单主键通常就是数值，展开集合与渲染层键必须是同一口径。
+ * @returns 标识为数值的部门树数据。
+ */
+function numericDepartments() {
+  return [
+    {
+      children: [
+        {
+          children: [{ label: '基础架构组', value: 111 }],
+          label: '前端组',
+          value: 11,
+        },
+        { label: '测试组', value: 13 },
+      ],
+      label: '研发中心',
+      value: 1,
+    },
+    {
+      children: [{ label: '品牌组', value: 21 }],
+      label: '市场部',
+      value: 2,
+    },
+  ];
+}
+
+/**
  * 取全部树节点元素（reka 渲染的 treeitem，运行时是 HTMLElement）。
  * @param wrapper 已挂载的树包装器。
  * @returns 节点元素包装器列表，按先序排列；按真实 DOM 元素类型收窄，便于用例读样式与派发事件。
@@ -438,6 +465,51 @@ describe('树形选择展开与收起', /** 展开集合错乱会让用户看不
     api.expandToLevel(3);
     await nextTick();
     expect(tree.text()).toContain('基础架构组');
+  });
+
+  it('数值型标识同样支持展开全部、收起与按层级展开', /** 数值主键写成数字键会让展开集合与渲染层字符串键对不上，按钮点了没反应。 */ async () => {
+    const { api, tree } = mountTree({ treeData: numericDepartments() });
+    await nextTick();
+
+    api.expandAll();
+    await nextTick();
+    expect(tree.text()).toContain('基础架构组');
+
+    api.collapseAll();
+    await nextTick();
+    expect(tree.text()).not.toContain('前端组');
+
+    api.expandToLevel(1);
+    await nextTick();
+    expect(tree.text()).toContain('前端组');
+    expect(tree.text()).not.toContain('基础架构组');
+
+    api.expandToLevel(3);
+    await nextTick();
+    expect(tree.text()).toContain('基础架构组');
+  });
+
+  it('数值型标识的展开与收起按同一键口径匹配', /** 展开写数字键、收起按字符串比较会让收起失效。 */ async () => {
+    const { api, tree } = mountTree({ treeData: numericDepartments() });
+    await nextTick();
+
+    api.expandNodes(1);
+    await nextTick();
+    expect(tree.text()).toContain('前端组');
+
+    api.collapseNodes(1);
+    await nextTick();
+    expect(tree.text()).not.toContain('前端组');
+  });
+
+  it('数值型 defaultExpandedKeys 也能初始展开', /** 业务用 defaultExpandedKeys: [0] 指定根节点，数字键与字符串键不同口径会展开不了。 */ async () => {
+    const { tree } = mountTree({
+      defaultExpandedKeys: [1],
+      treeData: numericDepartments(),
+    });
+    await nextTick();
+
+    expect(tree.text()).toContain('前端组');
   });
 
   it('展开全部跳过没有取值的父节点', /** 无标识节点参与展开会让展开集合出现空键。 */ async () => {

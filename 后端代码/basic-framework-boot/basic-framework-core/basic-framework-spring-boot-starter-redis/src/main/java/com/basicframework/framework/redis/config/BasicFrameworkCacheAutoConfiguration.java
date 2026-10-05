@@ -73,17 +73,17 @@ public class BasicFrameworkCacheAutoConfiguration {
      *
      * @param redisTemplate redis模板参数
      * @param redisCacheConfiguration redis缓存Configuration参数
-     * @param basic_frameworkCacheProperties 配置参数
+     * @param basicFrameworkCacheProperties 配置参数
      * @return 方法处理结果
      */
     @Bean
     public RedisCacheManager redisCacheManager(RedisTemplate<String, Object> redisTemplate,
                                                RedisCacheConfiguration redisCacheConfiguration,
-                                               BasicFrameworkCacheProperties basic_frameworkCacheProperties) {
+                                               BasicFrameworkCacheProperties basicFrameworkCacheProperties) {
         // 创建 RedisCacheWriter 对象
         RedisConnectionFactory connectionFactory = Objects.requireNonNull(redisTemplate.getConnectionFactory());
         RedisCacheWriter cacheWriter = RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory,
-                BatchStrategies.scan(basic_frameworkCacheProperties.getRedisScanBatchSize()));
+                BatchStrategies.scan(basicFrameworkCacheProperties.getRedisScanBatchSize()));
         // 创建 RedisCacheManager 对象
         return new TimeoutRedisCacheManager(cacheWriter, redisCacheConfiguration);
     }

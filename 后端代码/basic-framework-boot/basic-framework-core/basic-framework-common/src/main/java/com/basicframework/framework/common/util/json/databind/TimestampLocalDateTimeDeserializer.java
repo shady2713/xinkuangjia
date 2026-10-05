@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /**
  * 基于时间戳的 LocalDateTime 反序列化器
@@ -55,27 +56,32 @@ public class TimestampLocalDateTimeDeserializer extends JsonDeserializer<LocalDa
     }
 
     /**
-     * 解析Text。
+     * 按「yyyy-MM-dd HH:mm:ss → ISO → 带时区 ISO → 纯日期」顺序试探解析。
+     *
+     * @param value 待解析文本
+     * @return 解析出的本地日期时间
+     * @throws IOException 全部格式都解析失败时抛出，并保留最后一次失败原因
      */
+    @SuppressWarnings("PMD.GenericExceptionSwallowed") // 多格式试探链：前几种格式不被接受属预期分支，最后一次失败会抛出 IOException，不是静默吞噬。
     private LocalDateTime parseText(String value) throws IOException {
         if (value.matches("^-?\\d+$")) {
             return parseTimestamp(Long.parseLong(value));
         }
         try {
             return LocalDateTime.parse(value, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        } catch (Exception ignored) {
+        } catch (DateTimeParseException ignored) {
             // 继续尝试 ISO 格式，兼容 2026-06-17T12:00:00 这类值。
         }
         try {
             return LocalDateTime.parse(value, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception ignored) {
+        } catch (DateTimeParseException ignored) {
             // 继续尝试带时区 ISO 格式，兼容浏览器 Date 序列化后的值。
         }
         try {
             return OffsetDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
                     .atZoneSameInstant(ZoneId.systemDefault())
                     .toLocalDateTime();
-        } catch (Exception ignored) {
+        } catch (DateTimeParseException ignored) {
             // 继续尝试纯日期格式。
         }
         try {

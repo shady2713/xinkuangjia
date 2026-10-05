@@ -306,6 +306,7 @@ public class GlobalExceptionHandler {
      * 例如说，商品库存不足，用户手机号已存在。
      */
     @ExceptionHandler(value = ServiceException.class)
+    @SuppressWarnings("PMD.GenericExceptionSwallowed") // 其中的日志 try/catch 有意忽略失败：打印堆栈只是为了可观测性，绝不能影响错误响应返回。
     public CommonResult<?> serviceExceptionHandler(ServiceException ex) {
         // 不包含的时候，才进行打印，避免 ex 堆栈过多
         if (!IGNORE_ERROR_MESSAGES.contains(ex.getMessage())) {
@@ -331,7 +332,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = Exception.class)
     public CommonResult<?> defaultExceptionHandler(HttpServletRequest req, Throwable ex) {
         // 特殊：如果是 ServiceException 的异常，则直接返回
-        // 例如说：https://example.com/external/basicframework/basic_framework-cloud/issues/ICSSRM、https://example.com/external/basicframework/basic_framework-cloud/issues/ICT6FM
+        // 例如说：https://example.com/external/basicframework/basic_framework-cloud/issues/ICSSRM
+        // 以及：https://example.com/external/basicframework/basic_framework-cloud/issues/ICT6FM
         if (ex.getCause() != null && ex.getCause() instanceof ServiceException) {
             return serviceExceptionHandler((ServiceException) ex.getCause());
         }

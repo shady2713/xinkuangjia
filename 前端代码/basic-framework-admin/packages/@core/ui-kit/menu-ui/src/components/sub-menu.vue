@@ -38,7 +38,7 @@ const subMenuStyle = useMenuStyle(subMenu);
 
 const mouseInChild = ref(false);
 
-const items = ref<MenuProvider['items']>({});
+// 子菜单只登记子级菜单项（subMenus）；菜单项本身由顶层 menu.vue 统一登记，此处不持有 items。
 const subMenus = ref<MenuProvider['subMenus']>({});
 const timer = ref<null | ReturnType<typeof setTimeout>>(null);
 
@@ -73,23 +73,33 @@ const contentProps = computed((): HoverCardContentProps => {
   };
 });
 
-const active = computed(() => {
-  let isActive = false;
+const active = computed(
+  /**
+   * 汇总子级菜单的激活态，供菜单项高亮使用。
+   * @returns 任一子级菜单处于激活态时为 true。
+   */
+  () => {
+    let isActive = false;
 
-  Object.values(items.value).forEach((item) => {
-    if (item.active) {
-      isActive = true;
-    }
-  });
+    Object.values(subMenus.value).forEach(
+      /**
+       * 命中任一激活的子级菜单即视为激活。
+       * @param subItem 子级菜单登记项。
+       */
+      (subItem) => {
+        if (subItem.active) {
+          isActive = true;
+        }
+      },
+    );
+    return isActive;
+  },
+);
 
-  Object.values(subMenus.value).forEach((subItem) => {
-    if (subItem.active) {
-      isActive = true;
-    }
-  });
-  return isActive;
-});
-
+/**
+ * 登记一个子级菜单，供激活态汇总与父子联动使用。
+ * @param subMenu 子级菜单的登记信息。
+ */
 function addSubMenu(subMenu: MenuItemRegistered) {
   subMenus.value[subMenu.path] = subMenu;
 }

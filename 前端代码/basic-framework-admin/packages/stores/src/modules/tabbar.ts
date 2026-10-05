@@ -222,7 +222,9 @@ export const useTabbarStore = defineStore('core-tabbar', {
     },
     /**
      * @zh_CN 关闭其他标签页
-     * @param tab
+     *
+     * 保留当前标签，其余非固定标签按标签键批量关闭；固定标签与未命中的键一律跳过。
+     * @param tab 需要保留的标签页
      */
     async closeOtherTabs(tab: TabDefinition) {
       const closeKeys = this.tabs.map((item) => getTabKeyFromTab(item));
@@ -234,10 +236,7 @@ export const useTabbarStore = defineStore('core-tabbar', {
           const closeTab = this.tabs.find(
             (item) => getTabKeyFromTab(item) === key,
           );
-          if (!closeTab) {
-            continue;
-          }
-          if (!isAffixTab(closeTab)) {
+          if (shouldCloseOtherTab(closeTab)) {
             keys.push(closeTab.key as string);
           }
         }
@@ -617,9 +616,15 @@ if (hot) {
 
 /**
  * @zh_CN 克隆路由,防止路由被修改
- * @param route
+ *
+ * 入参在类型上是必填的标签定义，但标签也可能由外部构造（自定义标签、恢复的访问历史、
+ * 热更新期间的旧状态）后以空值进入本函数；空值原样返回，交给调用方按自身契约处理，
+ * 避免在这里抛出难以定位的解构错误。该契约由用例直接传入空值固定。
+ *
+ * @param route 待克隆的标签定义；为空时原样返回
+ * @returns 克隆后的标签定义，入参为空时返回入参本身
  */
-function cloneTab(route: TabDefinition): TabDefinition {
+export function cloneTab(route: TabDefinition): TabDefinition {
   if (!route) {
     return route;
   }
@@ -641,8 +646,28 @@ function cloneTab(route: TabDefinition): TabDefinition {
 }
 
 /**
- * @zh_CN 是否是固定标签页
- * @param tab
+ * @zh_CN 判断命中的标签是否应计入"关闭其他"的待关闭集合
+ *
+ * 标签键由 `getTabKeyFromTab` 从标签自身推导，正常流程下必然能命中来源标签；这里仍把
+ * "没有命中"当成显式契约处理：调用方传入未命中的结果时跳过该键，避免把空值写进待关闭
+ * 集合而误关其它标签。命中时固定标签不参与关闭，交由标签栏自身的固定语义决定。
+ *
+ * @param tab 按标签键命中的标签；标签列表中不存在该键时为 undefined
+ * @returns 命中且不是固定标签时为 true，类型上同时收窄为非空标签
+ */
+export function shouldCloseOtherTab(
+  tab: TabDefinition | undefined,
+): tab is TabDefinition {
+  if (!tab) {
+    return false;
+  }
+  return !isAffixTab(tab);
+}
+
+/**
+ * 判断标签页是否为固定标签页（固定在标签栏、不参与批量关闭）。
+ * @param tab 待判断的标签页
+ * @returns 标签声明了固定（affixTab）时为 true
  */
 function isAffixTab(tab: TabDefinition) {
   return tab?.meta?.affixTab ?? false;

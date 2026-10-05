@@ -4,6 +4,7 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.PageResult;
+import com.basicframework.framework.security.core.LoginUser;
 import com.basicframework.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2ClientDO;
@@ -155,6 +156,54 @@ class OAuth2TokenServiceImplTest {
         assertThat((Map<String, String>) method.invoke(tokenService, -1L, UserTypeEnum.ADMIN.getValue()))
                 .as("负编号同样属于机器主体").isEmpty();
         verify(adminUserService, never()).getUser(anyLong());
+    }
+
+    /**
+     * 管理端登录用户信息必须同时覆盖“有部门”与“无部门”两种身份边界。
+     *
+     * <p>部门的展示形式必须是字符串编号：有部门时写成编号文本，无部门时必须写成 null 值而不是
+     * 空串或缺键——前端与下游鉴权按 {@code deptId} 是否存在区分“未分配部门”和“部门编号为空”，
+     * 空串会被当成一个不存在的部门。用例对两种输入分别断言整张用户信息映射，并核对查询编号。</p>
+     *
+     * <p><b>白盒直调：</b>{@code buildUserInfo} 私有，唯一调用点在令牌签发流程内部；
+     * 反射直调传入真实管理端用户类型与用户编号，真实执行用户查询、昵称读取与部门编号判定，
+     * 只替换用户服务这一依赖边界。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void buildUserInfoCoversPresentAndAbsentDeptId() throws Exception {
+        injectDependencies();
+        Method method = OAuth2TokenServiceImpl.class.getDeclaredMethod("buildUserInfo", Long.class, Integer.class);
+        method.setAccessible(true);
+
+        AdminUserDO userWithDept = enabledUser(1024L);
+        userWithDept.setNickname("DUMMY-NICK");
+        userWithDept.setDeptId(2048L);
+        when(adminUserService.getUser(1024L)).thenReturn(userWithDept);
+
+        Map<String, String> withDept = (Map<String, String>) method.invoke(
+                tokenService, 1024L, UserTypeEnum.ADMIN.getValue());
+        assertThat(withDept).as("有部门时必须回填昵称与部门编号文本")
+                .containsExactlyInAnyOrderEntriesOf(Map.of(
+                        LoginUser.INFO_KEY_NICKNAME, "DUMMY-NICK",
+                        LoginUser.INFO_KEY_DEPT_ID, "2048"));
+
+        AdminUserDO userWithoutDept = enabledUser(1025L);
+        userWithoutDept.setNickname("DUMMY-NICK-NO-DEPT");
+        userWithoutDept.setDeptId(null);
+        when(adminUserService.getUser(1025L)).thenReturn(userWithoutDept);
+
+        Map<String, String> withoutDept = (Map<String, String>) method.invoke(
+                tokenService, 1025L, UserTypeEnum.ADMIN.getValue());
+        assertThat(withoutDept).as("无部门时必须保留部门键并显式给出 null 值")
+                .containsEntry(LoginUser.INFO_KEY_NICKNAME, "DUMMY-NICK-NO-DEPT")
+                .containsKey(LoginUser.INFO_KEY_DEPT_ID);
+        assertThat(withoutDept.get(LoginUser.INFO_KEY_DEPT_ID)).as("无部门不得写成空串").isNull();
+
+        verify(adminUserService).getUser(1024L);
+        verify(adminUserService).getUser(1025L);
     }
 
     /** 机器令牌按哨兵刷新值只能精确删除本行，不得按哨兵值批量撤销其它机器会话。 */

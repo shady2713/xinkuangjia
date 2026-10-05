@@ -13,12 +13,19 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum SmsSendStatusEnum {
 
-    INIT(0), // 初始化
-    SUCCESS(10), // 发送成功
-    FAILURE(20), // 发送失败
-    IGNORE(30), // 忽略，即不发送
+    /** 待发送，状态值 0；日志落库时的初始状态，随后由发送结果改写。 */
+    INIT(0),
+    /** 发送成功，状态值 10；短信 API 已受理。 */
+    SUCCESS(10),
+    /** 发送失败，状态值 20；失败编码与提示记录在同一条日志的 api_send_code、api_send_msg。 */
+    FAILURE(20),
+    /** 忽略，状态值 30；模板或渠道被禁用时不投递，只保留日志。 */
+    IGNORE(30),
     ;
 
+    /**
+     * 状态值，对应 system_sms_log.send_status
+     */
     private final int status;
 
 }

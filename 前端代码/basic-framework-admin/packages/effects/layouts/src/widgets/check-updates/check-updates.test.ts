@@ -311,6 +311,55 @@ describe('更新检查与页面可见性', /** 可见性变化是后台标签页
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('页面已可见时收到可见事件不会留下重复轮询', /** start() 不清理既有定时器会让旧句柄失去引用后永久轮询，隐藏时也再停不掉。 */ async () => {
+    stubRemoteHostname();
+    respondWithTag(FIRST_TAG);
+    mountCheckUpdates();
+    expect(vi.getTimerCount()).toBe(1);
+
+    // 标签页在后台打开时组件已挂载并自带一个定时器；恢复可见时不能把它变成两个。
+    documentHidden = false;
+    await dispatchVisibilityChange();
+
+    expect(vi.getTimerCount()).toBe(1);
+
+    // 再隐藏一次必须能把当前定时器真正停掉，证明句柄没有指向被丢弃的旧定时器。
+    documentHidden = true;
+    await dispatchVisibilityChange();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('卸载时在途的可见性检查结束后不会重建轮询', /** 卸载后在途检查的续接逻辑再装定时器，会让已销毁组件永久发请求。 */ async () => {
+    stubRemoteHostname();
+    /** 挂起的检查请求，用例通过它把检查固定在“进行中”。 */
+    let resolveFetch: PendingFetchResolver | undefined;
+    fetchMock.mockImplementation(
+      /** 返回一个由用例手动结算的请求。 */ () =>
+        new Promise(
+          /** 记录结算入口，用例据此决定何时放行。 */ (resolve) => {
+            resolveFetch = resolve;
+          },
+        ),
+    );
+    const mounted = mountCheckUpdates();
+
+    documentHidden = false;
+    await dispatchVisibilityChange();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    mounted.unmount();
+    wrapper = undefined;
+    expect(vi.getTimerCount()).toBe(0);
+
+    // 卸载后才结算本次检查：续接逻辑不得再安装定时器。
+    resolveFetch?.({ headers: new Headers({ etag: FIRST_TAG }) });
+    await flushPromises();
+
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('组件卸载后停止轮询并不再响应可见性变化', /** 卸载后仍监听会让已销毁的组件继续发请求，泄露在布局切换时尤其明显。 */ async () => {
     stubRemoteHostname();
     respondWithTag(FIRST_TAG);

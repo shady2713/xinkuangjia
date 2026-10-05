@@ -9,9 +9,10 @@
  * 语法问题被误报成注释问题；无脚本组件的说明检查失效会让纯模板组件没有任何业务说明。
  * 用例全部使用真实源码文本驱动导出的检查函数，只断言诊断的规则码与行号。
  */
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { checkWebFile } from './web-comments.mjs';
+import { checkWebFile, documentation } from './web-comments.mjs';
 
 /**
  * 构造一次检查的输入文件。
@@ -656,5 +657,72 @@ describe('脚本语言分派', /** 扩展名决定解析器，分派错误会让
 
     expect(rules(findings)).not.toContain('web-syntax');
     expect(rules(findings)).toContain('web-doc');
+  });
+});
+
+describe('声明注释窗口的显式输入', /** 声明起点由调用方显式给出，裁决必须按该起点核对注释是否紧邻声明。 */ () => {
+  it('注释紧贴声明时返回该注释原文与说明文字', /** 正常路径的返回值错位会让职责与标签检查整体失效。 */ () => {
+    const source =
+      'const before = 1;\n/**\n * 执行一次操作。\n * @returns 固定值。\n */\nexport function run() {\n  return 1;\n}\n';
+    const tree = ts.createSourceFile(
+      'probe.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const declaration = tree.statements[1];
+    const start = declaration.getStart(tree);
+
+    // 18 是注释的真实起始字符位置，54 是声明的真实起始字符位置。
+    expect(start).toBe(54);
+    expect(documentation(declaration, tree, start)).toEqual({
+      jsdoc: true,
+      raw: '/**\n * 执行一次操作。\n * @returns 固定值。\n */',
+      start: 18,
+      text: '执行一次操作。\n@returns 固定值。',
+    });
+  });
+
+  it('注释与声明起点之间隔着代码时返回空说明', /** 隔着语句复用旧注释会让注释与实现错配，必须拒绝该注释。 */ () => {
+    const source =
+      'const before = 1;\n/* 旧说明。 */ const other = 2;\nexport function run() {\n  return 1;\n}\n';
+    const tree = ts.createSourceFile(
+      'probe.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    // 注释落在第二条语句的 trivia 里，但本次要取说明的声明在它之后：窗口内含真实代码。
+    const commentOwner = tree.statements[1];
+    const start = tree.statements[2].getStart(tree);
+
+    expect(documentation(commentOwner, tree, start)).toEqual({
+      jsdoc: false,
+      raw: '',
+      start,
+      text: '',
+    });
+  });
+
+  it('声明起点之前没有候选注释时返回空说明', /** 没有候选注释时必须直接返回空说明，不能把声明之后的注释算进来。 */ () => {
+    const source = 'export function run() {\n  return 1;\n}\n';
+    const tree = ts.createSourceFile(
+      'probe.ts',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const declaration = tree.statements[0];
+    const start = declaration.getStart(tree);
+
+    expect(documentation(declaration, tree, start)).toEqual({
+      jsdoc: false,
+      raw: '',
+      start,
+      text: '',
+    });
   });
 });

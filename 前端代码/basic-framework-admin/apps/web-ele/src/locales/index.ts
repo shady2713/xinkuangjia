@@ -47,12 +47,36 @@ async function loadThirdPartyMessage(lang: SupportedLanguagesType) {
   await Promise.all([loadElementLocale(lang), loadDayjsLocale(lang)]);
 }
 
+/** dayjs 语言包类型：与 `await import('dayjs/locale/...')` 的返回值一致。 */
+type DayjsLocale = Awaited<typeof import('dayjs/locale/en')>;
+
+/**
+ * 应用已加载的 dayjs 语言包。
+ *
+ * 语言包由调用方加载后显式传入：动态导入成功时交出语言包对象，加载不出内容时交出空值。
+ * 空值不能直接交给 `dayjs.locale()`——传空会重置回 dayjs 内置语言，日期格式会在用户切换
+ * 语言后悄悄退回默认值；这里改为只告警并保持当前语言，让问题留在日志里而不是界面上。
+ *
+ * @param locale 已加载的 dayjs 语言包，空值表示语言包缺失
+ * @param lang 当前语言标识，仅用于告警文案
+ */
+export function applyDayjsLocale(
+  locale: DayjsLocale | undefined,
+  lang: SupportedLanguagesType,
+) {
+  if (locale) {
+    dayjs.locale(locale);
+  } else {
+    logWarn('i18n:dayjs-locale', `Failed to load dayjs locale for ${lang}`);
+  }
+}
+
 /**
  * 加载dayjs的语言包
  * @param lang
  */
 async function loadDayjsLocale(lang: SupportedLanguagesType) {
-  let locale;
+  let locale: DayjsLocale | undefined;
   switch (lang) {
     case 'en-US': {
       locale = await import('dayjs/locale/en');
@@ -67,11 +91,7 @@ async function loadDayjsLocale(lang: SupportedLanguagesType) {
       locale = await import('dayjs/locale/en');
     }
   }
-  if (locale) {
-    dayjs.locale(locale);
-  } else {
-    logWarn('i18n:dayjs-locale', `Failed to load dayjs locale for ${lang}`);
-  }
+  applyDayjsLocale(locale, lang);
 }
 
 /**

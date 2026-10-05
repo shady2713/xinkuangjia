@@ -37,6 +37,9 @@ public class ValidationUtils {
     private static final char[] ID_CARD_CHECK_CODES = {'1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'};
     private static final DateTimeFormatter ID_CARD_BIRTHDAY_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 
+    /** Luhn 算法单位数字进位阈值：乘 2 后超过 9 需要减 9。 */
+    private static final int LUHN_DIGIT_CARRY_THRESHOLD = 9;
+
     /**
      * 校验手机号是否为 11 位大陆手机号格式。
      *
@@ -236,8 +239,8 @@ public class ValidationUtils {
             int digit = bankCardNo.charAt(i) - '0';
             if (doubleDigit) {
                 digit *= 2;
-                if (digit > 9) {
-                    digit -= 9;
+                if (digit > LUHN_DIGIT_CARRY_THRESHOLD) {
+                    digit -= LUHN_DIGIT_CARRY_THRESHOLD;
                 }
             }
             sum += digit;

@@ -109,7 +109,9 @@ public class CacheRequestBodyWrapper extends HttpServletRequestWrapper {
              * @param readListener readListener 数据集合
              */
             @Override
-            public void setReadListener(ReadListener readListener) {}
+            public void setReadListener(ReadListener readListener) {
+                // 同步读取语义：请求体已缓存为字节数组，异步读取通知无需实现。
+            }
 
             /**
              * 判断当前组件是否具备执行条件。

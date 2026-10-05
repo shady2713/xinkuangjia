@@ -30,6 +30,18 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.*;
 @Slf4j
 public class FileUploadLifecycle {
 
+    /** 上传会话状态：已预占配额，等待内容落库。 */
+    private static final String STATUS_PENDING = "PENDING";
+
+    /** 上传会话状态：内容已落库。 */
+    private static final String STATUS_COMPLETE = "COMPLETE";
+
+    /** 上传会话状态：已取消，等待清理暂存内容。 */
+    private static final String STATUS_CANCELLED = "CANCELLED";
+
+    /** 配额预占成功的返回行数。 */
+    private static final int QUOTA_CONSUMED = 1;
+
     @Resource
     private FileUploadMapper uploads;
     @Resource
@@ -57,7 +69,7 @@ public class FileUploadLifecycle {
             throw exception(FILE_PATH_INVALID);
         }
         uploads.initializeQuota(owner);
-        if (uploads.consumeQuota(owner, size, limits.getDailyBytes(), limits.getDailyRequests()) != 1) {
+        if (uploads.consumeQuota(owner, size, limits.getDailyBytes(), limits.getDailyRequests()) != QUOTA_CONSUMED) {
             throw exception(FILE_UPLOAD_QUOTA_EXCEEDED);
         }
         FileUploadDO upload = new FileUploadDO();
@@ -65,7 +77,7 @@ public class FileUploadLifecycle {
         upload.setName(name);
         upload.setPath(path);
         upload.setSize(size);
-        upload.setStatus("PENDING");
+        upload.setStatus(STATUS_PENDING);
         if (direct) {
             upload.setStagingPath("upload-staging/" + UUID.randomUUID().toString().replace("-", ""));
         }
@@ -88,14 +100,14 @@ public class FileUploadLifecycle {
         if (upload == null || !owner.equals(upload.getOwnerKey())) {
             throw exception(FILE_UPLOAD_INVALID);
         }
-        if ("COMPLETE".equals(upload.getStatus())) {
+        if (STATUS_COMPLETE.equals(upload.getStatus())) {
             FileDO file = files.selectById(upload.getFileId());
             if (file == null) {
                 throw exception(FILE_UPLOAD_INVALID);
             }
             return file;
         }
-        if (!"PENDING".equals(upload.getStatus()) || uploads.countExpired(upload.getId()) != 0) {
+        if (!STATUS_PENDING.equals(upload.getStatus()) || uploads.countExpired(upload.getId()) != 0) {
             throw exception(FILE_UPLOAD_INVALID);
         }
         byte[] content = serverContent;
@@ -141,15 +153,15 @@ public class FileUploadLifecycle {
         if (upload == null || uploads.countCleanupDue(id) == 0) {
             return;
         }
-        if ("PENDING".equals(upload.getStatus())) {
+        if (STATUS_PENDING.equals(upload.getStatus())) {
             if (uploads.countExpired(id) == 0) {
                 return;
             }
             uploads.cancel(id);
-            upload.setStatus("CANCELLED");
+            upload.setStatus(STATUS_CANCELLED);
         }
         try {
-            if ("CANCELLED".equals(upload.getStatus())) {
+            if (STATUS_CANCELLED.equals(upload.getStatus())) {
                 storage.delete(upload.getPath());
             }
             if (upload.getStagingPath() != null) {

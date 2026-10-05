@@ -4,8 +4,296 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.github.io/schema/ruleset_2_0_0.xsd">
     <description>
-        执行 Maven PMD 默认静态分析；Java 注释增量门禁统一由仓库 scripts 目录维护。
+        basic-framework 后端 Java 生产源码（src/main/java）的静态质量基线。
+
+        基线是 maven-pmd-plugin 的默认规则集（42 条）。本规则集在其之上按 R06
+        「建立 Java 代码质量基线」补齐九类治理：资源关闭、事务边界、幂等/重复执行、
+        魔法值、命名、注释、线程安全、空值契约、异常吞噬。
+
+        这里的规则经过真实反例注入校准：每个类别至少有一条「注入即红、还原即绿」的规则。
+        个别规则按 R06「先校准误报」的要求收窄了匹配范围或阈值，收窄处均在本文件内写明
+        证据与原因；没有把任何一类整体关闭。
+
+        测试源码（src/test/java）不在本规则集范围内：测试的注释门禁由仓库
+        scripts/code/java 下的检查器维护。
     </description>
 
+    <!-- ================= 基线：Maven PMD 默认规则集（42 条） ================= -->
     <rule ref="rulesets/java/maven-pmd-plugin-default.xml"/>
+
+    <!-- ================= 一、资源关闭 ================= -->
+    <!-- CloseResource 默认只认 java.sql.*；这里补上 IO 流，覆盖 InputStream/Reader 等未关闭场景。 -->
+    <rule ref="category/java/errorprone.xml/CloseResource">
+        <properties>
+            <property name="types"
+                      value="java.sql.Connection,java.sql.Statement,java.sql.ResultSet,java.io.InputStream,java.io.OutputStream,java.io.Reader,java.io.Writer"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/bestpractices.xml/UseTryWithResources"/>
+    <rule ref="category/java/performance.xml/AvoidFileStream"/>
+
+    <!-- ================= 二、事务边界 ================= -->
+    <!-- 自定义规则：@Transactional 只是声明，以下三种写法会让它形同虚设。 -->
+    <rule name="TransactionBoundaryViolation"
+          language="java"
+          message="事务边界失效：@Transactional 方法存在「代理不生效 / 手工 autoCommit 绕过 / 捕获异常后既不抛出也不补偿（事务会照常提交）」三种缺陷之一。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>
+            覆盖 R06「事务边界」。三种失效模式：
+            (1) @Transactional 标在 private/static 方法上：Spring AOP 代理无法拦截，事务根本不会开启；
+            (2) 方法体内调用 setAutoCommit(...)：手工切换自动提交，绕过 Spring 事务同步；
+            (3) 捕获 Exception/Throwable/RuntimeException 后既不抛出、也不做任何补偿调用：
+                失败被静默吞掉，外层事务照常提交，数据库留下半成品数据。
+
+            第 (3) 种刻意保留了「catch 块内存在其他方法调用」的例外：像
+            FileUploadLifecycle#reconcile 那样捕获失败后写入补偿记录（预约重试）属于有意为之，
+            需要以带理由的 @SuppressWarnings("PMD.TransactionBoundaryViolation") 逐处声明。
+        </description>
+        <priority>2</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                (
+                  //MethodDeclaration[ModifierList/Annotation[@SimpleName = 'Transactional']]
+                    [@Visibility = 'private' or pmd-java:modifiers() = 'static']
+                  |
+                  //MethodDeclaration[ModifierList/Annotation[@SimpleName = 'Transactional']]
+                    [.//MethodCall[@MethodName = 'setAutoCommit']]
+                  |
+                  //MethodDeclaration[ModifierList/Annotation[@SimpleName = 'Transactional']]
+                    //CatchClause[CatchParameter/ClassType[@SimpleName = ('Exception', 'Throwable', 'RuntimeException')]]
+                    [not(.//ThrowStatement)]
+                    [not(.//MethodCall)]
+                )
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- 自定义规则：参与型事务必须显式声明回滚规则（Spring 默认只对 RuntimeException/Error 回滚）。 -->
+    <rule name="TransactionRollbackRuleMissing"
+          language="java"
+          message="事务回滚契约缺失：@Transactional 参与型事务必须显式声明 rollbackFor / noRollbackFor，否则受检异常不会回滚。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>
+            覆盖 R06「事务边界」。Spring 默认只在 RuntimeException/Error 上回滚；未声明 rollbackFor 的
+            参与型事务（无 propagation 或 REQUIRED / REQUIRES_NEW / NESTED）遇到受检异常会照常提交，
+            是经典的数据一致性缺陷。
+
+            校准：只加入或挂起外层事务的传播行为（MANDATORY / SUPPORTS / NOT_SUPPORTED / NEVER）
+            其回滚规则由外层事务决定，不在本规则范围内。
+        </description>
+        <priority>2</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                //MethodDeclaration
+                  /ModifierList/Annotation[@SimpleName = 'Transactional']
+                  [not(AnnotationMemberList/MemberValuePair[
+                        @Name = ('rollbackFor', 'noRollbackFor', 'rollbackForClassName', 'noRollbackForClassName')])]
+                  [not(AnnotationMemberList/MemberValuePair[@Name = 'propagation']
+                        [.//FieldAccess[@Name = ('MANDATORY', 'SUPPORTS', 'NOT_SUPPORTED', 'NEVER')]])]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- ================= 三、幂等 / 重复执行 ================= -->
+    <rule ref="category/java/errorprone.xml/IdempotentOperations"/>
+    <rule ref="category/java/errorprone.xml/AssignmentToNonFinalStatic"/>
+    <rule ref="category/java/design.xml/MutableStaticState"/>
+
+    <!-- 自定义规则：被框架反复触发的方法含写入却没有重复执行闸门。 -->
+    <rule name="RepeatedExecutionGuardMissing"
+          language="java"
+          message="重复执行风险：被框架反复触发的方法（@Scheduled / MQ 监听 / @XxlJob）含写入型调用，却没有分布式锁或幂等闸门。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>
+            覆盖 R06「重复执行行为」。定时任务在多实例下会并发触发，MQ 消息「至少投递一次」会重复消费。
+            这类方法一旦包含写入（insert/save/update/delete/remove/send/publish/trim/put/increment/execute/create），
+            必须持有重复执行闸门：分布式锁（lock/tryLock）、幂等键（setIfAbsent/putIfAbsent/hasKey/acquire）
+            或幂等注解（@Idempotent / @RepeatSubmit / @Lock / @DistributedLock）。
+
+            本框架自带的 Redis Stream 清理任务与 pending 消息重投任务都以 Redisson tryLock 持锁，
+            是合规样例（规则对它们不报）。
+        </description>
+        <priority>2</priority>
+        <properties>
+            <property name="triggers"
+                      description="会被框架反复触发的注解简单名"
+                      type="String"
+                      value="Scheduled,RabbitListener,KafkaListener,RocketMQMessageListener,PulsarListener,JmsListener,SqsListener,StreamListener,XxlJob,ElasticJob"/>
+            <property name="xpath">
+                <value><![CDATA[
+                //MethodDeclaration
+                  [ModifierList/Annotation[contains($triggers, @SimpleName)]]
+                  [.//MethodCall[matches(@MethodName, '^(insert|save|update|delete|remove|send|publish|trim|put|increment|execute|create)[A-Z].*$')]]
+                  [not(.//MethodCall[@MethodName = ('lock', 'tryLock', 'setIfAbsent', 'putIfAbsent', 'hasKey', 'acquire')])]
+                  [not(.//Annotation[@SimpleName = ('Idempotent', 'RepeatSubmit', 'Lock', 'DistributedLock')])]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- ================= 四、魔法值 ================= -->
+    <rule ref="category/java/errorprone.xml/AvoidLiteralsInIfCondition"/>
+    <rule ref="category/java/codestyle.xml/UseUnderscoresInNumericLiterals"/>
+    <!-- AvoidDuplicateLiterals：默认 minimalLength=3，会把 JSON 字段名、Swagger 示例、区域名等
+         「语义不同的同形字面量」也算重复。这里保留规则，只把确属外部协议固定值、提取常量反而
+         降低可读性的字面量登记进 exceptionList，其余重复字面量提取常量。 -->
+    <rule ref="category/java/errorprone.xml/AvoidDuplicateLiterals">
+        <properties>
+            <property name="exceptionList" value="1024,user,us-east-1,false,Code"/>
+        </properties>
+    </rule>
+
+    <!-- ================= 五、命名 ================= -->
+    <rule ref="category/java/codestyle.xml/ClassNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/MethodNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/FieldNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/FormalParameterNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/LocalVariableNamingConventions"/>
+    <rule ref="category/java/codestyle.xml/BooleanGetMethodName"/>
+    <rule ref="category/java/codestyle.xml/AvoidDollarSigns"/>
+    <!-- 类型参数命名：PMD 的 TypeParameterNamingConventions 在 7.17 上无法通过 ruleset XML
+         改属性（连写入默认值 [A-Z] 都会被规则集校验拒绝，实测 100% 报错），因此改用等价的
+         自定义 XPath 规则，表达「大写字母开头、仅字母数字」这一校准后的命名契约。
+         默认的 [A-Z] 只接受单字母，会拒绝 <Config extends FileClientConfig>、<DTO> 这类
+         更具可读性的描述性类型参数名，而它们是既有公共 API（AbstractFileClient、BaseMapperX）
+         的一部分，改名会破坏调用方；自定义规则仍然拒绝 t / x / _T / foo 等命名。 -->
+    <rule name="TypeParameterNaming"
+          language="java"
+          message="类型参数名必须大写字母开头且只含字母数字（T、K、V、DTO、Config 合法；t、x、_T、foo 非法）。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>
+            覆盖 R06「命名」。等价于 PMD TypeParameterNamingConventions 的可配置版本，
+            规则模式为 ^[A-Z][A-Za-z0-9]*$。
+        </description>
+        <priority>3</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                //TypeParameter[not(matches(@Name, '^[A-Z][A-Za-z0-9]*$'))]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- ================= 六、注释 ================= -->
+    <!-- CommentRequired：字段级要求按校准关闭，理由见下；类型/方法/构造方法级仍为 required。
+         PMD 的 fieldCommentRequirement 会要求「所有字段」都有 JavaDoc，包括 private 实现常量
+         （如 ValidationUtils 的 13 个正则常量、PageParam 的私有默认值）。这超出仓库自己的权威注释标准：
+         .agents/skills/weetion-development-java-standards/references/java-comments.md（「本文件是 Java 注释
+         要求的唯一专项来源」）只把字段 JavaDoc 限定为 DO/VO 字段与 DTO、record、枚举等模型字段，
+         并明确禁止「复述可直接看懂的赋值」与「借任务扩展到无关旧代码」。
+         实测该属性在 597 个生产文件上产生 526 条字段级违规，绝大多数属于上述两类禁止情形。
+         字段级 JavaDoc 由仓库既有的 Java 注释检查器（scripts/code/java，按增量门禁管理，
+         并能校验 @param/@return/@throws，PMD 的 CommentRequired 做不到）承接，不在 PMD 里重复归属。 -->
+    <rule ref="category/java/documentation.xml/CommentRequired">
+        <properties>
+            <property name="classCommentRequirement" value="Required"/>
+            <property name="enumCommentRequirement" value="Required"/>
+            <property name="publicMethodCommentRequirement" value="Required"/>
+            <property name="protectedMethodCommentRequirement" value="Required"/>
+            <property name="fieldCommentRequirement" value="Ignored"/>
+        </properties>
+    </rule>
+    <!-- CommentSize：默认 maxLines=6 / maxLineLength=80 与仓库自己的注释标准冲突——
+         该标准要求公共 API 与复杂方法说明「参数、返回、实际异常、副作用」，实测生产代码 JavaDoc
+         块长度 p50=5、p90=7、p99=11、max=30 行，行长 p99=108、p99.9=133 字符。
+         按默认值会在 597 个文件上产生 226 条违规，且全部命中类/方法契约注释，属系统性误报。
+         这里把阈值校准到仓库实测口径（行长 120 与仓库 99.7% 的行一致），保留「注释失控膨胀」的检出能力。 -->
+    <rule ref="category/java/documentation.xml/CommentSize">
+        <properties>
+            <property name="maxLines" value="30"/>
+            <property name="maxLineLength" value="120"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/documentation.xml/UncommentedEmptyMethodBody"/>
+    <rule ref="category/java/documentation.xml/UncommentedEmptyConstructor"/>
+    <rule ref="category/java/documentation.xml/DanglingJavadoc"/>
+
+    <!-- ================= 七、线程安全 ================= -->
+    <rule ref="category/java/multithreading.xml/NonThreadSafeSingleton"/>
+    <rule ref="category/java/multithreading.xml/UnsynchronizedStaticFormatter"/>
+    <rule ref="category/java/bestpractices.xml/AvoidStringBufferField"/>
+    <rule ref="category/java/bestpractices.xml/AvoidMessageDigestField"/>
+    <!-- UseConcurrentHashMap：默认 XPath 会连「方法内局部 Map 变量」一起报。实测 16 条命中里
+         15 条是局部变量（如 TimestampLocalDateTimeSerializer#buildFieldMap 的返回值，其构造成员由
+         ConcurrentHashMap#computeIfAbsent 保证单线程执行，用 HashMap 是正确的），只有字段级才是真问题。
+         校准为只检查字段声明，排除「局部变量」这一整类误报模式。 -->
+    <rule ref="category/java/multithreading.xml/UseConcurrentHashMap">
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                //FieldDeclaration/VariableDeclarator
+                  [VariableId[pmd-java:typeIsExactly('java.util.Map')]]
+                  [.//ConstructorCall[pmd-java:typeIsExactly('java.util.HashMap')]]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- ================= 八、空值契约 ================= -->
+    <rule ref="category/java/errorprone.xml/AvoidCatchingNPE"/>
+    <rule ref="category/java/bestpractices.xml/LiteralsFirstInComparisons"/>
+    <rule ref="category/java/errorprone.xml/EqualsNull"/>
+
+    <!-- ================= 九、异常吞噬 ================= -->
+    <!-- AvoidLosingExceptionInformation 已由 PMD 7.17.0 标记 deprecated，官方替代品是
+         UselessPureMethodCall —— 而 UselessPureMethodCall 本来就在基线默认规则集里（默认 42 条之一）。
+         再挂一条已废弃的规则属于重复归属，故不列入。 -->
+    <!-- PreserveStackTrace 按 R06「先校准误报」移除，证据见下。
+         实测 7 条命中里有 6 条是「刻意不串联 cause」的信息不泄漏策略，且代码内写明理由：
+           - BootstrapAdminService#lockName / BootstrapConfiguration#parseDatabase /
+             BootstrapPassword#encode：抛出固定分类的 BootstrapFailure /
+             IllegalStateException，AdminBootstrapMain 的类注释明确「失败只输出固定分类，
+             不记录异常消息、堆栈或环境值」；
+           - SmsCallbackPayloadValidator / SmsSendServiceImpl：注释写明「解析器异常可能包含原文，
+             只向协议入口传递固定原因」。
+         该策略有回归测试保护（见 module-system 的 bootstrap/sms 集成测试），
+         把 cause 串回去会直接违反「不泄漏环境值/原文」的安全要求，不是漏写。
+         异常吞噬这一类仍由 EmptyCatchBlock（默认规则，含 UselessPureMethodCall）、
+         DoNotThrowExceptionInFinally、AvoidRethrowingException、AvoidCatchingThrowable 与下面的
+         GenericExceptionSwallowed 覆盖；校准中发现的唯一真实缺陷 CronUtils#getNextTimes
+         已按缺陷修复（补上 cause）。 -->
+    <rule ref="category/java/errorprone.xml/DoNotThrowExceptionInFinally"/>
+    <rule ref="category/java/design.xml/AvoidRethrowingException"/>
+    <rule ref="category/java/errorprone.xml/AvoidCatchingThrowable"/>
+    <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace"/>
+    <!-- UseCorrectExceptionLogging 只匹配 Apache Commons Logging 的 org.apache.commons.logging.Log
+         （规则的自带说明：This rule only applies to Apache Commons Logging）。本仓库生产源码统一使用
+         SLF4J，该规则在本仓库内不可能命中，属于「看起来覆盖率 +1、实际零对象」的规则，故不列入。 -->
+    <!-- 自定义规则：只报「真正的吞噬」——捕获宽泛异常后既不抛出、也不使用异常对象、也不做任何调用。
+         这是对 PMD AvoidCatchingGenericException 的收窄替代：后者只按「捕获类型宽泛」判定，
+         实测在本仓库产生 44 条命中，全部落在过滤器、全局异常处理器、MQ 任务、文件客户端等
+         必须兜住任意异常的边界代码里（兜不住就会打断主链路），属于规则意图与框架边界代码冲突。 -->
+    <rule name="GenericExceptionSwallowed"
+          language="java"
+          message="异常被静默吞噬：捕获 Exception/RuntimeException/Throwable 后既不抛出、也不使用异常对象、也不做任何处理。"
+          class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
+        <description>
+            覆盖 R06「异常吞噬」。判定条件同时满足才算违规：
+            (1) 捕获类型是 Exception / RuntimeException / NullPointerException / Throwable；
+            (2) catch 块内没有 throw；
+            (3) 没有把捕获到的异常对象传给任何地方（未记录、未包装、未判断）；
+            (4) catch 块内没有任何方法调用。
+            边界代码（过滤器、全局异常处理器）通常会 log 或返回兜底值，因此不会命中本规则。
+        </description>
+        <priority>2</priority>
+        <properties>
+            <property name="xpath">
+                <value><![CDATA[
+                //CatchClause
+                  [CatchParameter/ClassType[@SimpleName = ('Exception', 'RuntimeException', 'NullPointerException', 'Throwable')]]
+                  [not(.//ThrowStatement)]
+                  [not(.//VariableAccess[@Name = ancestor::CatchClause[1]/CatchParameter/@Name])]
+                  [not(.//MethodCall)]
+                ]]></value>
+            </property>
+        </properties>
+    </rule>
+
+    <!-- ================= 反例注入用单规则集 ================= -->
+    <!-- 见 config/pmd/README-injection.md：注入验证使用 -Dpmd.rulesets 指向单规则文件。 -->
 </ruleset>

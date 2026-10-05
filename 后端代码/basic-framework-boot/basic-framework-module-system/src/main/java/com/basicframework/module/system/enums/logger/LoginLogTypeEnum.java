@@ -11,14 +11,21 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum LoginLogTypeEnum {
 
-    LOGIN_USERNAME(100), // 使用账号登录
-    LOGIN_SOCIAL(101), // 使用社交登录
-    LOGIN_MOBILE(103), // 使用手机登陆
-    LOGIN_SMS(104), // 使用短信登陆
-    LOGIN_SHARE(105), // 使用固定分享码登录
+    /** 账号密码登录；用户名或密码错误时也用该类型记录失败结果。 */
+    LOGIN_USERNAME(100),
+    /** 社交账号授权登录；框架保留的类型，当前登录入口不产生该记录。 */
+    LOGIN_SOCIAL(101),
+    /** 手机号加短信验证码登录；后台管理端的短信登录使用该类型。 */
+    LOGIN_MOBILE(103),
+    /** 短信登录；与手机号登录分开统计，当前登录入口不产生该记录。 */
+    LOGIN_SMS(104),
+    /** 固定分享码登录；框架保留的类型，当前登录入口不产生该记录。 */
+    LOGIN_SHARE(105),
 
-    LOGOUT_SELF(200),  // 自己主动登出
-    LOGOUT_DELETE(202), // 强制退出
+    /** 用户主动退出登录。 */
+    LOGOUT_SELF(200),
+    /** 强制退出；管理端删除访问令牌时写入。 */
+    LOGOUT_DELETE(202),
     ;
 
     /**

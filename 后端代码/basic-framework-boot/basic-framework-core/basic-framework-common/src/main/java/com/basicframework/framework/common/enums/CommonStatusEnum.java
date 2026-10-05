@@ -16,7 +16,9 @@ import java.util.Arrays;
 @AllArgsConstructor
 public enum CommonStatusEnum implements ArrayValuable<Integer> {
 
+    /** 开启状态，状态值 0；启用中的部门、岗位、角色等记录使用该值。 */
     ENABLE(0, "开启"),
+    /** 关闭状态，状态值 1；已停用但保留历史数据的记录使用该值。 */
     DISABLE(1, "关闭");
 
     public static final Integer[] ARRAYS = Arrays.stream(values()).map(CommonStatusEnum::getStatus).toArray(Integer[]::new);

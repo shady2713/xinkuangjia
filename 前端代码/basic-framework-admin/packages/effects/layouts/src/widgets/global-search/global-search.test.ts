@@ -30,6 +30,40 @@ import {
 
 import GlobalSearch from './global-search.vue';
 
+/** 取消回调签名：入口注册给 useVbenModal 的取消语义处理器。 */
+type CancelHandler = () => void;
+
+/** 入口注册到 useVbenModal 的取消回调；用于在默认取消按钮不渲染时驱动取消语义。 */
+const modalOptions = vi.hoisted(
+  /** 汇总入口注册的回调，供用例在默认取消按钮不渲染时驱动取消语义。 */ () => ({
+    onCancel: undefined as CancelHandler | undefined,
+  }),
+);
+
+vi.mock(
+  '@vben-core/popup-ui',
+  /**
+   * 只包一层 useVbenModal：记录入口注册的选项后仍调用真实实现，
+   * 弹窗渲染、开合与状态全部走真实组件；这样用例才能在入口覆写了 footer 插槽、
+   * 默认取消按钮不渲染的前提下，触发弹窗自身的"取消"语义。
+   */
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@vben-core/popup-ui')>();
+    return {
+      ...actual,
+      /**
+       * 记录注册选项后调用真实 useVbenModal。
+       * @param options 入口注册的弹窗选项。
+       * @returns 真实的 [Modal, api] 二元组。
+       */
+      useVbenModal: (options: Record<string, unknown>) => {
+        modalOptions.onCancel = options?.onCancel as CancelHandler;
+        return actual.useVbenModal(options as never);
+      },
+    };
+  },
+);
+
 vi.mock(
   '@vben/icons',
   /**
@@ -350,13 +384,32 @@ describe('全局搜索弹窗开合', /** 开合链路决定入口点了有没有
     await openModal(wrapper);
 
     // 入口整块覆写了弹窗的 footer 插槽，因此默认的取消/确认按钮不会渲染，
-    // 组件里 useVbenModal 注册的 onCancel 也就没有触发入口（详见交付说明）。
+    // 组件里 useVbenModal 注册的 onCancel 也就没有 UI 触发入口。
     const footerText = document.body.textContent ?? '';
     expect(footerText).toContain($t('ui.widgets.search.select'));
     expect(footerText).toContain($t('ui.widgets.search.navigate'));
     expect(footerText).toContain($t('ui.widgets.search.close'));
     expect(findButtonByText($t('cancel'))).toBeUndefined();
     expect(findButtonByText($t('confirm'))).toBeUndefined();
+  });
+
+  it('弹窗取消语义触发时关闭弹窗', /** 取消回调断链会让弹窗在取消路径上无法关闭，用户被困在弹窗里。 */ async () => {
+    const wrapper = mountGlobalSearch();
+    await openModal(wrapper);
+
+    // 入口覆写了 footer 插槽，默认取消按钮不渲染，因此直接触发弹窗自身的取消语义。
+    expect(modalOptions.onCancel).toBeTypeOf('function');
+    modalOptions.onCancel?.();
+
+    await vi.waitFor(
+      /** 等待取消语义真实关闭弹窗。 */ () => {
+        expect(findSearchInput()).toBeNull();
+      },
+    );
+    // 关闭后弹窗内容整体卸载，页脚快捷键提示不再残留。
+    expect(document.body.textContent).not.toContain(
+      $t('ui.widgets.search.select'),
+    );
   });
 });
 

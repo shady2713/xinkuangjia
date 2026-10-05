@@ -54,6 +54,7 @@ public class IdempotentAspect {
      * @throws Throwable 被拦截方法抛出的异常
      */
     @Around(value = "@annotation(idempotent)")
+    @SuppressWarnings("PMD.AvoidCatchingThrowable") // 释放幂等 Key 必须覆盖 Error，否则 Key 会被永久占用；catch 内紧接着原样 rethrow，失败没有被吞掉。
     public Object aroundPointCut(ProceedingJoinPoint joinPoint, Idempotent idempotent) throws Throwable {
         // 获得 IdempotentKeyResolver
         IdempotentKeyResolver keyResolver = keyResolvers.get(idempotent.keyResolver());

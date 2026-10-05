@@ -40,14 +40,18 @@ const emit = defineEmits<{
   submit: [value: string];
 }>();
 
-const [Form, { resetForm, validate, getValues, getFieldComponentRef }] =
-  useVbenForm<BaseFormComponentType, LockScreenForm>(
-    reactive({
-      commonConfig: {
-        hideLabel: true,
-        hideRequiredMark: true,
-      },
-      schema: computed(() => [
+const [Form, formApi] = useVbenForm<BaseFormComponentType, LockScreenForm>(
+  reactive({
+    commonConfig: {
+      hideLabel: true,
+      hideRequiredMark: true,
+    },
+    schema: computed(
+      /**
+       * 声明锁屏密码输入项：必填，且只提交明文密码字段。
+       * @returns 表单 schema 数组。
+       */
+      () => [
         {
           component: 'VbenInputPassword' as const,
           componentProps: {
@@ -60,18 +64,26 @@ const [Form, { resetForm, validate, getValues, getFieldComponentRef }] =
             .string()
             .min(1, { message: $t('ui.widgets.lockScreen.placeholder') }),
         },
-      ]),
-      showDefaultActions: false,
-    }),
-  );
+      ],
+    ),
+    showDefaultActions: false,
+  }),
+);
+
+const { getFieldComponentRef, getValues, resetForm, validate } = formApi;
 
 const [Modal] = useVbenModal({
+  /** 确认动作复用同一条提交链路，避免页脚按钮与回车走两套逻辑。 */
   onConfirm() {
     handleSubmit();
   },
+  /**
+   * 弹窗打开时清空上一次的密码输入。
+   * @param isOpen 弹窗当前是否打开。
+   */
   onOpenChange(isOpen) {
     if (isOpen) {
-      resetForm();
+      void resetFormForOpen();
     }
   },
   /**
@@ -89,6 +101,27 @@ const [Modal] = useVbenModal({
     );
   },
 });
+
+/**
+ * 打开弹窗时清空上一次的密码输入。
+ *
+ * 弹窗默认 `destroyOnClose`：关闭会连表单一起销毁，重新打开时打开回调早于内容重建，
+ * 此刻表单处于“已卸载”状态，直接重置会被表单实例以「表单已卸载」拒绝；
+ * 这条拒绝没有接收方，会变成未处理拒绝上抛到运行环境（也清不掉上一次的校验错误）。
+ * 因此先等重建后的表单真正挂载，再执行重置。
+ * 等待与重置失败都只记录日志：清空输入失败不应中断弹窗打开流程，也不应留下未处理拒绝。
+ */
+async function resetFormForOpen() {
+  try {
+    // 表单已挂载（未开启关闭即销毁、或重建已完成）时无需等待，直接重置。
+    if (!formApi.isMounted) {
+      await formApi.stateHandler.waitForCondition();
+    }
+    await resetForm();
+  } catch (error) {
+    console.error('Failed to reset lock screen form', error);
+  }
+}
 
 /**
  * 提交解锁密码。

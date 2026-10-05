@@ -64,7 +64,7 @@ final class BootstrapConfiguration {
             URI uri = new URI(url.substring(5));
             String path = uri.getRawPath();
             if (uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawFragment() != null
-                    || uri.getPort() == 0 || uri.getPort() > 65535 || path == null
+                    || uri.getPort() == 0 || uri.getPort() > 65_535 || path == null
                     || !path.matches("/[A-Za-z0-9_]{1,64}")) {
                 throw new URISyntaxException("", "invalid single database target");
             }
@@ -98,7 +98,7 @@ final class BootstrapConfiguration {
                             .contains(pair[1]);
                     case "serverTimezone" -> pair[1].matches("[A-Za-z0-9_/:+-]{1,64}");
                     case "connectTimeout", "socketTimeout" -> pair[1].matches("[1-9][0-9]{0,4}")
-                            && Integer.parseInt(pair[1]) <= 60000;
+                            && Integer.parseInt(pair[1]) <= 60_000;
                     default -> false;
                 };
             }

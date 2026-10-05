@@ -132,6 +132,7 @@ public class ApiDecryptRequestWrapper extends HttpServletRequestWrapper {
              */
             @Override
             public void setReadListener(ReadListener readListener) {
+                // 同步读取语义：请求体已整体读入内存，异步读取通知无需实现。
             }
 
         };

@@ -33,6 +33,12 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 @Validated
 public class SmsCodeServiceImpl implements SmsCodeService {
 
+    /** 失败预算返回码：可用尝试次数已耗尽。 */
+    private static final long VERIFY_BUDGET_EXHAUSTED = 2;
+
+    /** 失败预算返回码：本次校验通过且预算已扣减。 */
+    private static final long VERIFY_MATCHED = 1;
+
     private static final int SMS_CODE_LENGTH = 6;
     private static final int SMS_CODE_BOUND = 1_000_000;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -153,10 +159,10 @@ public class SmsCodeServiceImpl implements SmsCodeService {
                 lastSmsCode.getCode().getBytes(StandardCharsets.UTF_8));
         long result = smsVerificationRedisDAO.checkFailureBudget(mobile, lastSmsCode.getId(), matched,
                 smsCodeProperties.getExpireTimes().toMillis(), smsCodeProperties.getVerificationMaximumFailures());
-        if (result == 2) {
+        if (result == VERIFY_BUDGET_EXHAUSTED) {
             throw exception(SMS_CODE_ATTEMPTS_EXHAUSTED);
         }
-        if (result != 1) {
+        if (result != VERIFY_MATCHED) {
             throw exception(SMS_CODE_NOT_FOUND);
         }
         return lastSmsCode;

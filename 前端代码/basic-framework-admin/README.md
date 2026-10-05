@@ -52,9 +52,9 @@ pnpm install --frozen-lockfile
 | --- | --- |
 | [应用基础配置](apps/web-ele/.env) | Vite 通用参数、构建标题 |
 | [开发配置](apps/web-ele/.env.development) | 端口 5175、公共路径 /、API 前缀 /admin-api |
-| [本机模板](apps/web-ele/.env.local.example) | 可选复制为同目录 .env.development.local，覆盖本机 API 地址 |
+| [本机模板](apps/web-ele/.env.local.example) | 可选复制为同目录 .env.development.local，覆盖本机 API 地址；含 `VITE_DEV_API_TARGET` 开发代理目标 |
 | [生产配置](apps/web-ele/.env.production) | /admin/ 公共路径、hash 路由 |
-| [Vite 配置](apps/web-ele/vite.config.mts) | /admin-api 代理到 http://127.0.0.1:48080/admin-api |
+| [Vite 配置](apps/web-ele/vite.config.mts) | /admin-api 默认代理到 http://127.0.0.1:48080/admin-api，可用 `VITE_DEV_API_TARGET` 覆盖（不必改源文件） |
 | [运行时配置](apps/web-ele/docker/app.config.js) | API、验证码、上传方式和固定界面偏好 |
 | [Nginx 模板](apps/web-ele/docker/nginx.conf) | 生产静态资源、管理 API、OAuth2 代理 |
 
@@ -68,7 +68,7 @@ pnpm install --frozen-lockfile
 pnpm dev:ele
 ```
 
-默认访问 http://localhost:5175；实际端口以终端为准。也可从仓库根运行 `pwsh -File scripts/runtime/start_frontend.ps1`。API 使用同源 `/admin-api`，Vite 代理保留后端同名前缀；页面能打开但接口失败时，检查 Java 48080、代理目标与请求回包。
+默认访问 http://localhost:5175；实际端口以终端为准。也可从仓库根运行 `pwsh -File scripts/runtime/start_frontend.ps1`；没有 PowerShell 时用 `bash scripts/runtime/start_frontend.sh`。API 使用同源 `/admin-api`，Vite 代理保留后端同名前缀；后端不在 48080 时用 `VITE_DEV_API_TARGET` 覆盖代理目标（见本机模板），页面能打开但接口失败时检查 Java 端口、代理目标与请求回包。
 
 ## 常用验证
 
@@ -79,7 +79,8 @@ pnpm dev:ele
 | `pnpm check:type` | 应用、`packages/**` 与 `internal/**` 各包按自身 tsconfig 的 TypeScript/Vue 类型检查 |
 | `python -B -X utf8 scripts/quality/check_crud.py <api-path> <views-path>` | 完整 CRUD 的文件、导入边界、应用类型与模块 ESLint；环境缺失不能通过 |
 | `pnpm lint` | ESLint、Prettier、Stylelint 检查；不加 --format 不自动修复 |
-| `pnpm quality:comments` | 当前变更中文职责注释检查 |
+| `pnpm quality:comments` | 当前变更中文职责注释检查；干净工作区上对象数为 0，只能证明改动触及的声明 |
+| `pnpm quality:comments:all` | 全库注释审计（`node scripts/check-quality.mjs web --all`）；**当前为红灯，尚未清零，因此没有接入阻断门禁**。实测检查 1520+ 项、4300+ 条问题（工作区并发改动会小幅波动），其中约 1441 条落在调用实参位置的匿名回调（如 `computed(...)`、`.filter(...)` 内的箭头函数），按现有规则必须把注释写在实参列表内部才能消除，属于待校准的规则边界；其余为真实的模块头与具名声明缺注释。修正顺序与现状见[脚本索引](../../docs/开发指南/脚本使用索引.md#质量检查) |
 | `pnpm quality:workspace` | workspace 和 catalog 约束 |
 | `pnpm test:unit` | Vitest 已声明单元测试 |
 | `pnpm test:e2e` | Turbo 分发声明的 E2E 任务，核对实际用例数；当前规格只验证生产登录页 |

@@ -130,7 +130,7 @@ public class SmsCallbackController {
     /** 仅接收明确的 JSON 媒体类型，结构化 JSON 使用专用流读取而不要求公共过滤器缓存。 */
     private static boolean isJsonMediaType(String mediaType) {
         return mediaType.startsWith("application/") && !mediaType.contains("*")
-                && (mediaType.equals(MediaType.APPLICATION_JSON_VALUE) || mediaType.endsWith("+json"));
+                && (MediaType.APPLICATION_JSON_VALUE.equals(mediaType) || mediaType.endsWith("+json"));
     }
 
     /** 仅记录固定归类和关联元数据，禁止将解析异常或回执正文写入日志。 */

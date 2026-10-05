@@ -20,6 +20,9 @@ import java.time.Duration;
  */
 public class TimeoutRedisCacheManager extends RedisCacheManager {
 
+    /** 自定义过期时间写法 "#缓存名#过期秒数" 按 # 拆分后的段数。 */
+    private static final int CUSTOM_EXPIRE_PART_COUNT = 2;
+
     private static final String SPLIT = "#";
 
     /**
@@ -46,7 +49,7 @@ public class TimeoutRedisCacheManager extends RedisCacheManager {
         }
         // 如果使用 # 分隔，大小不为 2，则说明不使用自定义过期时间
         String[] names = StrUtil.splitToArray(name, SPLIT);
-        if (names.length != 2) {
+        if (names.length != CUSTOM_EXPIRE_PART_COUNT) {
             return super.createRedisCache(name, cacheConfig);
         }
 

@@ -128,6 +128,25 @@ class GlobalExceptionHandlerTest {
     }
 
     /**
+     * 既没有字段级错误也没有对象级错误时必须返回固定兜底提示。
+     *
+     * <p>参数绑定失败但错误列表为空是绑定器可能给出的形态：此时取“第一个错误”得到 null。
+     * 若兜底提示被删掉或改写成 null，客户端会收到一条没有原因、也没有稳定文案的 400 响应，
+     * 前端无法给出可读提示。这里锁定错误码与兜底文案，且不得抛出空指针。</p>
+     */
+    @Test
+    void bindFailureWithoutAnyErrorReturnsStableFallbackMessage() {
+        BindException exception = new BindException(new Object(), "request");
+        assertThat(exception.getFieldError()).as("前置条件：该异常没有字段级错误").isNull();
+        assertThat(exception.getAllErrors()).as("前置条件：该异常没有对象级错误").isEmpty();
+
+        CommonResult<?> result = handler.bindExceptionHandler(exception);
+
+        assertThat(result.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(result.getMsg()).as("无任何错误时必须给出固定兜底提示").isEqualTo("请求参数校验失败");
+    }
+
+    /**
      * 全量分发必须把每类异常路由到各自处理器并给出对应错误码。
      *
      * <p>Filter 不走 SpringMVC 流程，只能依赖这个入口兜底；任一分支漏配或顺序错位都会让

@@ -147,34 +147,45 @@ const sidebarMarginTop = computed(() => {
 
 /**
  * 动态获取侧边宽度
+ *
+ * 侧边区域不可见时宽度必须为 0，否则内容区会被压窄。两处判定都保留：
+ * 先按"侧边区域被隐藏且当前布局没有其它侧边列"归零，再对剩余的隐藏场景兜底归零。
+ * 两种顺序的返回值完全一致（隐藏时一律为 0），但把复合判定放在前面后，
+ * 隐藏状态下的布局分支才真正参与求值，不再是永远不会被求值的冗余条件。
  */
-const getSidebarWidth = computed(() => {
-  const { isMobile, sidebarHidden, sidebarMixedWidth, sidebarWidth } = props;
-  let width = 0;
+const getSidebarWidth = computed(
+  /**
+   * 计算侧边区域的占位宽度。
+   * @returns 侧边区域宽度（像素）；侧边被隐藏或当前布局不显示侧边时为 0。
+   */
+  () => {
+    const { isMobile, sidebarHidden, sidebarMixedWidth, sidebarWidth } = props;
+    let width = 0;
 
-  if (sidebarHidden) {
+    if (
+      !sidebarEnableState.value ||
+      (sidebarHidden &&
+        !isSidebarMixedNav.value &&
+        !isMixedNav.value &&
+        !isHeaderMixedNav.value)
+    ) {
+      return width;
+    }
+
+    if (sidebarHidden) {
+      return width;
+    }
+
+    if ((isHeaderMixedNav.value || isSidebarMixedNav.value) && !isMobile) {
+      width = sidebarMixedWidth;
+    } else if (sidebarCollapse.value) {
+      width = isMobile ? 0 : getSideCollapseWidth.value;
+    } else {
+      width = sidebarWidth;
+    }
     return width;
-  }
-
-  if (
-    !sidebarEnableState.value ||
-    (sidebarHidden &&
-      !isSidebarMixedNav.value &&
-      !isMixedNav.value &&
-      !isHeaderMixedNav.value)
-  ) {
-    return width;
-  }
-
-  if ((isHeaderMixedNav.value || isSidebarMixedNav.value) && !isMobile) {
-    width = sidebarMixedWidth;
-  } else if (sidebarCollapse.value) {
-    width = isMobile ? 0 : getSideCollapseWidth.value;
-  } else {
-    width = sidebarWidth;
-  }
-  return width;
-});
+  },
+);
 
 /**
  * 获取扩展区域宽度

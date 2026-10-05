@@ -29,6 +29,7 @@ import {
   buildRequiredUsernameSchema,
   DEFAULT_DATE_FORMAT,
   DEFAULT_DATETIME_FORMAT,
+  isPresent,
   isQuantityValue,
 } from './field-rules';
 
@@ -346,7 +347,8 @@ describe('银行卡与数值校验器', /** 银行卡、百分比与数量规则
       '百分比必须在 0-100 之间，最多保留两位小数',
     );
     // 未填写的必填百分比被联合类型直接拒绝：zod 先判类型再执行精化，
-    // 因此 isPresent 的空值守卫在当前契约下无法被外部调用触达。
+    // 因此 isPresent 的空值守卫不会经由该精化回调触发；空值分支由下方
+    // 「必填判定」用例直接向 isPresent 传入空值验证。
     expect(schema.safeParse(undefined).success).toBe(false);
     expect(firstIssueMessage(schema, 'abc')).toBe(
       '百分比必须在 0-100 之间，最多保留两位小数',
@@ -371,5 +373,28 @@ describe('银行卡与数值校验器', /** 银行卡、百分比与数量规则
     expect(isQuantityValue(0)).toBe(true);
     expect(isQuantityValue(1.5)).toBe(false);
     expect(isQuantityValue(-1)).toBe(false);
+  });
+});
+
+describe('必填判定', /** 必填判定决定"用户是否填过"的语义，空值误判为已填写会让必填字段形同虚设。 */ () => {
+  it('未填写判定拒绝 undefined 与 null', /** 空值被当成已填写会让必填字段以空值提交。 */ () => {
+    expect(isPresent(undefined)).toBe(false);
+    expect(isPresent(null)).toBe(false);
+  });
+
+  it('字符串按去空格后是否为空判断', /** 只输入空白字符不算填写，否则必填校验可以被空格绕过。 */ () => {
+    expect(isPresent('')).toBe(false);
+    expect(isPresent('   ')).toBe(false);
+    expect(isPresent('\t\n')).toBe(false);
+    expect(isPresent(' 已填写 ')).toBe(true);
+  });
+
+  it('非字符串取值一律视为已填写', /** 0 与 false 是合法取值，误判为未填写会让数值、开关字段无法提交。 */ () => {
+    expect(isPresent(0)).toBe(true);
+    expect(isPresent(-1)).toBe(true);
+    expect(isPresent(Number.NaN)).toBe(true);
+    expect(isPresent(false)).toBe(true);
+    expect(isPresent({})).toBe(true);
+    expect(isPresent([])).toBe(true);
   });
 });

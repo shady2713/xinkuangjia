@@ -448,6 +448,40 @@ describe('裁剪器比例解析', /** 比例解析决定裁剪框是否按调用
     expect(dimensionOf(wrapper)).toEqual([37, 37, 37, 37]);
   });
 
+  it('比例取值为零时告警并退回初始尺寸', /** 0 宽或 0 高构不成比例，静默生效会让裁剪框比例无法预期。 */ async () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(/** 忽略告警输出，仅记录调用。 */ () => {});
+
+    // 格式正确但取值为 0：必须落在取值校验上，而不是被格式校验一并拒绝。
+    const zeroWidth = mountCropper({ aspectRatio: '0:9' });
+    await zeroWidth.wrapper.find('.cropper-image').trigger('load');
+
+    expect(warn).toHaveBeenCalledWith('裁剪比例解析失败，宽高必须为正整数');
+    expect(dimensionOf(zeroWidth.wrapper)).toEqual([37, 37, 37, 37]);
+
+    warn.mockClear();
+    const zeroHeight = mountCropper({ aspectRatio: '16:0' });
+    await zeroHeight.wrapper.find('.cropper-image').trigger('load');
+
+    expect(warn).toHaveBeenCalledWith('裁剪比例解析失败，宽高必须为正整数');
+    expect(dimensionOf(zeroHeight.wrapper)).toEqual([37, 37, 37, 37]);
+  });
+
+  it('带前导零的比例段仍按格式非法处理', /** "09:9" 不是合法比例段，放宽格式校验会让它被当成有效比例。 */ async () => {
+    const warn = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(/** 忽略告警输出，仅记录调用。 */ () => {});
+    const { wrapper } = mountCropper({ aspectRatio: '09:9' });
+
+    await wrapper.find('.cropper-image').trigger('load');
+
+    expect(warn).toHaveBeenCalledWith(
+      '裁剪比例格式错误，应为 "数字:数字" 格式，如 "16:9"',
+    );
+    expect(dimensionOf(wrapper)).toEqual([37, 37, 37, 37]);
+  });
+
   it('运行期改动比例立即重算裁剪框', /** 比例改动不生效会让用户切换比例时看不到变化。 */ async () => {
     const { wrapper } = mountCropper();
     await wrapper.find('.cropper-image').trigger('load');

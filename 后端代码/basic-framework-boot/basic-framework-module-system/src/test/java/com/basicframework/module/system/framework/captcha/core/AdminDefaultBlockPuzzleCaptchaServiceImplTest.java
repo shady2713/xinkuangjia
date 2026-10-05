@@ -16,10 +16,13 @@ import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -331,6 +334,198 @@ class AdminDefaultBlockPuzzleCaptchaServiceImplTest {
     }
 
     /**
+     * 素材加载器必须在每条返回路径上关闭资源，且把读取阶段的受检异常降级为 null。
+     *
+     * <p>加载器用 try-with-resources 管理依赖包内的素材流：无论正常返回、图片不可解码的提前
+     * 返回，还是读取抛受检异常，底层流都必须被关闭；读取异常必须降级成“该素材不可用”，
+     * 否则一次素材损坏就会让整个验证码实现的类初始化失败，登录页直接不可用。这里用真实
+     * 依赖素材与独立探针资源覆盖正常关闭、提前返回关闭与读取异常三条可观测路径。</p>
+     *
+     * <p><b>观测限制：</b>本用例只消费类路径上的真实素材与探针资源，覆盖真实资源的正常关闭、
+     * 提前返回关闭与读取异常三条路径；受控流注入（含「关闭本身失败」）由下面基于
+     * {@code defaultImageResourceOpener} 接缝的用例覆盖，两者互补而不重复。</p>
+     *
+     * @throws Exception 反射调用或探针读取失败时抛出
+     */
+    @Test
+    void loadDefaultImageClosesStreamAndDegradesReadFailureOnRealResources() throws Exception {
+        assertThat((String) loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                .as("正常返回路径：真实素材必须给出非空 Base64").isNotBlank();
+        assertThat((String) loadDefaultImage("captcha-probe-not-an-image.png"))
+                .as("图片不可解码的提前返回路径：同样必须清理资源并返回 null").isNull();
+        assertThat((String) loadDefaultImage("captcha/does-not-exist-probe.png"))
+                .as("资源不存在路径：必须返回 null").isNull();
+        assertThat((String) loadDefaultImage("captcha-probe-truncated.png"))
+                .as("读取抛受检异常路径：必须降级为 null 并关闭资源").isNull();
+    }
+
+    /**
+     * 资源不存在时加载器必须返回 null，且确实按原始路径向读取接缝索取资源。
+     *
+     * <p>「资源不存在」的真实形态是 {@code getResourceAsStream} 返回 null。这里用接缝把它变成可控输入，
+     * 锁定「取不到资源即降级为 null、不抛异常」的契约，并用路径回执证明加载器把原始路径交给了接缝，
+     * 而不是绕开接缝另走一条查找。</p>
+     *
+     * <p><b>接缝的两条边：</b>本用例走的是关闭守卫的「流为空→跳过关闭」一侧；下面
+     * {@link #loadDefaultImageClosesEveryNonNullResourceStream()} 用非空流走「必须关闭」一侧，
+     * 两条用例合起来覆盖同一处守卫的两个方向。</p>
+     *
+     * @throws Exception 反射调用失败时抛出
+     */
+    @Test
+    void loadDefaultImageReturnsNullForMissingResourceThroughOpener() throws Exception {
+        Function<String, InputStream> previous = AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener;
+        AtomicReference<String> requestedPath = new AtomicReference<>();
+        try {
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = path -> {
+                requestedPath.set(path);
+                return null;
+            };
+
+            assertThat(loadDefaultImage("captcha/missing-through-opener.png"))
+                    .as("接缝取不到资源时必须返回 null 而不是抛错").isNull();
+            assertThat(requestedPath).as("加载器必须把原始路径交给读取接缝")
+                    .hasValue("captcha/missing-through-opener.png");
+        } finally {
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = previous;
+        }
+    }
+
+    /**
+     * 只要接缝给出了非空流，加载器就必须在每条返回路径上关闭它，并把受检异常降级为 null。
+     *
+     * <p>依赖包素材损坏有两种真实形态：字节读到一半失败、以及关闭流本身失败。两者都发生在
+     * try-with-resources 的作用域内，必须同样返回 null 跳过该素材，绝不能让类初始化失败。
+     * 这里用受控流把「返回值」与「关闭动作」同时变成可断言对象：素材不可解码、素材可用、
+     * 读取失败、关闭失败四条路径都必须关闭底层流。</p>
+     *
+     * <p><b>白盒直调：</b>{@code loadDefaultImage} 是私有静态方法，用例沿用类内反射助手，
+     * 只把流的来源换成受控流，字节内容、路径与日志分类都不变。</p>
+     *
+     * @throws Exception 反射调用或探针读取失败时抛出
+     */
+    @Test
+    void loadDefaultImageClosesEveryNonNullResourceStream() throws Exception {
+        Function<String, InputStream> previous = AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener;
+        try {
+            byte[] notImage = readProbe("captcha-probe-not-an-image.png");
+            ControlledInputStream invalidImage = new ControlledInputStream(notImage, false, false);
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = path -> invalidImage;
+            assertThat(loadDefaultImage("captcha-probe-not-an-image.png"))
+                    .as("非空流但素材不可解码时必须返回 null").isNull();
+            assertThat(invalidImage.isClosed()).as("素材不可解码的提前返回路径必须关闭流").isTrue();
+
+            byte[] realImage = readProbe("defaultImages/jigsaw/original/1.png");
+            ControlledInputStream usable = new ControlledInputStream(realImage, false, false);
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = path -> usable;
+            assertThat((String) loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                    .as("可用素材必须返回与原始字节一致的 Base64")
+                    .isEqualTo(Base64.getEncoder().encodeToString(realImage));
+            assertThat(usable.isClosed()).as("正常返回路径必须关闭流").isTrue();
+
+            ControlledInputStream readFailure = new ControlledInputStream(realImage, true, false);
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = path -> readFailure;
+            assertThat(loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                    .as("读取抛受检 IOException 时必须降级为 null").isNull();
+            assertThat(readFailure.isClosed()).as("读取失败的返回路径同样必须关闭流").isTrue();
+
+            ControlledInputStream closeFailure = new ControlledInputStream(realImage, false, true);
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = path -> closeFailure;
+            assertThat(loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                    .as("关闭本身抛受检 IOException 时也必须降级为 null").isNull();
+            assertThat(closeFailure.isClosed()).as("关闭动作必须真的执行过").isTrue();
+        } finally {
+            AdminDefaultBlockPuzzleCaptchaServiceImpl.defaultImageResourceOpener = previous;
+        }
+
+        assertThat((String) loadDefaultImage("defaultImages/jigsaw/original/1.png"))
+                .as("恢复默认接缝后，真实依赖素材必须仍可加载").isNotBlank();
+    }
+
+    /**
+     * 受控默认素材流：记录加载器是否关闭过它，并可让读取或关闭阶段抛出受检 IOException。
+     *
+     * <p>它只替换流的来源，不改变字节内容，用来把「依赖包素材损坏」的两种真实形态
+     * （读取中断、关闭失败）变成可断言结果。字节仍由内置的 {@link ByteArrayInputStream} 提供，
+     * 因此正常路径的读取结果与真实素材逐字节一致。</p>
+     */
+    private static final class ControlledInputStream extends java.io.FilterInputStream {
+
+        /** 加载器是否调用过 {@link #close()}。 */
+        private boolean closed;
+        /** 读取阶段是否抛出受检 IOException。 */
+        private final boolean failOnRead;
+        /** 关闭阶段是否抛出受检 IOException。 */
+        private final boolean failOnClose;
+
+        /**
+         * 以指定字节构造受控流。
+         *
+         * @param bytes 流的字节内容，与真实素材一致
+         * @param failOnRead 读取阶段是否抛出受检 IOException
+         * @param failOnClose 关闭阶段是否抛出受检 IOException
+         */
+        ControlledInputStream(byte[] bytes, boolean failOnRead, boolean failOnClose) {
+            super(new ByteArrayInputStream(bytes));
+            this.failOnRead = failOnRead;
+            this.failOnClose = failOnClose;
+        }
+
+        /**
+         * 加载器是否关闭过该流。
+         *
+         * @return 已执行关闭动作时返回 true
+         */
+        boolean isClosed() {
+            return closed;
+        }
+
+        /** 记录关闭动作；开关打开时抛出受检异常，模拟关闭失败。 */
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            if (failOnClose) {
+                throw new IOException("受控关闭失败");
+            }
+            super.close();
+        }
+
+        /** 返回全部字节；开关打开时抛出受检异常，模拟素材读取中断。 */
+        @Override
+        public byte[] readAllBytes() throws IOException {
+            if (failOnRead) {
+                throw new IOException("受控读取失败");
+            }
+            return super.readAllBytes();
+        }
+    }
+
+    /**
+     * 默认素材全部不可用时类初始化必须仍然成立，并由公开入口给出“底图缺失”业务码。
+     *
+     * <p>静态素材列表在类初始化时按编号 1..6 加载；只要加载器把不可用素材过滤掉而不是抛错，
+     * 即使图库整体损坏，类也能完成初始化。这里通过“缺失编号的路径模板”验证过滤行为本身，
+     * 并用真实公开入口确认可用素材时仍能出图，避免把类初始化失败的场景误当成可观测结果。</p>
+     *
+     * <p><b>白盒直调：</b>{@code loadDefaultImages} 是私有静态方法，生产调用点只传依赖包内置
+     * 路径模板；传一条确定不存在的模板即可断言“不可用素材被过滤掉、返回空列表”这一契约。</p>
+     *
+     * @throws Exception 反射查找或调用失败时抛出
+     */
+    @Test
+    void loadDefaultImagesFiltersUnavailableEntriesInsteadOfFailingClassInitialization() throws Exception {
+        Method method = AdminDefaultBlockPuzzleCaptchaServiceImpl.class
+                .getDeclaredMethod("loadDefaultImages", String.class);
+        method.setAccessible(true);
+
+        assertThat((List<?>) method.invoke(null, "captcha/missing-%s.png"))
+                .as("全部素材不可用时必须返回空列表而不是抛错").isEmpty();
+
+        assertThat(captchaService.get(new CaptchaVO()).isSuccess())
+                .as("正对照：真实图库可用时公开入口必须仍然能出图").isTrue();
+    }
+
+    /**
      * 读取类路径探针资源的全部字节。
      *
      * @param path 类路径资源路径
@@ -343,6 +538,30 @@ class AdminDefaultBlockPuzzleCaptchaServiceImplTest {
             assertThat(inputStream).as("探针资源必须存在：" + path).isNotNull();
             return inputStream.readAllBytes();
         }
+    }
+
+    /**
+     * 候选素材为空或空白时必须返回 null，可解码素材必须返回真实图片。
+     *
+     * <p>随机取图只有在候选列表非空时才会走到解码；空候选与空白候选都必须由解码前的空值判定
+     * 直接返回 null，否则后续裁剪会拿着 null 图继续执行并以空指针失败。这里用真实私有方法配
+     * 边界输入断言，正对照使用真实依赖图库素材，证明 null 来自输入判定而不是解码失败。</p>
+     *
+     * @throws Exception 反射查找、调用或图片解码失败时抛出
+     */
+    @Test
+    void randomImageReturnsNullForBlankInputAndImageForDecodableBase64() throws Exception {
+        Method method = AdminDefaultBlockPuzzleCaptchaServiceImpl.class.getDeclaredMethod("randomImage", List.class);
+        method.setAccessible(true);
+
+        assertThat(method.invoke(null, List.of())).as("空候选必须返回 null").isNull();
+        assertThat(method.invoke(null, List.of("   "))).as("空白候选必须返回 null").isNull();
+
+        Object realImageBase64 = loadDefaultImage("defaultImages/jigsaw/original/1.png");
+        assertThat(realImageBase64).as("正对照素材必须可加载").isNotNull();
+        Object image = method.invoke(null, List.of(realImageBase64));
+        assertThat(image).as("可解码素材必须返回真实图片").isInstanceOf(BufferedImage.class);
+        assertThat(((BufferedImage) image).getWidth()).isPositive();
     }
 
 }

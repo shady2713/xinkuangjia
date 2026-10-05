@@ -815,7 +815,7 @@ describe('可调整尺寸容器程序化更新', /** 外部改属性时必须重
 });
 
 describe('可调整尺寸容器手柄与卸载', /** 手柄过滤与监听解绑决定组件能否安全复用。 */ () => {
-  it('配置拖拽手柄后手柄与内容区都不会开始拖动', /** 手柄过滤在事件回调里取不到组件实例，失效会让拖动整体不可用。 */ async () => {
+  it('配置拖拽手柄后仅手柄可拖动', /** 手柄过滤必须能取到本组件实例标识，取不到会让手柄与内容区一起失效。 */ async () => {
     const target = mount(Resize, {
       props: {
         dragHandle: '.DUMMY-handle',
@@ -829,17 +829,17 @@ describe('可调整尺寸容器手柄与卸载', /** 手柄过滤与监听解绑
     wrapper = target;
     await nextTick();
 
+    // 命中 dragHandle 选择器的元素带本实例标记，从这里按下才开始拖动。
     const handle = target.find('.DUMMY-handle').element;
     handle.dispatchEvent(mouseEvent('mousedown', 0, 0));
     fireOnDocument('mousemove', 40, 0);
     await nextTick();
 
-    // 手柄标记与按下目标都取不到同一个组件实例标识，因此不会开始拖动。
-    expect(rootStyle(target).left).toBe('0px');
+    expect(rootStyle(target).left).toBe('40px');
 
     fireOnDocument('mouseup', 40, 0);
     await nextTick();
-    // 内容区按下时目标没有手柄标记，反而满足放行条件并开始拖动。
+    // 内容区没有手柄标记，不属于可拖动起点，按下后位置保持不变。
     await target.find('.DUMMY-content').trigger('mousedown', {
       button: 0,
       pageX: 0,
@@ -848,10 +848,10 @@ describe('可调整尺寸容器手柄与卸载', /** 手柄过滤与监听解绑
     fireOnDocument('mousemove', 300, 0);
     await nextTick();
 
-    expect(rootStyle(target).left).toBe('300px');
+    expect(rootStyle(target).left).toBe('40px');
   });
 
-  it('配置取消区后按下仍会拖动', /** 取消标记同样取不到组件实例，取消区当前不会拦住拖动。 */ async () => {
+  it('配置取消区后取消区按下不拖动', /** 取消标记必须能取到本组件实例标识，取不到会让取消区被拖走。 */ async () => {
     const target = mount(Resize, {
       props: {
         dragCancel: '.DUMMY-cancel',
@@ -871,7 +871,7 @@ describe('可调整尺寸容器手柄与卸载', /** 手柄过滤与监听解绑
     fireOnDocument('mousemove', 60, 0);
     await nextTick();
 
-    expect(rootStyle(target).left).toBe('60px');
+    expect(rootStyle(target).left).toBe('0px');
   });
 
   it('关闭拖动后按下不改变位置', /** 拖动开关失效会让只读元素被移动。 */ async () => {

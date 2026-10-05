@@ -121,6 +121,36 @@ class FileTypeUtilsTest {
         assertThat(FileTypeUtils.isAllowedUploadType(PDF, "fake.mp4")).as("非视频内容不得按视频放行").isFalse();
     }
 
+    /**
+     * 后缀不属于任何已知类别时，类型匹配必须保守拒绝。
+     *
+     * <p><b>补测动机：</b>上传白名单扣除图片与视频后的集合恰好等于 MIME 匹配的 switch 分支集，
+     * 所以从公开入口 {@code isAllowedUploadType} 出发，未知后缀会先被白名单拦掉，
+     * switch 的 {@code default} 永不执行。该 {@code default} 是白名单被放宽或新增后缀却漏补
+     * 分支时的最后一道防线，一旦它被改成放行，白名单收紧就会静默失效。</p>
+     *
+     * <p><b>输入契约：</b>提取出的 {@code isMimeTypeMatchingExtension} 接受任意小写后缀，
+     * 不要求已通过白名单，因此这里可以直接用未知后缀驱动真实 switch 的 {@code default}；
+     * 同时用已声明后缀的正例与反例证明该方法不是恒返回 false。</p>
+     */
+    @Test
+    void mimeMatchingRejectsExtensionsOutsideKnownCategories() {
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("exe", "application/octet-stream"))
+                .as("未知后缀必须保守拒绝").isFalse();
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("svg", "image/svg+xml"))
+                .as("未登记的图片后缀不得因为 MIME 是 image/ 而放行").isFalse();
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("", ""))
+                .as("空后缀与空 MIME 必须拒绝，不得退化成放行").isFalse();
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("unknown", "application/pdf"))
+                .as("仅 MIME 匹配不足以放行未声明的后缀").isFalse();
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("pdf", "application/pdf"))
+                .as("正例对照：已声明后缀与匹配 MIME 必须放行").isTrue();
+        assertThat(FileTypeUtils.isMimeTypeMatchingExtension("pdf", "application/zip"))
+                .as("反例对照：已声明后缀与不匹配 MIME 必须拒绝").isFalse();
+        assertThat(FileTypeUtils.isAllowedUploadType(PDF, "payload.exe"))
+                .as("未知后缀仍必须在公开入口被白名单拦下").isFalse();
+    }
+
     /** 图片内容按 inline 预览写出，响应体与内容类型必须与输入一致。 */
     @Test
     void writeAttachmentWritesImageInline() throws Exception {

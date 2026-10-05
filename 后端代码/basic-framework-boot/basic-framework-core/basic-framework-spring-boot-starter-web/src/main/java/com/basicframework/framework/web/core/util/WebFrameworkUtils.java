@@ -30,13 +30,19 @@ public class WebFrameworkUtils {
      */
     public static final String HEADER_TERMINAL = "terminal";
 
-    private static WebProperties properties;
+    /** WebProperties 静态持有者：由容器启动期构造单例时写入一次，之后只读。 */
+    private static volatile WebProperties properties;
 
     /**
      * 创建 WebFrameworkUtils，并初始化所需依赖与配置。
      *
+     * <p>本类是静态工具方法集合，配置只能放在静态字段上：Spring 容器启动期构造该单例时写入一次，
+     * 之后全部是只读访问，不存在并发写入。改成实例字段会把改动扩散到全部静态调用方，
+     * 收益不足，因此保留静态持有并显式声明该取舍。</p>
+     *
      * @param webProperties 配置参数
      */
+    @SuppressWarnings("PMD.AssignmentToNonFinalStatic") // 启动期一次性注入的静态配置持有者，volatile 保证安全发布，之后无写入。
     public WebFrameworkUtils(WebProperties webProperties) {
         properties = webProperties;
     }

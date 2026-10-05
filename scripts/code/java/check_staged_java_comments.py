@@ -1333,6 +1333,22 @@ def _new_documentation_findings(
     ]
 
 
+def scan_full_source(path: str, source: str) -> list[Finding]:
+    """检查单个 Java 源文件的全部声明，不受暂存差异范围限制。
+
+    全量入口复用同一套规则，把每个文件的所有行都视为受影响范围，
+    因此历史欠账不会再被“本次没有改动”掩盖。
+
+    Args:
+        path: 仓库相对路径。
+        source: 当前 Java 源码。
+    Returns:
+        该文件全部声明的注释问题，行号以当前源码为基准。
+    """
+
+    return _scan_source(path, source, set(range(1, source.count("\n") + 2)))
+
+
 def _scan_staged_java_comments(paths: list[str] | None = None) -> list[Finding]:
     """扫描全部暂存 Java 文件的增量注释问题。
 

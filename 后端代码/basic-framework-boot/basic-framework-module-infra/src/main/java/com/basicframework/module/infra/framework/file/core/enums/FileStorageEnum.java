@@ -19,6 +19,7 @@ import lombok.Getter;
 @Getter
 public enum FileStorageEnum {
 
+    /** S3 对象存储，编码 20（对应字典 infra_file_storage 的取值）；经 S3 协议对接 MinIO、阿里云 OSS、腾讯云 COS 等。 */
     S3(20, S3FileClientConfig.class, S3FileClient.class),
     ;
 

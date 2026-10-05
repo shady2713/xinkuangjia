@@ -82,6 +82,9 @@ GATES = (
         zero_reason="没有适用的 Java 增量文件，未验证 Java 声明",
         scope="worktree-private-index-incremental",
     ),
+    # 增量入口只覆盖本次改动；全量入口把 900+ 个纳管文件的全部声明都作为对象，
+    # 使“干净工作区零对象”无法再被当成全库注释合格。
+    Gate("java-comments-full", "code/java/check_full_java_comments.py", "comments"),
     Gate("backend-boundaries", "code/java/verify_backend_boundaries.py", "boundaries"),
     Gate("workspace-layering", "code/web/verify_workspace_layering.py", "boundaries"),
     Gate("api-contracts", "code/java/verify_api_contracts.py", "boundaries"),

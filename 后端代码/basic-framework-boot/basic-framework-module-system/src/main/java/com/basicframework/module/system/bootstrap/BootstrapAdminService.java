@@ -22,6 +22,9 @@ import java.util.Set;
  */
 final class BootstrapAdminService {
 
+    /** JDBC 单行写入成功的更新行数。 */
+    private static final int SINGLE_ROW_AFFECTED = 1;
+
     private static final List<String> IDENTITY_TABLES = List.of("system_users", "system_user_role",
             "system_user_post", "system_oauth2_access_token", "system_oauth2_refresh_token");
     private static final String ADMIN_PLATFORM = "super_admin";
@@ -178,7 +181,7 @@ final class BootstrapAdminService {
             statement.setString(2, encoded);
             statement.setString(3, ADMIN_PLATFORM);
             statement.setString(4, username);
-            if (statement.executeUpdate() != 1) {
+            if (statement.executeUpdate() != SINGLE_ROW_AFFECTED) {
                 throw new SQLException("Bootstrap insert failed");
             }
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -197,7 +200,7 @@ final class BootstrapAdminService {
                         + " VALUES (?, ?, 'bootstrap', 'bootstrap')")) {
             statement.setLong(1, userId);
             statement.setLong(2, roleId);
-            if (statement.executeUpdate() != 1) {
+            if (statement.executeUpdate() != SINGLE_ROW_AFFECTED) {
                 throw new SQLException("Bootstrap role grant failed");
             }
         }

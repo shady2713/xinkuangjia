@@ -51,6 +51,17 @@ kind: package-reference
 
 `.env` 按 Java properties 读取，值不加 shell 引号；示例中的 `your_*` 是占位值，使用前替换。与 Docker 共用 MinIO 配置时，`MINIO_SECURE` 使用 `true` 或 `false`，endpoint 与 TLS 实际方式一致。不要把宿主机 localhost 当作容器中的外部服务地址。
 
+### `.env` 与 `--env-file` 的键名规则（同一份样例，两种语义）
+
+`application.yaml` 用 `optional:file:.env[.properties]` 导入配置，所以 `.env` 不是 dotenv，而是一个 Java properties 属性源。它只认两类键：
+
+1. **`application.yaml` 里存在 `${大写键}` 占位符的键**，例如 `DB_HOST`、`SERVER_PORT`、`MINIO_ENDPOINT`；[.env.example](.env.example) 中的大写键大多属于这一类。
+2. **与 Spring 属性同名的小写键**，例如 `server.port`、`logging.level.com.basicframework`、`basic-framework.captcha.enable`；`.env` 作为属性源优先级高于 `application.yaml`，两类键同时出现时以小写属性键为准。
+
+两类之外的键在 `.env` 中**既不生效也不告警**（实测）：`SPRING_DATASOURCE_URL` 指向不存在的库仍能正常启动，`LOGGING_LEVEL_COM_BASICFRAMEWORK=DEBUG` 得到 0 行 DEBUG，`CAPTCHA_ENABLE=false` 不会关闭验证码；`.env` 同时写 `SERVER_PORT=48091` 与 `server.port=48092` 时应用在 48092 启动。真正决定日志级别的是 `logging.level.*`，`logback-spring.xml` 不接受 `LOG_LEVEL_*`。
+
+`docker --env-file` / [config/backend.env](../../docs/部署/部署说明.md#准备目录与配置) 走**真实进程环境**：同一份文件的每一行都被注入为操作系统环境变量，再由 Spring 宽松绑定解析，语义与 `.env` 不同。同一个属性在真实环境下可以用 `basic-framework.captcha.enable`、`basic-framework_captcha_enable`、`BASICFRAMEWORK_CAPTCHA_ENABLE` 三种写法启动（实测都生效），`.env` 里无效的 `SERVER_FORWARD_HEADERS_STRATEGY` 在这里生效；真实进程环境优先级高于 `.env` 与 `application.yaml`，所以未关闭验证码时用环境变量即可覆盖 `.env` 的 `true`。两处的键名、引号与转义规则不同，上线前必须按实际生效结果核对，不能只看配置文件内容。
+
 数据库使用[独立迁移入口](../../docs/部署/数据库初始化与迁移.md)，不由应用启动执行。`CORS_ALLOWED_ORIGIN` 已绑定为精确来源列表，留空关闭跨域；禁止通配符。转发头使用 Tomcat 原生处理，`TRUSTED_PROXY_REGEX` 默认不信任任何代理，见[服务器配置](../../docs/部署/部署说明.md#准备目录与配置)。
 
 ## 本地启动
@@ -69,7 +80,21 @@ java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-se
 
 第二条命令跳过测试，不能替代第一条或交付门禁。也可在 IDE 运行 [BasicFrameworkServerApplication](basic-framework-server/src/main/java/com/basicframework/server/BasicFrameworkServerApplication.java)。
 
-从仓库根运行 `pwsh -File scripts/runtime/start_java.ps1 -Build` 可打包后启动；脚本需要 PATH 上的 `mvn.cmd` 与 `java`。不加 `-Build` 使用已有 JAR。默认服务 http://127.0.0.1:48080；检查 Started 日志、实际认证和权限接口，不能只看进程或端口。
+从仓库根运行 `pwsh -File scripts/runtime/start_java.ps1 -Build` 可打包后启动；脚本需要 PATH 上的 `mvn.cmd` 与 `java`。不加 `-Build` 使用已有 JAR。默认服务 http://127.0.0.1:48080；检查 Started 日志、实际认证和权限接口，不能只看进程或端口。没有 PowerShell 时用 [start_java.sh](../../scripts/runtime/start_java.sh)（`bash scripts/runtime/start_java.sh -b`）。
+
+### 干净安装后的真实登录方式
+
+1. 管理前端固定走 `POST /admin-api/system/auth/super-admin-login`（[前端 auth.ts](../../前端代码/basic-framework-admin/apps/web-ele/src/api/core/auth.ts)），该账号的 `user_type` 必须是 `super_admin`；用超级管理员账号请求 `/system/auth/login` 会返回 `登录失败，账号密码不正确`。
+2. 口令按前端协议先做 **MD5**（小写十六进制），服务端再用 BCrypt 校验。curl 或自动化冒烟必须传 `md5(明文口令)`；示例里的 `CHANGE_ME_MD5_OF_YOUR_PASSWORD` 只是占位符，真实值由本地环境在每次冒烟时用 `md5sum`（或等价工具）临时算出并注入，不得写入仓库、脚本、命令历史或日志：
+
+```bash
+curl -s -X POST http://127.0.0.1:48080/admin-api/system/auth/super-admin-login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"CHANGE_ME_MD5_OF_YOUR_PASSWORD"}'
+```
+
+3. 图形验证码默认开启，未关闭时任何登录都返回 `{"code":400,"msg":"验证码不能为空"}`。联调与自动化冒烟在 `.env` 中加小写键 `basic-framework.captcha.enable=false`（见[环境与配置](#env-与---env-file-的键名规则同一份样例两种语义)）；生产保持开启。
+4. 取回 `data.accessToken` 后以 `Authorization: Bearer <token>` 调用其它接口；权限判断以 `GET /admin-api/system/auth/get-permission-info` 的 `permissions` 与 `menus` 为准。
 
 ## 常用验证
 

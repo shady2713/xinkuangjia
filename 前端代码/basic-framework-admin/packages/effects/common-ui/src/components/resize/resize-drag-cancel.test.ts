@@ -2,11 +2,12 @@
  * 可调整尺寸容器取消区过滤的真实行为回归。
  *
  * 组件允许用 `dragCancel` 选择器声明「从这里按下不开始拖动」的区域：挂载时给命中的元素写入
- * `data-drag-cancel`，按下回调再拿事件目标的该标记与组件实例标识比较。事件回调里取不到组件
- * 实例，比较的右侧是 undefined，因此从**没有**该标记的普通元素按下时两侧都为 undefined、
- * 条件成立并提前返回，拖动不会开始；这正是「配了取消区之后普通区域反而不能拖」这一现状的
- * 原因，属真实可复现行为。用例真实挂载组件、真实派发按下与移动序列，断言容器位置未变化，
- * 从而守护这条提前返回分支不被静默删除。
+ * `data-drag-cancel`，按下回调再拿事件目标的该标记与组件实例标识比较。比较右侧必须取到本组件
+ * 实例的标识：事件回调里调用 `getCurrentInstance()` 只会拿到 null，两侧比较随之失去意义——
+ * 普通元素因「标记为 undefined」被提前拦截而拖不动，取消区元素却因「标记不等于 undefined」
+ * 被放行、整块区域被拖走。这正是「配了取消区之后普通区域反而不能拖、取消区反而能拖」的原因。
+ * 用例真实挂载组件、真实派发按下与移动序列，同时断言普通区域能拖、取消区不能拖，
+ * 保证两个分支都不会再被反转。
  */
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -57,7 +58,7 @@ function fireOnDocument(type: string, x: number, y: number) {
 }
 
 describe('可调整尺寸容器取消区过滤', /** 取消区过滤失效会让声明为不可拖动的区域被拖走，或让整块内容失去拖动能力。 */ () => {
-  it('配置取消区后从普通元素按下不开始拖动', /** 普通元素没有取消标记，比较两侧同为 undefined 时会被提前拦截。 */ async () => {
+  it('配置取消区后仅普通元素可以拖动', /** 取消区必须拦住拖动，普通元素必须仍能拖动。 */ async () => {
     wrapper = mount(Resize, {
       props: {
         dragCancel: '.DUMMY-cancel',
@@ -70,7 +71,7 @@ describe('可调整尺寸容器取消区过滤', /** 取消区过滤失效会让
     });
     await nextTick();
 
-    // 先在普通内容元素上真实按下并移动：取消区过滤会拦下这次拖动。
+    // 先在普通内容元素上真实按下并移动：普通元素不在取消区内，这次拖动应当生效。
     await wrapper.find('.DUMMY-body').trigger('mousedown', {
       button: 0,
       pageX: 0,
@@ -80,22 +81,22 @@ describe('可调整尺寸容器取消区过滤', /** 取消区过滤失效会让
     await nextTick();
 
     const root = wrapper.element as HTMLElement;
-    expect(root.style.left).toBe('0px');
-    expect(root.style.top).toBe('0px');
+    expect(root.style.left).toBe('120px');
+    expect(root.style.top).toBe('60px');
 
     fireOnDocument('mouseup', 120, 60);
     await nextTick();
 
-    // 取消区元素带标记，与右侧 undefined 不相等，因此这里反而放行并真实拖动。
+    // 取消区元素带本实例的取消标记，从这里按下不开始拖动，位置保持在上一次拖动结果。
     await wrapper.find('.DUMMY-cancel').trigger('mousedown', {
       button: 0,
-      pageX: 0,
-      pageY: 0,
+      pageX: 120,
+      pageY: 60,
     });
-    fireOnDocument('mousemove', 80, 0);
+    fireOnDocument('mousemove', 200, 140);
     await nextTick();
 
-    expect(root.style.left).toBe('80px');
-    expect(root.style.top).toBe('0px');
+    expect(root.style.left).toBe('120px');
+    expect(root.style.top).toBe('60px');
   });
 });

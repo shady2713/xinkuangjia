@@ -428,7 +428,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
             // 匹配 s3.{region}.amazonaws.com 格式
             if (host.startsWith("s3.") && host.contains(".amazonaws.com")) {
                 String regionPart = regionSegment(host, "s3.".length(), ".amazonaws.com");
-                if (StrUtil.isNotEmpty(regionPart) && !regionPart.equals("accelerate")) {
+                if (StrUtil.isNotEmpty(regionPart) && !"accelerate".equals(regionPart)) {
                     return regionPart;
                 }
             }

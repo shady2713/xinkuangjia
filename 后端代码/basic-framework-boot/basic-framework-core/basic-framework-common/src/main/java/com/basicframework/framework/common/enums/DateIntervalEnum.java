@@ -16,11 +16,17 @@ import java.util.Arrays;
 @AllArgsConstructor
 public enum DateIntervalEnum implements ArrayValuable<Integer> {
 
-    HOUR(0, "小时"), // 特殊：字典里，暂时不会有这个枚举！！！因为大多数情况下，用不到这个间隔
+    /** 小时间隔，编码 0；字典暂不提供该粒度，仅在明确需要小时的场景直接引用。 */
+    HOUR(0, "小时"),
+    /** 天间隔，编码 1。 */
     DAY(1, "天"),
+    /** 周间隔，编码 2。 */
     WEEK(2, "周"),
+    /** 月间隔，编码 3。 */
     MONTH(3, "月"),
+    /** 季度间隔，编码 4。 */
     QUARTER(4, "季度"),
+    /** 年间隔，编码 5。 */
     YEAR(5, "年")
     ;
 

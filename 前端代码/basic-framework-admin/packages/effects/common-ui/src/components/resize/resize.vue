@@ -309,6 +309,14 @@ const currentStick = ref<null | string>(null);
 
 const parentElement = ref<HTMLElement | null>(null);
 
+/**
+ * 本组件实例，用于给拖拽手柄与取消区元素写入实例标识。
+ * 必须在 setup 阶段取一次：`bodyDown` 由真实 DOM 事件触发，Vue 在事件回调里不设置当前实例，
+ * 回调内调用 `getCurrentInstance()` 只会得到 null，标记比较的右侧随之恒为 undefined，
+ * dragHandle 与 dragCancel 的过滤结果会被整体反转。
+ */
+const instance = getCurrentInstance();
+
 // 挂载前这四个尺寸都还是 null，按 0 参与运算与原来的隐式转换结果一致，
 // 因此首帧渲染不会出现 NaN，onMounted 写入真实值后自动重算。
 const width = computed(
@@ -931,8 +939,7 @@ onMounted(
    * 拖动事件挂在 document 上，保证指针移出组件范围后仍能继续拖动。
    */
   () => {
-    const currentInstance = getCurrentInstance();
-    const $el = currentInstance?.vnode.el as HTMLElement;
+    const $el = instance?.vnode.el as HTMLElement;
 
     parentElement.value = $el?.parentNode as HTMLElement;
     parentWidth.value = parentW.value ?? parentElement.value?.clientWidth;
@@ -966,7 +973,7 @@ onMounted(
          */
         (dragHandle) => {
           (dragHandle as HTMLElement).dataset.dragHandle = String(
-            currentInstance?.uid,
+            instance?.uid,
           );
         },
       );
@@ -980,7 +987,7 @@ onMounted(
          */
         (cancelHandle) => {
           (cancelHandle as HTMLElement).dataset.dragCancel = String(
-            currentInstance?.uid,
+            instance?.uid,
           );
         },
       );
@@ -1019,14 +1026,14 @@ const bodyDown = (ev: MouseEvent & TouchEvent) => {
   const targetDataset = (target as HTMLElement | null)?.dataset;
   if (
     dragHandle.value &&
-    targetDataset?.dragHandle !== getCurrentInstance()?.uid.toString()
+    targetDataset?.dragHandle !== instance?.uid.toString()
   ) {
     return;
   }
 
   if (
     dragCancel.value &&
-    targetDataset?.dragCancel === getCurrentInstance()?.uid.toString()
+    targetDataset?.dragCancel === instance?.uid.toString()
   ) {
     return;
   }

@@ -29,12 +29,12 @@ public enum DbTypeEnum {
     /**
      * MySQL
      */
-    MY_SQL(DbType.MYSQL, "MySQL", "FIND_IN_SET('#{value}', #{column}) <> 0"),
+    MY_SQL(DbType.MYSQL, "MySQL", findInSetExpression()),
 
     /**
      * Oracle
      */
-    ORACLE(DbType.ORACLE, "Oracle", "FIND_IN_SET('#{value}', #{column}) <> 0"),
+    ORACLE(DbType.ORACLE, "Oracle", findInSetExpression()),
 
     /**
      * PostgreSQL
@@ -55,7 +55,7 @@ public enum DbTypeEnum {
     /**
      * 达梦
      */
-    DM(DbType.DM, "DM DBMS", "FIND_IN_SET('#{value}', #{column}) <> 0"),
+    DM(DbType.DM, "DM DBMS", findInSetExpression()),
 
     /**
      * 人大金仓
@@ -65,9 +65,20 @@ public enum DbTypeEnum {
     /**
      * OceanBase
      */
-    OCEAN_BASE(DbType.OCEAN_BASE, "OceanBase", "FIND_IN_SET('#{value}', #{column}) <> 0")
+    OCEAN_BASE(DbType.OCEAN_BASE, "OceanBase", findInSetExpression())
 
     ;
+
+    /**
+     * FIND_IN_SET 兼容表达式模板：判断逗号分隔列是否包含当前值。
+     *
+     * <p>用静态方法而不是静态常量：枚举常量参数不允许前向引用本枚举中后面声明的静态字段。</p>
+     *
+     * @return FIND_IN_SET 兼容 SQL 模板
+     */
+    private static String findInSetExpression() {
+        return "FIND_IN_SET('#{value}', #{column}) <> 0";
+    }
 
     private static final Map<String, DbTypeEnum> BY_PRODUCT_NAME = Map.copyOf(Arrays.stream(values())
             .collect(Collectors.toMap(DbTypeEnum::getProductName, Function.identity())));

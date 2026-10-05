@@ -9,6 +9,10 @@
  * 用例真实挂载组件、真实派发按下/移动/松开鼠标序列，并真实调用组件注册到画布上的点击复位。
  * canvas 2D 上下文与图片加载是本组件依赖的两个浏览器外部边界：happy-dom 不实现画布也不加载
  * 图片，因此这里按浏览器契约提供可记录的画布上下文，并由用例在合适的时机触发图片加载完成。
+ *
+ * 复位入口有两处必须单独固定：一是"滑块条组件已不存在"时的早退守卫（组件卸载后仍被调用
+ * resume 的时序），二是滑块条回写 v-model 时父级的验证状态更新。前者用真实卸载后的受控时序
+ * 驱动并断言复位没有转发给滑块条，后者用滑块条自身声明的 `update:modelValue` 事件契约驱动。
  */
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
@@ -17,6 +21,7 @@ import { $t } from '@vben/locales';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import SliderCaptcha from '../../slider-captcha/index.vue';
 import SliderTranslateCaptcha from '../index.vue';
 
 /** 画布宽度，组件默认值。 */
@@ -397,5 +402,49 @@ describe('拼图验证码拖动与校验', /** 位移换算与容差判定决定
     await wrapper.findAll('canvas')[0]?.trigger('click');
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false]);
+  });
+
+  it('滑块条组件已不存在时复位静默返回', /** 卸载后仍被调用复位时必须直接返回，否则会访问已销毁的滑块条而抛错。 */ async () => {
+    const wrapper = mount(SliderTranslateCaptcha, {
+      props: { src: 'DUMMY-puzzle.png' },
+    });
+    loadImage();
+    await nextTick();
+    const captcha = wrapper.vm as unknown as {
+      /** 组件通过 defineExpose 暴露的复位入口。 */
+      resume: () => void;
+    };
+    const exposed = wrapper.findComponent(SliderCaptcha).vm.$.exposed as {
+      /** 滑块条通过 defineExpose 暴露的复位入口。 */
+      resume: () => void;
+    };
+    const barResume = vi.spyOn(exposed, 'resume');
+
+    // 组件在挂载状态下：复位必须真实转发给滑块条并重新出题。
+    const imagesBeforeMountedResume = ImageStub.instances.length;
+    captcha.resume();
+
+    expect(barResume).toHaveBeenCalledTimes(1);
+    expect(ImageStub.instances.length).toBe(imagesBeforeMountedResume + 1);
+
+    // 卸载后滑块条模板引用已被清空：守卫必须拦下，既不转发也不重新出题。
+    wrapper.unmount();
+
+    expect(
+      /** 卸载后调用复位入口，守卫必须让它安全返回。 */ () => captcha.resume(),
+    ).not.toThrow();
+    expect(barResume).toHaveBeenCalledTimes(1);
+    expect(ImageStub.instances.length).toBe(imagesBeforeMountedResume + 1);
+  });
+
+  it('滑块条回写 v-model 时父级验证状态同步更新', /** 回写链路断开会让父级拿不到验证结果，业务方无法据此放行提交。 */ () => {
+    const wrapper = mount(SliderTranslateCaptcha, {
+      props: { modelValue: false, src: 'DUMMY-puzzle.png' },
+    });
+
+    // 滑块条通过自身声明的 v-model 事件回写验证状态。
+    wrapper.findComponent(SliderCaptcha).vm.$emit('update:modelValue', true);
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true]);
   });
 });

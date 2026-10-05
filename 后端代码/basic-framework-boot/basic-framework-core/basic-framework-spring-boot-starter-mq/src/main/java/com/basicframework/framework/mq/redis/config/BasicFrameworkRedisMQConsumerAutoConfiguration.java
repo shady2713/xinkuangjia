@@ -82,7 +82,8 @@ public class BasicFrameworkRedisMQConsumerAutoConfiguration {
     /**
      * 创建 Redis Stream 集群消费的容器
      *
-     * 基础知识：<a href="https://www.geek-book.com/src/docs/redis/redis/redis.io/commands/xreadgroup.html">Redis Stream 的 xreadgroup 命令</a>
+     * 基础知识：Redis Stream 的 xreadgroup 命令，见
+     * https://www.geek-book.com/src/docs/redis/redis/redis.io/commands/xreadgroup.html
      */
     @Bean(initMethod = "start", destroyMethod = "stop")
     @ConditionalOnBean(AbstractRedisStreamMessageListener.class) // 只有 AbstractStreamMessageListener 存在的时候，才需要注册 Redis pubsub 监听
