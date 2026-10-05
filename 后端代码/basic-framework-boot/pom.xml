@@ -253,7 +253,10 @@
                             <execution>
                                 <id>quality-static-analysis</id>
                                 <phase>verify</phase>
-                                <goals><goal>pmd</goal></goals>
+                                <!-- 发布阶段使用的就是这个 profile：必须绑定真实的 check（违规即失败），
+                                     不能只绑定只生成报告的 pmd，否则静态违规不会阻止发布。
+                                     check 会先派生 pmd 报告，target/pmd.xml 仍然产出并被发布门禁核验。 -->
+                                <goals><goal>check</goal></goals>
                             </execution>
                         </executions>
                     </plugin>

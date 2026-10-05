@@ -1,5 +1,9 @@
 """核对 CI 作业与真实 JUnit 用例，拒绝跳过、空报告、缺失集成测试及无证据的发布结论。
 
+发布结论还必须包含真实静态检查证据：覆盖率裁决文档里的静态检查段由
+scripts/workflow/static_gate.py 在作业内从真实 PMD/lint 报告生成，本模块独立复核
+其执行状态、零违规、工具与命令、配置指纹、检查范围与真实源码清单是否一致。
+
 @author OpenAI Codex
 """
 
@@ -12,6 +16,12 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.common.quality_common import CheckError
+from scripts.workflow import static_gate
 
 # 四个必需作业：文档与工具、管理前端、Java 后端、浏览器业务端到端。
 # 浏览器业务用例同样必须真实成功并上报正整数用例数，跳过或零用例一律拒绝。
@@ -26,9 +36,14 @@ BACKEND_REQUIRED = {
 # 编排必须产出同名文件，阶段标签本身不再产生 release_verified。
 RELEASE_SCHEMA = "ci-release-evidence/v1"
 COVERAGE_SCHEMA = "coverage-gate/v1"
+STATIC_SCHEMA = static_gate.SCHEMA
 COVERAGE_THRESHOLDS = {"per_file": True, "lines": 100, "methods_or_functions": 100}
 REVISION_TEXT = re.compile(r"[0-9a-f]{40}")
 DIGEST_TEXT = re.compile(r"[0-9a-f]{64}")
+# 每个发布范围必须真实执行过的静态检查工具；名字、版本与命令缺一即拒绝。
+STATIC_TOOLS = {"backend": ("pmd",), "web": ("eslint", "prettier", "stylelint")}
+# 静态检查工具识别仓库的根目录；发布证据固定对应本仓库的模块与配置。
+ROOT = Path(__file__).resolve().parents[2]
 RELEASE_JOBS = {
     "backend": {"evidence": "release-backend.json", "coverage_kind": "backend",
                 "coverage_file": "coverage-backend.json"},
@@ -71,6 +86,110 @@ def json_document(directory: Path, name: str) -> dict[str, object]:
     return document
 
 
+def static_section(document: dict[str, object], name: str, kind: str) -> dict[str, object]:
+    """复核发布证据里的静态检查段，拒绝跳过、零对象、违规、范围缩水与旧配置。
+
+    静态检查段由作业内的 static_gate.py 从真实报告生成；本函数不信任其中的自述，
+    重新按当前仓库枚举模块与配置指纹，并要求模块清单、源码对象数与生产清单匹配。
+
+    Args:
+        document: 已确认阶段的覆盖率裁决文档。
+        name: 证据文件名，用于错误定位。
+        kind: 期望的静态检查范围，backend 或 web。
+    Returns:
+        已复核的静态检查段。
+    Raises:
+        ValueError: 缺少静态检查段，或执行状态、工具、命令、配置、范围、计数任一项不符。
+    """
+    section = document.get("static_analysis")
+    if not isinstance(section, dict):
+        raise ValueError(f"覆盖率证据缺少静态检查结论：{name}")
+    if section.get("schema") != STATIC_SCHEMA or section.get("kind") != kind \
+            or section.get("stage") != document.get("stage"):
+        raise ValueError(f"静态检查证据的阶段、范围或结构不正确：{name}")
+    if section.get("status") != "passed" or section.get("code") != 0:
+        raise ValueError(f"静态检查未真实通过，不能作为发布证据：{name}")
+    if section.get("executed") is not True or section.get("skipped") is not False:
+        raise ValueError(f"静态检查被跳过或未真实执行：{name}")
+    objects, violations = section.get("objects"), section.get("violations")
+    # 布尔值是 int 的子类，必须先按精确类型拒绝，避免 True 冒充正整数检查对象。
+    if type(objects) is not int or objects <= 0:
+        raise ValueError(f"静态检查没有正整数的真实检查对象：{name}")
+    if type(violations) is not int or violations != 0:
+        raise ValueError(f"静态检查仍声明违规：{name}")
+    tools = section.get("tools")
+    if not isinstance(tools, list) or not tools:
+        raise ValueError(f"静态检查证据没有工具记录：{name}")
+    found: dict[str, dict[str, object]] = {}
+    for item in tools:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str) or item["name"] in found:
+            raise ValueError(f"静态检查工具名缺失或重复：{name}")
+        found[item["name"]] = item
+    if set(found) != set(STATIC_TOOLS[kind]):
+        raise ValueError(f"静态检查工具集合与范围要求不一致：{name}")
+    for tool, item in found.items():
+        if item.get("status") != "passed" or item.get("exit_code") != 0:
+            raise ValueError(f"静态检查工具未真实通过：{kind}/{tool}")
+        if not str(item.get("version", "")).strip() or not str(item.get("command", "")).strip():
+            raise ValueError(f"静态检查工具缺少版本或可核对命令：{kind}/{tool}")
+    try:
+        expected_config = {static_gate.repository_path(ROOT, path): static_gate.digest(path)
+                           for path in (static_gate.backend_configs(ROOT) if kind == "backend"
+                                        else static_gate.web_configs(ROOT))}
+    except (CheckError, OSError, ValueError) as error:
+        raise ValueError(f"无法核对静态检查配置：{name}") from error
+    declared = section.get("config")
+    if not isinstance(declared, list) or not declared:
+        raise ValueError(f"静态检查证据缺少配置指纹：{name}")
+    recorded: dict[str, str] = {}
+    for item in declared:
+        if not isinstance(item, dict) or not isinstance(item.get("path"), str) \
+                or not DIGEST_TEXT.fullmatch(str(item.get("sha256", ""))):
+            raise ValueError(f"静态检查配置指纹不合法：{name}")
+        recorded[item["path"]] = str(item["sha256"])
+    if recorded != expected_config:
+        raise ValueError(f"静态检查配置与当前仓库不一致，证据可能来自旧版本或被改动：{name}")
+    reports = section.get("reports")
+    if not isinstance(reports, list) or not reports:
+        raise ValueError(f"静态检查证据缺少真实报告清单：{name}")
+    for item in reports:
+        if not isinstance(item, dict) or not str(item.get("path", "")).strip() \
+                or not DIGEST_TEXT.fullmatch(str(item.get("sha256", ""))):
+            raise ValueError(f"静态检查报告清单缺少路径或指纹：{name}")
+    if kind == "backend":
+        try:
+            expected_modules = {static_gate.repository_path(ROOT, module)
+                                for module in static_gate.production_modules(ROOT)}
+        except (OSError, ValueError) as error:
+            raise ValueError(f"无法枚举后端静态检查范围：{name}") from error
+        modules = section.get("modules")
+        if not isinstance(modules, list) or not modules:
+            raise ValueError(f"静态检查证据缺少逐模块结论：{name}")
+        sources = 0
+        for item in modules:
+            if not isinstance(item, dict) or item.get("module") not in expected_modules \
+                    or item.get("violations") != 0 or type(item.get("sources")) is not int \
+                    or int(item["sources"]) <= 0 or not DIGEST_TEXT.fullmatch(str(item.get("sha256", ""))):
+                raise ValueError(f"静态检查的模块结论不完整或范围不符：{name}")
+            sources += int(item["sources"])
+        if {str(item["module"]) for item in modules} != expected_modules:
+            raise ValueError(f"静态检查范围与当前后端模块不一致：{name}")
+        if len(reports) != len(modules) or sources != objects:
+            raise ValueError(f"静态检查对象数与模块结论不一致：{name}")
+    else:
+        workspace = section.get("workspace")
+        if not isinstance(workspace, dict) or workspace.get("files") != objects \
+                or workspace.get("errors") != 0 or workspace.get("fatal") != 0:
+            raise ValueError(f"静态检查的工作区自述不合法：{name}")
+        # 三个工具都在真实执行中退出 0 才写出证据；未格式化文件与 stylelint 问题数必须为 0。
+        if workspace.get("unformatted") != 0 or workspace.get("stylelint_problems") not in (0, None):
+            raise ValueError(f"静态检查仍存在未通过的工具结果：{name}")
+        inventory = document.get("inventory")
+        if not isinstance(inventory, list) or len(inventory) > objects:
+            raise ValueError(f"静态检查范围小于生产源码清单：{name}")
+    return section
+
+
 def coverage_document(directory: Path, name: str, kind: str) -> dict[str, object]:
     """核对一份发布阶段覆盖率裁决，拒绝审计结论、零对象、阈值放宽和缺口。
 
@@ -79,9 +198,10 @@ def coverage_document(directory: Path, name: str, kind: str) -> dict[str, object
         name: 覆盖率证据文件名。
         kind: 期望的覆盖率范围，backend 或 web。
     Returns:
-        已确认属于该范围发布门槛且已通过的真实裁决文档。
+        已确认属于该范围发布门槛且已通过的真实裁决文档，并已复核其中的静态检查段。
     Raises:
-        ValueError: 阶段或范围不符、未通过、零实测对象、存在缺口或阈值被改变。
+        ValueError: 阶段或范围不符、未通过、零实测对象、存在缺口或阈值被改变，
+            或缺少真实静态检查证据。
     """
     document = json_document(directory, name)
     if document.get("schema") != COVERAGE_SCHEMA or document.get("kind") != kind or document.get("stage") != "release":
@@ -107,6 +227,7 @@ def coverage_document(directory: Path, name: str, kind: str) -> dict[str, object
     if not isinstance(reports, list) or not reports or not all(
             isinstance(item, dict) and DIGEST_TEXT.fullmatch(str(item.get("sha256", ""))) for item in reports):
         raise ValueError(f"覆盖率证据缺少报告内容指纹：{name}")
+    static_section(document, name, kind)
     return document
 
 
@@ -185,9 +306,10 @@ def coverage_declaration(declared: object, job: str, spec: dict[str, str], cover
 def release_evidence(directory: Path | None, counts: dict[str, int], revision: str | None) -> dict[str, object]:
     """核验发布阶段的真实检查证据，缺少或不合格时拒绝给出发布结论。
 
-    证据由 workflow 中的真实命令产出：每个作业的覆盖率裁决原始 JSON，
-    以及该作业在本次提交上真实执行检查的清单。计数必须与聚合门禁独立核对的
-    作业计数、覆盖率裁决的实测文件数一致，避免用标签或空报告冒充发布。
+    证据由 workflow 中的真实命令产出：每个作业的覆盖率裁决原始 JSON（含作业内
+    static_gate.py 从真实 PMD/lint 报告生成的静态检查段），以及该作业在本次提交上
+    真实执行检查的清单。计数必须与聚合门禁独立核对的作业计数、覆盖率裁决的实测文件数
+    一致，避免用标签或空报告冒充发布。
     Args:
         directory: 发布检查写入证据的目录，缺失即拒绝。
         counts: 四个必需作业上报的正整数用例数。
@@ -213,7 +335,9 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
             if checks[check]["checked"] != expected:
                 raise ValueError(f"发布检查计数与真实结果不一致：{job}/{check}")
         released[job] = {"evidence": spec["evidence"], "coverage": spec["coverage_file"],
-                         "measured_files": coverage["measured_files"], "checks": sorted(RELEASE_CHECKS[job])}
+                         "measured_files": coverage["measured_files"], "checks": sorted(RELEASE_CHECKS[job]),
+                         "static": {"objects": coverage["static_analysis"]["objects"],
+                                    "tools": sorted(item["name"] for item in coverage["static_analysis"]["tools"])}}
     return {"directory": str(directory), "revision": revision, "jobs": released}
 
 
@@ -332,7 +456,7 @@ def main() -> int:
                     stream.write(f"checked={result['checked']}\n")
         print(json.dumps(result, ensure_ascii=False))
         return 0
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError, CheckError):
         print("CI 证据核对失败：必需作业或真实测试未完整成功。", file=sys.stderr)
         return 1
 

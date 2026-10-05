@@ -69,7 +69,7 @@ def render(root: Path) -> str:
         "",
         f"当前工作区共 {len(items)} 个包、{len(links)} 条分类依赖。箭头由使用方指向被依赖包；依据清单声明，不代表源码调用图。",
         "",
-        "-----",
+        "---",
         "",
         "## 目录",
         "",
@@ -80,7 +80,7 @@ def render(root: Path) -> str:
         [
             "- [开发笔记](#开发笔记)",
             "",
-            "-----",
+            "---",
             "",
             "## 包清单",
             "",
@@ -94,7 +94,7 @@ def render(root: Path) -> str:
         lines.append(f"| {name} | [package.json]({quote('../../' + rel, safe='/')}) |")
     fence = chr(96) * 3
     for section, label in LABELS.items():
-        lines.extend(["", "-----", "", f"## {label}", "", fence + "mermaid", "flowchart LR"])
+        lines.extend(["", "---", "", f"## {label}", "", fence + "mermaid", "flowchart LR"])
         for package in items:
             name = html.escape(package.name, quote=True).replace("\n", " ")
             lines.append(f'  {identifiers[package.name]}["{name}"]')
@@ -105,14 +105,14 @@ def render(root: Path) -> str:
     lines.extend(
         [
             "",
-            "-----",
+            "---",
             "",
             "## 开发笔记",
             "",
             "<details>",
             "<summary>生成与验证</summary>",
             "",
-            "在所属前端运行 pnpm graph:modules 生成，pnpm graph:modules:check 只读检查是否最新。",
+            "在所属前端运行 pnpm graph:modules 生成，pnpm graph:modules:check 只读检查是否最新。"
             "外部包、动态加载和源码调用不在图中。生成顺序固定；循环依赖按原边保留，不伪装成拓扑顺序。",
             "",
             "</details>",

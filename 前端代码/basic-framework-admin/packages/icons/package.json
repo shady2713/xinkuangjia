@@ -3,6 +3,9 @@
   "version": "5.6.0",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -11,8 +14,5 @@
   },
   "dependencies": {
     "@vben-core/icons": "workspace:*"
-  },
-  "scripts": {
-    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

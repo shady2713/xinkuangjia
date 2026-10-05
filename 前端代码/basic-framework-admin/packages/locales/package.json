@@ -3,6 +3,9 @@
   "version": "5.6.0",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
   "sideEffects": [
     "**/*.css"
   ],
@@ -17,8 +20,5 @@
     "@vben-core/composables": "workspace:*",
     "vue": "catalog:",
     "vue-i18n": "catalog:"
-  },
-  "scripts": {
-    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/styles 的基础样式和组件库子路径，供前端应用接入公共外观时查阅。"
+description: '说明 @vben/styles 的基础样式和组件库子路径，供前端应用接入公共外观时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的样式文件，继承了 `@vben-core/design` 的所有能力。业务上有通用的样式文件可以放在这里。
-
 
 ## 目录
 

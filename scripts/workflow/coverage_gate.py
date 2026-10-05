@@ -1,6 +1,9 @@
 """核对覆盖率报告与源码分母，最终阶段逐文件要求行和方法/函数全部覆盖。
 
-本工具只裁决已有覆盖率数据，不把读取报告视为测试执行成功。
+本工具只裁决已有覆盖率数据，不把读取报告视为测试执行成功。最终阶段（full/release）
+还要求同范围的静态检查已经有真实执行证据：后端重新核验各模块 PMD 报告，前端复核
+static_gate.py 写出的 lint 证据；缺失、旧报告、跳过或违规都会让裁决以 2 退出，
+调用方拿不到可用的发布证据。
 @author OpenAI Codex
 """
 
@@ -21,6 +24,10 @@ if __package__ in (None, ""):
 
 from scripts.code.java.check_staged_java_comments import _mask_java, _matching_delimiters
 from scripts.common.quality_common import DEFAULT_ROOT, CheckError, run_process
+from scripts.workflow import static_gate
+
+# 只有最终阶段才要求静态检查证据；audit 只报告缺口，不产生发布结论。
+FINAL_STAGES = frozenset({"full", "release"})
 
 BACKEND = Path("后端代码/basic-framework-boot")
 FRONTEND = Path("前端代码/basic-framework-admin")
@@ -493,6 +500,29 @@ def conclude(result: dict[str, object], stage: str) -> int:
     return 1 if failed and stage != "audit" else 0
 
 
+def require_static_analysis(root: Path, kind: str, stage: str, module: Path | None,
+                            evidence: Path | None, report: Path | None) -> dict[str, object]:
+    """最终阶段核验同范围静态检查证据，缺失、旧报告、跳过或违规一律拒绝签发。
+
+    Args:
+        root: 仓库根目录。
+        kind: backend 或 web。
+        stage: full 或 release；audit 不要求静态证据。
+        module: 仅后端使用的单模块范围。
+        evidence: 仅前端使用的静态检查证据路径。
+        report: 仅前端使用的 ESLint JSON 报告路径覆盖。
+    Returns:
+        通过核验的静态检查证据段，供发布证据文档公开工具、配置指纹与真实报告清单。
+    Raises:
+        ValueError: 阶段不属于最终阶段，调用方逻辑错误。
+        CheckError: 证据缺失、过期、越界或不可核验，对应退出码 2。
+        RuntimeError: 存在真实静态违规或检查未执行，对应退出码 1。
+    """
+    if stage not in FINAL_STAGES:
+        raise ValueError("只有最终阶段要求静态检查证据")
+    return static_gate.verify_static(root, kind, stage, module, evidence, report)
+
+
 def main() -> int:
     """解析明确阶段和范围，输出不含源码正文的覆盖率裁决及可核对分母清单。"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -503,6 +533,8 @@ def main() -> int:
     parser.add_argument("--coverage", type=Path)
     parser.add_argument("--prepare", action="store_true", help="只重置指定 Maven 模块的本次覆盖率数据")
     parser.add_argument("--require-prepared", action="store_true", help="要求后端报告绑定本次测试前的输入")
+    parser.add_argument("--static-evidence", type=Path, help="前端静态检查证据路径；缺省用仓库默认位置")
+    parser.add_argument("--static-report", type=Path, help="前端 ESLint JSON 报告路径；缺省用仓库默认位置")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     root = args.root.resolve()
@@ -516,6 +548,20 @@ def main() -> int:
             print("已准备本次模块覆盖率输入；尚未执行测试或覆盖率验收。")
             return 0
         result = backend_report(root, args.module.resolve() if args.module else None, args.require_prepared) if args.kind == "backend" else web_report(root, (args.coverage or root / FRONTEND / "coverage/coverage-final.json").resolve())
+        # 只有最终阶段（full/release）要求真实静态检查证据：audit 仍是“只报告缺口”的入口，
+        # 官方前端默认入口 run_frontend_tests.py --coverage 走的就是 audit，退出码语义不变。
+        if args.stage in FINAL_STAGES:
+            try:
+                static = require_static_analysis(root, args.kind, args.stage,
+                                                 args.module.resolve() if args.module else None,
+                                                 args.static_evidence, args.static_report)
+            except static_gate.StaticViolationError as error:
+                print(f"静态检查未通过：{error}", file=sys.stderr)
+                return 1
+            except CheckError as error:
+                print(f"静态检查证据无法核验：{error}", file=sys.stderr)
+                return 2
+            result["static_analysis"] = static
         code = conclude(result, args.stage)
         # Maven 聚合 POM 没有生产分母，明确 N/A；最终仓库入口仍拒绝全组零实测。
         if args.module and result["status"] == "not-applicable":

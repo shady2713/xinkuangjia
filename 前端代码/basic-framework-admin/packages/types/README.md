@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/types 的公共 TypeScript 类型，供应用共享编译期接口约定时查阅。"
+description: '说明 @vben/types 的公共 TypeScript 类型，供应用共享编译期接口约定时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的工具类型，继承了 `@vben-core/typings` 的所有能力。业务上有通用的类型定义可以放在这里。
-
 
 ## 目录
 

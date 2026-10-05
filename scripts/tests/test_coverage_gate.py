@@ -40,6 +40,21 @@ def java_report(root: Path, entries: dict[str, tuple[int, int, int, int]]) -> Pa
     return path
 
 
+def java_pmd(root: Path) -> Path:
+    """写一份真实形状的 PMD 报告与绑定配置，满足最终阶段的静态检查证据要求。"""
+    ruleset = root / gate.BACKEND / "config/pmd/basic-framework-ruleset.xml"
+    ruleset.parent.mkdir(parents=True, exist_ok=True)
+    ruleset.write_text('<ruleset name="demo"/>', encoding="utf-8")
+    (root / gate.BACKEND / "pom.xml").write_text("<project/>", encoding="utf-8")
+    source = root / gate.BACKEND / "module/src/main/java/demo/Value.java"
+    path = root / gate.BACKEND / "module/target/pmd.xml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f'<?xml version="1.0" encoding="UTF-8"?><pmd xmlns="{gate.static_gate.PMD_NAMESPACE}" '
+                    f'version="7.17.0" timestamp="2026-10-04T14:58:57.450" '
+                    f'data-source="{source}"/>', encoding="utf-8")
+    return path
+
+
 def web_source(root: Path, name: str = "value.ts", content: str | None = None) -> Path:
     """写入应用源码，名字含未导入或 vendored 字样也属于普通生产分母。"""
     path = root / gate.FRONTEND / "apps/demo/src" / name
@@ -265,11 +280,89 @@ def test_real_cli_fails_on_uncovered_unicode_path(tmp_path: Path) -> None:
     root = tmp_path / "中文工程"
     java_source(root)
     java_report(root, {"Value.java": (1, 0, 1, 0)})
+    java_pmd(root)
     result = subprocess.run([sys.executable, "-B", "-X", "utf8", str(Path(gate.__file__)), "--root", str(root), "--kind", "backend", "--stage", "full", "--json"], capture_output=True, timeout=30)
     assert result.returncode == 1
     data = json.loads(result.stdout)
     assert data["failed_files"] == 1
     assert data["validates_test_execution"] is False
+    # 最终阶段的发布证据必须同时带真实静态检查结论。
+    assert data["static_analysis"]["status"] == "passed"
+
+
+def test_audit_stage_cli_does_not_require_static_evidence(tmp_path: Path) -> None:
+    """回归反例：audit 阶段只报告缺口，不得要求发布阶段的静态检查证据。"""
+    source = web_source(tmp_path)
+    report = web_report(tmp_path, {source: web_entry({"0": 0}, {"0": 0})})
+    result = subprocess.run(
+        [sys.executable, "-B", "-X", "utf8", str(Path(gate.__file__)), "--root", str(tmp_path),
+         "--kind", "web", "--coverage", str(report), "--stage", "audit", "--json"],
+        capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["status"] == "audit-findings"
+    assert "static_analysis" not in data
+
+
+def test_frontend_runner_default_stage_stays_audit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """官方前端默认入口必须以 audit 调用门禁：不要求静态证据，退出码原样传播。"""
+    runner = frontend_runner()
+    frontend = tmp_path / gate.FRONTEND
+    frontend.mkdir(parents=True)
+    monkeypatch.setattr(runner, "__file__", str(frontend / "scripts/quality/run_frontend_tests.py"))
+    monkeypatch.setattr(sys, "argv", ["runner", "--coverage"])
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "node")
+    monkeypatch.setattr(runner, "coverage_inputs", lambda root: {"source": "unchanged"})
+    commands: list[list[str]] = []
+
+    def execute(command: list[str], *arguments: object) -> int:
+        """第一次调用写出新报告，第二次调用是被测门禁且返回通过。"""
+        commands.append(command)
+        if len(commands) == 1:
+            report = frontend / "coverage/coverage-final.json"
+            report.parent.mkdir()
+            report.write_text("{}", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(runner, "run_process", execute)
+    assert runner.main() == 0
+    assert commands[-1][-2:] == ["--stage", "audit"]
+
+
+def test_frontend_runner_audit_path_runs_real_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """官方入口的 audit 参数必须真能被门禁接受：用真实子进程执行改写 --root 的等价入口。"""
+    source = web_source(tmp_path)
+    report = web_report(tmp_path, {source: web_entry({"0": 0}, {"0": 0})})
+    payload = report.read_text(encoding="utf-8")
+    report.unlink()
+    runner = frontend_runner()
+    frontend = tmp_path / gate.FRONTEND
+    # 真实 runner 以 root.parents[1] 定位仓库脚本；这里放置只补充 --root 的等价入口。
+    wrapper = tmp_path / "scripts/workflow/coverage_gate.py"
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text(
+        "import subprocess, sys\n"
+        f"sys.exit(subprocess.run([sys.executable, '-B', '-X', 'utf8', {str(Path(gate.__file__))!r},"
+        f" '--root', {str(tmp_path)!r}, *sys.argv[1:]]).returncode)\n",
+        encoding="utf-8")
+    monkeypatch.setattr(runner, "__file__", str(frontend / "scripts/quality/run_frontend_tests.py"))
+    monkeypatch.setattr(sys, "argv", ["runner", "--coverage"])
+    monkeypatch.setattr(runner.shutil, "which", lambda name: "node")
+    monkeypatch.setattr(runner, "coverage_inputs", lambda root: {"source": "unchanged"})
+    commands: list[list[str]] = []
+
+    def execute(command: list[str], root: Path, environment: dict[str, str], timeout: int) -> int:
+        """第一次调用写出新报告，第二次调用用真实子进程运行改写 root 的门禁。"""
+        commands.append(command)
+        if len(commands) == 1:
+            report.parent.mkdir(parents=True, exist_ok=True)
+            report.write_text(payload, encoding="utf-8")
+            return 0
+        return subprocess.run(command, cwd=root, env=environment, timeout=timeout, check=False).returncode
+
+    monkeypatch.setattr(runner, "run_process", execute)
+    assert runner.main() == 0
+    assert commands[-1][-2:] == ["--stage", "audit"]
 
 
 def test_provider_empty_placeholder_does_not_make_types_executable(tmp_path: Path) -> None:

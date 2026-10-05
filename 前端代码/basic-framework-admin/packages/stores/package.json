@@ -3,6 +3,9 @@
   "version": "5.6.0",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
   "sideEffects": [
     "**/*.css"
   ],
@@ -21,8 +24,5 @@
     "secure-ls": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:"
-  },
-  "scripts": {
-    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
   }
 }

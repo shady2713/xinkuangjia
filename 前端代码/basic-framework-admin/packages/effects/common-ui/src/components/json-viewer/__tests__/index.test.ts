@@ -38,7 +38,9 @@ interface ValueClickPayload {
  * @param props 传给组件的真实属性；`value` 是组件必填项，其余属性可选。
  * @returns 组件包装器。
  */
-function mountViewer(props: Partial<JsonViewerProps> & Pick<JsonViewerProps, 'value'>) {
+function mountViewer(
+  props: Partial<JsonViewerProps> & Pick<JsonViewerProps, 'value'>,
+) {
   return mount(JsonViewer, { props });
 }
 

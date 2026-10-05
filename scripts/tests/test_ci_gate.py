@@ -1,7 +1,8 @@
 """验证 CI 证据核对：正常聚合、受控反例失败、报告真伪、发布证据与输出脱敏。
 
-反例重点覆盖上游 $GITHUB_OUTPUT 产生的非字典 outputs 和只改阶段标签的发布结论：
-前者曾抛出未捕获的 AttributeError，后者曾在没有任何发布证据时返回 release_verified。
+反例重点覆盖上游 $GITHUB_OUTPUT 产生的非字典 outputs、只改阶段标签的发布结论，
+以及发布证据里的静态检查段：跳过、零对象、违规、范围缩水与旧配置都必须拒绝。
+前者曾抛出未捕获的 AttributeError，中间一项曾在没有任何发布证据时返回 release_verified。
 
 @author OpenAI Codex
 """
@@ -16,12 +17,14 @@ import shlex
 import subprocess
 import sys
 from fnmatch import fnmatchcase
+from functools import lru_cache
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import pytest
 
 from scripts.workflow import ci_gate as gate
+from scripts.workflow import static_gate
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "workflow" / "ci_gate.py"
@@ -69,6 +72,53 @@ def digest(seed: object) -> str:
     return hashlib.sha256(str(seed).encode("utf-8")).hexdigest()
 
 
+@lru_cache(maxsize=None)
+def static_template(kind: str) -> str:
+    """按当前仓库真实模块、配置与工具生成静态检查段模板的 JSON 文本。
+
+    夹具必须与被测门禁使用同一套独立枚举：后端模块清单来自生产源码目录，
+    配置指纹来自规则集/父 POM 或前端三条规则配置，否则汇总校验会正当地拒绝。
+    """
+    configs = [{"path": static_gate.repository_path(gate.ROOT, path), "sha256": static_gate.digest(path)}
+               for path in (static_gate.backend_configs(gate.ROOT) if kind == "backend"
+                            else static_gate.web_configs(gate.ROOT))]
+    if kind == "backend":
+        modules = []
+        for module in static_gate.production_modules(gate.ROOT):
+            relative = static_gate.repository_path(gate.ROOT, module)
+            modules.append({"module": relative, "report": f"{relative}/target/pmd.xml",
+                            "sha256": digest(relative), "sources": len(static_gate.production_sources(module)),
+                            "violations": 0, "suppressed": 0, "pmd_version": "7.17.0",
+                            "timestamp": "2026-10-04T14:58:57.450"})
+        document: dict[str, object] = {
+            "schema": static_gate.SCHEMA, "kind": kind, "stage": "release", "status": "passed", "code": 0,
+            "executed": True, "skipped": False, "violations": 0, "config": configs,
+            "tools": [{"name": "pmd", "version": "7.17.0", "status": "passed",
+                       "command": "mvn -B -ntp -Pquality-audit verify", "exit_code": 0}],
+            "objects": sum(int(item["sources"]) for item in modules),
+            "reports": [{"kind": "pmd", "path": item["report"], "sha256": item["sha256"]} for item in modules],
+            "modules": modules,
+        }
+    else:
+        objects = 4096
+        document = {
+            "schema": static_gate.SCHEMA, "kind": kind, "stage": "release", "status": "passed", "code": 0,
+            "executed": True, "skipped": False, "violations": 0, "objects": objects, "config": configs,
+            "tools": [{"name": name, "version": "1.0.0", "status": "passed",
+                       "command": " ".join(static_gate.WEB_COMMANDS[name]), "exit_code": 0}
+                      for name in static_gate.WEB_TOOLS],
+            "reports": [{"kind": "eslint", "path": "coverage/eslint-report.json", "sha256": digest("eslint")}],
+            "workspace": {"files": objects, "errors": 0, "warnings": 0, "fatal": 0,
+                          "unformatted": 0, "stylelint_problems": None},
+        }
+    return json.dumps(document, ensure_ascii=False)
+
+
+def static_document(kind: str) -> dict[str, object]:
+    """取回一份可独立篡改的静态检查段夹具，避免反例互相污染。"""
+    return json.loads(static_template(kind))
+
+
 def coverage_document(kind: str, measured: int = 3) -> dict[str, object]:
     """构造发布阶段覆盖率裁决夹具，结构与 coverage_gate.py 的真实 JSON 输出一致。"""
     document: dict[str, object] = {
@@ -81,6 +131,7 @@ def coverage_document(kind: str, measured: int = 3) -> dict[str, object]:
         "inventory": [{"path": f"src/file{index}.source", "sha256": digest(f"inv{index}")}
                       for index in range(measured)],
         "reports": [{"path": "coverage/report.json", "sha256": digest("report")}],
+        "static_analysis": static_document(kind),
     }
     return document
 
@@ -214,12 +265,14 @@ class TestBrowserE2EWorkflow:
         assert "scripts/e2e/run_business_e2e.py --summary" in section
         assert "ci_services.py start" in section
         assert "playwright install --with-deps chromium" in section
-        # 缺少镜像来源与缺少浏览器都必须失败，不能降级或跳过。
-        assert "BF_CI_IMAGE_MINIO" in section and "未配置 BF_CI_IMAGE_MINIO" in section
+        # 镜像来源必须经核验而不是靠“变量非空”过关：预检调用 ci_services.py images，
+        # 由脚本按 sha256 固定默认值与覆盖值；缺失或未固定时退出 2 红灯。
+        assert "ci_services.py images" in section
         assert "--results" in section
-        # 失败痕迹只在失败时上传，且缺失痕迹不阻断结论本身。
-        upload = step_named("browser_e2e", "上传失败痕迹")
-        assert "if: failure()" in upload and "if-no-files-found: ignore" in upload
+        # 失败痕迹与用例摘要都要在失败时也上传，且缺失制品不改变作业结论本身。
+        upload = step_named("browser_e2e", "上传浏览器用例摘要与失败痕迹")
+        assert "if: always()" in upload and "if-no-files-found: warn" in upload
+        assert "business-e2e.json" in upload and "business-e2e-results" in upload
         stop = step_named("browser_e2e", "停止真实服务")
         assert "if: always()" in stop
 
@@ -463,6 +516,114 @@ class TestReleaseEvidence:
             gate.release_evidence(directory, {"backend": 5, "docs_tools": 7, "frontend": 6}, "f" * 40)
 
 
+class TestReleaseStaticAnalysis:
+    """发布证据必须包含真实静态检查结论：跳过、零对象、违规、范围缩水与旧配置都拒绝。"""
+
+    COUNTS = {"backend": 5, "docs_tools": 7, "frontend": 6}
+
+    def directory(self, tmp_path: Path, kind: str, section: object) -> Path:
+        """把指定静态检查段写入某范围的覆盖率证据，返回发布证据目录。"""
+        # 覆盖率实测文件数必须与作业清单声明的计数一致，否则会因无关原因被拒绝。
+        document = coverage_document(kind, 3 if kind == "backend" else 4)
+        if section is None:
+            document.pop("static_analysis")
+        else:
+            document["static_analysis"] = section
+        overrides = {"backend_coverage": document} if kind == "backend" else {"web_coverage": document}
+        return evidence_directory(tmp_path, **overrides)
+
+    def assert_rejected(self, directory: Path) -> None:
+        """断言该证据目录不能签发发布结论。"""
+        with pytest.raises(ValueError):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    @pytest.mark.parametrize("kind", ["backend", "web"])
+    def test_complete_static_evidence_is_accepted(self, tmp_path: Path, kind: str) -> None:
+        """正例：静态检查段与真实仓库模块、配置一致时参与发布结论。"""
+        summary = gate.release_evidence(self.directory(tmp_path, kind, static_document(kind)), self.COUNTS, REVISION)
+        job = "backend" if kind == "backend" else "frontend"
+        assert summary["jobs"][job]["static"]["objects"] > 0
+        assert summary["jobs"][job]["static"]["tools"]
+
+    @pytest.mark.parametrize("kind", ["backend", "web"])
+    def test_missing_static_section_rejected(self, tmp_path: Path, kind: str) -> None:
+        """反例：没有任何静态检查结论的覆盖率证据不能构成发布证据。"""
+        self.assert_rejected(self.directory(tmp_path, kind, None))
+
+    @pytest.mark.parametrize("kind", ["backend", "web"])
+    @pytest.mark.parametrize("name,mutate", [
+        ("schema", lambda section: section.update(schema="static-analysis/v2")),
+        ("stage", lambda section: section.update(stage="full")),
+        ("kind", lambda section: section.update(kind="other")),
+        ("status", lambda section: section.update(status="failed")),
+        ("code", lambda section: section.update(code=1)),
+        ("executed", lambda section: section.update(executed=False)),
+        ("skipped", lambda section: section.update(skipped=True)),
+        ("objects-zero", lambda section: section.update(objects=0)),
+        ("objects-bool", lambda section: section.update(objects=True)),
+        ("objects-text", lambda section: section.update(objects="4096")),
+        ("violations", lambda section: section.update(violations=1)),
+        ("tools-empty", lambda section: section.update(tools=[])),
+        ("tools-missing", lambda section: section["tools"].pop(0)),
+        ("tools-duplicate", lambda section: section["tools"].append(dict(section["tools"][0]))),
+        ("tools-exit", lambda section: section["tools"][0].update(exit_code=1)),
+        ("tools-status", lambda section: section["tools"][0].update(status="skipped")),
+        ("tools-version", lambda section: section["tools"][0].update(version="")),
+        ("tools-command", lambda section: section["tools"][0].update(command="")),
+        ("config-empty", lambda section: section.update(config=[])),
+        ("config-digest", lambda section: section["config"][0].update(sha256="0" * 64)),
+        ("config-extra", lambda section: section["config"].append({"path": "extra", "sha256": "1" * 64})),
+        ("reports-empty", lambda section: section.update(reports=[])),
+        ("reports-digest", lambda section: section["reports"][0].update(sha256="xyz")),
+    ])
+    def test_tampered_static_section_rejected(self, tmp_path: Path, kind: str, name: str,
+                                              mutate: object) -> None:
+        """反例：跳过、零对象、违规、工具伪造、配置或报告指纹不符都必须拒绝。"""
+        section = static_document(kind)
+        mutate(section)  # type: ignore[operator]
+        self.assert_rejected(self.directory(tmp_path, kind, section))
+
+    @pytest.mark.parametrize("mutate", [
+        lambda section: section["modules"].pop(0),
+        lambda section: section["modules"].append(dict(section["modules"][0], module="后端代码/其它模块")),
+        lambda section: section["modules"][0].update(sources=0),
+        lambda section: section["modules"][0].update(violations=1),
+        lambda section: section.update(objects=int(section["objects"]) + 1),
+        lambda section: section["reports"].pop(0),
+    ])
+    def test_backend_module_scope_must_match_repository(self, tmp_path: Path, mutate: object) -> None:
+        """反例：后端静态检查范围必须覆盖当前全部生产模块，且逐模块结论自洽。"""
+        section = static_document("backend")
+        mutate(section)  # type: ignore[operator]
+        self.assert_rejected(self.directory(tmp_path, "backend", section))
+
+    @pytest.mark.parametrize("mutate", [
+        lambda section: section["workspace"].update(files=int(section["objects"]) - 1),
+        lambda section: section["workspace"].update(errors=1),
+        lambda section: section["workspace"].update(fatal=1),
+        lambda section: section.update(objects=2, workspace={"files": 2, "errors": 0, "warnings": 0, "fatal": 0}),
+    ])
+    def test_web_static_scope_must_cover_production_inventory(self, tmp_path: Path, mutate: object) -> None:
+        """反例：前端静态检查范围不得小于生产源码清单，工作区自述必须自洽。"""
+        section = static_document("web")
+        mutate(section)  # type: ignore[operator]
+        self.assert_rejected(self.directory(tmp_path, "web", section))
+
+    def test_cli_rejects_tampered_static_evidence(self, tmp_path: Path) -> None:
+        """反例：真实 CLI 遇到被改坏的静态段时受控失败，不输出发布结论。"""
+        section = static_document("backend")
+        section["violations"] = 1
+        directory = self.directory(tmp_path, "backend", section)
+        done = subprocess.run(
+            [sys.executable, "-B", "-X", "utf8", str(SCRIPT), "aggregate", "--stage", "release",
+             "--release-evidence", str(directory), "--revision", REVISION],
+            cwd=ROOT, env={"PATH": os.environ.get("PATH", ""), "NEEDS_JSON": json.dumps(release_needs())},
+            capture_output=True, text=True, timeout=120, check=False)
+        assert done.returncode == 1
+        assert done.stdout == ""
+        assert "Traceback" not in done.stderr
+
+
 class TestReports:
     """JUnit 报告必须与声明计数一致，且包含必需的真实集成测试类。"""
 
@@ -601,6 +762,107 @@ class TestWorkflowWiring:
             assert f'name: {spec["evidence"].replace("release-", "release-evidence-").replace(".json", "")}' in gate_section
 
 
+class TestRequiredJobConsistency:
+    """固定必需作业清单与真实编排必须一致：重命名或增删作业不能只改一边。
+
+    汇总门禁按 ci_gate.JOBS 精确比对 needs 集合，多一个或少一个作业都会被拒绝；
+    真实缺陷（云端必需作业全红）说明这类“配置与门禁各说各话”必须先被测试挡住。
+    """
+
+    def declared_jobs(self) -> set[str]:
+        """取回 ci.yml 中 jobs 段声明的全部作业名（不与 on、env 等顶层键混淆）。"""
+        text = WORKFLOW.read_text(encoding="utf-8")
+        assert "\njobs:\n" in text, "工作流必须包含 jobs 段"
+        jobs_text = text.split("\njobs:\n", 1)[1]
+        return set(re.findall(r"^  ([A-Za-z_][\w-]*):\n", jobs_text, re.MULTILINE))
+
+    def gate_needs(self) -> set[str]:
+        """取回汇总作业 needs 列表中的作业名，作为门禁实际比对的集合。"""
+        needs = re.search(r"^    needs:\n((?:      - [\w-]+\n)+)", job_section("gate"), re.MULTILINE)
+        assert needs, "汇总作业必须显式声明 needs"
+        return set(re.findall(r"- ([\w-]+)", needs.group(1)))
+
+    def test_required_jobs_match_workflow_jobs(self) -> None:
+        """工作流只允许声明必需作业与汇总作业，避免出现没人核对结果的多余作业。"""
+        assert self.declared_jobs() == gate.JOBS | {"gate"}
+
+    def test_gate_needs_equals_required_jobs(self) -> None:
+        """汇总作业的 needs 必须与 JOBS 完全相等：少一个就会漏判，多一个会永远失败。"""
+        assert self.gate_needs() == gate.JOBS
+
+    def test_every_required_job_is_really_defined(self) -> None:
+        """JOBS 里每个名字都必须对应真实作业段，防止只改常量造成假门禁。"""
+        for name in sorted(gate.JOBS):
+            assert job_section(name).strip(), f"{name} 没有可核对的作业内容"
+
+
+class TestDependencyAndFailureReportWiring:
+    """核对作业自己安装锁定依赖，并在失败时也上传真实存在的测试摘要。
+
+    历史缺陷（run 37187078778）：docs_tools 未安装 Python 检查依赖而退出 2；
+    frontend 的失败用例写入 runner 临时 JSON 却没上传，云端无法定位真实失败原因。
+    """
+
+    REQUIREMENTS = ROOT / "scripts" / "workflow" / "requirements-ci.txt"
+    INSTALL = "python -m pip install --require-hashes -r scripts/workflow/requirements-ci.txt"
+
+    def locked_packages(self) -> set[str]:
+        """取回锁定文件里的包名，逐个要求固定版本且至少登记一条 sha256 摘要。
+
+        Returns:
+            规范化后的包名集合（小写、下划线转连字符）。
+        Raises:
+            AssertionError: 出现未固定版本、未登记摘要或重复声明的依赖。
+        """
+        packages: dict[str, int] = {}
+        current: str | None = None
+        for raw in self.REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            start = re.match(r"^([A-Za-z0-9_.\-]+)==([^\s\\]+)(.*)$", line)
+            if start:
+                current = start.group(1).lower().replace("_", "-")
+                assert current not in packages, f"依赖重复声明：{current}"
+                packages[current] = 0
+                line = start.group(3)
+            assert current, f"依赖续行没有对应声明：{line}"
+            packages[current] += len(re.findall(r"--hash=sha256:[0-9a-f]{64}", line))
+        assert packages, "锁定依赖文件不能为空"
+        for name, hashes in sorted(packages.items()):
+            assert hashes, f"依赖缺少 sha256 摘要：{name}"
+        return set(packages)
+
+    @pytest.mark.parametrize("name", ["markdown-it-py", "mdurl", "pyyaml"])
+    def test_document_checks_dependencies_are_locked(self, name: str) -> None:
+        """文档检查实际导入的 Markdown 解析器、其依赖与 PyYAML 都必须在锁定文件中。"""
+        assert name in self.locked_packages()
+
+    @pytest.mark.parametrize("job", ["docs_tools", "backend", "browser_e2e"])
+    def test_python_consuming_jobs_install_locked_requirements(self, job: str) -> None:
+        """凡是执行仓库内 Python 检查的作业都要自己安装同一个锁定文件。"""
+        assert self.INSTALL in job_section(job), f"{job} 必须安装锁定依赖"
+
+    def test_document_checks_install_happens_in_the_consuming_job(self) -> None:
+        """反例：依赖只能靠 docs_tools 自己安装，不能假定其他作业装过。"""
+        docs = job_section("docs_tools")
+        install = step_named("docs_tools", "安装固定版本的 CI 工具依赖")
+        assert self.INSTALL in install and "if:" not in install
+        # 文档检查必须在该安装之后的步骤里运行，避免顺序颠倒成“先检查后装依赖”。
+        assert docs.index(self.INSTALL) < docs.index("run_checks.py --group docs")
+
+    @pytest.mark.parametrize("job", ["docs_tools", "frontend", "backend", "browser_e2e"])
+    def test_failure_reports_are_uploaded_always(self, job: str) -> None:
+        """四个必需作业都必须在失败时也上传真实路径上的测试摘要或报告。"""
+        uploads = [part for part in re.split(r"\n      - ", job_section(job))
+                   if "actions/upload-artifact@v4" in part and "if: always()" in part]
+        assert uploads, f"{job} 缺少 if: always() 的失败报告上传"
+        for part in uploads:
+            # 上传位置必须指向本次运行真实写出的 runner 临时文件或 Maven 报告目录。
+            assert "${{ runner.temp }}" in part or "target/surefire-reports" in part, part
+            assert "if-no-files-found: warn" in part, "失败上传不得因缺文件改变作业结论"
+
+
 class TestWorkflowOutputWiring:
     """对全部作业输出做结构性核对，不只核对历史上出过问题的那两处。
 
@@ -670,6 +932,26 @@ class TestWorkflowOutputWiring:
             assert step_id in blocks, f"{job}.outputs.{name} 绑定了不存在的步骤：{step_id}"
             assert self.writes_output(blocks[step_id], name), \
                 f"{job}.outputs.{name} 没有被 steps.{step_id} 真实写入 GITHUB_OUTPUT"
+
+    def test_frontend_release_runs_static_gate_before_coverage_verdict(self) -> None:
+        """发布阶段必须先真实执行前端静态检查，再进入覆盖率裁决。
+
+        覆盖率裁决在最终阶段会复核静态检查证据：缺少这一步时作业会 fail-closed，
+        但失败原因会落在覆盖率步骤上，掩盖真正的接线缺失。这里把顺序固定下来。
+        """
+        section = job_section("frontend")
+        names = re.findall(r"^      - name:\s*(.+?)\s*$", section, re.MULTILINE)
+        static_step = "完整静态检查（发布阶段）"
+        verdict_step = "发布阶段前端覆盖率裁决"
+        assert static_step in names, f"前端作业缺少发布阶段静态检查步骤：{static_step}"
+        assert verdict_step in names, f"前端作业缺少发布阶段覆盖率裁决步骤：{verdict_step}"
+        assert names.index(static_step) < names.index(verdict_step), \
+            "发布阶段静态检查必须排在覆盖率裁决之前，否则裁决读不到本次证据"
+        static_block = section.split(f"- name: {static_step}", 1)[1].split("\n      - ", 1)[0]
+        assert "static_gate.py --kind web --execute" in static_block, \
+            "发布阶段静态检查步骤必须真实执行 static_gate.py --kind web --execute"
+        assert "inputs.stage == 'release'" in static_block, \
+            "发布阶段静态检查步骤必须限定在 release 阶段执行"
 
 
 class TestCommandLine:

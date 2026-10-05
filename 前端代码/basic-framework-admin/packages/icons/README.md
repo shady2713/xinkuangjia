@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/icons 的项目图标入口，供前端页面复用图标组件时查阅。"
+description: '说明 @vben/icons 的项目图标入口，供前端页面复用图标组件时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的图标文件，继承了 `@vben-core/icons` 的所有能力。业务上有通用图标可以放在这里。
-
 
 ## 目录
 

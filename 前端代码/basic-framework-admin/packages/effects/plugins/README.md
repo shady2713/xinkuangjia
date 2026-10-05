@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/plugins 的第三方库子路径，供应用按需接入图表、表格和动效时查阅。"
+description: '说明 @vben/plugins 的第三方库子路径，供应用按需接入图表、表格和动效时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 该目录用于存放项目中集成的第三方库及其相关插件。每个插件都包含了可重用的逻辑、配置和组件，方便在项目中进行统一管理和调用。
-
 
 ## 目录
 
