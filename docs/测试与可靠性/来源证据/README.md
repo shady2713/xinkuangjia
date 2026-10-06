@@ -38,6 +38,7 @@ kind: package-reference
 - 重复列名：账本表头仍有 11 个重名（D10 列与 D10b 更新列同名）。派生取**末列**（D10b 更新值），并把选定记录上“首列与末列取值不同”的条数登记在 `manifest.duplicate_column_mismatches`（实测：`author_status` 12、`evidence_points`／`evidence_route`／`local_sha256_after` 各 17、`open_gap`／`review_by` 各 61、`review_conclusion` 65）。该差异必须如实登记，不能表述成“两侧一致”。
 - 逐类型证据：账本有 12 条记录没有 `type_evidence`（11 条 A1 恢复署名 + 1 条改判），索引沿用 D10b 构建的同路径逐类型证据，登记在 `manifest.synthesized_type_evidence`。
 - 本索引的中立指纹：见 `manifest.records_sha256`（逐条记录规范化 JSON 的 SHA-256）。
+- **本索引文件的当前整文件 SHA-256：`5b96faac4867543c1d54d2bc0f44096f59242667171185928d91a90531308c62`**（`records` = 186）。本值与检查器各入口实际报告的 `evidence.registry_sha256` 一致（2026-10-06 复算轮实测：`--validate-evidence-branches` 退出 0／`checked 16`／`findings 0`；`check_full_java_comments.py --maintenance` 退出 0／`checked 904`／`hard_failures 0`）。本轮改动前为 `282735c352a312f4fb22b3cad3f823e3ab6c531fef90287c89fe77e6e98b9b82`——该值是本仓库文档中若干历史运行记录（如 D12/D14 复算更正、本机 `run_checks` 探针、云端 run）当时**实际读到**的指纹，记录本身依然为真；本轮只因 `manifest` 补记工具指纹轨迹与 `ledger_replay` 范围声明（均不改动 `records`）而使整文件指纹变化，`manifest.records_sha256` 保持 `2a23d7ff…` 不变。
 
 ## 八个证据字段组
 
@@ -129,6 +130,18 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 `ledger_replay` 记录的实测事实：账本是**混合快照**——`ledger_local_sha_matches_worktree` 12 条已更新到最终态、`ledger_local_sha_matches_revision` 169 条仍是 `daf4d23^`（D13 路径续行前）的字节、两者都不是 0 条，186 条全部与工作树不一致（`ledger_local_sha_compared = 186`、`ledger_local_sha_matches_neither = 0`）；索引一律按工作树重绑，因此与账本在 `d12_verdict` 上差 81 条、在 `local_sha256_after` 上差 174 条、在 `type_evidence` 上差 186 条（其中 12 条账本为空）。索引**不**声称与账本逐字节同一快照；差异字段、重放输入与命令都如实登记。
 
+> **范围声明（不要把 `differing_fields` 读成“只有 3 个字段不同”）**：上面这段只登记了 `d12_verdict`、`local_sha256_after`、`type_evidence` 三个**重点**比较字段，它们是 `manifest.ledger_replay` 的 `differing_fields`，不是账本与索引之间的全部差异字段。独立**全字段重放**（62 个字段全覆盖，行键 `local_path`，重名列取末列，标量按字符串比对、`type_evidence` 按 JSON 语义叶子比对；只比较账本与索引共有的 186 条）实测：**共 18 个字段存在差异，其余 44 个字段完全一致**。除上述 3 个外，另 15 个差异字段已登记在 `manifest.ledger_replay.additional_differing_fields`（只放字段名与差异条数，无任何新证据判断）：
+>
+> | 字段 | 差异条数 | 字段 | 差异条数 | 字段 | 差异条数 |
+> | --- | --- | --- | --- | --- | --- |
+> | `local_bytes_after` | 185 | `local_bytes_final` | 174 | `d12_correspondence_points` | 169 |
+> | `evidence_points` | 168 | `open_gap` | 125 | `d12_blocker_reason` | 107 |
+> | `b1_review` | 98 | `independent_review` | 98 | `local_modification_facts` | 98 |
+> | `review_conclusion` | 98 | `author_only_contract` | 12 | `counter_evidence_conclusion` | 1 |
+> | `evidence_branch` | 1 | `evidence_route` | 1 | `review_by` | 1 |
+>
+> 两表合计 18 个即全部差异字段。其中差异**仅 1 条**的 `counter_evidence_conclusion`、`evidence_branch`、`evidence_route`、`review_by` 四个字段**全部落在 `ApiEncrypt.java` 这一条记录上**（账本侧 `evidence_branch`/`counter_evidence_conclusion` 为空、`evidence_route` 为“路线 3”、`review_by` 为 D10b 会话署名；索引侧为 `E1-author-only`、“路线 2”与 d15ev/d10review2 署名）——方向与 `manifest.d15ev_execution.verdict_change` 登记的“`ApiEncrypt` 改判为 accepted 并落 `evidence_branch = E1-author-only`”一致，**索引是较新的一侧**；如实登记该差异，不对其作任何改判。`author_only_contract` 的 12 条中，11 条是 11 条 A1 记录的 `author_only_contract.tool.sha256` 单叶子差异，第 12 条是 `ApiEncrypt.java` 账本该字段为空。重放方法与读数登记在 `manifest.ledger_replay.full_field_replay`，`type_evidence` 的逐路径叶子构成见同节 `differing_type_evidence_fields`（本轮实测与之逐项一致）。
+
 ## 证据分支契约
 
 `evidence_branch` 是按记录显式声明的版本化启用开关：未声明分支的记录沿用原有充分路线的结构校验，本规则不改判任何已有条目；一旦声明分支，就必须满足该分支的全部必需字段与判据，否则对应来源例外被拒绝。机械校验与语义复核分工明确：机器只确认结构与可判定的不合格形状，有区分力的对应与身份贡献仍以记录中绑定的逐项复核结论为准。
@@ -154,7 +167,7 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 ### 工具指纹重绑与结构点重定位（n1fix 轮）
 
-- **工具指纹重绑**：证据分支契约的 `tool.sha256` 必须等于当前规则实现指纹；N1 修法改动了同一实现文件，因此 11 条 A1 记录的 `author_only_contract.tool.sha256` 按同一口径机械重绑 `1a06a625…`（D10close）→ `2839dddd…`（n1fix），`manifest.records_sha256` 随之重算。A1 比较实现（`_comment_body_line`、`_exclusion_reason`、`_a1_normalize`、`_a1_raw_changed_lines`、`_a1_compare`、`_a1_baseline_bytes`、`_author_only_contract_reasons`）的逐函数 SHA-256 未变，登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind`。**冻结账本分歧**：声明账本 `registry-d12b.tsv`（SHA-256 `986b40a0…`）仍保留 `1a06a625…`，从该账本完整重放会在这一个嵌套字段上产生旧值；`ledger_replay` 的比较字段不含 `author_only_contract`，其余重放关系不变。
+- **工具指纹重绑**：证据分支契约的 `tool.sha256` 必须等于当前规则实现指纹；每轮规则实现改动都会改动同一文件 `scripts/code/java/check_staged_java_comments.py`，因此 11 条 A1 记录的 `author_only_contract.tool.sha256` 按同一口径机械重绑，**当前实测值为 `b396db67…`**，完整重绑轨迹为 `1a06a625…`（D10close 基线）→ `2839dddd…`（n1fix：N1 分支↔路线归属修法）→ `5fbbf43d…`（同一实现文件被并行会话继续修改）→ `dffc690f…`（d10review2：D14 §132 来源说明验收状态 + §112 内容点绑定判据落地）→ `b396db67…`（d15impl：裁决 D15 落地），逐步明细登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind_history`，汇总值与轨迹说明在同节 `tool_sha_rebind.after` / `after_trace`。`manifest.records_sha256` 随之重算。A1 比较实现（`_comment_body_line`、`_exclusion_reason`、`_a1_normalize`、`_a1_raw_changed_lines`、`_a1_compare`、`_a1_baseline_bytes`、`_author_only_contract_reasons`）的逐函数 SHA-256 未变，登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind`。**冻结账本分歧**：声明账本 `registry-d12b.tsv`（SHA-256 `986b40a0…`）仍保留重绑前的 `1a06a625…`，从该账本完整重放会在这一个嵌套字段上产生旧值；`ledger_replay` 的比较字段不含 `author_only_contract`，其余重放关系不变，该差异已按上节范围声明登记在 `additional_differing_fields`（12 条）。
 - **结构点行号重定位**：上一轮 155 个无 `fragment` 的结构/说明点中有 6 个未定位。n1fix 轮逐点重定位——按记录 `size` 枚举双方 R5 归一化序列里长度恰为 `size` 的完全相同窗口，并用记录 `head` 锚定起点（容忍账本端定长截断）；注释剥离按 Java 词法识别字符串/字符字面量，`FileController.java` 第 11 点上一轮未命中即来自把 `@GetMapping("/…/**")` 里的 `/**` 误当块注释起点。结果见 `manifest.structural_point_localization`：155 点中 **144 定位 + 11 条作者声明说明点，0 个不可定位**，逐点行号在同节 `items[]`。
 
 ## 复核与重生成

@@ -4600,6 +4600,38 @@
     "local_sha256_after": 174,
     "type_evidence": 186
    },
+    "scope_declaration": "范围声明：本节 differing_fields / identical_fields 登记的是被重点比较并复算的字段，不是账本与索引之间的全部差异字段。独立全字段重放实测共 18 个字段存在差异、其余 44 个字段完全一致；本节只登记其中 3 个重点差异字段，其余 15 个见 additional_differing_fields，两表合计即全部差异字段。不得把本节读成“只有 differing_fields 这 3 个字段不同”。本节不含任何新证据判断：重放只登记字段名与差异条数，未因此改判任何记录、未改动任何记录的证据内容。",
+    "additional_differing_fields": {
+     "local_bytes_after": 185,
+     "local_bytes_final": 174,
+     "d12_correspondence_points": 169,
+     "evidence_points": 168,
+     "open_gap": 125,
+     "d12_blocker_reason": 107,
+     "b1_review": 98,
+     "independent_review": 98,
+     "local_modification_facts": 98,
+     "review_conclusion": 98,
+     "author_only_contract": 12,
+     "counter_evidence_conclusion": 1,
+     "evidence_branch": 1,
+     "evidence_route": 1,
+     "review_by": 1
+    },
+    "additional_differing_fields_note": "上表 15 个字段与本节 differing_fields 的 3 个字段合计 18 个，即全字段重放实测的全部差异字段；每个数字是存在差异的记录条数（比较记录共 186 条）。其中差异仅 1 条的 counter_evidence_conclusion、evidence_branch、evidence_route、review_by 四个字段全部落在 ApiEncrypt.java 这一条记录上：账本侧 evidence_branch 与 counter_evidence_conclusion 为空、evidence_route 为“路线 3”、review_by 为 D10b 会话署名；索引侧为“E1-author-only”、“路线 2”与 d15ev/d10review2 署名。该方向与 manifest.d15ev_execution.verdict_change 登记的“ApiEncrypt 改判为 accepted 并落 evidence_branch = E1-author-only”一致，即索引是较新的一侧；本轮如实登记该差异，不对其作任何改判。author_only_contract 的 12 条中，11 条是 11 条 A1 记录的 author_only_contract.tool.sha256 单叶子差异（账本冻结在重绑前的 1a06a625…，索引为当前实测 b396db67…），第 12 条是 ApiEncrypt.java 账本该字段为空，与 manifest.branch_route_ownership_fix.tool_sha_rebind.frozen_ledger_divergence 登记一致。type_evidence 的逐路径叶子差异已单独登记在同节 differing_type_evidence_fields，本轮实测与之逐项一致。",
+    "full_field_replay": {
+     "executed_date": "2026-10-06",
+     "method": "独立全字段重放（只读）：账本按制表符分隔、内嵌双引号以两个连续双引号转义的 CSV 风格反转义后读取；同名重复列取末列（见 manifest.duplicate_columns_resolution）；行键 local_path，只比较账本与索引共有的 186 条记录（账本另有 811 行不在索引授权范围内）；标量字段按字符串逐条比对；type_evidence 两侧均按 JSON 解析后做逐路径叶子比对。两侧字段集合完全一致，无“账本无此字段”或“索引无此字段”。type_evidence 的叶子构成见同节 differing_type_evidence_fields，不在此重复登记。",
+     "compared_fields": 62,
+     "differing_field_count": 18,
+     "identical_field_count": 44,
+     "records_compared": 186,
+     "ledger_records_total": 997,
+     "ledger_only_records": 811,
+     "index_only_records": 0,
+     "fields_missing_from_ledger": [],
+     "fields_missing_from_index": []
+    },
    "identical_fields": {
     "author_status": 186,
     "d12_verdict": 105,
@@ -4767,7 +4799,8 @@
     "records": 11,
     "field": "author_only_contract.tool.sha256",
     "before": "1a06a625130687a250e2b0a1cfe4c51b54e9abbaa3737fa16f0392c453199649",
-    "after": "dffc690ffb03d6c5c5aeae6a1265fd1e57d23939148204d26f8140bc27aaa40e",
+    "after": "b396db679bee04ceb6d42e9b0bead917b854389b8b75e4148294b7a6cf22b487",
+    "after_trace": "本值为 2026-10-06 对 scripts/code/java/check_staged_java_comments.py 实测的整文件 SHA-256，并与 11 条 A1 记录 author_only_contract.tool.sha256 的实测取值逐条一致。重绑轨迹：1a06a625…（D10close 基线）→ 2839dddd…（n1fix：N1 分支↔路线归属修法）→ 5fbbf43d…（同一实现文件被并行会话继续修改）→ dffc690f…（d10review2：D14 §132 来源说明验收状态 + §112 内容点绑定判据落地）→ b396db67…（d15impl：裁决 D15 落地），逐步明细见同节 tool_sha_rebind_history。本字段此前停留在 dffc690f…，而同节 history 末条与 11 条记录的实测取值已是 b396db67…，属汇总字段未随重绑同步的过期登记；本轮按实测值改正并补记轨迹，未改写任何历史步骤。",
     "reason": "README 证据分支契约要求 tool.sha256 等于当前规则实现指纹；N1 修法改动同一文件，整文件指纹随之变化，故按同一口径机械重绑。",
     "a1_comparison_implementation_unchanged": true,
     "a1_comparison_functions": [
