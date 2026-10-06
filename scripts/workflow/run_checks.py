@@ -42,6 +42,61 @@ CHECK_STATUS_MAINTENANCE = "completed-with-registered-blockers"
 ACCEPTANCE_MODE_ENV = "JAVA_COMMENT_ACCEPTANCE_MODE"
 ACCEPTANCE_MODE_MAINTENANCE = "maintenance"
 
+# Java 注释规则实现对“固定地址取回失败”写出的固定前缀（网络不可达、HTTP 错误、
+# 超时）。这是**环境故障**：证据没取回来既不是内容不符，也不是已验收，与逐项清单
+# 对撞得到的“已验收记录不能出现在阻断/硬失败清单”会误导整改方向。本消费者按同一
+# 前缀识别它，并把结论表达为受控的环境失败；内容不符、判词冲突等真实不一致仍照旧拒绝。
+# 前缀与规则实现的一致性由 scripts/tests/test_upstream_evidence_unavailable.py 断言。
+UPSTREAM_UNAVAILABLE_PREFIX = "无法从固定地址取回上游内容"
+UPSTREAM_UNAVAILABLE_PATTERN = re.compile(
+    re.escape(UPSTREAM_UNAVAILABLE_PREFIX) + r"\s+(?P<url>\S+?)（(?P<detail>.*?)）"
+)
+
+
+def upstream_unavailable(text: object) -> tuple[str, str] | None:
+    """判断一段诊断文本是否只说明“上游内容取不回”，并取出地址与真实故障。
+
+    Args:
+        text: 子检查写出的单条拒绝原因或整段诊断文本。
+
+    Returns:
+        ``(固定地址, 故障说明)``；不是取不回时返回 ``None``。
+    """
+
+    if not isinstance(text, str):
+        return None
+    match = UPSTREAM_UNAVAILABLE_PATTERN.search(text)
+    if match is None:
+        return None
+    return match.group("url"), match.group("detail").strip()
+
+
+def unavailable_reason(path: str, unavailable: tuple[str, str]) -> str:
+    """返回可直接定位的“证据不可得”诊断，说明该条本次没有被按内容复核。"""
+
+    url, detail = unavailable
+    return (
+        f"证据不可得：上游内容取不回：{url}：{detail}；{path} 本次未能复核上游内容，"
+        "不能据此判为内容不符，也不能按已验收对撞"
+    )
+
+
+def declared_evidence_error(source: bytes) -> str:
+    """读取子检查自报的“证据不可得”文本；没有或不是 v2 报告时返回空串。
+
+    该字段是检查器对“证据没取回来”的显式声明，与内容失败、协议错误分开；调度器
+    据此给出可定位的环境失败原因，而不是笼统的“未完成”。
+    """
+
+    try:
+        value = json.loads(source.decode("utf-8"))
+    except (ValueError, UnicodeError):
+        return ""
+    if not isinstance(value, dict):
+        return ""
+    declared = value.get("evidence_error")
+    return declared.strip() if isinstance(declared, str) else ""
+
 
 def _acceptance_module():
     """按需取回 Java 注释检查器的版本化协议常量与索引加载实现。"""
@@ -94,6 +149,8 @@ class Outcome:
     blockers: tuple[dict[str, object], ...] = ()
     acceptance: dict[str, object] | None = None
     acceptance_mode: str = ""
+    # 子检查自报的“证据不可得”文本；非空表示环境故障，不是内容或数据不一致。
+    evidence_error: str = ""
 
 
 
@@ -337,20 +394,7 @@ def _verify_acceptance_ledger(
     """
 
     module = _acceptance_module()
-    if not isinstance(registry_info, dict):
-        raise CheckError("来源验收报告缺少账本指纹")
-    path_text = str(registry_info.get("registry", "")).strip()
-    digest_text = str(registry_info.get("registry_sha256", "")).strip().lower()
-    if not path_text or not re.fullmatch(r"[0-9a-f]{64}", digest_text):
-        raise CheckError("来源验收报告缺少可核对的账本路径或 SHA-256")
-    index = Path(path_text)
-    if not index.is_file():
-        raise CheckError(f"来源验收报告声明的索引不存在：{index}")
-    if hashlib.sha256(index.read_bytes()).hexdigest() != digest_text:
-        raise CheckError("来源验收报告声明的索引指纹与当前账本不一致")
-    registry = module.load_evidence_registry(index, None)
-    if registry is None or not registry.requires_acceptance_state:
-        raise CheckError("来源验收报告声明的索引未启用验收状态")
+    registry = _load_report_registry(root, registry_info)
     accepted_verdicts = (
         *module.SOURCE_NOTE_ACCEPTED_VERDICTS,
         *module.AUTHOR_TAG_ACCEPTED_VERDICTS,
@@ -365,7 +409,30 @@ def _verify_acceptance_ledger(
             raise CheckError(f"逐项验收状态指向索引中不存在的对象：{path}")
         verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
         if verdict in accepted_verdicts:
-            raise CheckError(f"已验收记录不能出现在阻断/硬失败清单：{path}")
+            # 先分清“证据没取回来”与“内容确实不对”：上游取不回属于环境故障，
+            # 按内容不符报“已验收却进清单”会把整改指向错误方向，且会掩盖真实故障。
+            unavailable = next(
+                (
+                    found
+                    for reason in item.get("reasons") or ()
+                    if (found := upstream_unavailable(reason)) is not None
+                ),
+                None,
+            )
+            if unavailable is not None:
+                raise CheckError(unavailable_reason(path, unavailable))
+            content = next(
+                (
+                    str(reason).strip()
+                    for reason in item.get("reasons") or ()
+                    if str(reason).strip() and upstream_unavailable(reason) is None
+                ),
+                "",
+            )
+            raise CheckError(
+                f"已验收记录不能出现在阻断/硬失败清单：{path}"
+                + (f"（逐项原因：{content[:160]}）" if content else "")
+            )
         if str(item.get("verdict") or "") != verdict:
             raise CheckError(f"逐项判词与当前索引不一致：{path}")
         if not str(item.get("blocker_reason") or "").strip():
@@ -405,6 +472,99 @@ def _verify_acceptance_ledger(
         "not_accepted": len(expected),
         "covered": len(seen),
     }
+
+
+def _load_report_registry(root: Path, registry_info: object):
+    """按报告声明的账本路径与指纹加载受控索引，供逐项复算使用。
+
+    Args:
+        root: 被检查仓库根目录。
+        registry_info: 报告 ``evidence`` 段声明的账本信息。
+
+    Returns:
+        已加载的受控索引对象。
+
+    Raises:
+        CheckError: 声明缺失、路径不可读或指纹与当前账本不一致。
+    """
+
+    module = _acceptance_module()
+    if not isinstance(registry_info, dict):
+        raise CheckError("来源验收报告缺少账本指纹")
+    path_text = str(registry_info.get("registry", "")).strip()
+    digest_text = str(registry_info.get("registry_sha256", "")).strip().lower()
+    if not path_text or not re.fullmatch(r"[0-9a-f]{64}", digest_text):
+        raise CheckError("来源验收报告缺少可核对的账本路径或 SHA-256")
+    index = Path(path_text)
+    if not index.is_file():
+        raise CheckError(f"来源验收报告声明的索引不存在：{index}")
+    if hashlib.sha256(index.read_bytes()).hexdigest() != digest_text:
+        raise CheckError("来源验收报告声明的索引指纹与当前账本不一致")
+    registry = module.load_evidence_registry(index, None)
+    if registry is None or not registry.requires_acceptance_state:
+        raise CheckError("来源验收报告声明的索引未启用验收状态")
+    return registry
+
+
+def _verify_unavailable_records(
+    root: Path,
+    registry_info: object,
+    unavailable: list[object],
+    blockers: list[object],
+    hard: list[object],
+    accepted: list[object],
+    scope: object,
+) -> None:
+    """复核声明为“证据不可得”的记录本身真实存在且绑定成立。
+
+    子检查把取不回上游内容的记录移出逐项清单是受控失败的一部分，不是绕过复核的手段：
+    每条都必须能在受控索引里找到、判词与索引一致、本地最终指纹与当前文件一致、在
+    本次扫描范围内，并且不得同时出现在已验收、已登记阻断或硬失败清单里。
+
+    Raises:
+        CheckError: 任一条件不成立。
+    """
+
+    module = _acceptance_module()
+    registry = _load_report_registry(root, registry_info)
+    scope_files: set[str] | None = None
+    if isinstance(scope, dict) and isinstance(scope.get("files"), list):
+        scope_files = {str(item) for item in scope["files"]}
+    declared = {
+        str(item.get("path", ""))
+        for item in (*blockers, *hard, *accepted)
+        if isinstance(item, dict)
+    }
+    seen: set[str] = set()
+    for item in unavailable:
+        if not isinstance(item, dict):
+            raise CheckError("证据不可得条目必须是结构化对象")
+        path = str(item.get("path", ""))
+        if path in declared or path in seen:
+            raise CheckError(f"同一记录不能同时出现在证据不可得与逐项清单：{path}")
+        record = registry.records.get(path)
+        if record is None:
+            raise CheckError(f"证据不可得条目指向索引中不存在的对象：{path}")
+        verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+        if str(item.get("verdict") or "").strip() != verdict:
+            raise CheckError(f"证据不可得条目的判词与当前索引不一致：{path}")
+        source = root / path
+        if not source.is_file():
+            raise CheckError(f"证据不可得条目指向的对象不存在：{path}")
+        recorded = str(item.get("local_sha256") or "").lower()
+        if hashlib.sha256(source.read_bytes()).hexdigest() != recorded:
+            raise CheckError(f"证据不可得条目的最终对象指纹与当前文件不符：{path}")
+        if scope_files is not None and path not in scope_files:
+            raise CheckError(f"证据不可得条目超出本次声明的扫描范围：{path}")
+        entries = item.get("unavailable")
+        if not isinstance(entries, list) or not entries:
+            raise CheckError(f"证据不可得条目缺少取回失败的固定地址与原因：{path}")
+        for entry in entries:
+            if not isinstance(entry, dict) or not str(entry.get("url", "")).strip():
+                raise CheckError(f"证据不可得条目缺少取回失败的固定地址：{path}")
+            if not str(entry.get("reason", "")).strip():
+                raise CheckError(f"证据不可得条目缺少取回失败的真实原因：{path}")
+        seen.add(path)
 
 
 def verify_acceptance_report(
@@ -469,10 +629,37 @@ def verify_acceptance_report(
         "findings": len(findings),
         "uncovered_records": len(uncovered),
     }
+    declared_unavailable = counts.get("evidence_unavailable")
+    if declared_unavailable is not None:
+        expected_counts["evidence_unavailable"] = declared_unavailable
     if counts != expected_counts:
         raise CheckError("v2 报告的逐项计数与清单长度不一致")
     if uncovered:
         raise CheckError("v2 报告存在未覆盖的索引记录，范围漏项不能按空集合降级")
+    # 证据不可得（上游内容取不回）是环境失败：逐项清单按声明就是不完备的，因此
+    # 不能拿它去做“已验收却进清单”的对撞，也不能据此签发通过；改为按受控失败
+    # 结束，并先核对被移出逐项清单的记录确实真实存在且绑定成立。
+    unavailable = acceptance.get("evidence_unavailable", [])
+    if not isinstance(unavailable, list):
+        raise CheckError("v2 报告的 evidence_unavailable 必须是数组")
+    if declared_unavailable is not None and declared_unavailable != len(unavailable):
+        raise CheckError("v2 报告的证据不可得计数与清单长度不一致")
+    evidence_error = value.get("evidence_error")
+    if evidence_error not in (None, ""):
+        if not isinstance(evidence_error, str) or not unavailable:
+            raise CheckError("v2 报告声明了证据不可得却没有逐项清单")
+        _verify_unavailable_records(
+            root if root is not None else Path.cwd(),
+            value.get("evidence"),
+            unavailable,
+            blockers,
+            hard,
+            accepted,
+            acceptance.get("scope"),
+        )
+        raise CheckError(
+            f"证据不可得：{evidence_error}；本次不能按内容不符或已验收对撞复核这些记录"
+        )
     status = acceptance_status(checked, findings, blockers)
     if value.get("status") != status:
         raise CheckError("v2 报告的声明状态与计数不一致")
@@ -614,6 +801,7 @@ def execute(
     acceptance_summary: dict[str, object] | None = None
     reason = ""
     process_code = None
+    evidence_error = ""
     try:
         result = run_process(
             arguments,
@@ -646,6 +834,12 @@ def execute(
                 status, reason = "environment-error", "子检查报告零对象，但独立范围清单仍存在适用对象"
         else:
             status, reason = "environment-error", "子检查未完成，保留实际非规则退出码"
+            declared = declared_evidence_error(result.stdout)
+            if declared and gate.acceptance:
+                # 子检查自报“证据不可得”（上游内容取不回）：按环境故障表达真实原因，
+                # 不能降级成内容失败，也不能因为退出码非 0/1 就丢掉可定位的诊断。
+                evidence_error = declared
+                reason = f"证据不可得：{declared}"
         if acceptance_report is not None and gate.acceptance_report:
             if not acceptance_report.is_file():
                 status, reason = (
@@ -676,6 +870,7 @@ def execute(
         blockers=blockers,
         acceptance=acceptance_summary,
         acceptance_mode=str((acceptance_summary or {}).get("mode", "")),
+        evidence_error=evidence_error,
     )
 
 
@@ -823,6 +1018,14 @@ def run_with_evidence(
     consistent = before is not None and after is not None and before == after
     if not consistent and not evidence_error:
         evidence_error = "inputs-changed-during-checks"
+    unavailable = [
+        f"{result.name}:{result.evidence_error}"
+        for result in outcomes
+        if result.evidence_error
+    ]
+    if unavailable and not evidence_error:
+        # 子检查自报“证据不可得”时，汇总层同样按证据无效表达，而不是内容失败。
+        evidence_error = ";".join(unavailable)
     code = combined_code(outcomes) if consistent else 2
     registered = [
         blocker
