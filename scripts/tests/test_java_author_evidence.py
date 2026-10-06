@@ -1183,7 +1183,7 @@ def test_repository_source_index_covers_applied_objects() -> None:
     # D10close 轮在同一 v3 账本内追加 6 列（evidence_branch、author_only_contract、content_points、
     # independence_reason、counter_evidence_conclusion、b1_review），账本指纹随之更新。
     assert manifest["source_ledger_sha256"] == (
-        "48df04e3becc1d6fee6ba074587c5f18fa2955ba58b8f377eda21d43d81a465f"
+        "986b40a03f5d8d26c7d1977f5e659e24d22a928a44bbb29f9c18715892afd94e"
     )
     assert manifest["source_ledger_records"] == 997
     assert manifest["source_ledger_columns"] == 73
