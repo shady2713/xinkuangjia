@@ -23,6 +23,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 上游文件续：iocoder/yudao/framework/apilog/config/YudaoApiLogAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 1 行，移除或改写上游 1 行；import 新增 1 行、移除 1 行；补充注释 7 行。
+ * 来源验收：尚未验收
  */
 @AutoConfiguration(after = BasicFrameworkWebAutoConfiguration.class)
 public class BasicFrameworkApiLogAutoConfiguration implements WebMvcConfigurer {

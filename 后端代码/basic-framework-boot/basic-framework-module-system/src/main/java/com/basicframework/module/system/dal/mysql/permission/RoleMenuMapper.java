@@ -12,6 +12,7 @@ import java.util.List;
  * RoleMenuMapper 数据访问接口，负责持久化查询与写入。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Mapper
 public interface RoleMenuMapper extends BaseMapperX<RoleMenuDO> {

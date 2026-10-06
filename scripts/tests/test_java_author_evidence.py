@@ -1226,14 +1226,15 @@ def test_repository_source_index_covers_applied_objects() -> None:
     assert len(records) == 186 and manifest["selected_records"] == 186
     counted = collections.Counter(record["d12_verdict"] for record in records)
     assert manifest["selected_by_verdict"] == dict(sorted(counted.items()))
-    # D14 §132 逐项复核落地后的判词分布：17 条 accepted、58 条复核回退、23 条需补证、
-    # 77 条证据不足阻断、11 条 A1。前序「92 + 6 accepted」口径未被独立复核追认。
+    # D14 §132 逐项复核落地后的判词分布，再加上 D15 §107 对 114 条逐项核实其他充分路线后的
+    # 1 条改判：18 条 accepted、58 条复核回退、22 条需补证、77 条证据不足阻断、11 条 A1。
+    # 前序「92 + 6 accepted」口径未被独立复核追认。
     assert dict(sorted(counted.items())) == {
         "A1（E1-author-only）成立，恢复上游证据支持的作者": 11,
         "复核回退，保持来源说明并登记阻断（尚未验收）": 58,
-        "已按 D12 格式写入来源说明并撤回无依据署名": 17,
+        "已按 D12 格式写入来源说明并撤回无依据署名": 18,
         "证据不足，保持原状并登记阻断": 77,
-        "需补证，尚未验收": 23,
+        "需补证，尚未验收": 22,
     }
     canonical = json.dumps(records, ensure_ascii=False, sort_keys=True).encode("utf-8")
     assert hashlib.sha256(canonical).hexdigest() == manifest["records_sha256"]
@@ -1257,7 +1258,7 @@ def test_repository_source_index_covers_applied_objects() -> None:
         for record in records
         if record["d12_verdict"] == "已按 D12 格式写入来源说明并撤回无依据署名"
     ]
-    assert len(applied) == 17
+    assert len(applied) == 18
     for record in records:
         assert set(java.EVIDENCE_REQUIRED_FIELDS) <= set(record), record.get("local_path")
         evidence = json.loads(record["type_evidence"])
@@ -1300,9 +1301,10 @@ def test_repository_source_index_covers_applied_objects() -> None:
     for record in applied:
         source = DEFAULT_ROOT / record["local_path"]
         assert hashlib.sha256(source.read_bytes()).hexdigest() == record["local_sha256_after"]
-    # D14：11 条 A1 记录必须带完整的 E1-author-only 版本化契约，且契约自述的剩余内容一致成立。
+    # D14：11 条 A1 记录必须带完整的 E1-author-only 版本化契约，且契约自述的剩余内容一致成立；
+    # D15 §107 改判的 ApiEncrypt 同样声明该分支，故为 12 条。
     author_only = [record for record in records if record.get("evidence_branch") == "E1-author-only"]
-    assert len(author_only) == 11
+    assert len(author_only) == 12
     for record in author_only:
         contract = json.loads(record["author_only_contract"])
         assert contract["schema"] == "d10-author-only/v1"
@@ -1328,7 +1330,7 @@ def test_repository_source_index_covers_applied_objects() -> None:
             assert point["point_kind"] in java.CONTENT_POINT_KINDS
             assert point["local_lines"] and point["upstream_lines"]
             assert hashlib.sha256(point["fragment"].encode("utf-8")).hexdigest() == point["fragment_sha256"]
-    # 分支入口必须对已声明分支的记录真实复算：11 条 A1 + 4 条 C2。
+    # 分支入口必须对已声明分支的记录真实复算：12 条 A1（含 D15 §107 改判）+ 4 条 C2。
     completed = subprocess.run(
         [
             sys.executable,
@@ -1344,7 +1346,7 @@ def test_repository_source_index_covers_applied_objects() -> None:
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     branch_report = json.loads(completed.stdout)
-    assert branch_report["checked"] == 15 and branch_report["findings"] == []
+    assert branch_report["checked"] == 16 and branch_report["findings"] == []
 
 
 RECORD_VO_PATH = JAVA_PATH.replace("EvidenceDemo.java", "EvidenceVO.java")
@@ -2553,14 +2555,16 @@ def test_repository_manifest_declares_ledger_replay_relation() -> None:
     assert replay["declared_ledger_sha256"] == manifest["source_ledger_sha256"]
     assert replay["declared_ledger_records"] == 997
     assert replay["ledger_local_sha_compared"] == len(document["records"])
-    # 账本每条指纹必须等于当前工作树、整改前 daf4d23^ 或本轮回退前工作树三者之一，
-    # 不允许第四种来源；d14_review_round 已登记第三者为 Q3 改写前的合法比较输入。
+    # 账本每条指纹必须等于当前工作树、整改前 daf4d23^、本轮回退前工作树或标注回填前
+    # 工作树四者之一，不允许第五种来源；d14_review_round 已登记第三者为 Q3 改写前的
+    # 合法比较输入，manifest.marker_backfill.prerebind_sha256 登记第四者的逐文件指纹。
     assert replay["ledger_local_sha_matches_neither"] == 0
     assert replay["d14_review_round"]
     assert (
         replay["ledger_local_sha_matches_worktree"]
         + sum(replay["ledger_local_sha_matches_revision"].values())
         + replay["ledger_local_sha_matches_d14_prerebind"]
+        + replay["ledger_local_sha_matches_marker_backfill_prerebind"]
         >= len(document["records"])
     )
     # 索引按工作树重绑、账本是混合快照：差异必须如实登记，不得声称逐字节一致。

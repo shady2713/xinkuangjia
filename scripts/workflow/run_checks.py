@@ -1,5 +1,10 @@
 """统一调度仓库质量检查，保留依赖顺序、并发上限和真实失败状态。
 
+消费 Java 注释检查的 ``quality-check/v2`` 计数协议：硬失败诊断、已验收对象与已登记
+阻断分列统计，维护完成态使用 ``completed-with-registered-blockers`` 而不是 ``passed``，
+既不计入通过检查数，也不增加已验收对象数。所有 v2 声明都要用仓库内受控索引与真实
+文件独立复算一遍，子工具自造状态、少报阻断或未显式选择维护模式都会被拒绝。
+
 用法：python scripts/workflow/run_checks.py --group docs
 默认运行全部已登记质量检查，不自动执行构建、提交或业务测试。
 @author 李杰
@@ -11,6 +16,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -30,6 +36,20 @@ from scripts.workflow import check_evidence
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
 
+# v2 计数协议的消费者侧常量。规则实现（scripts/code/java/check_staged_java_comments.py）
+# 是唯一事实来源，这里只按需读取，不在导入期建立跨脚本依赖。
+CHECK_STATUS_MAINTENANCE = "completed-with-registered-blockers"
+ACCEPTANCE_MODE_ENV = "JAVA_COMMENT_ACCEPTANCE_MODE"
+ACCEPTANCE_MODE_MAINTENANCE = "maintenance"
+
+
+def _acceptance_module():
+    """按需取回 Java 注释检查器的版本化协议常量与索引加载实现。"""
+
+    from scripts.code.java import check_staged_java_comments
+
+    return check_staged_java_comments
+
 
 @dataclass(frozen=True)
 class Gate:
@@ -42,11 +62,21 @@ class Gate:
     root_argument: bool = True
     zero_reason: str | None = None
     scope: str = "worktree-full"
+    acceptance: bool = False
+    # 子检查是否接受维护模式与来源报告命令行开关；工作区入口只转发私有索引，
+    # 因此它通过 JAVA_COMMENT_ACCEPTANCE_MODE 环境变量表达同一选择。
+    acceptance_flag: bool = False
+    # 该子检查是否负责写出来源验收报告制品；只有它才检查报告是否真的产出。
+    acceptance_report: bool = False
 
 
 @dataclass(frozen=True)
 class Outcome:
-    """记录单项检查的状态、退出码、耗时与输出，跳过不能算成功。"""
+    """记录单项检查的状态、退出码、耗时与输出，跳过不能算成功。
+
+    ``blockers`` 是该检查独立上报的已登记阻断清单（只来自 v2 协议）；它不进入
+    ``passed`` 计数，只在汇总中单独统计与展示。
+    """
 
     name: str
     status: str
@@ -61,7 +91,16 @@ class Outcome:
     diagnostics: tuple[dict[str, object], ...] = ()
     attempted: bool = True
     process_code: int | None = None
+    blockers: tuple[dict[str, object], ...] = ()
+    acceptance: dict[str, object] | None = None
+    acceptance_mode: str = ""
 
+
+
+# 允许作为后续检查前置的真实状态：维护完成态同样表示检查真的执行过。
+ACCEPTABLE_DEPENDENCY_STATES = frozenset(
+    {"passed", "not-applicable", CHECK_STATUS_MAINTENANCE}
+)
 
 GATES = (
     Gate("md-links", "docs/verify_md_links.py", "docs"),
@@ -81,10 +120,18 @@ GATES = (
         root_argument=False,
         zero_reason="没有适用的 Java 增量文件，未验证 Java 声明",
         scope="worktree-private-index-incremental",
+        acceptance=True,
     ),
     # 增量入口只覆盖本次改动；全量入口把 900+ 个纳管文件的全部声明都作为对象，
     # 使“干净工作区零对象”无法再被当成全库注释合格。
-    Gate("java-comments-full", "code/java/check_full_java_comments.py", "comments"),
+    Gate(
+        "java-comments-full",
+        "code/java/check_full_java_comments.py",
+        "comments",
+        acceptance=True,
+        acceptance_flag=True,
+        acceptance_report=True,
+    ),
     Gate("backend-boundaries", "code/java/verify_backend_boundaries.py", "boundaries"),
     Gate("workspace-layering", "code/web/verify_workspace_layering.py", "boundaries"),
     Gate("api-contracts", "code/java/verify_api_contracts.py", "boundaries"),
@@ -124,12 +171,35 @@ def select_gates(names: list[str], group: str) -> list[Gate]:
     return [gate for gate in GATES if gate.name in selected]
 
 
-def command_for(gate: Gate, root: Path) -> list[str]:
-    """生成固定检查的真实参数数组，所有子检查必须返回结构化计数协议。"""
+def command_for(
+    gate: Gate,
+    root: Path,
+    *,
+    maintenance: bool = False,
+    acceptance_report: Path | None = None,
+) -> list[str]:
+    """生成固定检查的真实参数数组，所有子检查必须返回结构化计数协议。
+
+    Args:
+        gate: 已登记的固定检查配置。
+        root: 待检查仓库目录。
+        maintenance: 是否显式选择维护模式。只有声明支持验收状态的子检查才接受该开关；
+            未显式选择时保持严格拒绝。
+        acceptance_report: 由支持验收状态的子检查写出的来源验收报告路径。
+
+    Returns:
+        子进程参数数组；不改变任何判定标准。
+    """
+
     command = [sys.executable, "-B", "-X", "utf8", str(SCRIPT_DIRECTORY / gate.script)]
     if gate.root_argument:
         command.extend(["--root", str(root)])
+    if gate.acceptance and gate.acceptance_flag and maintenance:
+        command.append("--maintenance")
+    if gate.acceptance_report and acceptance_report is not None:
+        command.extend(["--acceptance-report", str(acceptance_report)])
     return [*command, "--json"]
+
 
 
 def evidence_environment(root: Path) -> dict[str, str]:
@@ -214,32 +284,289 @@ def zero_scope_confirmed(gate: Gate, root: Path) -> bool:
     return not files.intersection(selected)
 
 
-def parse_result(gate: Gate, code: int, source: bytes) -> tuple[str, int | None, str, tuple[dict[str, object], ...]]:
+def acceptance_status(checked: int, findings: list[object], blockers: list[object]) -> str:
+    """按 v2 协议由计数推出唯一状态，禁止消费者自造状态（裁决 D15 §74）。"""
+
+    if findings:
+        return "failed"
+    if not checked:
+        return "not-applicable"
+    if blockers:
+        return CHECK_STATUS_MAINTENANCE
+    return "passed"
+
+
+def _blocker_brief(item: object) -> dict[str, object]:
+    """取出一条已登记阻断的最小可复核摘要，不含源码正文。"""
+
+    if not isinstance(item, dict):
+        return {"record_id": "", "verdict": "", "form": "", "classification": ""}
+    return {
+        key: item.get(key)
+        for key in (
+            "record_id",
+            "path",
+            "line",
+            "type_name",
+            "form",
+            "classification",
+            "verdict",
+            "blocker_reason",
+            "open_gap",
+        )
+    }
+
+
+def _verify_acceptance_ledger(
+    root: Path,
+    registry_info: object,
+    blockers: list[object],
+    hard: list[object],
+    accepted: list[object],
+    scope_files: set[str] | None,
+) -> dict[str, object]:
+    """用受控索引与真实文件复算逐项验收状态（裁决 D15 §68/§72）。
+
+    子工具声明不能作为唯一依据：本函数重新读取报告声明的索引，复算**该报告声明范围内**
+    的非验收记录集合，逐条核对阻断/硬失败条目的判词、阻断原因、缺口与最终对象指纹，
+    并确认已验收条目确实对应索引里已验收的记录。增量入口的范围是本次改动文件，
+    因此复算必须按报告范围收窄，不能拿全库账本要求增量报告逐一覆盖。
+
+    Raises:
+        CheckError: 索引不可读、指纹不符、判词不符、登记字段缺失或对象缺失。
+    """
+
+    module = _acceptance_module()
+    if not isinstance(registry_info, dict):
+        raise CheckError("来源验收报告缺少账本指纹")
+    path_text = str(registry_info.get("registry", "")).strip()
+    digest_text = str(registry_info.get("registry_sha256", "")).strip().lower()
+    if not path_text or not re.fullmatch(r"[0-9a-f]{64}", digest_text):
+        raise CheckError("来源验收报告缺少可核对的账本路径或 SHA-256")
+    index = Path(path_text)
+    if not index.is_file():
+        raise CheckError(f"来源验收报告声明的索引不存在：{index}")
+    if hashlib.sha256(index.read_bytes()).hexdigest() != digest_text:
+        raise CheckError("来源验收报告声明的索引指纹与当前账本不一致")
+    registry = module.load_evidence_registry(index, None)
+    if registry is None or not registry.requires_acceptance_state:
+        raise CheckError("来源验收报告声明的索引未启用验收状态")
+    accepted_verdicts = (
+        *module.SOURCE_NOTE_ACCEPTED_VERDICTS,
+        *module.AUTHOR_TAG_ACCEPTED_VERDICTS,
+    )
+    seen: set[str] = set()
+    for item in [*blockers, *hard]:
+        if not isinstance(item, dict):
+            raise CheckError("逐项验收状态必须是结构化对象")
+        path = str(item.get("path", ""))
+        record = registry.records.get(path)
+        if record is None:
+            raise CheckError(f"逐项验收状态指向索引中不存在的对象：{path}")
+        verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+        if verdict in accepted_verdicts:
+            raise CheckError(f"已验收记录不能出现在阻断/硬失败清单：{path}")
+        if str(item.get("verdict") or "") != verdict:
+            raise CheckError(f"逐项判词与当前索引不一致：{path}")
+        if not str(item.get("blocker_reason") or "").strip():
+            raise CheckError(f"逐项验收状态缺少阻断原因：{path}")
+        if not str(item.get("open_gap") or "").strip():
+            raise CheckError(f"逐项验收状态缺少缺口登记：{path}")
+        source = root / path
+        if not source.is_file():
+            raise CheckError(f"逐项验收状态指向的对象不存在：{path}")
+        recorded = str(item.get("local_sha256") or "").lower()
+        if hashlib.sha256(source.read_bytes()).hexdigest() != recorded:
+            raise CheckError(f"逐项验收状态的最终对象指纹与当前文件不符：{path}")
+        if scope_files is not None and path not in scope_files:
+            raise CheckError(f"逐项验收状态超出本次声明的扫描范围：{path}")
+        seen.add(path)
+    for item in accepted:
+        if not isinstance(item, dict):
+            raise CheckError("已验收条目必须是结构化对象")
+        path = str(item.get("path", ""))
+        record = registry.records.get(path)
+        if record is None:
+            raise CheckError(f"已验收条目指向索引中不存在的对象：{path}")
+        if str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip() not in accepted_verdicts:
+            raise CheckError(f"索引未验收的记录不能出现在已验收清单：{path}")
+    expected = {
+        path
+        for path, record in registry.records.items()
+        if str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+        not in accepted_verdicts
+        and (scope_files is None or path in scope_files)
+    }
+    missing = sorted(expected - seen)
+    if missing:
+        raise CheckError(f"来源验收报告漏掉了索引中的未验收对象：{missing[0]}")
+    return {
+        "records": len(registry.records),
+        "not_accepted": len(expected),
+        "covered": len(seen),
+    }
+
+
+def verify_acceptance_report(
+    gate: Gate,
+    value: dict[str, object],
+    maintenance: bool,
+    root: Path | None = None,
+) -> tuple[str, int, tuple[dict[str, object], ...], dict[str, object]]:
+    """独立复核 v2 报告，不能只信子工具声明（裁决 D15 §68）。
+
+    复核内容：协议与 schema 版本、模式与调用方选择一致、计数与逐项清单长度一致、
+    未覆盖漏项为空，并用仓库内受控索引复算非验收记录集合，逐条核对阻断条目的判词、
+    阻断原因、缺口与最终对象指纹。任何不一致都按环境/协议错误拒绝，不降级为已登记阻断。
+
+    Args:
+        gate: 已登记的固定检查配置。
+        value: 子检查返回的 v2 报告。
+        maintenance: 调用方是否显式选择了维护模式。
+        root: 被检查仓库根目录，用于按仓库相对路径复核最终对象指纹。
+
+    Returns:
+        ``(状态, 实际对象数, 阻断清单, 验收摘要)``。
+
+    Raises:
+        CheckError: 协议、模式、计数、逐项清单或索引复算任一不一致。
+    """
+
+    module = _acceptance_module()
+    acceptance = value.get("acceptance")
+    if value.get("protocol") != module.ACCEPTANCE_PROTOCOL or not isinstance(acceptance, dict):
+        raise CheckError("v2 报告缺少来源验收段或协议版本不匹配")
+    if acceptance.get("schema") != module.ACCEPTANCE_REPORT_SCHEMA:
+        raise CheckError("v2 报告的来源验收 schema 不正确")
+    mode = acceptance.get("mode")
+    if mode not in {"strict", "maintenance"}:
+        raise CheckError("v2 报告缺少合法验收模式")
+    if mode == "maintenance" and not maintenance:
+        raise CheckError("子检查声称维护完成态，但调用方未显式选择维护模式")
+    checked, findings = value.get("checked"), value.get("findings")
+    if type(checked) is not int or checked < 0 or not isinstance(findings, list):
+        raise CheckError("v2 报告缺少合法对象计数或诊断集合")
+    blockers = acceptance.get("registered_blockers")
+    hard = acceptance.get("hard_failures")
+    accepted = acceptance.get("accepted")
+    uncovered = acceptance.get("uncovered_records")
+    for name, items in (
+        ("registered_blockers", blockers),
+        ("hard_failures", hard),
+        ("accepted", accepted),
+        ("uncovered_records", uncovered),
+    ):
+        if not isinstance(items, list):
+            raise CheckError(f"v2 报告的 {name} 必须是数组")
+    counts = acceptance.get("counts")
+    if not isinstance(counts, dict):
+        raise CheckError("v2 报告缺少逐项计数")
+    expected_counts = {
+        "scanned_files": checked,
+        "accepted": len(accepted),
+        "registered_blockers": len(blockers),
+        "hard_failures": len(hard),
+        "findings": len(findings),
+        "uncovered_records": len(uncovered),
+    }
+    if counts != expected_counts:
+        raise CheckError("v2 报告的逐项计数与清单长度不一致")
+    if uncovered:
+        raise CheckError("v2 报告存在未覆盖的索引记录，范围漏项不能按空集合降级")
+    status = acceptance_status(checked, findings, blockers)
+    if value.get("status") != status:
+        raise CheckError("v2 报告的声明状态与计数不一致")
+    if not maintenance and status == CHECK_STATUS_MAINTENANCE:
+        raise CheckError("未显式选择维护模式时不得以维护完成态结束")
+    # 已登记阻断/硬失败必须能由受控索引复算；索引缺失时按协议错误拒绝而不是默认通过。
+    scope = acceptance.get("scope")
+    scope_files: set[str] | None = None
+    if isinstance(scope, dict) and isinstance(scope.get("files"), list):
+        scope_files = {str(item) for item in scope["files"]}
+        if scope.get("count") != len(scope_files):
+            raise CheckError("v2 报告的扫描范围计数与清单长度不一致")
+        if counts.get("scanned_files") != len(scope_files):
+            raise CheckError("v2 报告的扫描范围与对象计数不一致")
+    registry_info = value.get("evidence")
+    if not isinstance(registry_info, dict):
+        # 没有受控索引时只能允许“本次范围确实没有适用对象”的报告；
+        # 一旦存在逐项状态或索引被声明，就必须能按账本复算。
+        if blockers or hard or accepted or any(
+            int(counts.get(key) or 0)
+            for key in ("accepted", "registered_blockers", "hard_failures")
+        ):
+            raise CheckError("v2 报告缺少本次采用的账本指纹，逐项状态无法复算")
+        ledger = {"records": 0, "not_accepted": 0, "covered": 0}
+    else:
+        ledger = _verify_acceptance_ledger(
+            root if root is not None else Path.cwd(),
+            registry_info,
+            blockers,
+            hard,
+            accepted,
+            scope_files,
+        )
+    summary = {
+        "mode": mode,
+        "counts": dict(counts),
+        "blockers": [_blocker_brief(item) for item in blockers],
+        "ledger": ledger,
+    }
+    return status, checked, tuple(dict(item) for item in blockers), summary
+
+
+def parse_result(
+    gate: Gate,
+    code: int,
+    source: bytes,
+    *,
+    maintenance: bool = False,
+    root: Path | None = None,
+) -> tuple[str, int | None, str, tuple[dict[str, object], ...], dict[str, object] | None]:
     """核对计数、诊断与退出码的一致性；零对象必须由登记理由明确解释。
 
     Args:
         gate: 已登记的检查及其零对象政策。
         code: 实际子进程退出码。
         source: 子进程标准输出，错误输出不能充当结构化结果。
+        maintenance: 调用方是否显式选择了维护模式。
+        root: 被检查仓库根目录，用于按仓库相对路径复核最终对象指纹。
     Returns:
-        状态、实际计数、原因及不含原文的诊断位置。
+        状态、实际计数、原因、不含原文的诊断位置，以及 v2 验收摘要（v1 为 ``None``）。
     Raises:
         CheckError: 协议缺失、格式无效或子进程状态自相矛盾。
     """
+
     try:
         value = json.loads(source.decode("utf-8"))
     except (ValueError, UnicodeError) as error:
         raise CheckError("检查未返回有效的结构化计数协议") from error
-    if not isinstance(value, dict) or value.get("protocol") != PROTOCOL:
+    if not isinstance(value, dict):
+        raise CheckError("检查结果必须是结构化对象")
+    acceptance_summary: dict[str, object] | None = None
+    module = _acceptance_module()
+    protocol = value.get("protocol")
+    if protocol == module.ACCEPTANCE_PROTOCOL:
+        if not gate.acceptance:
+            raise CheckError("未登记接受验收状态的检查不得返回 v2 报告")
+        status, checked, _blockers, acceptance_summary = verify_acceptance_report(
+            gate, value, maintenance, root
+        )
+        findings = value["findings"]
+        if code != (1 if findings else 0):
+            raise CheckError("检查退出码与声明状态不一致")
+    elif protocol == PROTOCOL:
+        checked, findings = value.get("checked"), value.get("findings")
+        if type(checked) is not int or checked < 0 or not isinstance(findings, list):
+            raise CheckError("检查结果缺少合法对象计数或诊断集合")
+        expected = "failed" if findings else "passed" if checked else "not-applicable"
+        if value.get("status") != expected or code != (1 if findings else 0):
+            raise CheckError("检查退出码、对象计数和声明状态不一致")
+        status = expected
+    else:
         raise CheckError("检查结果协议版本不匹配")
-    checked, findings = value.get("checked"), value.get("findings")
-    if type(checked) is not int or checked < 0 or not isinstance(findings, list):
-        raise CheckError("检查结果缺少合法对象计数或诊断集合")
     if not isinstance(value.get("check"), str) or not value["check"]:
         raise CheckError("检查结果缺少检查身份")
-    expected = "failed" if findings else "passed" if checked else "not-applicable"
-    if value.get("status") != expected or code != (1 if findings else 0):
-        raise CheckError("检查退出码、对象计数和声明状态不一致")
     diagnostics = []
     for finding in findings:
         if (
@@ -249,11 +576,11 @@ def parse_result(gate: Gate, code: int, source: bytes) -> tuple[str, int | None,
         ):
             raise CheckError("检查诊断缺少可复核的位置")
         diagnostics.append({key: finding[key] for key in ("path", "line", "rule")})
-    if expected == "not-applicable":
+    if status == "not-applicable":
         if gate.zero_reason is None:
-            return "environment-error", 0, "已选择检查未发现任何对象；请核对根目录和扫描范围", ()
-        return expected, 0, gate.zero_reason, ()
-    return expected, checked, "", tuple(diagnostics)
+            return "environment-error", 0, "已选择检查未发现任何对象；请核对根目录和扫描范围", (), acceptance_summary
+        return status, 0, gate.zero_reason, (), acceptance_summary
+    return status, checked, "", tuple(diagnostics), acceptance_summary
 
 
 def execute(
@@ -261,6 +588,9 @@ def execute(
     root: Path,
     timeout: float,
     cancel: threading.Event | None = None,
+    *,
+    maintenance: bool = False,
+    acceptance_report: Path | None = None,
 ) -> Outcome:
     """在受控子进程中执行单项检查，错误与规则失败分别保留。
 
@@ -269,13 +599,19 @@ def execute(
         root: 待检查仓库目录。
         timeout: 单项检查的秒数上限。
         cancel: 用户中断时由调度器设置的取消信号。
+        maintenance: 是否显式选择维护模式。
+        acceptance_report: 来源验收报告写出路径（只对支持验收状态的全量检查生效）。
     Returns:
-        包含真实命令、对象计数和耗时；环境问题和超时分别保留。
+        包含真实命令、对象计数、阻断清单和耗时；环境问题和超时分别保留。
     """
     started = time.monotonic()
-    arguments = command_for(gate, root)
+    arguments = command_for(
+        gate, root, maintenance=maintenance, acceptance_report=acceptance_report
+    )
     checked = None
     diagnostics: tuple[dict[str, object], ...] = ()
+    blockers: tuple[dict[str, object], ...] = ()
+    acceptance_summary: dict[str, object] | None = None
     reason = ""
     process_code = None
     try:
@@ -286,6 +622,12 @@ def execute(
             env={
                 **os.environ,
                 **evidence_environment(root),
+                # 不接受开关的转发入口用等价环境变量表达同一维护模式选择。
+                **(
+                    {ACCEPTANCE_MODE_ENV: ACCEPTANCE_MODE_MAINTENANCE}
+                    if maintenance and gate.acceptance and not gate.acceptance_flag
+                    else {}
+                ),
                 "PYTHONIOENCODING": "utf-8",
                 "PYTHONDONTWRITEBYTECODE": "1",
             },
@@ -295,11 +637,21 @@ def execute(
         process_code = result.code
         output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
         if code in {0, 1}:
-            status, checked, reason, diagnostics = parse_result(gate, code, result.stdout)
+            status, checked, reason, diagnostics, acceptance_summary = parse_result(
+                gate, code, result.stdout, maintenance=maintenance, root=root
+            )
+            if acceptance_summary is not None:
+                blockers = tuple(acceptance_summary.get("blockers") or ())
             if status == "not-applicable" and not zero_scope_confirmed(gate, root):
                 status, reason = "environment-error", "子检查报告零对象，但独立范围清单仍存在适用对象"
         else:
             status, reason = "environment-error", "子检查未完成，保留实际非规则退出码"
+        if acceptance_report is not None and gate.acceptance_report:
+            if not acceptance_report.is_file():
+                status, reason = (
+                    "environment-error",
+                    f"已要求写出来源验收报告，但检查未实际产出：{acceptance_report}",
+                )
     except CheckTimeout as exc:
         code, output, status, reason = 2, str(exc), "timeout", "检查超过约定时限，子进程已终止"
     except CheckError as exc:
@@ -308,10 +660,34 @@ def execute(
         # 输出与原因都保留真实异常文本，避免"检查未完成"无法定位到具体路径或编码问题。
         detail = str(exc).strip() or type(exc).__name__
         code, output, status, reason = 2, detail, "environment-error", f"独立范围清单无法读取，检查未完成：{detail}"
-    return Outcome(gate.name, status, code, round(time.monotonic() - started, 3), output, checked, tuple(arguments), str(root), reason, gate.scope, diagnostics, process_code=process_code)
+    return Outcome(
+        gate.name,
+        status,
+        code,
+        round(time.monotonic() - started, 3),
+        output,
+        checked,
+        tuple(arguments),
+        str(root),
+        reason,
+        gate.scope,
+        diagnostics,
+        process_code=process_code,
+        blockers=blockers,
+        acceptance=acceptance_summary,
+        acceptance_mode=str((acceptance_summary or {}).get("mode", "")),
+    )
 
 
-def schedule(gates: list[Gate], root: Path, jobs: int, timeout: float) -> list[Outcome]:
+def schedule(
+    gates: list[Gate],
+    root: Path,
+    jobs: int,
+    timeout: float,
+    *,
+    maintenance: bool = False,
+    acceptance_report: Path | None = None,
+) -> list[Outcome]:
     """有界并发运行独立检查；前置失败则明确跳过依赖项。
 
     Args:
@@ -319,6 +695,8 @@ def schedule(gates: list[Gate], root: Path, jobs: int, timeout: float) -> list[O
         root: 待检查仓库根目录。
         jobs: 最大同时运行的检查数。
         timeout: 每项检查的秒数上限。
+        maintenance: 是否显式选择维护模式。
+        acceptance_report: 来源验收报告写出路径。
     Returns:
         按登记顺序排列的全部结果，包括因依赖失败跳过的项。
     Raises:
@@ -334,11 +712,21 @@ def schedule(gates: list[Gate], root: Path, jobs: int, timeout: float) -> list[O
             for name, gate in list(pending.items()):
                 if not all(dependency in outcomes for dependency in gate.dependencies):
                     continue
-                if any(outcomes[dependency].status not in {"passed", "not-applicable"} for dependency in gate.dependencies):
+                if any(outcomes[dependency].status not in ACCEPTABLE_DEPENDENCY_STATES for dependency in gate.dependencies):
                     outcomes[name] = Outcome(name, "not-run", 1, 0, "前置检查未通过", command=tuple(command_for(gate, root)), cwd=str(root), reason="dependency-failed", scope=gate.scope, attempted=False)
                     del pending[name]
                 elif len(running) < jobs:
-                    running[pool.submit(execute, gate, root, timeout, cancel)] = name
+                    running[
+                        pool.submit(
+                            execute,
+                            gate,
+                            root,
+                            timeout,
+                            cancel,
+                            maintenance=maintenance,
+                            acceptance_report=acceptance_report,
+                        )
+                    ] = name
                     del pending[name]
             if running:
                 finished, _ = wait(running, return_when=FIRST_COMPLETED)
@@ -354,18 +742,28 @@ def schedule(gates: list[Gate], root: Path, jobs: int, timeout: float) -> list[O
 
 
 def combined_code(outcomes: list[Outcome]) -> int:
-    """环境或超时返回 2，失败/未执行/全组无实测对象返回 1，其余返回 0。"""
+    """环境或超时返回 2，失败/未执行/全组无实测对象返回 1，其余返回 0。
+
+    维护完成态（``completed-with-registered-blockers``）计入“有实际对象”但不计入
+    “通过检查数”，因此它既不能被当成失败而阻止维护汇总，也不能让来源验收通过数增加。
+    """
     if any(result.status in {"environment-error", "timeout"} for result in outcomes):
         return 2
     if any(
-        result.status == "passed" and (type(result.checked) is not int or result.checked <= 0)
+        result.status in {"passed", CHECK_STATUS_MAINTENANCE}
+        and (type(result.checked) is not int or result.checked <= 0)
         or result.status == "not-applicable" and result.checked != 0
         for result in outcomes
     ):
         return 2
-    if any(result.status not in {"passed", "not-applicable"} for result in outcomes):
+    if any(result.status not in ACCEPTABLE_DEPENDENCY_STATES for result in outcomes):
         return 1
-    if not any(result.status == "passed" and type(result.checked) is int and result.checked > 0 for result in outcomes):
+    if not any(
+        result.status in {"passed", CHECK_STATUS_MAINTENANCE}
+        and type(result.checked) is int
+        and result.checked > 0
+        for result in outcomes
+    ):
         return 1
     return 0
 
@@ -378,7 +776,15 @@ def persisted_outcome(outcome: Outcome) -> dict[str, object]:
     return value
 
 
-def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) -> tuple[dict[str, object], list[Outcome]]:
+def run_with_evidence(
+    gates: list[Gate],
+    root: Path,
+    jobs: int,
+    timeout: float,
+    *,
+    maintenance: bool = False,
+    acceptance_report: Path | None = None,
+) -> tuple[dict[str, object], list[Outcome]]:
     """在执行前后核对同一工作树及规则内容，输入变化时拒绝签发有效成功。
 
     Args:
@@ -386,6 +792,8 @@ def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) 
         root: 实际检查工作目录。
         jobs: 子检查并发上限。
         timeout: 单项检查超时秒数。
+        maintenance: 是否显式选择维护模式。
+        acceptance_report: 来源验收报告写出路径。
     Returns:
         不含源码正文的证据与用于本次终端显示的原始结果；失败也保留真实状态。
     """
@@ -400,7 +808,14 @@ def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) 
         evidence_error = f"input-snapshot-failed:{type(error).__name__}:{(str(error).strip() or '无附加信息')}"
         outcomes = [Outcome(gate.name, "not-run", 2, 0, "输入快照失败，未运行检查", command=tuple(command_for(gate, root)), cwd=str(root), reason=evidence_error, scope=gate.scope, attempted=False) for gate in gates]
     else:
-        outcomes = schedule(gates, root, jobs, timeout)
+        outcomes = schedule(
+            gates,
+            root,
+            jobs,
+            timeout,
+            maintenance=maintenance,
+            acceptance_report=acceptance_report,
+        )
         try:
             after = check_evidence.snapshot(root, DEFAULT_ROOT)
         except (CheckError, OSError, UnicodeError) as error:
@@ -409,6 +824,11 @@ def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) 
     if not consistent and not evidence_error:
         evidence_error = "inputs-changed-during-checks"
     code = combined_code(outcomes) if consistent else 2
+    registered = [
+        blocker
+        for result in outcomes
+        for blocker in result.blockers
+    ]
     report: dict[str, object] = {
         "schema": check_evidence.SCHEMA,
         "started_at": started,
@@ -416,16 +836,68 @@ def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) 
         "root": str(root),
         "input_mode": "worktree",
         "selection": [asdict(gate) for gate in gates],
-        "execution": {"jobs": jobs, "timeout_seconds": timeout},
+        "execution": {
+            "jobs": jobs,
+            "timeout_seconds": timeout,
+            "mode": "maintenance" if maintenance else "strict",
+        },
         "evidence": evidence_report(root),
         "before": before, "after": after,
         "inputs_consistent": consistent,
         "evidence_error": evidence_error,
         "code": code,
-        "status": "passed" if code == 0 else "invalid-evidence" if not consistent else "not-verified" if all(result.status == "not-applicable" for result in outcomes) else "failed",
+        "status": run_status(code, consistent, outcomes),
+        # 已登记阻断独立成列：它不进入 passed 计数，也不增加已验收对象数。
+        "counts": {
+            "results": len(outcomes),
+            "passed": sum(result.status == "passed" for result in outcomes),
+            "registered_blockers": len(registered),
+            "hard_failures": sum(len(result.diagnostics) for result in outcomes),
+            "not_applicable": sum(result.status == "not-applicable" for result in outcomes),
+            "not_run": sum(not result.attempted for result in outcomes),
+        },
+        "registered_blockers": registered,
+        "source_acceptance": source_acceptance_report(outcomes),
         "results": [persisted_outcome(result) for result in outcomes],
     }
     return report, outcomes
+
+
+def run_status(code: int, consistent: bool, outcomes: list[Outcome]) -> str:
+    """按真实退出码与逐项状态给出汇总状态，维护完成态与 passed 分开表达。"""
+
+    if code == 0 and any(
+        result.status == CHECK_STATUS_MAINTENANCE for result in outcomes
+    ):
+        return CHECK_STATUS_MAINTENANCE
+    if code == 0:
+        return "passed"
+    if not consistent:
+        return "invalid-evidence"
+    if all(result.status == "not-applicable" for result in outcomes):
+        return "not-verified"
+    return "failed"
+
+
+def source_acceptance_report(outcomes: list[Outcome]) -> dict[str, object] | None:
+    """汇总支持验收状态的子检查结果，供报告与上游消费者直接取用。"""
+
+    entries = [result for result in outcomes if result.acceptance is not None]
+    if not entries:
+        return None
+    return {
+        "checks": [result.name for result in entries],
+        "mode": entries[0].acceptance_mode,
+        "registered_blockers": [
+            blocker for result in entries for blocker in result.blockers
+        ],
+        "counts": {
+            "registered_blockers": sum(
+                len(result.blockers) for result in entries
+            ),
+            "hard_failures": sum(len(result.diagnostics) for result in entries),
+        },
+    }
 
 
 def positive_integer(value: str) -> int:
@@ -449,6 +921,19 @@ def main() -> int:
     arguments.add_argument("--list", action="store_true")
     arguments.add_argument("--json", action="store_true")
     arguments.add_argument("--report", type=Path, help="显式保存可复核 JSON 证据，路径必须位于输入目录外")
+    arguments.add_argument(
+        "--maintenance",
+        action="store_true",
+        help=(
+            "显式维护模式：完整消费未验收状态后，已登记阻断单独列出并以"
+            " completed-with-registered-blockers 结束；不加此开关保持严格拒绝"
+        ),
+    )
+    arguments.add_argument(
+        "--acceptance-report",
+        type=Path,
+        help="由全量 Java 注释检查写出来源验收报告（source-acceptance-report/v1）",
+    )
     args = arguments.parse_args()
     gates = select_gates(args.checks, args.group)
     if args.list:
@@ -457,14 +942,33 @@ def main() -> int:
     root = args.root.resolve()
     if args.report is not None:
         check_evidence.validate_destination(args.report.resolve(), root, DEFAULT_ROOT)
-    report, outcomes = run_with_evidence(gates, root, args.jobs, args.timeout)
+    acceptance_report = args.acceptance_report.resolve() if args.acceptance_report else None
+    if acceptance_report is not None:
+        producers = [gate for gate in gates if gate.acceptance_report]
+        if not producers:
+            print(
+                "来源验收报告请求失败：本次选择中没有全量 Java 注释检查，"
+                "不能用空文件代替本次来源验收",
+                file=sys.stderr,
+            )
+            return 2
+    report, outcomes = run_with_evidence(
+        gates,
+        root,
+        args.jobs,
+        args.timeout,
+        maintenance=args.maintenance,
+        acceptance_report=acceptance_report,
+    )
     code = int(report["code"])
     if args.report is not None:
         check_evidence.write_report(args.report.resolve(), report)
+    counts = report["counts"]
+    assert isinstance(counts, dict)
     if args.json:
         print(
             json.dumps(
-                {"code": code, "status": report["status"], "inputs_consistent": report["inputs_consistent"], "evidence_error": report["evidence_error"], "evidence": report["evidence"], "results": [asdict(result) for result in outcomes]},
+                {"code": code, "status": report["status"], "inputs_consistent": report["inputs_consistent"], "evidence_error": report["evidence_error"], "evidence": report["evidence"], "counts": counts, "registered_blockers": report["registered_blockers"], "source_acceptance": report["source_acceptance"], "results": [asdict(result) for result in outcomes]},
                 ensure_ascii=False,
             )
         )
@@ -485,8 +989,15 @@ def main() -> int:
         else:
             print(f"受控来源证据：{evidence.get('reason')}")
         print(
-            f"汇总：{report['status']}；{sum(result.status == 'passed' for result in outcomes)}/{len(outcomes)} 项有实际对象并通过，退出码 {code}。"
+            f"汇总：{report['status']}；{counts['passed']}/{len(outcomes)} 项有实际对象并通过，"
+            f"已登记阻断 {counts['registered_blockers']} 项，硬失败 {counts['hard_failures']} 项，"
+            f"未覆盖漏项 0 项，退出码 {code}。"
         )
+        for blocker in report["registered_blockers"]:
+            print(
+                f"- 已登记阻断（不计为通过）：{blocker.get('path')} "
+                f"[{blocker.get('form')}] {blocker.get('verdict')}"
+            )
         if report["evidence_error"]:
             print(f"证据无效：{report['evidence_error']}")
     return code

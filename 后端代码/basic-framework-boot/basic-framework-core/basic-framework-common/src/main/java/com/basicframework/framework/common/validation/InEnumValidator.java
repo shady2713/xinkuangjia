@@ -12,6 +12,7 @@ import java.util.List;
  * 单值枚举取值范围校验器。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 public class InEnumValidator implements ConstraintValidator<InEnum, Object> {
 

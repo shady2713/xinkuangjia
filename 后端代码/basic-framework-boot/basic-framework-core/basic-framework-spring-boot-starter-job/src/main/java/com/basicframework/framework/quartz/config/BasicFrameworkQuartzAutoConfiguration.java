@@ -16,6 +16,7 @@ import java.util.Optional;
  * 让上层业务在调用时获得统一的错误提示。</p>
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @AutoConfiguration
 @EnableScheduling // 开启 Spring 自带的定时任务

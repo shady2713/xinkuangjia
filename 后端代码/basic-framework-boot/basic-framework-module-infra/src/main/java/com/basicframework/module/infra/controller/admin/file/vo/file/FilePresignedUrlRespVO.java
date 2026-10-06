@@ -14,6 +14,7 @@ import java.util.Map;
  * 上游文件续：infra/controller/admin/file/vo/file/FilePresignedUrlRespVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 3 行，移除或改写上游 4 行；import 新增 1 行、移除 0 行；补充注释 6 行，上游注释 4 行未保留。
+ * 来源验收：尚未验收
  */
 @AllArgsConstructor
 @NoArgsConstructor

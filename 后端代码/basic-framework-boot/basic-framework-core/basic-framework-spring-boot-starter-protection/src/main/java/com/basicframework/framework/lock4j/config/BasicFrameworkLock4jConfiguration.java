@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
  * Lock4j 自动配置类，提供项目统一的获取锁失败处理策略。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @AutoConfiguration(before = LockAutoConfiguration.class)
 @ConditionalOnClass(name = "com.baomidou.lock.annotation.Lock4j")

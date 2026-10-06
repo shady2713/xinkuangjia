@@ -14,6 +14,7 @@ import java.util.List;
  * 参数配置对象转换器。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Mapper
 public interface ConfigConvert {

@@ -315,13 +315,25 @@ def run_checks(root: Path, folder: Path, env: dict[str, str], changes: list[Chan
     for name, script, arguments in core_jobs(changes):
         if name == "java-comments":
             evidence_arguments, description = evidence_cli_arguments(root)
+            # 提交路径属于裁决 D15 所说的「维护检查」：在完整消费未验收状态后，允许以
+            # 「执行完成 + 存在已登记阻断」结束，而**不是**把这些条目当成通过。
+            # 发布汇总仍由 ci_gate 强制：存在适用阻断即退出 1 且 release_verified=false。
+            # 这里显式选择维护模式（不显式选择时检查器保持严格拒绝）。
             arguments = [*arguments, *evidence_arguments]
+            # 提交路径属于裁决 D15 所说的「维护检查」：完整消费未验收状态后允许以
+            # 「执行完成 + 存在已登记阻断」结束，而不是把这些条目当成通过。
+            # 发布汇总仍由 ci_gate 强制：存在适用阻断即退出 1 且 release_verified=false。
+            # 检查器同时支持命令行开关与环境变量，这里两个都显式给出，避免任一路径失效。
+            arguments = [*arguments, "--maintenance"]
+            job_env = {**env, "JAVA_COMMENT_ACCEPTANCE_MODE": "maintenance"}
             print(description, flush=True)
         try:
             command = [sys.executable, "-X", "utf8", "-B", str(DEFAULT_ROOT / "scripts" / script)]
             if name == "web-comments":
                 command.extend(["--root", str(root)])
-            result = run_process(command + arguments, root, env=env, timeout=180)
+            result = run_process(
+                command + arguments, root, env=job_env if name == "java-comments" else env, timeout=180
+            )
             print(f"[{name}]", flush=True)
             print(result.stdout.decode("utf-8", errors="replace"), end="", flush=True)
             print(

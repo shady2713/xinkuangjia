@@ -16,6 +16,7 @@ import org.springframework.core.task.SimpleAsyncTaskExecutor;
  * 上游文件续：iocoder/yudao/framework/quartz/config/YudaoAsyncAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 1 行，上游代码 1 行在本地被移除或改写，例如 @EnableAsync；本地补充注释 15 行，上游注释 1 行未保留。
+ * 来源验收：尚未验收
  */
 @AutoConfiguration
 @EnableAsync

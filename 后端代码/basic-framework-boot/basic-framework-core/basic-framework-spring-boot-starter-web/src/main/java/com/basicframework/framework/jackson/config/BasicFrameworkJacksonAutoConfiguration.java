@@ -33,6 +33,7 @@ import java.time.LocalTime;
  * 上游文件续：yudao/framework/jackson/config/YudaoJacksonAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 11 行，上游注释 1 行未保留。
+ * 来源验收：尚未验收
  */
 @AutoConfiguration(after = JacksonAutoConfiguration.class)
 @Slf4j

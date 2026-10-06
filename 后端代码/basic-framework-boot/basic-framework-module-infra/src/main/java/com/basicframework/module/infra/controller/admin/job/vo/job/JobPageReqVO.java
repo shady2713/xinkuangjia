@@ -13,6 +13,7 @@ import lombok.EqualsAndHashCode;
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/job/vo/job/JobPageReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 1 行，例如 @EqualsAndHashCode(callSuper = false)；本地补充注释 9 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 定时任务分页 Request VO")
 @Data

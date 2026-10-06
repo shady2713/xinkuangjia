@@ -11,6 +11,7 @@ import lombok.Data;
  * 上游文件续：system/controller/admin/permission/vo/menu/MenuListReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 1 行；补充注释 14 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 菜单列表 Request VO")
 @Data

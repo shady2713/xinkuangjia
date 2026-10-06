@@ -7,6 +7,7 @@ package com.basicframework.framework.xss.core.clean;
  * 上游文件续：cn/iocoder/yudao/framework/xss/core/clean/XssCleaner.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；该类型自身无其他改动。
+ * 来源验收：尚未验收
  */
 public interface XssCleaner {
 

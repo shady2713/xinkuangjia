@@ -23,6 +23,12 @@
 #   7. 36da1d3 的云端前端单元测试退出 1，失败用例写入 runner 临时 JSON 却没有上传，无法定位。
 #      现在四个作业都用 if: always() 上传本次真实产出的测试摘要与必要日志，重跑后可据此
 #      定位真实失败用例；上传步骤不改变作业结论，也不把失败包装成通过。
+#   8. 全量 Java 注释检查当前仍有已登记阻断（D15 核对版本 162 个 public/嵌套类型，落在
+#      157 个文件；严格模式退出 1）。docs_tools 的注释步骤改以 D15 §78 的显式维护模式运行：
+#      合规登记的未验收项移入独立阻断清单、作业可以 success，同时真实写出
+#      source-acceptance-report/v1。这不构成发布通过：release 汇总必须独立取回并复核该报告，
+#      存在适用阻断时仍退出 1、release_verified=false（D15 §80/§99）。是否已在本机之外的
+#      云端按此配置真实跑通，以该次运行结论为准，本文件不据此声明通过。
 #
 # 门禁语义（与 scripts/workflow/ci_gate.py 的强制规则一致）：
 #   * docs_tools、backend、frontend、browser_e2e 四个作业都是必需作业，必须 result == success。
@@ -33,6 +39,11 @@
 #   * release 结论必须有真实证据：aggregate 要求取回 release-backend.json /
 #     release-frontend.json 与 coverage-backend.json / coverage-web.json，文件缺失、零对象、
 #     审计阶段结论、阈值被改或计数与作业上报不一致一律拒绝。阶段标签本身不产生发布结论。
+#   * release 还必须取回 docs_tools 真实写出的来源验收报告
+#     （$RUNNER_TEMP/release-evidence/source-acceptance-report.json，schema
+#     source-acceptance-report/v1）：报告缺失、未知 schema、旧提交、规则实现指纹或受控账本
+#     指纹不符、扫描范围漏项、计数与逐项清单不符、或存在适用来源阻断（含合规登记的阻断）
+#     时，汇总退出 1 且 release_verified=false；四个必需作业全绿不能代替本次来源验收。
 name: ci-gate
 
 on:
@@ -129,24 +140,43 @@ jobs:
       # 汇总门禁随即拒绝，不会静默通过。
       # 不写进上面的 checked 计数：该计数只表示文档与工具检查对象数，混入其他范围会失真。
       - name: 运行注释检查
+        env:
+          REPORT: ${{ runner.temp }}/comments-report.json
+          ACCEPTANCE_REPORT: ${{ runner.temp }}/release-evidence/source-acceptance-report.json
         run: |
+          mkdir -p "$(dirname "$ACCEPTANCE_REPORT")"
           # 全量 Java 注释检查在无受控快照时需按固定提交地址实时取回上游内容并复算
           # SHA-256（实测单项约 128 秒，云端更慢），默认 180 秒余量不足，故显式放宽
           # 单项超时；这不改变任何判定标准，超时仍按 environment-error 让本作业红灯。
-          python -B -X utf8 scripts/workflow/run_checks.py --group comments --timeout 600 --json \
-            --report "$RUNNER_TEMP/comments-report.json"
+          #
+          # --maintenance 是裁决 D15 §78 的显式维护模式：只有合规登记的未验收项（就地
+          # 验收标注与索引相符、登记完整、对象与最终版本可核对）才移入独立阻断清单，全量
+          # 检查以 completed-with-registered-blockers 结束，并真实写出 source-acceptance-report/v1；
+          # 缺标注、登记/指纹/范围不符等硬失败仍然退出 1，本作业随之红灯，这里没有
+          # continue-on-error 或吞掉失败的分支。发布是否成立不由本步骤决定：release 汇总
+          # 必须独立取回该报告并复核，存在适用阻断时仍退出 1、release_verified=false
+          # （D15 §80/§99），因此维护模式不会把发布包装成通过。
+          python -B -X utf8 scripts/workflow/run_checks.py --group comments --maintenance --timeout 600 --json \
+            --report "$RUNNER_TEMP/comments-report.json" \
+            --acceptance-report "$ACCEPTANCE_REPORT"
           python -B -X utf8 scripts/workflow/verify_report.py "$RUNNER_TEMP/comments-report.json" --json
           python -B -X utf8 - <<'PY'
           import json, os, sys
           report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
-          passed = [item for item in report["results"] if item.get("status") == "passed"]
-          total = sum(int(item["checked"]) for item in passed)
+          # 有实际对象的真实执行包括通过项与维护完成态；维护完成态计入“执行过”，
+          # 但不计入通过数（counts.passed），也不代表来源验收通过。
+          executed = [
+              item for item in report["results"]
+              if item.get("status") in ("passed", "completed-with-registered-blockers")
+          ]
+          total = sum(int(item["checked"]) for item in executed)
           if total <= 0:
               sys.exit("注释检查没有任何实际对象，不计为通过")
-          print(f"注释检查对象：{total}")
+          print(
+              f"注释检查对象：{total}；其中已登记阻断 "
+              f"{report['counts']['registered_blockers']} 项，不计为通过"
+          )
           PY
-        env:
-          REPORT: ${{ runner.temp }}/comments-report.json
 
       - name: 上传注释检查报告
         if: always()
@@ -154,6 +184,18 @@ jobs:
         with:
           name: comments-report
           path: ${{ runner.temp }}/comments-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      # 来源验收报告是 release 汇总必须独立复核的制品（D15 §69）：生产端由上面的全量
+      # Java 注释检查真实写出，这里无论成败都取回。缺失时只用 warn 记录而不额外失败，
+      # 因为 release 汇总本身把“没有本次报告”当作受控失败，不会出现缺报告仍然发布通过。
+      - name: 上传来源验收报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-source
+          path: ${{ runner.temp }}/release-evidence/source-acceptance-report.json
           if-no-files-found: warn
           retention-days: 7
 
@@ -628,6 +670,18 @@ jobs:
 
       # 发布证据只能来自真实作业产出：作业失败时跳过取回，让聚合门禁直接报告真实原因，
       # 而不是用下载失败掩盖首个失败。缺少制品时下载本身也会失败，结论仍然是红灯。
+      #
+      # 来源验收报告（source-acceptance-report/v1）由 docs_tools 的全量 Java 注释检查
+      # 真实写出并上传；这里取回到 $RUNNER_TEMP/release-evidence，正好是 ci_gate 既有
+      # 要求的位置（目录下的 source-acceptance-report.json，或 SOURCE_ACCEPTANCE_REPORT）。
+      # 取回失败或报告缺失时 release 汇总按受控失败退出 1，不输出成功结论。
+      - name: 取回来源验收报告
+        if: inputs.stage == 'release' && needs.docs_tools.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-evidence-source
+          path: ${{ runner.temp }}/release-evidence
+
       - name: 取回发布阶段后端证据
         if: inputs.stage == 'release' && needs.backend.result == 'success'
         uses: actions/download-artifact@v4

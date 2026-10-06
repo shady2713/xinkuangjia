@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
  * 上游文件续：system/controller/admin/auth/vo/AuthResetPasswordReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 5 行，移除或改写上游 5 行；import 新增 2 行、移除 2 行；补充注释 18 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 短信重置账号密码 Request VO")
 @Data

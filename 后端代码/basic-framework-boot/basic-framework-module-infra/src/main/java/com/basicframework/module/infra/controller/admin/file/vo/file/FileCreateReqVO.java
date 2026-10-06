@@ -19,6 +19,7 @@ import lombok.Data;
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/file/vo/file/FileCreateReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 17 行，移除或改写上游 9 行；import 新增 7 行、移除 1 行；补充注释 27 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 文件创建 Request VO")
 @Data

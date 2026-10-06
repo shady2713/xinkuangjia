@@ -20,6 +20,7 @@ import static com.basicframework.framework.web.config.BasicFrameworkWebAutoConfi
  * 当开启 basic-framework.api-encrypt.enable 时，注册 ApiEncryptFilter。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @AutoConfiguration
 @Slf4j

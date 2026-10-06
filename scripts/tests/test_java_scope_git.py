@@ -186,9 +186,15 @@ def test_real_worktree_json_protocol(tmp_path: Path, language: str, populated: b
     result = execute(sandbox, f"scripts/code/{language}/check_worktree_{language}_comments.py", "--json")
     assert result.returncode == (1 if populated else 0), result.stdout + result.stderr
     value = json.loads(result.stdout)
-    assert value["protocol"] == "quality-check/v1"
+    # Java 检查器按裁决 D15 §65 输出 v2：硬失败、已验收与已登记阻断必须分列；
+    # Python 检查器沿用 v1 通过/失败协议，两者不能互相冒充。
+    expected_protocol = "quality-check/v2" if language == "java" else "quality-check/v1"
+    assert value["protocol"] == expected_protocol
     assert value["checked"] == int(populated)
     assert value["status"] == ("failed" if populated else "not-applicable")
+    if language == "java":
+        assert value["acceptance"]["counts"]["registered_blockers"] == 0
+        assert value["acceptance"]["counts"]["accepted"] == 0
 
 
 def test_no_applicable_java_reports_no_validation(tmp_path: Path) -> None:

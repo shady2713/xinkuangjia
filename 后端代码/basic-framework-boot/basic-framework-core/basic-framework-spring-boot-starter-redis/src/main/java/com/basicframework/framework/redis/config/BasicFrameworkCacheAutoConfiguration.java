@@ -29,6 +29,7 @@ import static com.basicframework.framework.redis.config.BasicFrameworkRedisAutoC
  * 上游文件续：YudaoCacheAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间与类名前缀适配，缓存属性改为 BasicFrameworkCacheProperties；补全职责与方法 JavaDoc。
+ * 来源验收：尚未验收
  */
 @AutoConfiguration
 @EnableConfigurationProperties({CacheProperties.class, BasicFrameworkCacheProperties.class})

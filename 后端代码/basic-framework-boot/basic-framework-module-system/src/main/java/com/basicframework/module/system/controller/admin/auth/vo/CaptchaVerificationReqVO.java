@@ -12,6 +12,7 @@ import lombok.Data;
  * 上游文件续：system/controller/admin/auth/vo/CaptchaVerificationReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 2 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 验证码 Request VO")
 @Data
@@ -34,6 +35,7 @@ public class CaptchaVerificationReqVO {
      * 上游文件续：system/controller/admin/auth/vo/CaptchaVerificationReqVO.java
      * 来源依据：固定见证版本；历史引入版本未核实。
      * 本地修改：该类型相对固定版本无内容改动。
+     * 来源验收：尚未验收
      */
     public interface CodeEnableGroup {
     }

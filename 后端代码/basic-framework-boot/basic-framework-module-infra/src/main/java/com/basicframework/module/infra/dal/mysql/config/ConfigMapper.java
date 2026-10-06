@@ -11,6 +11,7 @@ import org.apache.ibatis.annotations.Mapper;
  * 参数配置 Mapper。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Mapper
 public interface ConfigMapper extends BaseMapperX<ConfigDO> {

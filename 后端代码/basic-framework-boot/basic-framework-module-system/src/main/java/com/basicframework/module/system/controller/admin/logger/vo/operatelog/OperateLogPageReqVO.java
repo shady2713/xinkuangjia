@@ -20,6 +20,7 @@ import lombok.EqualsAndHashCode;
  * 上游文件续：controller/admin/logger/vo/operatelog/OperateLogPageReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 2 行；import 新增 2 行、移除 1 行；补充注释 23 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 操作日志分页列表 Request VO")
 @Data

@@ -8,6 +8,15 @@ public 类型有两条合规路径：准确的 ``@author``，或按 D12 裁决�
 清单与上游快照逐项核验的来源说明。来源说明只主张“某固定上游版本的对应文件未声明
 作者”，不主张历史引入版本，也不得写成具体人名。
 
+按裁决 D15，报告必须区分「通过 / 已登记阻断 / 失败」三种结论：``quality-check/v2``
+把硬失败诊断、已验收来源（含独立 A1 分支）与已登记阻断分列，维护完成态使用
+``completed-with-registered-blockers`` 而不是 ``passed``。未验收条目只有在索引、对象、
+保留文本、状态、最终版本都能核对且就地标注与索引相符时才进入独立阻断集合；无标注、
+重复/冲突标注、未知取值或自称已验收一律硬失败。作者标签形态（含 33 条只有 ``@author``
+的原阻断项）与来源说明形态走同一验收状态汇总，使用独立的 ``署名验收：`` 标注，
+不能借作者格式分支漏报。只有显式维护模式才允许以“执行完成、存在已登记阻断”结束；
+未显式选择时既有验收入口保持严格拒绝。
+
 清单与快照位置按“命令行参数 > 环境变量 > 仓库内受控默认索引”解析：
 ``--evidence-registry``/``--evidence-snapshots`` 或
 ``JAVA_COMMENT_EVIDENCE_REGISTRY``/``JAVA_COMMENT_EVIDENCE_SNAPSHOTS`` 显式配置优先；
@@ -34,7 +43,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -43,7 +52,6 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from scripts.common.repository_layout import JAVA_SOURCE_ROOT, is_java_source
-from scripts.common.check_protocol import payload
 from scripts.common.quality_common import CheckError
 
 # Windows Git Hook 可能继承非 UTF-8 控制台编码，统一输出编码以保证中文提示可读。
@@ -173,6 +181,36 @@ SOURCE_REVIEW_PREFIX = "来源验收："
 SOURCE_REVIEW_ACCEPTED_MARKER = "来源验收：已验收"
 SOURCE_REVIEW_UNACCEPTED_MARKER = "来源验收：尚未验收"
 SOURCE_REVIEW_MARKERS = (SOURCE_REVIEW_ACCEPTED_MARKER, SOURCE_REVIEW_UNACCEPTED_MARKER)
+# 裁决 D15 §128：只有作者标签、没有来源说明的原阻断项必须同等纳管。它们使用独立的
+# 就地署名验收标注；标注不能塞进 @author 取值，也不能描述该姓名已核实。
+SIGNATURE_REVIEW_PREFIX = "署名验收："
+SIGNATURE_REVIEW_ACCEPTED_MARKER = "署名验收：已验收"
+SIGNATURE_REVIEW_UNACCEPTED_MARKER = "署名验收：尚未验收"
+SIGNATURE_REVIEW_MARKERS = (
+    SIGNATURE_REVIEW_ACCEPTED_MARKER,
+    SIGNATURE_REVIEW_UNACCEPTED_MARKER,
+)
+# 作者标签形态的独立已验收分支：A1（E1-author-only）不是来源说明 accepted 集合的成员，
+# 不能因为它不在 SOURCE_NOTE_ACCEPTED_VERDICTS 里就把这 11 条算成失败。
+AUTHOR_TAG_ACCEPTED_VERDICTS = (
+    "A1（E1-author-only）成立，恢复上游证据支持的作者",
+)
+# 报告状态的固定取值（裁决 D15 §65/§74/§78）：维护完成态必须与 passed 分开表达，
+# 不能用同一个 passed 兼任“执行完成”与“来源已验收”两个结论。
+CHECK_STATUS_PASSED = "passed"
+CHECK_STATUS_FAILED = "failed"
+CHECK_STATUS_MAINTENANCE = "completed-with-registered-blockers"
+# 验收状态记录的三种分类；只有第一条进入“已验收对象数”，第二条只进入独立阻断清单，
+# 第三条是硬失败。禁止把 registered-blocker 计入 passed 或来源验收通过数。
+ACCEPTANCE_STATE_ACCEPTED = "accepted"
+ACCEPTANCE_STATE_REGISTERED_BLOCKER = "registered-blocker"
+ACCEPTANCE_STATE_HARD_FAILURE = "hard-failure"
+# 逐项验收状态记录的形态：来源说明形态与作者标签形态必须走同一汇总入口。
+ACCEPTANCE_FORM_SOURCE_NOTE = "来源说明"
+ACCEPTANCE_FORM_AUTHOR_TAG = "作者标签"
+# 验收报告与 v2 计数协议版本；v1 仍是其它检查器沿用的通过/失败协议。
+ACCEPTANCE_REPORT_SCHEMA = "source-acceptance-report/v1"
+ACCEPTANCE_PROTOCOL = "quality-check/v2"
 # 裁决 D14 §112：内容点必须绑定有区分力理由与语料/df 绑定字段，语料绑定须指回固定输入版本。
 CORRESPONDENCE_POINT_FIELDS = ("discrimination_reason", "corpus_binding")
 CORRESPONDENCE_POINT_KIND_PREFIXES = ("P1", "P2")
@@ -186,6 +224,10 @@ EVIDENCE_INDEX_SCHEMA = "d12-source-index/v1"
 EVIDENCE_HISTORY_BASIS = "introduced-verified"
 AUTHOR_UNDECLARED_STATUS = "已核实来源但作者未声明"
 EVIDENCE_REGISTRY_ENV = "JAVA_COMMENT_EVIDENCE_REGISTRY"
+# 工作区入口只负责准备私有索引并转发本检查器，不接受额外命令行开关；因此维护模式
+# 同时提供等价的环境变量入口，让既有调用方无需改动即可显式选择维护模式。
+ACCEPTANCE_MODE_ENV = "JAVA_COMMENT_ACCEPTANCE_MODE"
+ACCEPTANCE_MODE_MAINTENANCE = "maintenance"
 EVIDENCE_SNAPSHOTS_ENV = "JAVA_COMMENT_EVIDENCE_SNAPSHOTS"
 # 仓库内受控来源索引；相对被检查仓库根目录解析，不是任何本机绝对路径。
 DEFAULT_EVIDENCE_REGISTRY = "docs/测试与可靠性/来源证据/d12-source-index.json"
@@ -342,6 +384,114 @@ class Finding:
     rule: str
     detail: str
     evidence_bound: bool = False
+
+
+@dataclass(frozen=True)
+class AcceptanceState:
+    """表示一条受控索引记录的逐项验收状态（裁决 D15 §65/§66）。
+
+    这是“完整消费未验收状态”的唯一载体：已验收、已登记阻断与硬失败三类都必须
+    逐项落到这里，文件数、声明数与诊断数分别统计，不再把 33 条作者标签形态漏掉。
+
+    Attributes:
+        record_id: 唯一记录标识，``local_path#qualified_name``。
+        path: 仓库相对路径。
+        line: 当前源码中该 public 类型的声明行号。
+        type_name: 含外层类型链的类型限定名。
+        form: 标注形态，来源说明或作者标签。
+        classification: accepted / registered-blocker / hard-failure。
+        verdict: 索引 ``d12_verdict`` 当前判词。
+        blocker_reason: 索引 ``d12_blocker_reason`` 阻断原因。
+        open_gap: 索引 ``open_gap`` 缺口登记。
+        route: 索引 ``evidence_route`` 所用路线。
+        branch: 索引 ``evidence_branch`` 声明的独立分支；未声明时为空串。
+        local_sha256: 记录登记的本地最终指纹。
+        upstream_commit: 记录登记的上游固定提交。
+        upstream_sha256: 记录登记的上游内容指纹。
+        review_by: 逐项复核负责方。
+        review_conclusion: 逐项复核依据。
+        reasons: 该条目落到当前分类的逐项依据或硬失败原因。
+    """
+
+    record_id: str
+    path: str
+    line: int
+    type_name: str
+    form: str
+    classification: str
+    verdict: str
+    blocker_reason: str
+    open_gap: str
+    route: str
+    branch: str
+    local_sha256: str
+    upstream_commit: str
+    upstream_sha256: str
+    review_by: str
+    review_conclusion: str
+    reasons: tuple[str, ...] = ()
+
+    def summary(self) -> dict[str, object]:
+        """返回可写入结构化报告的逐项摘要，不含源码正文。"""
+
+        return {
+            "record_id": self.record_id,
+            "path": self.path,
+            "line": self.line,
+            "type_name": self.type_name,
+            "form": self.form,
+            "classification": self.classification,
+            "verdict": self.verdict,
+            "blocker_reason": self.blocker_reason,
+            "open_gap": self.open_gap,
+            "route": self.route,
+            "branch": self.branch,
+            "local_sha256": self.local_sha256,
+            "upstream_commit": self.upstream_commit,
+            "upstream_sha256": self.upstream_sha256,
+            "review_by": self.review_by,
+            "review_conclusion": self.review_conclusion,
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass
+class AcceptanceLedger:
+    """收集一次扫描内全部逐项验收状态，供 v2 报告与阻断入口使用（D15 §65）。"""
+
+    states: list[AcceptanceState] = field(default_factory=list)
+
+    def add(self, state: AcceptanceState) -> None:
+        """登记一条逐项验收状态。"""
+
+        self.states.append(state)
+
+    def accepted(self) -> list[AcceptanceState]:
+        """返回已验收条目（含独立 A1 分支）。"""
+
+        return [
+            state
+            for state in self.states
+            if state.classification == ACCEPTANCE_STATE_ACCEPTED
+        ]
+
+    def registered_blockers(self) -> list[AcceptanceState]:
+        """返回独立列出的已登记阻断条目；它们不得进入 passed。"""
+
+        return [
+            state
+            for state in self.states
+            if state.classification == ACCEPTANCE_STATE_REGISTERED_BLOCKER
+        ]
+
+    def hard_failures(self) -> list[AcceptanceState]:
+        """返回登记不完整、绑定失效或标注不符的硬失败条目。"""
+
+        return [
+            state
+            for state in self.states
+            if state.classification == ACCEPTANCE_STATE_HARD_FAILURE
+        ]
 
 
 @dataclass(frozen=True)
@@ -2658,15 +2808,123 @@ def _source_review_markers(javadoc: str) -> list[str]:
     ]
 
 
+def _signature_review_markers(javadoc: str) -> list[str]:
+    """读取作者标签形态的就地署名验收标注行（裁决 D15 §128）。
+
+    标注行在 JavaDoc 正文中独占一行：``署名验收：已验收`` 或 ``署名验收：尚未验收``。
+    标注不能写进 ``@author`` 取值，只识别完整取值；其他取值返回未知标注由调用方拒绝。
+
+    Args:
+        javadoc: 完整 JavaDoc 文本。
+
+    Returns:
+        正文中出现的 ``署名验收：`` 标注行列表（按出现顺序）。
+    """
+
+    return [
+        line.strip()
+        for line in _javadoc_body_lines(javadoc)
+        if line.strip().startswith(SIGNATURE_REVIEW_PREFIX)
+    ]
+
+
+def _acceptance_marker_reasons(
+    javadoc: str, form: str, accepted: bool
+) -> list[str]:
+    """核验就地验收标注与索引状态相符（裁决 D15 §72/§128）。
+
+    未验收来源说明必须在正文中具有且仅具有一条与索引相符的 ``来源验收：尚未验收``；
+    作者标签形态使用独立的 ``署名验收：`` 标注。无标注、重复、冲突、未知取值或与索引
+    状态不符（含自称已验收）一律硬失败——既不能进入维护完成态，也不能作为已验收通过。
+    已验收来源说明沿用既有行为：标注可选，出现时必须是 ``来源验收：已验收``。
+
+    Args:
+        javadoc: 绑定该类型的完整 JavaDoc 文本。
+        form: 标注形态，来源说明或作者标签。
+        accepted: 索引判词是否已验收。
+
+    Returns:
+        逐项硬失败原因；为空表示标注满足与索引共同约束。
+    """
+
+    if form == ACCEPTANCE_FORM_SOURCE_NOTE:
+        markers = _source_review_markers(javadoc)
+        expected = (
+            SOURCE_REVIEW_ACCEPTED_MARKER if accepted else SOURCE_REVIEW_UNACCEPTED_MARKER
+        )
+    else:
+        markers = _signature_review_markers(javadoc)
+        expected = (
+            SIGNATURE_REVIEW_ACCEPTED_MARKER if accepted else SIGNATURE_REVIEW_UNACCEPTED_MARKER
+        )
+    if not markers:
+        if accepted:
+            # 已验收条目（含独立 A1 分支）沿用既有行为：标注可选；缺标注不等于未验收，
+            # 但一旦写了标注就必须与索引状态相符，不能两处互相矛盾。
+            return []
+        return [
+            f"文件内{form}缺少就地验收标注（应恰好一条“{expected}”）："
+            "缺标注不能进入维护完成态，也不能作为已验收通过"
+        ]
+    if len(markers) > 1:
+        return [f"文件内{form}的验收标注重复或冲突：{'、'.join(markers)}"]
+    marker = markers[0]
+    if marker not in (
+        SOURCE_REVIEW_MARKERS if form == ACCEPTANCE_FORM_SOURCE_NOTE else SIGNATURE_REVIEW_MARKERS
+    ):
+        return [f"文件内{form}的验收标注取值不受支持：{marker!r}"]
+    if marker != expected:
+        return [
+            f"文件内{form}的验收标注“{marker}”与索引验收状态不符（应为“{expected}”）"
+        ]
+    return []
+
+
+def _index_verdict(record: dict[str, object]) -> str:
+    """读取索引的验收判词；字段缺失或为空时返回空串。"""
+
+    return _text(record, SOURCE_NOTE_VERDICT_FIELD)
+
+
+def _registration_reasons(record: dict[str, object], subject: str) -> list[str]:
+    """核验未验收记录的登记完整性，不要求补齐内容点（裁决 D15 §72）。
+
+    裁决要求“索引、对象、保留文本、状态及最终版本必须能核对”，并且明确已经登记为
+    未验收的记录不再要求补齐恰好缺失的内容点才能纳管。因此本函数只检查状态类字段、
+    上游绑定与逐项复核记录是否完整，不重复判定证据是否充分——证据不足本身就是这条
+    记录被登记为阻断的原因，不能用“未验收”让登记缺失或绑定失效一并消失。
+
+    Args:
+        record: 清单记录。
+        subject: 被登记对象名，要求复核结论指向它。
+
+    Returns:
+        登记完整性硬失败原因；为空表示可以进入已登记阻断集合。
+    """
+
+    reasons: list[str] = []
+    if not _text(record, SOURCE_NOTE_BLOCKER_FIELD):
+        reasons.append(
+            f"清单缺少 {SOURCE_NOTE_BLOCKER_FIELD} 阻断原因，未登记缺口不能算已登记阻断"
+        )
+    if not _text(record, "open_gap"):
+        reasons.append("清单缺少 open_gap 缺口登记，未登记缺口不能算已登记阻断")
+    if not COMMIT_PATTERN.match(_text(record, "upstream_commit")):
+        reasons.append("清单缺少有效的上游固定提交，保留文本无法核对")
+    if not SHA256_PATTERN.match(_text(record, "upstream_sha256").lower()):
+        reasons.append("清单缺少有效的上游内容 SHA-256，保留文本无法核对")
+    reasons.extend(_review_reasons(record, subject))
+    return reasons
+
+
 def _source_acceptance_reasons(
     record: dict[str, object], javadoc: str, registry: EvidenceRegistry
 ) -> list[str]:
     """消费索引的验收状态：未验收的记录不得在来源说明路径通过。
 
     裁决 D14 §120 要求已经写入的来源说明在补证期间标明尚未验收、不得进入“证据充分”的
-    交付范围；§132 要求逐项判断落到记录。本函数把该状态接到来源说明路径上：受控派生索引
-    的 ``d12_verdict`` 不是 ``SOURCE_NOTE_ACCEPTED_VERDICTS`` 之一时一律拒绝并给出诊断；
-    文件内标注行与索引状态不一致时同样拒绝（规则与索引共同约束，不能只改一侧或省略标注）。
+    交付范围；§132 要求逐项判断落到记录；D15 §72 补充正文必须具有且仅具有一条与索引相符
+    的 ``来源验收：尚未验收``，无标注、重复/冲突标注、未知值或自称已验收均硬失败。
 
     Args:
         record: 清单记录。
@@ -2679,22 +2937,14 @@ def _source_acceptance_reasons(
 
     if not registry.requires_acceptance_state:
         return []
-    reasons: list[str] = []
-    markers = _source_review_markers(javadoc)
-    for marker in markers:
-        if marker == SOURCE_REVIEW_UNACCEPTED_MARKER:
-            reasons.append(
-                f"文件内来源说明标注“{SOURCE_REVIEW_UNACCEPTED_MARKER}”，尚未验收"
-            )
-        elif marker not in SOURCE_REVIEW_MARKERS:
-            reasons.append(f"文件内来源说明的验收标注取值不受支持：{marker!r}")
-    verdict = _text(record, SOURCE_NOTE_VERDICT_FIELD)
+    verdict = _index_verdict(record)
     if not verdict:
-        reasons.append(
+        return [
             f"清单索引缺少 {SOURCE_NOTE_VERDICT_FIELD} 验收状态，来源说明没有验收依据"
-        )
-        return reasons
-    if verdict in SOURCE_NOTE_ACCEPTED_VERDICTS:
+        ]
+    accepted = verdict in SOURCE_NOTE_ACCEPTED_VERDICTS
+    reasons = _acceptance_marker_reasons(javadoc, ACCEPTANCE_FORM_SOURCE_NOTE, accepted)
+    if accepted:
         return reasons
     reason = (
         f"清单索引验收状态为“{verdict}”，尚未验收，来源说明不得作为证据充分通过"
@@ -2704,6 +2954,252 @@ def _source_acceptance_reasons(
         reason += f"（阻断原因：{blocker[:120]}）"
     reasons.append(reason)
     return reasons
+
+
+def _type_object_binding_reasons(
+    record: dict[str, object],
+    declaration: TypeDeclaration,
+    javadoc: str,
+    qualified_name: str,
+    enclosing_type: str | None,
+) -> list[str]:
+    """校验对象级绑定：限定名、嵌套关系与绑定 JavaDoc 指纹（裁决 D15 §72）。
+
+    与来源说明路径的 ``_type_mapping_reasons`` 相比，本函数不要求“上游未声明作者”，
+    因为作者标签形态（含 A1 分支）的上游版本可能确实声明了作者；对象与 JavaDoc 的
+    绑定强度不变，任何未修改的清单或快照都不能让失效绑定通过。
+
+    Args:
+        record: 清单记录。
+        declaration: 当前 public 类型声明。
+        javadoc: 绑定该类型的完整 JavaDoc 文本。
+        qualified_name: 含外层类型链的类型限定名。
+        enclosing_type: 外层类型限定名；顶层类型为 ``None``。
+
+    Returns:
+        对象级硬失败原因；为空表示对象与 JavaDoc 绑定成立。
+    """
+
+    value, error = _type_evidence_value(record)
+    if value is None:
+        return [str(error)]
+    entry = None
+    for candidate in value["types"]:  # type: ignore[union-attr]
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("qualified_name") != qualified_name:
+            continue
+        if bool(candidate.get("nested")) != bool(enclosing_type):
+            continue
+        if candidate.get("simple_name") not in (None, declaration.name):
+            continue
+        if candidate.get("kind") not in (None, declaration.kind):
+            continue
+        entry = candidate
+        break
+    if entry is None:
+        return [f"逐类型映射中没有 {qualified_name} 的条目，目标类型没有对象级授权"]
+    reasons: list[str] = []
+    recorded_javadoc = _text(entry, "javadoc_sha256").lower()
+    if not SHA256_PATTERN.match(recorded_javadoc):
+        reasons.append("逐类型映射缺少绑定 JavaDoc 的 SHA-256")
+    elif recorded_javadoc != hashlib.sha256(javadoc.encode("utf-8")).hexdigest():
+        reasons.append("绑定 JavaDoc 指纹不符，来源说明必须由清单绑定当前类型的 JavaDoc")
+    if enclosing_type is not None and _text(entry, "enclosing_type") != enclosing_type:
+        reasons.append(f"逐类型映射的外层类型不是 {enclosing_type}")
+    if not _text(entry, "upstream_type"):
+        reasons.append("逐类型映射缺少上游类型或片段")
+    return reasons
+
+
+def _final_version_reasons(record: dict[str, object], local_sha256: str | None) -> list[str]:
+    """校验索引登记的本地最终指纹与当前对象原始字节一致（裁决 D15 §72）。"""
+
+    recorded_local = _text(record, "local_sha256_after").lower()
+    if not SHA256_PATTERN.match(recorded_local):
+        return ["清单缺少有效的本地最终 SHA-256"]
+    if local_sha256 is None:
+        return ["当前对象没有可核验的原始字节指纹"]
+    if recorded_local != local_sha256:
+        return [f"本地最终指纹不符：清单 {recorded_local}，实测 {local_sha256}"]
+    return []
+
+
+def _registered_binding_reasons(
+    path: str,
+    record: dict[str, object],
+    declaration: TypeDeclaration,
+    javadoc: str,
+    note: SourceNote | None,
+    qualified_name: str,
+    enclosing_type: str | None,
+    registry: EvidenceRegistry,
+    local_sha256: str | None,
+) -> list[str]:
+    """核验已登记阻断的对象、保留文本与最终版本绑定（裁决 D15 §72）。
+
+    只有登记完整且对象、保留文本、状态、最终版本都能核对的条目才允许进入独立阻断集合；
+    内容点是否足够不在本函数内判定——证据不足本身就是登记阻断的原因，登记缺失或绑定
+    失效则不能借“未验收”一并豁免。
+
+    Args:
+        path: 仓库相对路径。
+        record: 清单记录。
+        declaration: 当前 public 类型声明。
+        javadoc: 绑定该类型的完整 JavaDoc 文本。
+        note: 来源说明；作者标签形态为 ``None``。
+        qualified_name: 含外层类型链的类型限定名。
+        enclosing_type: 外层类型限定名；顶层类型为 ``None``。
+        registry: 受控证据清单。
+        local_sha256: 当前对象原始字节的 SHA-256。
+
+    Returns:
+        绑定类硬失败原因；为空表示可以进入已登记阻断集合。
+    """
+
+    if path in registry.unparsable:
+        return [f"清单记录字段数与表头不一致，无法逐项核验：{path}"]
+    reasons = _final_version_reasons(record, local_sha256)
+    if note is None:
+        reasons.extend(
+            _type_object_binding_reasons(
+                record, declaration, javadoc, qualified_name, enclosing_type
+            )
+        )
+        return reasons
+    status = _text(record, "author_status")
+    if status != AUTHOR_UNDECLARED_STATUS:
+        reasons.append(f"清单状态是“{status or '空'}”，不是“{AUTHOR_UNDECLARED_STATUS}”")
+    reasons.extend(
+        _type_mapping_reasons(record, declaration, javadoc, qualified_name, enclosing_type)
+    )
+    reasons.extend(_history_reasons(record, note, registry))
+    reasons.extend(_upstream_binding_reasons(record, note))
+    reasons.extend(_local_modification_reasons(record, note))
+    return reasons
+
+
+def _acceptance_state(
+    path: str,
+    record: dict[str, object],
+    declaration: TypeDeclaration,
+    javadoc: str,
+    notes: list[SourceNote],
+    qualified_name: str,
+    enclosing_type: str | None,
+    registry: EvidenceRegistry,
+    local_sha256: str | None,
+    line: int,
+    finding_reasons: list[str],
+) -> AcceptanceState:
+    """计算单条索引记录的逐项验收状态（裁决 D15 §65/§66/§72/§128）。
+
+    来源说明形态与作者标签形态走同一入口：已验收、已登记阻断与硬失败分别落到
+    ``classification``，因此 33 条只有 ``@author`` 的原阻断项不会再从汇总里消失。
+    未验收条目只有在登记完整（阻断原因、缺口、复核、保留文本、最终版本、对象绑定）
+    且就地标注与索引相符时才进入独立阻断集合；其余一律硬失败。
+
+    Args:
+        path: 仓库相对路径。
+        record: 清单记录。
+        declaration: 当前 public 类型声明。
+        javadoc: 绑定该类型的完整 JavaDoc 文本。
+        notes: 已解析的来源说明列表。
+        qualified_name: 含外层类型链的类型限定名。
+        enclosing_type: 外层类型限定名；顶层类型为 ``None``。
+        registry: 受控证据清单。
+        local_sha256: 当前对象原始字节的 SHA-256。
+        line: 当前源码中的声明行号。
+        finding_reasons: 该类型在既有消费者中已产生的拒绝原因。
+
+    Returns:
+        该记录的逐项验收状态。
+    """
+
+    verdict = _index_verdict(record)
+    form = ACCEPTANCE_FORM_SOURCE_NOTE if notes else ACCEPTANCE_FORM_AUTHOR_TAG
+    accepted_verdicts = (
+        SOURCE_NOTE_ACCEPTED_VERDICTS if notes else AUTHOR_TAG_ACCEPTED_VERDICTS
+    )
+    accepted = bool(verdict) and verdict in accepted_verdicts
+    reasons: list[str] = []
+    classification = ACCEPTANCE_STATE_HARD_FAILURE
+    if not verdict:
+        reasons.append(
+            f"清单索引缺少 {SOURCE_NOTE_VERDICT_FIELD} 验收状态，验收状态不得省略"
+        )
+    elif accepted:
+        reasons.extend(_acceptance_marker_reasons(javadoc, form, True))
+        if notes:
+            # 来源说明形态的已验收分支沿用来源说明路径的完整逐项核验结论。
+            reasons.extend(finding_reasons)
+        else:
+            reasons.extend(_final_version_reasons(record, local_sha256))
+            reasons.extend(
+                _type_object_binding_reasons(
+                    record, declaration, javadoc, qualified_name, enclosing_type
+                )
+            )
+            # 作者标签形态的已验收结论必须有独立的版本化分支契约：只把判词写成
+            # A1 而不给逐项比较证据，等于只认状态值，必须硬失败。
+            branch, branch_error = _evidence_branch(record)
+            if branch_error:
+                reasons.append(branch_error)
+            elif branch != EVIDENCE_BRANCH_AUTHOR_ONLY:
+                reasons.append(
+                    "作者标签形态的已验收记录必须显式声明 "
+                    f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支与比较契约"
+                )
+            else:
+                reasons.extend(
+                    _author_only_contract_reasons(
+                        record,
+                        path,
+                        _text(record, "local_sha256_after").lower(),
+                        registry,
+                    )
+                )
+        if not reasons:
+            classification = ACCEPTANCE_STATE_ACCEPTED
+    else:
+        marker_reasons = _acceptance_marker_reasons(javadoc, form, False)
+        registration_reasons = _registration_reasons(record, declaration.name)
+        reasons.extend(marker_reasons)
+        reasons.extend(registration_reasons)
+        if not marker_reasons and not registration_reasons:
+            binding_reasons = _registered_binding_reasons(
+                path,
+                record,
+                declaration,
+                javadoc,
+                notes[0] if notes else None,
+                qualified_name,
+                enclosing_type,
+                registry,
+                local_sha256,
+            )
+            reasons.extend(binding_reasons)
+            if not binding_reasons:
+                classification = ACCEPTANCE_STATE_REGISTERED_BLOCKER
+    return AcceptanceState(
+        record_id=f"{path}#{qualified_name}",
+        path=path,
+        line=line,
+        type_name=qualified_name,
+        form=form,
+        classification=classification,
+        verdict=verdict,
+        blocker_reason=_text(record, SOURCE_NOTE_BLOCKER_FIELD),
+        open_gap=_text(record, "open_gap"),
+        route=_text(record, "evidence_route"),
+        branch=_text(record, EVIDENCE_BRANCH_FIELD),
+        local_sha256=_text(record, "local_sha256_after").lower(),
+        upstream_commit=_text(record, "upstream_commit"),
+        upstream_sha256=_text(record, "upstream_sha256").lower(),
+        review_by=_text(record, "review_by"),
+        review_conclusion=_text(record, "review_conclusion"),
+        reasons=tuple(reasons),
+    )
 
 
 def _correspondence_discrimination_reasons(record: dict[str, object]) -> list[str]:
@@ -2950,8 +3446,10 @@ def _scan_types(
     *,
     evidence: EvidenceRegistry | None = None,
     local_sha256: str | None = None,
+    acceptance: AcceptanceLedger | None = None,
+    maintenance: bool = False,
 ) -> list[Finding]:
-    """检查本次新增或修改的类型声明 JavaDoc。
+    """检查本次新增或修改的类型声明 JavaDoc，并逐项登记验收状态。
 
     Args:
         path: 仓库相对路径。
@@ -2961,13 +3459,18 @@ def _scan_types(
         declarations: 已解析的类型声明。
         evidence: 受控来源证据清单；未配置时为 ``None``。
         local_sha256: 当前对象原始字节的 SHA-256。
+        acceptance: 逐项验收状态收集器；为 ``None`` 时不登记状态。
+        maintenance: 是否处于显式维护模式。只有显式维护模式才允许把已登记阻断
+            与硬失败分开报告；未显式选择时既有验收入口保持严格拒绝。
 
     Returns:
-        类型注释问题列表。主张来源证据的类型即使声明行未变也会被检查。
+        类型注释问题列表。主张来源证据的类型即使声明行未变也会被检查。已登记阻断
+        在维护模式下进入 ``acceptance`` 的独立集合，不计入诊断，也不计为通过。
     """
 
     findings = []
     package = _package_name(_mask_java(source))
+    indexed = evidence is not None and getattr(evidence, "requires_acceptance_state", False)
     for declaration in declarations:
         javadoc = _attached_javadoc(source, declaration.declaration_offset)
         span = _attached_javadoc_span(source, declaration.declaration_offset)
@@ -2984,6 +3487,7 @@ def _scan_types(
         if not claims and not touched:
             continue
         line = _line_number(starts, declaration.name_offset)
+        record = evidence.records.get(path) if indexed else None
         if javadoc is None:
             findings.append(
                 Finding(
@@ -2993,24 +3497,21 @@ def _scan_types(
                     f"类型 {declaration.name} 缺少职责 JavaDoc",
                 )
             )
+            _record_unindexable_state(
+                acceptance, path, record, declaration, line, "类型缺少职责 JavaDoc"
+            )
             continue
         if not declaration.public:
             continue
         notes, note_errors = _parse_source_notes(javadoc)
         note_errors.extend(_provenance_tag_errors(javadoc))
         if note_errors:
-            findings.append(
-                Finding(
-                    path,
-                    line,
-                    "type-author",
-                    f"public 类型 {declaration.name} 的来源说明无效：{'；'.join(note_errors)}",
-                    True,
-                )
-            )
+            detail = f"public 类型 {declaration.name} 的来源说明无效：{'；'.join(note_errors)}"
+            findings.append(Finding(path, line, "type-author", detail, True))
+            _record_unindexable_state(acceptance, path, record, declaration, line, detail)
             continue
+        enclosing, qualified = _qualified_type_names(declarations, declaration, package)
         if notes:
-            enclosing, qualified = _qualified_type_names(declarations, declaration, package)
             reasons = _verify_source_notes(
                 path,
                 declaration,
@@ -3021,6 +3522,31 @@ def _scan_types(
                 evidence,
                 local_sha256,
             )
+            state = (
+                _acceptance_state(
+                    path,
+                    record,
+                    declaration,
+                    javadoc,
+                    notes,
+                    qualified,
+                    enclosing,
+                    evidence,
+                    local_sha256,
+                    line,
+                    reasons,
+                )
+                if record is not None
+                else None
+            )
+            if acceptance is not None and state is not None:
+                acceptance.add(state)
+            if _state_blocks_finding(state, maintenance):
+                continue
+            if state is not None and state.classification != ACCEPTANCE_STATE_ACCEPTED:
+                for reason in state.reasons:
+                    if reason not in reasons:
+                        reasons.append(reason)
             if reasons:
                 findings.append(
                     Finding(
@@ -3033,18 +3559,94 @@ def _scan_types(
                     )
                 )
             continue
-        if not _has_actual_author(javadoc):
-            findings.append(
-                Finding(
+        if _has_actual_author(javadoc):
+            # 作者标签形态与来源说明形态共用同一验收状态汇总（D15 §127/§128）：
+            # 这 33 条必须逐项进入未验收署名集合，不能再从拒绝诊断里消失。
+            state = (
+                _acceptance_state(
                     path,
+                    record,
+                    declaration,
+                    javadoc,
+                    [],
+                    qualified,
+                    enclosing,
+                    evidence,
+                    local_sha256,
                     line,
-                    "type-author",
-                    f"public 类型 {declaration.name} 的 JavaDoc 缺少非占位的 @author "
-                    "实际作者，也没有本裁决格式的来源说明",
-                    claims,
+                    [],
                 )
+                if record is not None
+                else None
             )
+            if acceptance is not None and state is not None:
+                acceptance.add(state)
+            if state is not None and state.classification != ACCEPTANCE_STATE_ACCEPTED:
+                if _state_blocks_finding(state, maintenance):
+                    continue
+                detail = (
+                    f"public 类型 {declaration.name} 的署名未被独立验收："
+                    f"{'；'.join(state.reasons[:3])}"
+                )
+                findings.append(Finding(path, line, "type-author", detail, True))
+            continue
+        detail = (
+            f"public 类型 {declaration.name} 的 JavaDoc 缺少非占位的 @author "
+            "实际作者，也没有本裁决格式的来源说明"
+        )
+        findings.append(Finding(path, line, "type-author", detail, claims))
+        _record_unindexable_state(acceptance, path, record, declaration, line, detail)
     return findings
+
+
+def _state_blocks_finding(state: AcceptanceState | None, maintenance: bool) -> bool:
+    """判断该验收状态是否已经完整表达为“已登记阻断”，不再产生诊断。
+
+    只有显式维护模式下的已登记阻断条目才允许不产生硬失败诊断；严格入口与未登记
+    条目都必须保留真实拒绝。维护完成态不进入通过检查数。
+    """
+
+    return bool(
+        maintenance
+        and state is not None
+        and state.classification == ACCEPTANCE_STATE_REGISTERED_BLOCKER
+    )
+
+
+def _record_unindexable_state(
+    acceptance: AcceptanceLedger | None,
+    path: str,
+    record: dict[str, object] | None,
+    declaration: TypeDeclaration,
+    line: int,
+    detail: str,
+) -> None:
+    """把无法计算完整状态的索引记录登记为硬失败，避免它从验收汇总里消失。"""
+
+    if acceptance is None or record is None:
+        return
+    acceptance.add(
+        AcceptanceState(
+            record_id=f"{path}#{declaration.name}",
+            path=path,
+            line=line,
+            type_name=declaration.name,
+            form=ACCEPTANCE_FORM_AUTHOR_TAG,
+            classification=ACCEPTANCE_STATE_HARD_FAILURE,
+            verdict=_index_verdict(record),
+            blocker_reason=_text(record, SOURCE_NOTE_BLOCKER_FIELD),
+            open_gap=_text(record, "open_gap"),
+            route=_text(record, "evidence_route"),
+            branch=_text(record, EVIDENCE_BRANCH_FIELD),
+            local_sha256=_text(record, "local_sha256_after").lower(),
+            upstream_commit=_text(record, "upstream_commit"),
+            upstream_sha256=_text(record, "upstream_sha256").lower(),
+            review_by=_text(record, "review_by"),
+            review_conclusion=_text(record, "review_conclusion"),
+            reasons=(detail,),
+        )
+    )
+
 
 
 def _method_end(masked: str, close_paren: int) -> int | None:
@@ -3568,6 +4170,8 @@ def _scan_source(
     *,
     evidence: EvidenceRegistry | None = None,
     local_sha256: str | None = None,
+    acceptance: AcceptanceLedger | None = None,
+    maintenance: bool = False,
 ) -> list[Finding]:
     """扫描单个暂存 Java 文件中的增量注释问题。
 
@@ -3577,9 +4181,11 @@ def _scan_source(
         added_lines: 暂存差异中的新增行号。
         evidence: 受控来源证据清单；未配置时为 ``None``。
         local_sha256: 当前对象原始字节的 SHA-256。
+        acceptance: 逐项验收状态收集器；为 ``None`` 时不登记状态。
+        maintenance: 是否处于显式维护模式。
 
     Returns:
-        当前文件的全部注释门禁问题。
+        当前文件的全部注释门禁问题；已登记阻断在维护模式下登记到 ``acceptance``。
     """
 
     if not added_lines:
@@ -3601,6 +4207,8 @@ def _scan_source(
             declarations,
             evidence=evidence,
             local_sha256=local_sha256,
+            acceptance=acceptance,
+            maintenance=maintenance,
         )
     )
     findings.extend(
@@ -3752,7 +4360,12 @@ def _new_documentation_findings(
 
 
 def scan_full_source(
-    path: str, source: str, *, evidence: EvidenceRegistry | None = None
+    path: str,
+    source: str,
+    *,
+    evidence: EvidenceRegistry | None = None,
+    acceptance: AcceptanceLedger | None = None,
+    maintenance: bool = False,
 ) -> list[Finding]:
     """检查单个 Java 源文件的全部声明，不受暂存差异范围限制。
 
@@ -3763,6 +4376,8 @@ def scan_full_source(
         path: 仓库相对路径。
         source: 当前 Java 源码。
         evidence: 受控来源证据清单；省略时读取环境变量配置，两者都没有则为 ``None``。
+        acceptance: 逐项验收状态收集器；为 ``None`` 时不登记状态。
+        maintenance: 是否处于显式维护模式。
     Returns:
         该文件全部声明的注释问题，行号以当前源码为基准。
     Raises:
@@ -3776,19 +4391,27 @@ def scan_full_source(
         set(range(1, source.count("\n") + 2)),
         evidence=registry,
         local_sha256=hashlib.sha256(source.encode("utf-8")).hexdigest(),
+        acceptance=acceptance,
+        maintenance=maintenance,
     )
 
 
 def _scan_staged_java_comments(
-    paths: list[str] | None = None, *, evidence: EvidenceRegistry | None = None
+    paths: list[str] | None = None,
+    *,
+    evidence: EvidenceRegistry | None = None,
+    acceptance: AcceptanceLedger | None = None,
+    maintenance: bool = False,
 ) -> list[Finding]:
     """扫描全部暂存 Java 文件的增量注释问题。
 
     Args:
         paths: 已读取的增量范围；省略时从当前索引读取，空列表不扩大扫描。
         evidence: 受控来源证据清单；省略时不启用 A 例外核验。
+        acceptance: 逐项验收状态收集器；为 ``None`` 时不登记状态。
+        maintenance: 是否处于显式维护模式。
     Returns:
-        本次提交中的全部注释门禁问题。
+        本次提交中的全部注释门禁问题；已登记阻断在维护模式下进入 ``acceptance``。
     """
 
     findings = []
@@ -3802,6 +4425,8 @@ def _scan_staged_java_comments(
                 _added_lines(path),
                 evidence=evidence,
                 local_sha256=local_sha256,
+                acceptance=acceptance,
+                maintenance=maintenance,
             )
         )
         findings.extend(
@@ -4138,11 +4763,126 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=f"受控上游快照根目录；默认读取 {EVIDENCE_SNAPSHOTS_ENV}",
     )
+    parser.add_argument(
+        "--maintenance",
+        action="store_true",
+        help=(
+            "显式维护模式：完整消费未验收状态后，已登记阻断进入独立清单并以"
+            " completed-with-registered-blockers 结束；不加此开关保持严格拒绝"
+        ),
+    )
     return parser.parse_args()
 
 
+def maintenance_requested(args: argparse.Namespace) -> bool:
+    """判断本次是否显式选择维护模式（命令行开关或等价环境变量）。"""
+
+    if getattr(args, "maintenance", False):
+        return True
+    return os.environ.get(ACCEPTANCE_MODE_ENV, "").strip() == ACCEPTANCE_MODE_MAINTENANCE
+
+
+def _acceptance_payload(
+    name: str,
+    checked: int,
+    findings: list[Finding],
+    evidence: EvidenceRegistry | None,
+    ledger: AcceptanceLedger | None,
+    maintenance: bool,
+    uncovered: list[dict[str, object]] | None = None,
+    scope: list[str] | None = None,
+) -> dict[str, object]:
+    """生成区分 passed / 已登记阻断 / 失败的版本化报告（裁决 D15 §61/§65/§74）。
+
+    v1 协议只有通过/失败两个状态，无法表达“执行完成、存在已登记阻断”。本函数输出
+    v2 协议：``findings`` 只放硬失败诊断，独立阻断清单单独成列，维护完成态使用
+    ``completed-with-registered-blockers``，绝不写成 ``passed``，也不计入已验收对象数。
+
+    Args:
+        name: 检查器身份。
+        checked: 实际扫描对象数量。
+        findings: 本入口真实产生的硬失败诊断（已登记阻断不在其中）。
+        evidence: 受控证据清单；未配置时为 ``None``。
+        ledger: 本次扫描收集的逐项验收状态；为 ``None`` 时按空集合处理。
+        maintenance: 是否显式选择维护模式。
+        uncovered: 扫描范围内存在非验收索引记录但没有产出逐项状态的漏项。
+        scope: 本次实际扫描的仓库相对路径；消费者按该范围复算，不要求增量入口覆盖全库。
+
+    Returns:
+        可序列化的 v2 结果，含计数、逐项清单与本次真实退出码。
+    """
+
+    states = ledger if ledger is not None else AcceptanceLedger()
+    accepted = states.accepted()
+    blockers = states.registered_blockers()
+    hard = states.hard_failures()
+    if findings:
+        status = CHECK_STATUS_FAILED
+    elif not checked:
+        status = "not-applicable"
+    elif blockers:
+        status = CHECK_STATUS_MAINTENANCE
+    else:
+        status = CHECK_STATUS_PASSED
+    uncovered = list(uncovered or [])
+    if uncovered and status == CHECK_STATUS_PASSED:
+        # 范围漏项不能静默：声明了非验收记录却没有逐项状态，等同于消费者漏看。
+        status = CHECK_STATUS_FAILED
+    # 维护完成态退出 0 但状态不是 passed；硬失败、范围漏项与未知状态都以非零结束。
+    exit_code = 1 if findings or uncovered else 0
+    result: dict[str, object] = {
+        "protocol": ACCEPTANCE_PROTOCOL,
+        "check": name,
+        "checked": checked,
+        "findings": [asdict(item) for item in findings],
+        "status": status,
+        "executed": True,
+        "process_exit_code": exit_code,
+        # 未配置证据时也显式报告 null，消费者不能把“没有指纹”当成“已验证”。
+        "evidence": evidence.describe() if evidence is not None else None,
+        "acceptance": {
+            "schema": ACCEPTANCE_REPORT_SCHEMA,
+            "mode": "maintenance" if maintenance else "strict",
+            "scanned_files": checked,
+            "scope": {"files": list(scope or []), "count": len(scope or [])},
+            "counts": {
+                "scanned_files": checked,
+                "accepted": len(accepted),
+                "registered_blockers": len(blockers),
+                "hard_failures": len(hard),
+                "findings": len(findings),
+                "uncovered_records": len(uncovered),
+            },
+            # 已验收来源与独立 A1 分支结果分列：来源说明形态（含 C2 内容点分支）与
+            # 作者标签形态（E1-author-only）分别统计，A1 不属于来源 accepted 集合。
+            "accepted": [state.summary() for state in accepted],
+            "accepted_source_notes": [
+                state.summary()
+                for state in accepted
+                if state.form == ACCEPTANCE_FORM_SOURCE_NOTE
+            ],
+            "accepted_author_branch": [
+                state.summary()
+                for state in accepted
+                if state.form == ACCEPTANCE_FORM_AUTHOR_TAG
+            ],
+            "registered_blockers": [state.summary() for state in blockers],
+            "hard_failures": [state.summary() for state in hard],
+            "uncovered_records": uncovered,
+        },
+    }
+    return result
+
+
 def _emit(
-    name: str, checked: int, findings: list[Finding], evidence: EvidenceRegistry | None
+    name: str,
+    checked: int,
+    findings: list[Finding],
+    evidence: EvidenceRegistry | None,
+    ledger: AcceptanceLedger | None = None,
+    maintenance: bool = False,
+    uncovered: list[dict[str, object]] | None = None,
+    scope: list[str] | None = None,
 ) -> int:
     """输出结构化结果，并附上本次采用的证据输入指纹。
 
@@ -4151,15 +4891,68 @@ def _emit(
         checked: 实际消费对象数量。
         findings: 注释门禁问题列表。
         evidence: 受控证据清单；未配置时为 ``None``。
+        ledger: 逐项验收状态收集器。
+        maintenance: 是否处于显式维护模式。
+        uncovered: 扫描范围内的索引漏项。
+        scope: 本次实际扫描的仓库相对路径。
     Returns:
-        存在规则问题时为 1，否则为 0。
+        存在硬失败或范围漏项时为 1，否则为 0；维护完成态返回 0 但不是 ``passed``。
     """
 
-    result = payload(name, checked, findings)
-    # 未配置证据时也显式报告 null，消费者不能把“没有指纹”当成“已验证”。
-    result["evidence"] = evidence.describe() if evidence is not None else None
+    result = _acceptance_payload(
+        name, checked, findings, evidence, ledger, maintenance, uncovered, scope
+    )
     print(json.dumps(result, ensure_ascii=False))
-    return 1 if findings else 0
+    return int(result["process_exit_code"])
+
+
+def uncovered_acceptance_records(
+    registry: EvidenceRegistry | None,
+    scanned: set[str],
+    ledger: AcceptanceLedger | None,
+) -> list[dict[str, object]]:
+    """列出扫描范围内有非验收索引记录但没有逐项状态的漏项（裁决 D15 §68/§69）。
+
+    消费者的“范围漏项”指的是：索引声明了某对象尚未验收，本次扫描又确实覆盖了该文件，
+    但报告里既没有它的已验收条目，也没有阻断或硬失败条目。这类漏项不能按默认 0、
+    空集合或旧账本降级。
+
+    Args:
+        registry: 受控证据清单。
+        scanned: 本次实际扫描的仓库相对路径集合。
+        ledger: 本次收集的逐项验收状态。
+
+    Returns:
+        漏项摘要列表（含记录标识与判词）；没有漏项时为空。
+    """
+
+    if registry is None or not registry.requires_acceptance_state:
+        return []
+    covered: set[str] = set()
+    if ledger is not None:
+        for state in ledger.states:
+            covered.add(state.record_id)
+            covered.add(f"{state.path}#{state.type_name}")
+    uncovered: list[dict[str, object]] = []
+    for path, record in sorted(registry.records.items()):
+        if path not in scanned:
+            continue
+        verdict = _index_verdict(record)
+        if verdict in (*SOURCE_NOTE_ACCEPTED_VERDICTS, *AUTHOR_TAG_ACCEPTED_VERDICTS):
+            continue
+        if any(record_id.startswith(f"{path}#") for record_id in covered):
+            continue
+        uncovered.append(
+            {
+                "record_id": path,
+                "path": path,
+                "verdict": verdict,
+                "blocker_reason": _text(record, SOURCE_NOTE_BLOCKER_FIELD),
+                "open_gap": _text(record, "open_gap"),
+            }
+        )
+    return uncovered
+
 
 
 def _describe_evidence(evidence: EvidenceRegistry | None) -> str:
@@ -4179,6 +4972,7 @@ def _describe_evidence(evidence: EvidenceRegistry | None) -> str:
 resolve_evidence = _resolve_evidence
 describe_evidence = _describe_evidence
 configured_evidence = _configured_evidence
+acceptance_payload = _acceptance_payload
 
 
 def _repository_root() -> Path:
@@ -4203,6 +4997,7 @@ def main() -> int:
     """
 
     args = _parse_args()
+    maintenance = maintenance_requested(args)
     if args.self_test:
         _run_self_test()
         return 0
@@ -4244,13 +5039,36 @@ def main() -> int:
             return 0
         if not args.json:
             print(f"Java 注释检查范围：{len(paths)} 个暂存文件，根目录 {JAVA_SOURCE_ROOT}，仅检查受影响声明。")
-        findings = _scan_staged_java_comments(paths, evidence=evidence)
+        ledger = AcceptanceLedger()
+        findings = _scan_staged_java_comments(
+            paths,
+            evidence=evidence,
+            acceptance=ledger,
+            maintenance=maintenance,
+        )
+        uncovered = uncovered_acceptance_records(evidence, set(paths), ledger)
     except RuntimeError as error:
         print(f"Java 注释检查失败：{error}", file=sys.stderr)
         return 2
     if args.json:
-        return _emit("Java 注释", len(paths), findings, evidence)
+        return _emit(
+            "Java 注释",
+            len(paths),
+            findings,
+            evidence,
+            ledger,
+            maintenance,
+            uncovered,
+            sorted(paths),
+        )
     if not findings:
+        if maintenance and ledger.registered_blockers():
+            print(
+                "Java 注释检查完成（维护模式）：执行完成，存在已登记阻断 "
+                f"{len(ledger.registered_blockers())} 项，来源尚未验收；"
+                "不计为通过。"
+            )
+            return 0
         print("Java 注释检查通过：暂存区新增或修改的声明符合要求")
         return 0
     print("检测到 Java 注释问题，已阻止提交：", file=sys.stderr)

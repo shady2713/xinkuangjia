@@ -13,6 +13,7 @@ import java.lang.annotation.Target;
  * 手机号格式校验注解。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Target({
         ElementType.METHOD,

@@ -122,7 +122,9 @@ def test_inflight_change_invalidates_successful_checks(tmp_path: Path, monkeypat
     monkeypatch.setattr(run_checks, "DEFAULT_ROOT", tools)
     gate = Gate("md-links", "docs/verify_md_links.py", "docs")
 
-    def changed_schedule(gates: list[Gate], folder: Path, jobs: int, timeout: float) -> list[Outcome]:
+    def changed_schedule(
+        gates: list[Gate], folder: Path, jobs: int, timeout: float, **options: object
+    ) -> list[Outcome]:
         """模拟检查完成前的并发编辑，保留一条表面成功结果供证据层拒绝。"""
         (folder / "中文 说明.md").write_text("# 并发修改\n", encoding="utf-8")
         return [Outcome(gate.name, "passed", 0, 0, "", checked=1, command=tuple(command_for(gate, folder)), cwd=str(folder))]

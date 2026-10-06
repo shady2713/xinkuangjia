@@ -72,8 +72,14 @@ def test_runner_failure_skips_only_dependents(
     """前置失败会阻断依赖项，但不会吞掉独立检查结果。"""
     calls = []
 
-    def fake_execute(gate: Gate, root: Path, timeout: float, cancel: threading.Event) -> Outcome:
-        """返回可控失败，记录实际调度的检查。"""
+    def fake_execute(
+        gate: Gate,
+        root: Path,
+        timeout: float,
+        cancel: threading.Event,
+        **options: object,
+    ) -> Outcome:
+        """返回可控失败，记录实际调度的检查；新增的维护/报告选项不影响本用例。"""
         calls.append(gate.name)
         return Outcome(
             gate.name,
@@ -99,7 +105,13 @@ def test_runner_concurrency_is_bounded(tmp_path: Path, monkeypatch: pytest.Monke
     active = 0
     maximum = 0
 
-    def fake_execute(gate: Gate, root: Path, timeout: float, cancel: threading.Event) -> Outcome:
+    def fake_execute(
+        gate: Gate,
+        root: Path,
+        timeout: float,
+        cancel: threading.Event,
+        **options: object,
+    ) -> Outcome:
         """在两个任务同时进入后释放，避免固定休眠猜测并发。"""
         nonlocal active, maximum
         with lock:

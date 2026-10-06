@@ -19,6 +19,7 @@ import java.util.List;
  * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/dal/mysql/user/AdminUserMapper.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间适配；分页查询补平台类型条件；新增按主键行锁查询；补全类型与方法 JavaDoc。
+ * 来源验收：尚未验收
  */
 @Mapper
 public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {

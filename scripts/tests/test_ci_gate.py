@@ -189,6 +189,173 @@ def evidence_directory(tmp_path: Path, *, cases: dict[str, int] | None = None,
     return directory
 
 
+SOURCE_INDEX_RELATIVE = "docs/测试与可靠性/来源证据/d12-source-index.json"
+SOURCE_JAVA_ROOT = (
+    "后端代码/basic-framework-boot/basic-framework-core/basic-framework-core/"
+    "src/main/java/example"
+)
+ACCEPTED_VERDICT = "已按 D12 格式写入来源说明并撤回无依据署名"
+BLOCKED_VERDICT = "证据不足，保持原状并登记阻断"
+
+
+def source_document(path: str, verdict: str, *, blocker: str = "") -> dict[str, object]:
+    """构造一条受控来源索引记录；未验收记录带完整登记字段。"""
+
+    return {
+        "local_path": path,
+        "scope": "backend-prod",
+        "upstream_repo_url": "https://github.com/YunaiV/ruoyi-vue-pro.git",
+        "upstream_commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+        "upstream_sha256": digest(f"upstream:{path}"),
+        "author_status": "已核实来源但作者未声明",
+        "evidence_route": "路线 3（证据不足，阻断）",
+        "evidence_points": "P2 注释点（共享独特注释正文）：来源验收探针 本地 L1 / 上游 L1",
+        "open_gap": "①上游该固定版本未声明作者；②历史引入版本仍未核实。",
+        "review_by": "CI 规则测试",
+        "review_date": "2026-10-06",
+        "review_conclusion": f"逐项复核 {Path(path).stem}：按登记结论保持未验收。",
+        "type_evidence": json.dumps(
+            {
+                "schema": "d12-type-evidence/v1",
+                "file": {"local_path": path, "local_sha256_final": ""},
+                "types": [
+                    {
+                        "qualified_name": f"example.{Path(path).stem}",
+                        "simple_name": Path(path).stem,
+                        "kind": "class",
+                        "nested": False,
+                        "enclosing_type": None,
+                        "upstream_type": f"cn.iocoder.yudao.example.{Path(path).stem}",
+                        "upstream_author_declared": False,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        "d12_verdict": verdict,
+        "d12_blocker_reason": blocker,
+    }
+
+
+def source_tree(root: Path, *, blocked: int = 0) -> Path:
+    """写出一棵最小来源树：纳管 Java 文件与受控索引。
+
+    blocked>0 时额外写出若干条未验收记录，用于验证“存在适用阻断时 release 必须
+    退出 1 且 release_verified=false”。
+    """
+
+    records = []
+    for index in range(blocked):
+        name = f"Blocked{index}Demo"
+        path = f"{SOURCE_JAVA_ROOT}/{name}.java"
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            f"package example;\n\n/** 阻断样本 {index}。 */\npublic class {name} {{\n}}\n",
+            encoding="utf-8",
+        )
+        records.append(source_document(path, BLOCKED_VERDICT, blocker="路线 3 只有 1 个独立定位对应点。"))
+    accepted = f"{SOURCE_JAVA_ROOT}/SourceGateDemo.java"
+    target = root / accepted
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "package example;\n\n/** 已验收样本。 */\npublic class SourceGateDemo {\n}\n",
+        encoding="utf-8",
+    )
+    records.append(source_document(accepted, ACCEPTED_VERDICT))
+    index = root / SOURCE_INDEX_RELATIVE
+    index.parent.mkdir(parents=True, exist_ok=True)
+    index.write_text(
+        json.dumps({"index_schema": "d12-source-index/v1", "manifest": {}, "records": records},
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return root
+
+
+def source_report(root: Path, revision: str, *, mode: str = "strict") -> dict[str, object]:
+    """按来源树与索引真实生成一份来源验收报告，字段全部由账本与文件复算。"""
+
+    index = (root / SOURCE_INDEX_RELATIVE).read_bytes()
+    document = json.loads(index.decode("utf-8"))
+    accepted, hard = [], []
+    for record in document["records"]:
+        path = record["local_path"]
+        source = root / path
+        verdict = record["d12_verdict"]
+        item = {
+            "record_id": path,
+            "path": path,
+            "line": 4,
+            "type_name": f"example.{Path(path).stem}",
+            "form": "来源说明",
+            "classification": "accepted" if verdict == ACCEPTED_VERDICT else "hard-failure",
+            "verdict": verdict,
+            "blocker_reason": record["d12_blocker_reason"],
+            "open_gap": record["open_gap"],
+            "local_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        }
+        (accepted if verdict == ACCEPTED_VERDICT else hard).append(item)
+    scope = sorted(gate.managed_java_files(root))
+    scanner = gate.SOURCE_ROOT / "scripts/code/java/check_staged_java_comments.py"
+    return {
+        "protocol": gate.SOURCE_PROTOCOL,
+        "check": "Java 注释（全量）",
+        "checked": len(scope),
+        "findings": [{"path": item["path"], "line": 4, "rule": "type-author", "detail": "x"}
+                     for item in hard],
+        "status": "failed" if hard else "passed",
+        "evidence": {
+            "registry": str(root / SOURCE_INDEX_RELATIVE),
+            "registry_sha256": hashlib.sha256(index).hexdigest(),
+            "records": len(document["records"]),
+        },
+        "revision": revision,
+        "scanner": {
+            "path": "scripts/code/java/check_staged_java_comments.py",
+            "sha256": hashlib.sha256(scanner.read_bytes()).hexdigest(),
+        },
+        "acceptance": {
+            "schema": gate.SOURCE_REPORT_SCHEMA,
+            "mode": mode,
+            "revision": revision,
+            "index_schema": "d12-source-index/v1",
+            "scanned_files": len(scope),
+            "counts": {
+                "scanned_files": len(scope),
+                "accepted": len(accepted),
+                "registered_blockers": 0,
+                "hard_failures": len(hard),
+                "findings": len(hard),
+                "uncovered_records": 0,
+            },
+            "accepted": accepted,
+            "registered_blockers": [],
+            "hard_failures": hard,
+            "uncovered_records": [],
+            "scope": {"files": scope, "count": len(scope)},
+        },
+    }
+
+
+def write_source_report(root: Path, revision: str, *, directory: Path | None = None,
+                        mode: str = "strict") -> Path:
+    """把来源验收报告写到发布证据目录，返回实际路径。"""
+
+    report = source_report(root, revision, mode=mode)
+    target = (directory or root) / gate.SOURCE_REPORT_NAME
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    return target
+
+
+@pytest.fixture
+def clean_source(tmp_path: Path) -> Path:
+    """提供一棵来源零阻断的最小来源树，供不关注来源状态的聚合用例复用。"""
+
+    return source_tree(tmp_path / "clean-source")
+
+
 def job_section(name: str) -> str:
     """按两空格作业缩进取回单个作业的 YAML 文本块，用于核对真实编排。"""
     text = WORKFLOW.read_text(encoding="utf-8")
@@ -292,25 +459,138 @@ class TestBrowserE2EWorkflow:
 class TestAggregate:
     """固定作业必须真实成功、有正整数计数且阶段一致才允许通过。"""
 
-    def test_normal_aggregation_reports_counts(self) -> None:
-        """全部必需作业成功时返回阶段、状态与逐作业用例数，非发布阶段不带发布证据。"""
-        result = gate.aggregate(needs(), "audit")
+    def test_normal_aggregation_reports_counts(self, tmp_path: Path) -> None:
+        """全部必需作业成功且来源零阻断时返回阶段、状态与逐作业用例数。"""
+        root = source_tree(tmp_path / "clean-source")
+        result = gate.aggregate(needs(), "audit", source_root=root)
         assert result == {"schema": "ci-summary/v1", "stage": "audit", "status": "passed",
                           "tests": {"backend": 4, "browser_e2e": 4, "docs_tools": 4, "frontend": 4},
-                          "release_verified": False, "release_evidence": None}
+                          "release_verified": False, "release_evidence": None,
+                          "source_acceptance": result["source_acceptance"], "exit_code": 0}
+        assert result["source_acceptance"]["status"] == "passed"
+        assert result["source_acceptance"]["applicable_blockers"] == 0
+
+    def test_existing_blockers_keep_aggregate_red(self, tmp_path: Path) -> None:
+        """反例：来源仍有未验收项时，非发布阶段也不能报告通过。"""
+        root = source_tree(tmp_path / "blocked-source", blocked=2)
+        result = gate.aggregate(needs(), "audit", source_root=root)
+        assert result["status"] == "blocked" and result["exit_code"] == 1
+        assert result["source_acceptance"]["index_blockers"] == 2
+        assert result["release_verified"] is False
 
     @pytest.mark.parametrize("stage", STAGES)
     def test_release_flag_only_for_verified_release(self, stage: str, tmp_path: Path) -> None:
         """反例：阶段标签本身不构成发布证据；只有真实证据齐备的 release 才标记已验证。"""
+        root = source_tree(tmp_path / "clean-source")
         if stage != "release":
-            assert gate.aggregate(needs(stage), stage)["release_verified"] is False
+            assert gate.aggregate(
+                needs(stage), stage, source_root=root
+            )["release_verified"] is False
             return
         with pytest.raises(ValueError):
             gate.aggregate(release_needs(), "release")
         directory = evidence_directory(tmp_path)
-        result = gate.aggregate(release_needs(), "release", directory, REVISION)
+        write_source_report(root, REVISION, directory=directory)
+        result = gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
         assert result["release_verified"] is True
         assert result["release_evidence"]["revision"] == REVISION
+
+    def test_release_with_blockers_is_false_even_when_jobs_succeed(self, tmp_path: Path) -> None:
+        """反例：四个作业全部 success 且有正计数，来源报告仍有阻断也必须拒绝发布。"""
+        root = source_tree(tmp_path / "blocked-source", blocked=1)
+        directory = evidence_directory(tmp_path)
+        write_source_report(root, REVISION, directory=directory)
+        result = gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
+        assert result["status"] == "blocked"
+        assert result["release_verified"] is False
+        assert result["exit_code"] == 1
+        assert result["source_acceptance"]["counts"]["hard_failures"] == 1
+        assert result["source_acceptance"]["hard_failures"][0]["verdict"] == BLOCKED_VERDICT
+
+    def test_release_requires_a_source_report(self, tmp_path: Path) -> None:
+        """反例：删掉来源报告后不能用默认 0、空集合或作业成功代替来源验收。"""
+        root = source_tree(tmp_path / "clean-source")
+        directory = evidence_directory(tmp_path)
+        with pytest.raises(ValueError) as failure:
+            gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
+        assert "来源验收报告" in str(failure.value)
+
+    def test_source_report_must_match_current_ledger_and_rules(self, tmp_path: Path) -> None:
+        """反例：改计数、减清单、换旧提交或改规则指纹都必须被复核拒绝。"""
+        root = source_tree(tmp_path / "source")
+        directory = evidence_directory(tmp_path)
+        write_source_report(root, REVISION, directory=directory)
+        target = directory / gate.SOURCE_REPORT_NAME
+        original = json.loads(target.read_text(encoding="utf-8"))
+
+        def rejected(document: dict[str, object], revision: str = REVISION) -> None:
+            """写入被篡改的报告并断言发布汇总受控拒绝，随后还原原报告。"""
+
+            target.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+            with pytest.raises(ValueError):
+                gate.aggregate(release_needs(), "release", directory, revision, source_root=root)
+            target.write_text(json.dumps(original, ensure_ascii=False), encoding="utf-8")
+
+        decremented = json.loads(json.dumps(original))
+        decremented["acceptance"]["counts"]["accepted"] = 99
+        rejected(decremented)
+        removed = json.loads(json.dumps(original))
+        removed["acceptance"]["accepted"] = []
+        rejected(removed)
+        stale = json.loads(json.dumps(original))
+        stale["revision"] = "f" * 40
+        stale["acceptance"]["revision"] = "f" * 40
+        rejected(stale)
+        wrong_rules = json.loads(json.dumps(original))
+        wrong_rules["scanner"]["sha256"] = "0" * 64
+        rejected(wrong_rules)
+        wrong_ledger = json.loads(json.dumps(original))
+        wrong_ledger["evidence"]["registry_sha256"] = "0" * 64
+        rejected(wrong_ledger)
+
+    def test_source_report_with_hidden_blocker_is_rejected(self, tmp_path: Path) -> None:
+        """反例：把未验收记录从清单里删掉（少报阻断）必须被独立复算揭穿。"""
+        root = source_tree(tmp_path / "blocked-source", blocked=1)
+        directory = evidence_directory(tmp_path)
+        write_source_report(root, REVISION, directory=directory)
+        target = directory / gate.SOURCE_REPORT_NAME
+        document = json.loads(target.read_text(encoding="utf-8"))
+        document["acceptance"]["hard_failures"] = []
+        document["acceptance"]["counts"]["hard_failures"] = 0
+        document["acceptance"]["counts"]["findings"] = 0
+        document["findings"] = []
+        document["status"] = "passed"
+        target.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        with pytest.raises(ValueError) as failure:
+            gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
+        assert "复算不一致" in str(failure.value)
+
+    def test_source_report_missing_index_schema_is_rejected(self, tmp_path: Path) -> None:
+        """反例：缺少来源索引 schema 声明的账本不能被当成有效的本次来源验收。"""
+        root = source_tree(tmp_path / "source")
+        index = root / SOURCE_INDEX_RELATIVE
+        document = json.loads(index.read_text(encoding="utf-8"))
+        document.pop("index_schema")
+        index.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+        directory = evidence_directory(tmp_path)
+        write_source_report(root, REVISION, directory=directory)
+        with pytest.raises(ValueError) as failure:
+            gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
+        assert "schema" in str(failure.value)
+
+    def test_maintenance_stage_states_blockers_without_passing(self, tmp_path: Path) -> None:
+        """反例：维护模式可以让非发布汇总退出 0，但不得被当成通过或发布已验证。"""
+        root = source_tree(tmp_path / "blocked-source", blocked=1)
+        result = gate.aggregate(
+            needs(), "audit", source_root=root, maintenance=True
+        )
+        assert result["status"] == "completed-with-registered-blockers"
+        assert result["exit_code"] == 0
+        assert result["release_verified"] is False
+        assert result["source_acceptance"]["applicable_blockers"] == 1
+        with pytest.raises(ValueError):
+            gate.aggregate(release_needs(), "release", None, REVISION,
+                           source_root=root, maintenance=True)
 
     @pytest.mark.parametrize("broken", [
         ["not", "a", "dict"], "checked=4", 7, None, True,
@@ -329,10 +609,12 @@ class TestAggregate:
                 gate.aggregate(needs(**{name: []}), "audit")
 
     @pytest.mark.parametrize("result", ["skipped", "cancelled", "failure", "success"])
-    def test_non_success_job_rejected(self, result: str) -> None:
+    def test_non_success_job_rejected(self, result: str, clean_source: Path) -> None:
         """skipped/cancelled/failure 一律不算通过；只有 success 可以。"""
         if result == "success":
-            assert gate.aggregate(needs(result=result), "audit")["status"] == "passed"
+            assert gate.aggregate(
+                needs(result=result), "audit", source_root=clean_source
+            )["status"] == "passed"
             return
         with pytest.raises(ValueError):
             gate.aggregate(needs(result=result), "audit")
@@ -757,7 +1039,10 @@ class TestWorkflowWiring:
         gate_section = job_section("gate")
         assert "RELEASE_EVIDENCE" in gate_section
         assert "CI_REVISION" in gate_section
-        assert gate_section.count("actions/download-artifact@v4") == len(gate.RELEASE_JOBS)
+        # 逐作业取回发布证据，另加一份来源验收报告（D15：存在已登记阻断时 release 必须红）。
+        # 这里钉住“恰好这么多份、且来源报告必须在场”，多一份少一份都会失败。
+        assert "release-evidence-source" in gate_section
+        assert gate_section.count("actions/download-artifact@v4") == len(gate.RELEASE_JOBS) + 1
         for spec in gate.RELEASE_JOBS.values():
             assert f'name: {spec["evidence"].replace("release-", "release-evidence-").replace(".json", "")}' in gate_section
 
@@ -963,9 +1248,10 @@ class TestCommandLine:
                               cwd=ROOT, env={"PATH": os.environ.get("PATH", ""), **environment},
                               capture_output=True, text=True, timeout=120, check=False)
 
-    def test_aggregate_success_exits_zero(self) -> None:
-        """合法 needs 输出摘要并返回 0。"""
-        done = self.run({"NEEDS_JSON": json.dumps(needs())}, "aggregate", "--stage", "audit")
+    def test_aggregate_success_exits_zero(self, clean_source: Path) -> None:
+        """合法 needs 且来源零阻断时输出摘要并返回 0。"""
+        done = self.run({"NEEDS_JSON": json.dumps(needs())}, "aggregate", "--stage", "audit",
+                        "--source-root", str(clean_source))
         assert done.returncode == 0, done.stderr
         assert json.loads(done.stdout)["status"] == "passed"
 
@@ -999,20 +1285,52 @@ class TestCommandLine:
         assert "Traceback" not in done.stderr
 
     def test_release_with_real_evidence_exits_zero(self, tmp_path: Path) -> None:
-        """正例：取回的证据与作业计数一致时输出发布结论并返回 0。"""
+        """正例：发布证据与来源验收报告都齐备且零阻断时才输出发布结论并返回 0。"""
         directory = evidence_directory(tmp_path)
+        root = source_tree(tmp_path / "clean-source")
+        report = write_source_report(root, REVISION, directory=directory)
         done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
-                         "CI_REVISION": REVISION}, "aggregate", "--stage", "release")
+                         "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
+                        "--source-root", str(root))
         assert done.returncode == 0, done.stderr
         summary = json.loads(done.stdout)
         assert summary["release_verified"] is True
         assert summary["release_evidence"]["revision"] == REVISION
+        assert summary["source_acceptance"]["report"] == str(report)
+
+    def test_release_with_blockers_exits_one_and_outputs_false(self, tmp_path: Path) -> None:
+        """反例：作业全绿、来源报告仍有已登记阻断时，汇总必须退出 1 并输出 false。"""
+        directory = evidence_directory(tmp_path)
+        root = source_tree(tmp_path / "blocked-source", blocked=1)
+        write_source_report(root, REVISION, directory=directory)
+        done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
+                         "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
+                        "--source-root", str(root))
+        assert done.returncode == 1
+        summary = json.loads(done.stdout)
+        assert summary["status"] == "blocked" and summary["release_verified"] is False
+        assert summary["source_acceptance"]["counts"]["hard_failures"] == 1
+        assert "Traceback" not in done.stderr
+
+    def test_release_without_source_report_exits_one(self, tmp_path: Path) -> None:
+        """反例：删除来源报告后发布汇总受控失败，不输出成功结论。"""
+        directory = evidence_directory(tmp_path)
+        root = source_tree(tmp_path / "clean-source")
+        done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
+                         "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
+                        "--source-root", str(root))
+        assert done.returncode == 1
+        assert done.stdout == ""
+        assert "来源验收报告" in done.stderr and "Traceback" not in done.stderr
 
     def test_release_flags_accepted_from_cli(self, tmp_path: Path) -> None:
-        """正例：目录与提交标识也可以由显式参数提供，行为与取环境一致。"""
+        """正例：目录、提交标识与来源报告也可以由显式参数提供。"""
         directory = evidence_directory(tmp_path)
+        root = source_tree(tmp_path / "clean-source")
+        report = write_source_report(root, REVISION)
         done = self.run({"NEEDS_JSON": json.dumps(release_needs())}, "aggregate", "--stage", "release",
-                        "--release-evidence", str(directory), "--revision", REVISION)
+                        "--release-evidence", str(directory), "--revision", REVISION,
+                        "--source-report", str(report), "--source-root", str(root))
         assert done.returncode == 0, done.stderr
         assert json.loads(done.stdout)["release_verified"] is True
 
@@ -1052,10 +1370,11 @@ class TestCommandLine:
         assert secret not in result.stdout and secret not in result.stderr
         assert "Traceback" not in result.stderr
 
-    def test_extra_output_key_does_not_break_aggregation(self) -> None:
+    def test_extra_output_key_does_not_break_aggregation(self, clean_source: Path) -> None:
         """合法阶段与计数下，上游附带的其他输出键不影响聚合结论。"""
         secret = "DUMMY-ghp-EXTRAKEYVALUE0987654321"
         payload = json.dumps(needs(backend={"stage": "audit", "checked": "1", "token": secret}))
-        result = self.run({"NEEDS_JSON": payload}, "aggregate", "--stage", "audit")
+        result = self.run({"NEEDS_JSON": payload}, "aggregate", "--stage", "audit",
+                          "--source-root", str(clean_source))
         assert result.returncode == 0, result.stderr
         assert secret not in result.stdout

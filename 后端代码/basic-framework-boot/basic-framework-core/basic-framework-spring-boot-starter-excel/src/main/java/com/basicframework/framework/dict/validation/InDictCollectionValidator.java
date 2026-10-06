@@ -18,6 +18,7 @@ import java.util.List;
  * 上游文件续：InDictCollectionValidator.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：jakarta 命名空间适配；字典值比较补空值防护；补全类型与方法职责 JavaDoc。
+ * 来源验收：尚未验收
  */
 public class InDictCollectionValidator implements ConstraintValidator<InDict, Collection<?>> {
 

@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.configurers.AuthorizeH
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/framework/security/config/SecurityConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 8 行；补充注释 14 行，上游注释 4 行未保留。
+ * 来源验收：尚未验收
  */
 @Configuration(proxyBeanMethods = false, value = "infraSecurityConfiguration")
 public class SecurityConfiguration {

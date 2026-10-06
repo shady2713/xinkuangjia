@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Bean;
  * Easy-Trans 数据翻译自动配置类。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @AutoConfiguration
 public class BasicFrameworkTranslateAutoConfiguration {

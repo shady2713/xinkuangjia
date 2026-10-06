@@ -16,6 +16,7 @@ import java.util.List;
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 28 行。
  *
  * @param <T> 数据项类型
+ * 来源验收：尚未验收
  */
 @Schema(description = "分页结果")
 @Data

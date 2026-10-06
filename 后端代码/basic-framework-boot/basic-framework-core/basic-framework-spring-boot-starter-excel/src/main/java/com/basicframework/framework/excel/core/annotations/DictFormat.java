@@ -12,6 +12,7 @@ import java.lang.annotation.Target;
  * 导出时将字典值格式化为字典标签，导入时将字典标签解析为字典值。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)

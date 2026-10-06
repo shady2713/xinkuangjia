@@ -17,6 +17,7 @@ import lombok.Data;
  * 上游文件续：system/controller/admin/permission/vo/role/RoleSaveReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 2 行；import 新增 3 行、移除 3 行；补充注释 26 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 角色创建/更新 Request VO")
 @Data

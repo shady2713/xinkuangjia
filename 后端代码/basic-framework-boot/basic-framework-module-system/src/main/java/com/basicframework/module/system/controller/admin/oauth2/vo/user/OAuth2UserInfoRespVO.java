@@ -15,6 +15,7 @@ import java.util.List;
  * 上游文件续：system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 5 行，移除或改写上游 5 行；补充注释 22 行，上游注释 2 行未保留。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - OAuth2 获得用户基本信息 Response VO")
 @Data
@@ -81,6 +82,7 @@ public class OAuth2UserInfoRespVO {
      * 上游文件续：system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
      * 来源依据：固定见证版本；历史引入版本未核实。
      * 本地修改：本地补充注释 6 行。
+     * 来源验收：尚未验收
      */
     @Schema(description = "部门")
     @Data
@@ -108,6 +110,7 @@ public class OAuth2UserInfoRespVO {
      * 上游文件续：system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
      * 来源依据：固定见证版本；历史引入版本未核实。
      * 本地修改：本地补充注释 6 行。
+     * 来源验收：尚未验收
      */
     @Schema(description = "岗位")
     @Data

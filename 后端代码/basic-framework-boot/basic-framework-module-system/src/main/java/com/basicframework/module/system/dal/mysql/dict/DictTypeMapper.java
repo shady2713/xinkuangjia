@@ -15,6 +15,7 @@ import java.util.Collection;
  * 字典类型数据访问接口。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Mapper
 public interface DictTypeMapper extends BaseMapperX<DictTypeDO> {

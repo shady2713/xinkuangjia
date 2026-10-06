@@ -38,6 +38,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_P
  * 上游文件续：system/controller/admin/permission/PermissionController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 24 行，移除或改写上游 5 行；import 新增 12 行、移除 4 行；补充注释 46 行，上游注释 1 行未保留。
+ * 来源验收：尚未验收
  */
 @Tag(name = "管理后台 - 权限")
 @RestController

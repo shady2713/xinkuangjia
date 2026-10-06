@@ -4,12 +4,19 @@
 scripts/workflow/static_gate.py 在作业内从真实 PMD/lint 报告生成，本模块独立复核
 其执行状态、零违规、工具与命令、配置指纹、检查范围与真实源码清单是否一致。
 
+按裁决 D15 §69/§80/§82，发布汇总还必须直接消费来源验收状态：本模块取回本次
+`source-acceptance-report/v1` 报告，核对提交、规则指纹、受控账本指纹、扫描范围、
+逐项状态与计数，并用仓库内索引与真实文件独立复算一遍。报告缺失、未知 schema、
+旧提交、计数不符、范围漏项或仍有适用阻断时，来源验收不通过；只要存在未解决阻断，
+release 汇总就退出 1 且 `release_verified=false`，不得因为“已登记”而转绿。
+
 @author OpenAI Codex
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -61,6 +68,19 @@ RELEASE_CHECKS = {
                  "frontend-production-build": "no_count",
                  "frontend-production-scan": "no_count"},
 }
+# 来源验收报告（裁决 D15 §65/§69）：由全量 Java 注释检查在真实扫描后写出，
+# 发布汇总必须取回并独立复核，不能用作业成功、默认 0 或旧账本代替。
+SOURCE_REPORT_SCHEMA = "source-acceptance-report/v1"
+SOURCE_PROTOCOL = "quality-check/v2"
+SOURCE_INDEX_DEFAULT = "docs/测试与可靠性/来源证据/d12-source-index.json"
+SOURCE_ACCEPTED_VERDICTS = (
+    "已按 D12 格式写入来源说明并撤回无依据署名",
+    "已按 D12 格式写入来源说明（D10b 改判）",
+    "A1（E1-author-only）成立，恢复上游证据支持的作者",
+)
+SOURCE_REPORT_NAME = "source-acceptance-report.json"
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
 
 
 def json_document(directory: Path, name: str) -> dict[str, object]:
@@ -341,8 +361,312 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
     return {"directory": str(directory), "revision": revision, "jobs": released}
 
 
-def aggregate(needs: object, stage: str, evidence: Path | None = None,
-              revision: str | None = None) -> dict[str, object]:
+def managed_java_files(root: Path) -> set[str]:
+    """独立枚举纳管 Java 源码，用于核对来源报告的扫描范围是否漏项。
+
+    Args:
+        root: 待检查仓库根目录。
+    Returns:
+        仓库相对路径集合；枚举失败时抛出 ``ValueError``。
+    Raises:
+        ValueError: 目录不可读或布局规则无法加载。
+    """
+
+    from scripts.common.repository_layout import is_java_source
+
+    try:
+        files = {
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*.java")
+            if path.is_file()
+        }
+    except OSError as error:
+        raise ValueError(f"无法枚举纳管 Java 源码：{root}") from error
+    return {name for name in files if is_java_source(name)}
+
+
+def load_source_index(index: Path) -> tuple[dict[str, dict[str, object]], str]:
+    """独立读取受控来源索引，返回 ``local_path`` 记录映射与文件指纹。
+
+    Args:
+        index: 索引文件路径。
+    Returns:
+        记录映射与索引原始字节的 SHA-256。
+    Raises:
+        ValueError: 文件缺失、不是合法 JSON 对象、未声明派生 schema 或记录结构异常。
+    """
+
+    if not index.is_file():
+        raise ValueError(f"缺少受控来源索引：{index}")
+    raw = index.read_bytes()
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError) as error:
+        raise ValueError(f"受控来源索引不是可读的 JSON：{index}") from error
+    if not isinstance(document, dict) or document.get("index_schema") != "d12-source-index/v1":
+        raise ValueError("受控来源索引没有声明 d12-source-index/v1 schema")
+    records = document.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("受控来源索引没有记录")
+    mapped: dict[str, dict[str, object]] = {}
+    for record in records:
+        if not isinstance(record, dict) or not str(record.get("local_path", "")).strip():
+            raise ValueError("受控来源索引记录缺少 local_path")
+        mapped[str(record["local_path"])] = record
+    return mapped, hashlib.sha256(raw).hexdigest()
+
+
+def source_blockers_from_index(
+    root: Path, index: Path
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """没有报告时按索引独立推导适用阻断，供非发布阶段如实呈现（裁决 D15 §78）。
+
+    Args:
+        root: 待检查仓库根目录。
+        index: 受控来源索引路径。
+    Returns:
+        适用阻断摘要列表与该索引的指纹摘要。
+    Raises:
+        ValueError: 索引不可读或结构不符。
+    """
+
+    records, digest = load_source_index(index)
+    blockers: list[dict[str, object]] = []
+    for path, record in sorted(records.items()):
+        verdict = str(record.get("d12_verdict") or "").strip()
+        if verdict in SOURCE_ACCEPTED_VERDICTS:
+            continue
+        if not (root / path).is_file():
+            continue
+        blockers.append(
+            {
+                "record_id": path,
+                "path": path,
+                "form": "来源说明" if str(record.get("evidence_points") or "").strip() else "作者标签",
+                "classification": "registered-blocker",
+                "verdict": verdict,
+                "blocker_reason": str(record.get("d12_blocker_reason") or ""),
+                "open_gap": str(record.get("open_gap") or ""),
+            }
+        )
+    return blockers, {"registry": str(index), "registry_sha256": digest, "records": len(records)}
+
+
+def source_acceptance(
+    report_path: Path | None,
+    root: Path,
+    revision: str | None,
+) -> dict[str, object]:
+    """取回并独立复核来源验收报告（裁决 D15 §69/§80/§82）。
+
+    Args:
+        report_path: 本次来源验收报告路径；为 ``None`` 时按索引独立推导。
+        root: 待检查仓库根目录。
+        revision: 本次验证的提交标识。
+    Returns:
+        含来源、账本指纹、计数、逐项阻断与结论的来源验收摘要。
+    Raises:
+        ValueError: 报告缺失、schema/协议不符、提交或规则指纹不符、账本指纹不符、
+            范围漏项、计数不一致或复算不一致。
+    """
+
+    index = root / SOURCE_INDEX_DEFAULT
+    if report_path is None:
+        blockers, registry_info = source_blockers_from_index(root, index)
+        return {
+            "source": "index",
+            "report": None,
+            "status": "blocked" if blockers else "passed",
+            "registry": registry_info,
+            "counts": {"registered_blockers": 0, "hard_failures": 0, "uncovered_records": 0},
+            "registered_blockers": [],
+            "hard_failures": [],
+            "uncovered_records": [],
+            "index_blockers": len(blockers),
+            "applicable_blockers": len(blockers),
+        }
+    if not report_path.is_file():
+        raise ValueError(f"缺少来源验收报告：{report_path}")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"来源验收报告不是可读的 JSON：{report_path}") from error
+    if not isinstance(report, dict) or report.get("protocol") != SOURCE_PROTOCOL:
+        raise ValueError("来源验收报告的协议版本不正确")
+    if report.get("check") != "Java 注释（全量）":
+        raise ValueError("来源验收报告不是全量 Java 注释检查的结果")
+    acceptance = report.get("acceptance")
+    if not isinstance(acceptance, dict) or acceptance.get("schema") != SOURCE_REPORT_SCHEMA:
+        raise ValueError("来源验收报告的 schema 不正确")
+    if not isinstance(revision, str) or not REVISION_TEXT.fullmatch(revision):
+        raise ValueError("来源验收复核没有绑定本次提交标识")
+    if report.get("revision") != revision:
+        raise ValueError("来源验收报告绑定的提交与本次验证不一致")
+    scanner = report.get("scanner")
+    if not isinstance(scanner, dict):
+        raise ValueError("来源验收报告缺少规则实现指纹")
+    scanner_path = str(scanner.get("path", "")).strip()
+    if scanner_path != "scripts/code/java/check_staged_java_comments.py":
+        raise ValueError(f"来源验收报告的规则实现路径不正确：{scanner_path or '空'}")
+    # 规则指纹绑定本工具所属仓库的当前实现：报告必须由当前规则产出，不能用旧规则结论。
+    implementation = SOURCE_ROOT / scanner_path
+    if not implementation.is_file():
+        raise ValueError("来源验收报告声明的规则实现不存在")
+    if hashlib.sha256(implementation.read_bytes()).hexdigest() != str(
+        scanner.get("sha256", "")
+    ).lower():
+        raise ValueError("来源验收报告的规则实现指纹与当前规则不一致")
+    records, digest = load_source_index(index)
+    evidence = report.get("evidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("来源验收报告缺少账本指纹")
+    if Path(str(evidence.get("registry", ""))).resolve() != index.resolve():
+        raise ValueError("来源验收报告采用的账本不是仓库内受控索引")
+    if str(evidence.get("registry_sha256", "")).lower() != digest:
+        raise ValueError("来源验收报告的账本指纹与当前索引不一致")
+    if int(evidence.get("records", -1)) != len(records):
+        raise ValueError("来源验收报告的账本记录数与当前索引不一致")
+    if acceptance.get("index_schema") != "d12-source-index/v1":
+        raise ValueError("来源验收报告没有声明受控派生索引 schema")
+    scope = acceptance.get("scope")
+    if not isinstance(scope, dict) or not isinstance(scope.get("files"), list):
+        raise ValueError("来源验收报告缺少扫描范围清单")
+    declared_scope = {str(item) for item in scope["files"]}
+    expected_scope = managed_java_files(root)
+    if declared_scope != expected_scope:
+        raise ValueError(
+            "来源验收报告的扫描范围与当前纳管 Java 源码不一致："
+            f"报告 {len(declared_scope)} 个，实测 {len(expected_scope)} 个"
+        )
+    counts = acceptance.get("counts")
+    blockers = acceptance.get("registered_blockers")
+    hard = acceptance.get("hard_failures")
+    accepted = acceptance.get("accepted")
+    uncovered = acceptance.get("uncovered_records")
+    for name, items in (
+        ("registered_blockers", blockers),
+        ("hard_failures", hard),
+        ("accepted", accepted),
+        ("uncovered_records", uncovered),
+    ):
+        if not isinstance(items, list):
+            raise ValueError(f"来源验收报告的 {name} 必须是数组")
+    if not isinstance(counts, dict):
+        raise ValueError("来源验收报告缺少逐项计数")
+    expected_counts = {
+        "scanned_files": len(declared_scope),
+        "accepted": len(accepted),
+        "registered_blockers": len(blockers),
+        "hard_failures": len(hard),
+        "uncovered_records": len(uncovered),
+    }
+    if any(counts.get(key) != value for key, value in expected_counts.items()):
+        raise ValueError("来源验收报告的计数与逐项清单长度不一致")
+    if int(report.get("checked", -1)) != len(declared_scope):
+        raise ValueError("来源验收报告的 checked 与扫描范围不一致")
+    if acceptance.get("revision") != revision:
+        raise ValueError("来源验收报告的验收段没有绑定本次提交")
+    # 独立复算：非验收记录集合必须被阻断/硬失败清单逐条覆盖，条目的判词、登记字段与
+    # 最终对象指纹必须与当前索引和当前源码一致。
+    expected_blocked = {
+        path
+        for path, record in records.items()
+        if str(record.get("d12_verdict") or "").strip() not in SOURCE_ACCEPTED_VERDICTS
+    }
+    covered: set[str] = set()
+    for item in [*blockers, *hard]:
+        if not isinstance(item, dict):
+            raise ValueError("来源验收报告的逐项状态必须是结构化对象")
+        path = str(item.get("path", ""))
+        record = records.get(path)
+        if record is None:
+            raise ValueError(f"来源验收报告引用了索引中不存在的对象：{path}")
+        verdict = str(record.get("d12_verdict") or "").strip()
+        if verdict in SOURCE_ACCEPTED_VERDICTS:
+            raise ValueError(f"索引已验收的记录不能出现在阻断清单：{path}")
+        if str(item.get("verdict") or "") != verdict:
+            raise ValueError(f"来源验收报告的逐项判词与当前索引不一致：{path}")
+        if not str(item.get("blocker_reason") or "").strip():
+            raise ValueError(f"来源验收报告的阻断条目缺少原因：{path}")
+        if not str(item.get("open_gap") or "").strip():
+            raise ValueError(f"来源验收报告的阻断条目缺少缺口：{path}")
+        source = root / path
+        if not source.is_file():
+            raise ValueError(f"来源验收报告的阻断条目指向不存在的对象：{path}")
+        if hashlib.sha256(source.read_bytes()).hexdigest() != str(
+            item.get("local_sha256", "")
+        ).lower():
+            raise ValueError(f"来源验收报告的最终对象指纹与当前文件不符：{path}")
+        covered.add(path)
+    for item in accepted:
+        if not isinstance(item, dict):
+            raise ValueError("来源验收报告的已验收条目必须是结构化对象")
+        path = str(item.get("path", ""))
+        record = records.get(path)
+        if record is None:
+            raise ValueError(f"来源验收报告的已验收条目指向不存在的对象：{path}")
+        if str(record.get("d12_verdict") or "").strip() not in SOURCE_ACCEPTED_VERDICTS:
+            raise ValueError(f"索引未验收的记录不能出现在已验收清单：{path}")
+    if covered != expected_blocked:
+        missing = sorted(expected_blocked - covered)
+        extra = sorted(covered - expected_blocked)
+        raise ValueError(
+            "来源验收报告的阻断清单与索引复算不一致："
+            f"漏项 {missing[:1]}，多余 {extra[:1]}"
+        )
+    if uncovered:
+        raise ValueError("来源验收报告存在未覆盖的索引记录，范围漏项不能按空集合降级")
+    blocking = len(blockers) + len(hard)
+    return {
+        "source": "report",
+        "report": str(report_path),
+        "status": "blocked" if blocking else "passed",
+        "registry": dict(evidence),
+        "scope_files": len(declared_scope),
+        "counts": {
+            "accepted": len(accepted),
+            "registered_blockers": len(blockers),
+            "hard_failures": len(hard),
+            "uncovered_records": len(uncovered),
+        },
+        "registered_blockers": [_source_brief(item) for item in blockers],
+        "hard_failures": [_source_brief(item) for item in hard],
+        "uncovered_records": list(uncovered),
+        "applicable_blockers": blocking,
+    }
+
+
+def _source_brief(item: object) -> dict[str, object]:
+    """取出逐项来源状态的摘要，不含任何源码正文。"""
+
+    if not isinstance(item, dict):
+        return {"record_id": "", "verdict": "", "form": "", "classification": ""}
+    return {
+        key: item.get(key)
+        for key in (
+            "record_id",
+            "path",
+            "line",
+            "type_name",
+            "form",
+            "classification",
+            "verdict",
+            "blocker_reason",
+            "open_gap",
+        )
+    }
+
+
+def aggregate(
+    needs: object,
+    stage: str,
+    evidence: Path | None = None,
+    revision: str | None = None,
+    *,
+    source_report: Path | None = None,
+    source_root: Path | None = None,
+    maintenance: bool = False,
+) -> dict[str, object]:
     """验证全部固定作业实际成功且有正整数用例，发布阶段还必须有真实发布证据。
 
     Args:
@@ -350,11 +674,14 @@ def aggregate(needs: object, stage: str, evidence: Path | None = None,
         stage: 本次入口的固定验证阶段。
         evidence: release 阶段由真实发布检查写出的证据目录；其他阶段忽略。
         revision: 本次验证的提交标识；release 阶段必须提供并与证据一致。
+        source_report: 本次来源验收报告路径；release 阶段必须存在。
+        source_root: 来源报告与被扫描 Java 源码所在的仓库根目录。
+        maintenance: 是否显式选择维护模式。维护模式不改变 release 的拒绝语义。
     Returns:
-        可公开的阶段、状态、用例数及发布证据摘要，不含环境或测试正文。
+        可公开的阶段、状态、用例数、来源验收摘要及发布证据摘要，不含环境或测试正文。
     Raises:
-        ValueError: 作业缺失、额外作业、失败、跳过、零用例、outputs 非字典、阶段不一致，
-            或 release 阶段缺少真实发布证据。
+        ValueError: 作业缺失、额外作业、失败、跳过、零用例、outputs 非字典、阶段不一致、
+            缺少真实发布证据，或来源验收报告缺失/不可复核。
     """
     if stage not in STAGES or not isinstance(needs, dict) or set(needs) != JOBS:
         raise ValueError("阶段或必需作业集合不正确")
@@ -374,8 +701,45 @@ def aggregate(needs: object, stage: str, evidence: Path | None = None,
         counts[name] = int(count)
     # 发布结论只能来自真实发布检查产出的证据；标签匹配不构成发布证据。
     released = release_evidence(evidence, counts, revision) if stage == "release" else None
-    return {"schema": "ci-summary/v1", "stage": stage, "status": "passed", "tests": counts,
-            "release_verified": released is not None, "release_evidence": released}
+    root = source_root if source_root is not None else SOURCE_ROOT
+    if source_report is None and isinstance(evidence, Path):
+        # 发布作业把来源验收报告与发布证据一起上传到同一目录；缺失即视为没有本次报告。
+        candidate = evidence / SOURCE_REPORT_NAME
+        source_report = candidate if candidate.is_file() else None
+    if stage == "release":
+        # 发布必须取回本次来源验收报告；无报告、旧提交或不可复核一律受控失败，
+        # 不能用默认 0、空集合或作业成功代替本次来源验收。
+        if source_report is None:
+            raise ValueError(
+                "发布阶段缺少来源验收报告（source-acceptance-report/v1）；"
+                "作业成功与阶段标签都不能代替来源验收"
+            )
+        acceptance = source_acceptance(source_report, root, revision)
+    elif source_report is not None:
+        acceptance = source_acceptance(source_report, root, revision)
+    else:
+        acceptance = source_acceptance(None, root, revision)
+    blocking = int(acceptance.get("applicable_blockers", 0))
+    if blocking:
+        # 存在适用阻断时不得转绿：维护模式只允许非发布汇总退出 0，release 仍必须退出 1。
+        status = (
+            "blocked"
+            if stage == "release" or not maintenance
+            else "completed-with-registered-blockers"
+        )
+    else:
+        status = "passed"
+    release_verified = released is not None and not blocking
+    return {
+        "schema": "ci-summary/v1",
+        "stage": stage,
+        "status": status,
+        "tests": counts,
+        "release_verified": release_verified,
+        "release_evidence": released,
+        "source_acceptance": acceptance,
+        "exit_code": 1 if (stage == "release" and blocking) or (blocking and not maintenance) else 0,
+    }
 
 
 def reports(paths: list[Path], required: set[str]) -> dict[str, object]:
@@ -430,13 +794,25 @@ def reports(paths: list[Path], required: set[str]) -> dict[str, object]:
 
 
 def main() -> int:
-    """从固定环境消费 needs 或报告；失败只输出结构错误，不泄露测试正文。"""
+    """从固定环境消费 needs 或报告；失败只输出结构错误，不泄露测试正文。
+
+    存在适用来源阻断时仍然输出完整汇总（含 ``release_verified=false`` 与逐项阻断），
+    但退出码为非零；报告缺失或不可复核时按受控失败退出，不输出成功结论。
+    """
+
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     sub = parser.add_subparsers(dest="command", required=True)
     final = sub.add_parser("aggregate")
     final.add_argument("--stage", choices=sorted(STAGES), required=True)
     final.add_argument("--release-evidence", type=Path, help="发布检查实际写出的证据目录")
     final.add_argument("--revision", help="本次验证的提交标识，缺省取 CI_REVISION")
+    final.add_argument("--source-report", type=Path, help="本次来源验收报告（source-acceptance-report/v1）")
+    final.add_argument("--source-root", type=Path, help="被扫描的仓库根目录；缺省取本工具所属仓库")
+    final.add_argument(
+        "--maintenance",
+        action="store_true",
+        help="显式维护模式：非发布阶段可退出 0，但状态明示存在已登记阻断且 release_verified=false",
+    )
     report = sub.add_parser("reports")
     report.add_argument("--path", type=Path, action="append", default=[])
     report.add_argument("--backend", type=Path)
@@ -447,7 +823,21 @@ def main() -> int:
             if directory is None and (value := os.environ.get("RELEASE_EVIDENCE")):
                 directory = Path(value)
             revision = args.revision or os.environ.get("CI_REVISION") or None
-            result = aggregate(json.loads(os.environ.get("NEEDS_JSON", "null")), args.stage, directory, revision)
+            source_report = args.source_report
+            if source_report is None and (value := os.environ.get("SOURCE_ACCEPTANCE_REPORT")):
+                source_report = Path(value)
+            if source_report is None and directory is not None:
+                candidate = directory / SOURCE_REPORT_NAME
+                source_report = candidate if candidate.is_file() else None
+            result = aggregate(
+                json.loads(os.environ.get("NEEDS_JSON", "null")),
+                args.stage,
+                directory,
+                revision,
+                source_report=source_report,
+                source_root=args.source_root,
+                maintenance=args.maintenance,
+            )
         else:
             paths = args.path + (list(args.backend.glob("**/target/surefire-reports/TEST-*.xml")) if args.backend else [])
             result = reports(paths, BACKEND_REQUIRED if args.backend else set())
@@ -455,9 +845,15 @@ def main() -> int:
                 with Path(output).open("a", encoding="utf-8") as stream:
                     stream.write(f"checked={result['checked']}\n")
         print(json.dumps(result, ensure_ascii=False))
+        if args.command == "aggregate":
+            return int(result.get("exit_code", 0))
         return 0
-    except (OSError, ValueError, TypeError, CheckError):
-        print("CI 证据核对失败：必需作业或真实测试未完整成功。", file=sys.stderr)
+    except (OSError, ValueError, TypeError, CheckError) as error:
+        print(
+            "CI 证据核对失败：必需作业或真实测试未完整成功；"
+            f"来源验收与发布证据必须可复核（{type(error).__name__}: {error}）。",
+            file=sys.stderr,
+        )
         return 1
 
 

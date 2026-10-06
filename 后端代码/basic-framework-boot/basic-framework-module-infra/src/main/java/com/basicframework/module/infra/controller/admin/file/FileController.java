@@ -54,6 +54,7 @@ import static com.basicframework.module.infra.framework.file.core.utils.FileType
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/file/FileController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 29 行，移除或改写上游 19 行；import 新增 21 行、移除 10 行；补充注释 69 行，上游注释 3 行未保留。
+ * 来源验收：尚未验收
  */
 @Tag(name = "管理后台 - 文件存储")
 @RestController

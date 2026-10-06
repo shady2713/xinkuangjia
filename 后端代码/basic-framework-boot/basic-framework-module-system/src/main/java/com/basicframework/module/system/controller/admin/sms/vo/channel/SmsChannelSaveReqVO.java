@@ -15,6 +15,7 @@ import jakarta.validation.constraints.Size;
  * 上游文件续：system/controller/admin/sms/vo/channel/SmsChannelSaveReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 9 行，移除或改写上游 3 行；import 新增 2 行、移除 1 行；补充注释 29 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 短信渠道创建/修改 Request VO")
 @Data

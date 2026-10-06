@@ -11,6 +11,7 @@ import java.util.Arrays;
  * 全局用户类型枚举
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @AllArgsConstructor
 @Getter

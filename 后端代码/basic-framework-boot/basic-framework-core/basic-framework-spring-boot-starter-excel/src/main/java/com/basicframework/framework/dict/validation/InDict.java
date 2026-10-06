@@ -15,6 +15,7 @@ import java.lang.annotation.Target;
  * 用于校验字段、方法参数或集合元素是否属于指定字典类型的可用字典值。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Target({
         ElementType.METHOD,

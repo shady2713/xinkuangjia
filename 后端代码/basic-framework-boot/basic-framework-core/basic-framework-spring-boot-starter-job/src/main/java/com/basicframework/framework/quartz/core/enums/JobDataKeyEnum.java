@@ -4,6 +4,7 @@ package com.basicframework.framework.quartz.core.enums;
  * Quartz JobDataMap 的 key 枚举。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 public enum JobDataKeyEnum {
 

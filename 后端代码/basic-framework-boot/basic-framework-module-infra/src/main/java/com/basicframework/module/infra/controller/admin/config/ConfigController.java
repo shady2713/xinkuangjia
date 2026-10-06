@@ -40,6 +40,7 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.EXPORT_SI
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/config/ConfigController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 18 行，移除或改写上游 13 行；import 新增 7 行、移除 5 行；补充注释 62 行。
+ * 来源验收：尚未验收
  */
 @Tag(name = "管理后台 - 参数配置")
 @RestController

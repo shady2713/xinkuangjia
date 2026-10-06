@@ -16,6 +16,7 @@ import java.time.Duration;
  * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/framework/sms/config/SmsCodeProperties.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 18 行，移除或改写上游 5 行；import 新增 3 行、移除 1 行；补充注释 9 行，上游注释 2 行未保留。
+ * 来源验收：尚未验收
  */
 @ConfigurationProperties(prefix = "basic-framework.sms-code")
 @Validated

@@ -6,6 +6,7 @@ import lombok.Getter;
 /**
  * 登录日志的类型枚举
  * @author 李杰
+ * 署名验收：尚未验收
  */
 @Getter
 @AllArgsConstructor

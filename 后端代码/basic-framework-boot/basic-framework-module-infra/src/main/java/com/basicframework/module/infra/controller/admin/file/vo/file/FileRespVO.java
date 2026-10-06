@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/file/vo/file/FileRespVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 3 行，移除或改写上游 5 行；补充注释 26 行。
+ * 来源验收：尚未验收
  */
 @Schema(description = "管理后台 - 文件 Response VO,不返回 content 字段，太大")
 @Data

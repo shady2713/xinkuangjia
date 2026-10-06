@@ -22,6 +22,7 @@ import org.springframework.data.redis.serializer.RedisSerializer;
  * 上游文件续：YudaoRedisAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：命名空间与类名前缀适配；buildRedisSerializer 改为显式变量接收；补全职责与方法 JavaDoc。
+ * 来源验收：尚未验收
  */
 @AutoConfiguration(before = RedissonAutoConfigurationV2.class)
 public class BasicFrameworkRedisAutoConfiguration {

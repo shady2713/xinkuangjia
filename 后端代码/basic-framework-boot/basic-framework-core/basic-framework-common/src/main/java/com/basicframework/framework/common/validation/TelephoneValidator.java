@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintValidatorContext;
  * 固话或手机号格式校验器。
  *
  * @author 李杰
+ * 署名验收：尚未验收
  */
 public class TelephoneValidator implements ConstraintValidator<Telephone, String> {
 
