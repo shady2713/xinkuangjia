@@ -144,6 +144,8 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 > 上段是 D12-174 交付时的历史状态。D10close 轮已按 D14 §60–§73 在同一 v3 账本内补齐 `evidence_branch` 与 `author_only_contract`，分支入口对当前索引实测 `checked: 15 / findings: 0`；账本指纹与列数见 `manifest.source_ledger_sha256`/`source_ledger_columns`。历史文本保留，最新状态以本目录索引与 `manifest` 为准。
 
+> **复算更正（2026-10-06，HEAD `1a51cc84a4ff000a58cdd42349b22925ac31208e`）**：上段的 `checked: 15 / findings: 0` 已被复算轮真实重跑更新为 **`checked: 16 / findings: 0`**，退出码 0（`python3 -B -X utf8 scripts/code/java/check_staged_java_comments.py --validate-evidence-branches`，`registry_sha256` = `282735c352a312f4fb22b3cad3f823e3ab6c531fef90287c89fe77e6e98b9b82`、`records` = 186）。当前索引 `evidence_branch` 分布实测为 `E1-author-only` 12 条 + `C2-independent-content` 4 条 = 16 条声明分支，多出的 1 条是 `ApiEncrypt.java`——它由[裁决 D15](../裁决-D15-已登记阻断与发布门禁.md)逐项核实轮改判为 accepted 并落 `evidence_branch = E1-author-only`（索引 `manifest.d15ev_execution.verdict_change`，`accepted: 1`）。证据全文见仓库外 `.bf-local/recompute/证据.md`。
+
 ### N1：分支↔路线归属校验（n1fix 轮）
 
 分支是版本化契约的启用开关，同时约束记录必须归属的证据路线：`E1-author-only` 只允许路线 2、`C2-independent-content` 只允许路线 3。来源说明路径（`_route_reasons`）与分支入口（`_validate_declared_branches`）**共用同一实现** `_branch_route_reasons`，归属不符时两个入口给出逐字相同的诊断并拒绝，归属不成立时不再叠加分支判据（与来源说明入口的早返回口径一致）。
