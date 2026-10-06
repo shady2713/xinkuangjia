@@ -41,12 +41,20 @@ def test_public_parameter_return_and_throw_failures() -> None:
     assert {"web-param", "web-returns", "web-throws"} <= {item["rule"] for item in findings}
 
 
-def test_private_function_and_callback_are_checked() -> None:
-    """内部函数与箭头回调也不能因未导出而缺少职责说明。"""
+def test_private_function_and_expression_callback_are_checked() -> None:
+    """内部函数与表达式位置的匿名函数也不能因未导出而缺少职责说明。
+
+    实参位置的匿名回调归并到最近的具名承载声明，不再单独要求注释；本用例同时钉住这两侧，
+    避免把"归并"退化成"豁免"。
+    """
     findings = web(
-        "/** 模块说明。 */\nconst value = 1;\nfunction hidden() {}\n[1].map(value => value + 1);\n"
+        "/** 模块说明。 */\nconst value = 1;\nfunction hidden() {}\nvoid function () {};\n"
     )
     assert sum(item["rule"] == "web-doc" for item in findings) == 2
+    assert sum(
+        item["rule"] == "web-doc"
+        for item in web("/** 模块说明。 */\nconst value = 1;\n[1].map(value => value + 1);\n")
+    ) == 0
     assert not web("/** 模块计算数组。 */\n[1].map(/** 将数量增加一。 */ value => value + 1);")
 
 

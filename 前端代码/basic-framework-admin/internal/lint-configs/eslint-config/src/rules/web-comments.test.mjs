@@ -905,3 +905,16 @@ describe('声明注释窗口的显式输入', /** 声明起点由调用方显式
     });
   });
 });
+
+describe('表达式位置的匿名函数表达式', /** 未被归并清单覆盖的匿名函数表达式不能因没有具名承载声明而免检。 */ () => {
+  it('一元表达式下的匿名函数表达式仍要求职责说明', /** 归并清单之外的位置必须继续按显式声明要求注释，避免规则被架空。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-function-expression.ts',
+        '/** 模块说明。 */\nconst value = 1;\nvoid function () {};\n',
+      ),
+    );
+
+    expect(findings.filter((item) => item.rule === 'web-doc')).toHaveLength(1);
+  });
+});
