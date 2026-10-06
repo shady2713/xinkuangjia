@@ -78,6 +78,12 @@ jobs:
       checked: ${{ steps.count.outputs.checked }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A1（E1-author-only）来源契约要读取**整改前基线提交**的文件字节来复算
+          # 「排除本地 @author 声明后与上游逐行全等」。浅克隆（默认 fetch-depth: 1）
+          # 取不到该基线提交，检查器会把「取不回基线」说成「内容不符」。
+          # 因此本作业需要完整历史；其余作业不依赖历史，保持默认深度。
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
