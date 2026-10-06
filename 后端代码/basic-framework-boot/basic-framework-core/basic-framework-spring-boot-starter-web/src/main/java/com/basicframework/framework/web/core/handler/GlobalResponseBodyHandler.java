@@ -23,7 +23,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/
  * 上游文件续：iocoder/yudao/framework/web/core/handler/GlobalResponseBodyHandler.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 18 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 23 行，移除或改写上游 0 行；补充注释 23 行，上游注释 0 行未保留。
  */
 @ControllerAdvice
 public class GlobalResponseBodyHandler implements ResponseBodyAdvice {

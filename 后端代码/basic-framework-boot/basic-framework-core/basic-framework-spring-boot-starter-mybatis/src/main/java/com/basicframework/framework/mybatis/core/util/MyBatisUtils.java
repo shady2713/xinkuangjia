@@ -30,7 +30,7 @@ import java.util.List;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
  * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/util/MyBatisUtils.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 22 行，移除或改写上游 50 行；import 新增 0 行、移除 3 行；补充注释 15 行，上游注释 12 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 53 行，移除或改写上游 89 行；import 新增 0 行、移除 3 行；补充注释 31 行，上游注释 21 行未保留。
  */
 public class MyBatisUtils {
 

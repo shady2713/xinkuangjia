@@ -16,7 +16,7 @@ import java.util.List;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-security/src/main/java/
  * 上游文件续：cn/iocoder/yudao/framework/security/config/SecurityProperties.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 4 行，移除或改写上游 4 行；import 新增 2 行、移除 2 行；补充注释 2 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 14 行，移除或改写上游 5 行；import 新增 2 行、移除 2 行；补充注释 9 行，上游注释 0 行未保留。
  */
 @ConfigurationProperties(prefix = "basic-framework.security")
 @Validated

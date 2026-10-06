@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/
  * 上游文件续：iocoder/yudao/framework/mybatis/core/query/MPJLambdaWrapperX.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 2 行，移除或改写上游 4 行；import 新增 0 行、移除 1 行；补充注释 214 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 377 行，移除或改写上游 9 行；import 新增 0 行、移除 1 行；补充注释 375 行，上游注释 0 行未保留。
  *
  * @param <T> 数据类型
  */

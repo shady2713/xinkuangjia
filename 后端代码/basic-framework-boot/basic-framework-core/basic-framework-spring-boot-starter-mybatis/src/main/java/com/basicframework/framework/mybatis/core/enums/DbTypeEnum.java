@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
  * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/enums/DbTypeEnum.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 23 行，移除或改写上游 18 行；import 新增 0 行、移除 1 行；补充注释 12 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 54 行，移除或改写上游 19 行；import 新增 0 行、移除 1 行；补充注释 28 行，上游注释 0 行未保留。
  */
 @Getter
 @AllArgsConstructor

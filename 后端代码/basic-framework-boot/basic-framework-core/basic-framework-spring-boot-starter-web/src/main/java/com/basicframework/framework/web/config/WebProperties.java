@@ -23,7 +23,7 @@ import java.net.URI;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/
  * 上游文件续：cn/iocoder/yudao/framework/web/config/WebProperties.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：命名空间/模块名/类名前缀适配、配置前缀 yudao.*→basic-framework.*；改写/新增 19 行，移除或改写上游 1 行；import 新增 6 行、移除 3 行；补充注释 15 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 77 行，移除或改写上游 7 行；import 新增 6 行、移除 3 行；补充注释 46 行，上游注释 1 行未保留。
  */
 @ConfigurationProperties(prefix = "basic-framework.web")
 @Validated

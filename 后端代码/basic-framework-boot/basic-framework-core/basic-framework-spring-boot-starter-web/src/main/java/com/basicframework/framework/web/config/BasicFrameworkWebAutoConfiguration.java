@@ -39,7 +39,7 @@ import jakarta.servlet.Filter;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/
  * 上游文件续：iocoder/yudao/framework/web/config/YudaoWebAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 4 行，移除或改写上游 6 行；import 新增 1 行、移除 3 行；补充注释 22 行，上游注释 2 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 62 行，移除或改写上游 24 行；import 新增 11 行、移除 13 行；补充注释 46 行，上游注释 2 行未保留。
  */
 @AutoConfiguration
 @EnableConfigurationProperties(WebProperties.class)

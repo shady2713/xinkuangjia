@@ -155,6 +155,30 @@ SOURCE_NOTE_INCOMPLETE_MESSAGE = (
 )
 LOCAL_MODIFICATION_NONE_LINE = "无。"
 LOCAL_MODIFICATION_NONE_MARKERS = {"无", "无本地修改", "no-local-modification", "none"}
+# 裁决 D14 §120/§132：来源说明的**验收状态**登记在受控派生索引（index_schema 为
+# d12-source-index/v1）的 d12_verdict 字段。只有列在 SOURCE_NOTE_ACCEPTED_VERDICTS 的
+# 状态才允许该来源说明作为「证据充分」通过；判为阻断、已回退或需补证时，来源说明路径
+# 必须拒绝，并给出指向该记录验收状态的诊断。未声明派生 schema 的清单（如账本 TSV）
+# 不带验收状态，沿用既有逐项核验，不在本判据内改判。
+SOURCE_NOTE_VERDICT_FIELD = "d12_verdict"
+SOURCE_NOTE_BLOCKER_FIELD = "d12_blocker_reason"
+SOURCE_NOTE_ACCEPTED_VERDICTS = (
+    "已按 D12 格式写入来源说明并撤回无依据署名",
+    "已按 D12 格式写入来源说明（D10b 改判）",
+)
+# 文件内来源说明的机读验收标注：来源说明正文中独占一行的标记行。
+# 规则与索引共同约束——标记行非「已验收」即拒绝；索引状态非已验收时，即使正文未写标注
+# 也拒绝（不能靠省略标注绕过），写了「已验收」而索引未验收同样拒绝。
+SOURCE_REVIEW_PREFIX = "来源验收："
+SOURCE_REVIEW_ACCEPTED_MARKER = "来源验收：已验收"
+SOURCE_REVIEW_UNACCEPTED_MARKER = "来源验收：尚未验收"
+SOURCE_REVIEW_MARKERS = (SOURCE_REVIEW_ACCEPTED_MARKER, SOURCE_REVIEW_UNACCEPTED_MARKER)
+# 裁决 D14 §112：内容点必须绑定有区分力理由与语料/df 绑定字段，语料绑定须指回固定输入版本。
+CORRESPONDENCE_POINT_FIELDS = ("discrimination_reason", "corpus_binding")
+CORRESPONDENCE_POINT_KIND_PREFIXES = ("P1", "P2")
+CORRESPONDENCE_POINT_MIN_REASON = 8
+CORRESPONDENCE_POINT_MIN_BINDING = 8
+CORRESPONDENCE_DF_MARKER = "df="
 # 受控清单的逐类型证据 schema；类型映射与复核结论必须是结构化结果。
 EVIDENCE_SCHEMA = "d12-type-evidence/v1"
 # 仓库内派生来源索引的 schema；只在清单显式声明时校验，普通记录数组不受影响。
@@ -202,6 +226,13 @@ EVIDENCE_BRANCHES = (EVIDENCE_BRANCH_AUTHOR_ONLY, EVIDENCE_BRANCH_CONTENT_INDEPE
 AUTHOR_ONLY_SCHEMA = "d10-author-only/v1"
 CONTENT_INDEPENDENT_SCHEMA = "d10-content-independent/v1"
 AUTHOR_ONLY_ROUTE = "路线 2"
+CONTENT_INDEPENDENT_ROUTE = "路线 3"
+# 分支是版本化契约的启用开关，同时约束记录必须归属的证据路线；分支入口与
+# 来源说明入口都只认这一份映射，避免两处口径不一致（N1 覆盖缺口）。
+EVIDENCE_BRANCH_ROUTES = {
+    EVIDENCE_BRANCH_AUTHOR_ONLY: AUTHOR_ONLY_ROUTE,
+    EVIDENCE_BRANCH_CONTENT_INDEPENDENT: CONTENT_INDEPENDENT_ROUTE,
+}
 # 比较契约只允许 D10 §0.3 原列的 R1–R4，且顺序固定；R5/R6 不得用于本分支。
 AUTHOR_ONLY_NORMALIZATION_ORDER = ("R1 LF 化", "R2 映射", "R3 行首尾空白", "R4 丢空行")
 AUTHOR_ONLY_ATTRIBUTION_CAUSES = (
@@ -943,6 +974,8 @@ class EvidenceRegistry:
         snapshots: 受控上游快照根目录；未配置时为 ``None``。
         records: ``local_path`` 到清单记录的映射。
         unparsable: 字段数与表头不一致、无法逐项核验的 ``local_path``。
+        requires_acceptance_state: 清单是否声明受控派生索引 schema（``d12-source-index/v1``）；
+            声明时必须消费 ``d12_verdict`` 验收状态，否则沿用既有逐项核验。
     """
 
     path: Path
@@ -950,6 +983,7 @@ class EvidenceRegistry:
     snapshots: Path | None
     records: dict[str, dict[str, object]]
     unparsable: frozenset[str]
+    requires_acceptance_state: bool = False
 
     def describe(self) -> dict[str, object]:
         """返回可写入结构化报告的输入指纹，不含任何证据内容。"""
@@ -1249,6 +1283,27 @@ def _upstream_author_lines(text: str) -> list[str]:
     ]
 
 
+def _declares_source_index_schema(text: str) -> bool:
+    """判断 JSON 清单是否显式声明受控派生来源索引 schema。
+
+    声明该 schema 的清单是**验收账本**：记录必须给出 ``d12_verdict`` 验收状态，来源说明
+    路径按该状态决定是否通过（裁决 D14 §120/§132）。未声明的清单（账本 TSV、普通记录数组）
+    不参与验收状态判据，避免把没有该字段的历史清单误判为“未验收”。
+
+    Args:
+        text: 清单原文。
+
+    Returns:
+        声明 ``EVIDENCE_INDEX_SCHEMA`` 时为 ``True``。
+    """
+
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(value, dict) and value.get("index_schema") == EVIDENCE_INDEX_SCHEMA
+
+
 def _read_json_records(
     path: Path, text: str
 ) -> tuple[dict[str, dict[str, object]], frozenset[str], tuple[str, ...]]:
@@ -1345,8 +1400,11 @@ def load_evidence_registry(
         raise EvidenceError(f"证据清单不是有效 UTF-8：{registry_path}") from error
     if registry_path.suffix.lower() == ".json" or text.lstrip()[:1] in {"[", "{"}:
         records, unparsable, columns = _read_json_records(registry_path, text)
+        # 只有显式声明受控派生索引 schema 的清单才携带验收状态；账本等其他清单没有该字段。
+        requires_acceptance_state = _declares_source_index_schema(text)
     else:
         records, unparsable, columns = _read_tsv_records(text)
+        requires_acceptance_state = False
     missing = [name for name in EVIDENCE_REQUIRED_FIELDS if name not in columns]
     if missing:
         raise EvidenceError(
@@ -1367,6 +1425,7 @@ def load_evidence_registry(
         snapshots=snapshots_path,
         records=records,
         unparsable=unparsable,
+        requires_acceptance_state=requires_acceptance_state,
     )
 
 
@@ -2382,6 +2441,34 @@ def _history_reasons(
     return reasons
 
 
+def _branch_route_reasons(record: dict[str, object]) -> list[str]:
+    """校验记录显式声明的证据分支是否归属到契约规定的证据路线。
+
+    分支是版本化契约的启用开关：``E1-author-only`` 只允许归属路线 2，
+    ``C2-independent-content`` 只允许归属路线 3。未声明分支的记录返回空列表，
+    由调用方沿用既有“原有充分路线”结构校验，本函数不改判任何已有条目。
+    分支入口（``_validate_declared_branches``）与来源说明入口（``_route_reasons``）
+    共用本函数，保证两个入口对同一异常给出同一诊断。
+
+    Args:
+        record: 清单记录。
+
+    Returns:
+        逐项拒绝原因；为空表示路线取值受支持且归属正确。
+    """
+
+    route = _text(record, "evidence_route")
+    if route not in EVIDENCE_ROUTES:
+        return [f"证据路线不受支持：{route or '空'}"]
+    branch, branch_error = _evidence_branch(record)
+    if branch_error:
+        return [branch_error]
+    expected = EVIDENCE_BRANCH_ROUTES.get(branch or "")
+    if expected is None or route == expected:
+        return []
+    return [f"{branch} 分支归属{expected}，当前 evidence_route={route}"]
+
+
 def _route_reasons(record: dict[str, object]) -> list[str]:
     """校验证据路线取值与路线 3 的独立对应点结构。
 
@@ -2393,29 +2480,18 @@ def _route_reasons(record: dict[str, object]) -> list[str]:
         有区分力的对应与身份贡献仍需人工判断。
     """
 
-    route = _text(record, "evidence_route")
-    if route not in EVIDENCE_ROUTES:
-        return [f"证据路线不受支持：{route or '空'}"]
-    branch, branch_error = _evidence_branch(record)
-    if branch_error:
-        return [branch_error]
+    branch_route_reasons = _branch_route_reasons(record)
+    if branch_route_reasons:
+        return branch_route_reasons
+    branch, _ = _evidence_branch(record)
     if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
-        if route != AUTHOR_ONLY_ROUTE:
-            return [
-                f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支归属路线 2，当前 evidence_route={route}"
-            ]
         return []
     if branch == EVIDENCE_BRANCH_CONTENT_INDEPENDENT:
-        if route != "路线 3":
-            return [
-                f"{EVIDENCE_BRANCH_CONTENT_INDEPENDENT} 分支归属路线 3，"
-                f"当前 evidence_route={route}"
-            ]
         return _content_independent_reasons(record)
     points = _text(record, "evidence_points")
     if not points:
         return ["缺少 evidence_points 比对依据"]
-    if route == "路线 3":
+    if _text(record, "evidence_route") == CONTENT_INDEPENDENT_ROUTE:
         segments = [segment.strip() for segment in re.split(r"[；;]", points) if segment.strip()]
         if len(segments) < 2 or len(set(segments)) < 2:
             return ["路线 3 的 evidence_points 必须有两个独立且有区分力的对应点"]
@@ -2562,6 +2638,128 @@ def _declared_author_sources(sources: list[dict[str, object]]) -> list[str]:
     ]
 
 
+def _source_review_markers(javadoc: str) -> list[str]:
+    """读取文件内来源说明的机读验收标注行。
+
+    标注行在 JavaDoc 正文中独占一行：``来源验收：已验收`` 或 ``来源验收：尚未验收``。
+    只识别完整取值；出现其他 ``来源验收：`` 取值时返回未知标注，由调用方拒绝。
+
+    Args:
+        javadoc: 完整 JavaDoc 文本。
+
+    Returns:
+        正文中出现的 ``来源验收：`` 标注行列表（按出现顺序）。
+    """
+
+    return [
+        line.strip()
+        for line in _javadoc_body_lines(javadoc)
+        if line.strip().startswith(SOURCE_REVIEW_PREFIX)
+    ]
+
+
+def _source_acceptance_reasons(
+    record: dict[str, object], javadoc: str, registry: EvidenceRegistry
+) -> list[str]:
+    """消费索引的验收状态：未验收的记录不得在来源说明路径通过。
+
+    裁决 D14 §120 要求已经写入的来源说明在补证期间标明尚未验收、不得进入“证据充分”的
+    交付范围；§132 要求逐项判断落到记录。本函数把该状态接到来源说明路径上：受控派生索引
+    的 ``d12_verdict`` 不是 ``SOURCE_NOTE_ACCEPTED_VERDICTS`` 之一时一律拒绝并给出诊断；
+    文件内标注行与索引状态不一致时同样拒绝（规则与索引共同约束，不能只改一侧或省略标注）。
+
+    Args:
+        record: 清单记录。
+        javadoc: 绑定该类型的完整 JavaDoc 文本。
+        registry: 受控证据清单。
+
+    Returns:
+        逐项拒绝原因；为空表示验收状态允许该来源说明通过。
+    """
+
+    if not registry.requires_acceptance_state:
+        return []
+    reasons: list[str] = []
+    markers = _source_review_markers(javadoc)
+    for marker in markers:
+        if marker == SOURCE_REVIEW_UNACCEPTED_MARKER:
+            reasons.append(
+                f"文件内来源说明标注“{SOURCE_REVIEW_UNACCEPTED_MARKER}”，尚未验收"
+            )
+        elif marker not in SOURCE_REVIEW_MARKERS:
+            reasons.append(f"文件内来源说明的验收标注取值不受支持：{marker!r}")
+    verdict = _text(record, SOURCE_NOTE_VERDICT_FIELD)
+    if not verdict:
+        reasons.append(
+            f"清单索引缺少 {SOURCE_NOTE_VERDICT_FIELD} 验收状态，来源说明没有验收依据"
+        )
+        return reasons
+    if verdict in SOURCE_NOTE_ACCEPTED_VERDICTS:
+        return reasons
+    reason = (
+        f"清单索引验收状态为“{verdict}”，尚未验收，来源说明不得作为证据充分通过"
+    )
+    blocker = _text(record, SOURCE_NOTE_BLOCKER_FIELD)
+    if blocker:
+        reason += f"（阻断原因：{blocker[:120]}）"
+    reasons.append(reason)
+    return reasons
+
+
+def _correspondence_discrimination_reasons(record: dict[str, object]) -> list[str]:
+    """核验 P1/P2 内容点的有区分力理由与语料/df 绑定（裁决 D14 §112）。
+
+    只有已验收的记录才要求内容点带 ``discrimination_reason`` 与 ``corpus_binding``：
+    被回退或需补证的记录按 §120 保留整改前文本，允许留空并另行登记。语料绑定必须指回
+    记录的固定上游提交并给出频率口径，否则无法区分“本文件出现”与语料频次。
+
+    Args:
+        record: 清单记录。
+
+    Returns:
+        逐项拒绝原因；为空表示内容点登记满足 §112 的机械可核验部分。
+    """
+
+    raw = record.get("d12_correspondence_points")
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return ["清单缺少 d12_correspondence_points 内容点登记（D14 §112）"]
+    if isinstance(raw, str):
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            return ["清单的 d12_correspondence_points 不是有效 JSON"]
+    else:
+        value = raw
+    if not isinstance(value, list):
+        return ["清单的 d12_correspondence_points 必须是结构化数组"]
+    commit = _text(record, "upstream_commit").lower()
+    content_points = [
+        point
+        for point in value
+        if isinstance(point, dict)
+        and str(point.get("kind", "")).startswith(CORRESPONDENCE_POINT_KIND_PREFIXES)
+    ]
+    if not content_points:
+        return ["d12_correspondence_points 没有 P1/P2 内容点，无法核验有区分力与语料绑定"]
+    reasons: list[str] = []
+    for index, point in enumerate(content_points, 1):
+        for field in CORRESPONDENCE_POINT_FIELDS:
+            text = str(point.get(field) or "").strip()
+            if len(text) < CORRESPONDENCE_POINT_MIN_REASON:
+                reasons.append(f"第 {index} 个内容点缺少 {field}（D14 §112）")
+        binding = str(point.get("corpus_binding") or "")
+        if binding and commit and commit not in binding.lower():
+            reasons.append(
+                f"第 {index} 个内容点的 corpus_binding 没有绑定固定上游提交 {commit}"
+            )
+        if binding and CORRESPONDENCE_DF_MARKER not in binding:
+            reasons.append(
+                f"第 {index} 个内容点的 corpus_binding 缺少频率口径"
+                f"（{CORRESPONDENCE_DF_MARKER}）"
+            )
+    return reasons
+
+
 def _verify_single_note(
     path: str,
     record: dict[str, object],
@@ -2577,6 +2775,10 @@ def _verify_single_note(
 
     if path in registry.unparsable:
         return [f"清单记录字段数与表头不一致，无法逐项核验：{path}"]
+    # 验收状态优先：记录未验收时该来源说明一律拒绝，诊断必须指向该状态。
+    acceptance_reasons = _source_acceptance_reasons(record, javadoc, registry)
+    if acceptance_reasons:
+        return acceptance_reasons
     reasons = []
     status = _text(record, "author_status")
     if status != AUTHOR_UNDECLARED_STATUS:
@@ -2586,6 +2788,9 @@ def _verify_single_note(
         reasons.append("清单缺少有效的本地最终 SHA-256")
     elif recorded_local != local_sha256:
         reasons.append(f"本地最终指纹不符：清单 {recorded_local}，实测 {local_sha256}")
+    # 已验收记录必须逐点绑定有区分力理由与语料/df（D14 §112），否则机械消费者无法区分。
+    if registry.requires_acceptance_state:
+        reasons.extend(_correspondence_discrimination_reasons(record))
     # 先给对象级授权与复核结论，再给上游定位与内容核验，避免诊断被次要原因挤满。
     reasons.extend(
         _type_mapping_reasons(record, declaration, javadoc, qualified_name, enclosing_type)
@@ -3629,7 +3834,10 @@ def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[s
 
     记录的 ``evidence_branch`` 声明是版本化契约的启用开关：声明 ``E1-author-only``
     必须满足作者排除判据，声明 ``C2-independent-content`` 必须满足内容点独立门槛。
-    未声明分支的记录不在此处判定（沿用既有路线校验），本入口不改判任何已有条目。
+    D14 §45/§101 同时把分支绑定到固定路线（路线 2 / 路线 3），因此本入口先复算
+    分支↔路线归属，再复算分支判据；归属不符即拒绝且不再重复报分支判据，
+    与来源说明入口 ``_route_reasons`` 的早返回口径一致。未声明分支的记录不在此处判定
+    （沿用既有路线校验），本入口不改判任何已有条目。
 
     Args:
         evidence: 已加载的受控证据清单。
@@ -3647,6 +3855,12 @@ def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[s
         checked += 1
         if branch_error:
             reasons.append(f"{path}：[{branch_error}]")
+            continue
+        route_reasons = _branch_route_reasons(record)
+        for reason in route_reasons:
+            reasons.append(f"{path}：[{reason}]")
+        if route_reasons:
+            # 路线归属不成立时与来源说明入口保持同一诊断，不再叠加分支判据。
             continue
         if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
             local_sha = _text(record, "local_sha256_after").lower()

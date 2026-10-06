@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
  * 上游文件：yudao-framework/yudao-common/src/main/java/cn/iocoder/yudao/
  * 上游文件续：framework/common/exception/util/ServiceExceptionUtil.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 16 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 33 行，移除或改写上游 0 行；补充注释 33 行，上游注释 0 行未保留。
  */
 @Slf4j
 public class ServiceExceptionUtil {

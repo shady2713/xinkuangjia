@@ -17,7 +17,7 @@ import java.util.Collection;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/
  * 上游文件续：iocoder/yudao/framework/mybatis/core/query/LambdaQueryWrapperX.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 2 行，移除或改写上游 20 行；import 新增 0 行、移除 3 行；补充注释 65 行，上游注释 8 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 118 行，移除或改写上游 56 行；import 新增 0 行、移除 3 行；补充注释 116 行，上游注释 10 行未保留。
  *
  * @param <T> 数据类型
  */

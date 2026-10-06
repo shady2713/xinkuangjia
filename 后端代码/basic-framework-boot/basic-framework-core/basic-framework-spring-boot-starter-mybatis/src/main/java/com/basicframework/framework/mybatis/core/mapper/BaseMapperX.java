@@ -32,7 +32,7 @@ import java.util.List;
  * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
  * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/mapper/BaseMapperX.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 15 行；import 新增 0 行、移除 1 行；补充注释 128 行，上游注释 10 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 219 行，移除或改写上游 44 行；import 新增 0 行、移除 1 行；补充注释 216 行，上游注释 21 行未保留。
  */
 public interface BaseMapperX<T> extends MPJBaseMapper<T> {
 

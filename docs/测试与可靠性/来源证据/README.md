@@ -117,6 +117,19 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 **当前账本的字段形状缺口**：`registry-d12b.tsv` 里 11 条 A1 记录只在 `d12_correspondence_points` 里写了 `kind: E1-author-only（D14 路线 2 新分支）` 与 `excluded_upstream`，**没有** D14 §67–§73 要求的 `evidence_branch`、`author_only_contract`（双方输入指纹、`excluded_author_declarations`、R1–R4 映射表与顺序、`remaining`、`attribution`、工具指纹、复核字段）与反证结论。因此分支入口对当前索引实测 `checked: 0`：契约未声明即不启用机械复算。要让这 11 项被本规则真正复算，账本须按 D14 schema 补齐上述字段；补齐后 `--validate-evidence-branches` 会逐项复算，负对照见 `scripts/tests/test_java_author_evidence.py` 与仓库外 `a1_negcontrol_probe.py`。
 
+> 上段是 D12-174 交付时的历史状态。D10close 轮已按 D14 §60–§73 在同一 v3 账本内补齐 `evidence_branch` 与 `author_only_contract`，分支入口对当前索引实测 `checked: 15 / findings: 0`；账本指纹与列数见 `manifest.source_ledger_sha256`/`source_ledger_columns`。历史文本保留，最新状态以本目录索引与 `manifest` 为准。
+
+### N1：分支↔路线归属校验（n1fix 轮）
+
+分支是版本化契约的启用开关，同时约束记录必须归属的证据路线：`E1-author-only` 只允许路线 2、`C2-independent-content` 只允许路线 3。来源说明路径（`_route_reasons`）与分支入口（`_validate_declared_branches`）**共用同一实现** `_branch_route_reasons`，归属不符时两个入口给出逐字相同的诊断并拒绝，归属不成立时不再叠加分支判据（与来源说明入口的早返回口径一致）。
+
+此前 `--validate-evidence-branches` 只对 `C2-independent-content` 复算内容点判据，不校验 `evidence_route` 是否归属路线 3，因此**没有来源说明**的 C2 记录在分支入口漏检（全量入口按来源说明路径会拒绝）。修法即补上这一校验。负对照（C2 写成路线 2、E1 写成路线 3、缺失 `evidence_route`、合法归属）在 `scripts/tests/test_java_author_evidence.py` 用真实 CLI 固化为退出码与诊断断言。
+
+### 工具指纹重绑与结构点重定位（n1fix 轮）
+
+- **工具指纹重绑**：证据分支契约的 `tool.sha256` 必须等于当前规则实现指纹；N1 修法改动了同一实现文件，因此 11 条 A1 记录的 `author_only_contract.tool.sha256` 按同一口径机械重绑 `1a06a625…`（D10close）→ `2839dddd…`（n1fix），`manifest.records_sha256` 随之重算。A1 比较实现（`_comment_body_line`、`_exclusion_reason`、`_a1_normalize`、`_a1_raw_changed_lines`、`_a1_compare`、`_a1_baseline_bytes`、`_author_only_contract_reasons`）的逐函数 SHA-256 未变，登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind`。**冻结账本分歧**：声明账本 `registry-d12b.tsv`（SHA-256 `986b40a0…`）仍保留 `1a06a625…`，从该账本完整重放会在这一个嵌套字段上产生旧值；`ledger_replay` 的比较字段不含 `author_only_contract`，其余重放关系不变。
+- **结构点行号重定位**：上一轮 155 个无 `fragment` 的结构/说明点中有 6 个未定位。n1fix 轮逐点重定位——按记录 `size` 枚举双方 R5 归一化序列里长度恰为 `size` 的完全相同窗口，并用记录 `head` 锚定起点（容忍账本端定长截断）；注释剥离按 Java 词法识别字符串/字符字面量，`FileController.java` 第 11 点上一轮未命中即来自把 `@GetMapping("/…/**")` 里的 `/**` 误当块注释起点。结果见 `manifest.structural_point_localization`：155 点中 **144 定位 + 11 条作者声明说明点，0 个不可定位**，逐点行号在同节 `items[]`。
+
 ## 复核与重生成
 - 门禁每次都会报告本次采用的清单路径、SHA-256 与记录数；报告中的指纹应与本目录文件一致。
 - 账本更新后必须重新派生本索引并保留整改前事实、变更理由与候选指纹；不得直接编辑记录。
@@ -129,6 +142,6 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 - 固定地址取回依赖到 `raw.githubusercontent.com` 的网络可达性；离线复核必须显式提供受控快照目录。
 - 上游文件正文与许可结论按裁决留在仓库外，本目录不提供许可验收结论。
 - 规则校验结构、版本、指纹与映射一致性；有区分力的对应与身份贡献仍需人工逐项复核。
-- 155 个结构/A1 说明点（原 138 个 P3 结构点 + 11 条 A1 记录 + 6 条改判记录的说明点）没有 `fragment`，其行号记录在 D10 的 R1–R6 归一化比对空间或 A1 比较空间，不是当前文件的物理行号，本轮未重定位，如实登记在 `manifest.relocalization.structural_points_out_of_scope`。
+- 155 个结构/A1 说明点（原 138 个 P3 结构点 + 11 条 A1 记录 + 6 条改判记录的说明点）没有 `fragment`，其行号记录在 D10 的 R1–R6 归一化比对空间或 A1 比较空间，不是当前文件的物理行号；D10close 轮完成 138 个 P3 结构点的 head 匹配定位，n1fix 轮把剩余 6 个逐点重定位（0 个不可定位），两次结果都登记在 `manifest.structural_point_localization`。
 - 14 处记录自由文本的「本地 L… / 上游 L…」引用既不属于任何对应点、也与记录声明的作者行原文不符（集中在 11 条 A1 记录与 3 条改判/结构点记录），无法用当前文件内容复算；未做猜测性改写，登记在 `manifest.relocalization.record_text_unattributed_records`，须由账本产出方修正。
 - 索引六类字段绑定某个工作树状态；并行会话改动已登记对象后必须重跑重绑流水线，否则字段一致性用例会失败。
