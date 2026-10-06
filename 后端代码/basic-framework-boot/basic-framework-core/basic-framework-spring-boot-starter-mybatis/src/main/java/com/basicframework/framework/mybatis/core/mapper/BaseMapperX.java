@@ -29,9 +29,10 @@ import java.util.List;
  * 1. {@link BaseMapper} 为 MyBatis Plus 的基础接口，提供基础的 CRUD 能力
  * 2. {@link MPJBaseMapper} 为 MyBatis Plus Join 的基础接口，提供连表 Join 能力
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/mapper/BaseMapperX.java
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
+ * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/mapper/BaseMapperX.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 3 行，上游代码 15 行在本地被移除或改写，例如 return new PageResult<>(list, (long) list.size());；return new PageResult<>(list, (long) list.size());；本地补充注释 127 行，上游注释 10 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 15 行；import 新增 0 行、移除 1 行；补充注释 128 行，上游注释 10 行未保留。
  */
 public interface BaseMapperX<T> extends MPJBaseMapper<T> {
 

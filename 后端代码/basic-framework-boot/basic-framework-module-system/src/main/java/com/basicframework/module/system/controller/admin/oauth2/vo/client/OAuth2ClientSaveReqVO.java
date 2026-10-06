@@ -17,9 +17,10 @@ import java.util.stream.Stream;
  * 管理后台 OAuth2 客户端创建或修改请求。
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/oauth2/vo/client/OAuth2ClientSaveReqVO.java
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/
+ * 上游文件续：controller/admin/oauth2/vo/client/OAuth2ClientSaveReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 15 行，上游代码 5 行在本地被移除或改写，例如 private static final int SERIALIZED_LIST_MAX_LENGTH = 255;；@Size(max = 255, message = "客户端编号长度不能超过 255 个字符")；本地补充注释 61 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 15 行，移除或改写上游 5 行；import 新增 6 行、移除 4 行；补充注释 66 行。
  */
 @Schema(description = "管理后台 - OAuth2 客户端创建/修改 Request VO")
 @Data

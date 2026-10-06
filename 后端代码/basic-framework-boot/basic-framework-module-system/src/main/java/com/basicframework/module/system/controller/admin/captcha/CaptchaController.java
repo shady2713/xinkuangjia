@@ -27,7 +27,7 @@ import java.util.Properties;
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
  * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/captcha/CaptchaController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 38 行，上游代码 4 行在本地被移除或改写，例如 private CaptchaService adminBlockPuzzleCaptchaService;；private AjCaptchaProperties captchaProperties;；本地补充注释 31 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 38 行，移除或改写上游 4 行；import 新增 7 行、移除 4 行；补充注释 36 行。
  */
 @Tag(name = "管理后台 - 验证码")
 @RestController("adminCaptchaController")

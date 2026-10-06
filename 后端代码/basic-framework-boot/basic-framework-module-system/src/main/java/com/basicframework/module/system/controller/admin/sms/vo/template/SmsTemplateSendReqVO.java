@@ -11,9 +11,10 @@ import java.util.Map;
  * SmsTemplateSendReqVO 请求对象，承载接口输入参数。
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/sms/vo/template/SmsTemplateSendReqVO.java
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+ * 上游文件续：system/controller/admin/sms/vo/template/SmsTemplateSendReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 5 行，上游代码 4 行在本地被移除或改写，例如 @Schema(description = "管理后台 - 短信模板发送 Request VO")；@Schema(description = "手机号", requiredMode = Schema.RequiredMode.REQUIRED, example = "")；本地补充注释 9 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 5 行，移除或改写上游 4 行；import 新增 2 行、移除 1 行；补充注释 14 行。
  */
 @Schema(description = "管理后台 - 短信模板发送 Request VO")
 @Data

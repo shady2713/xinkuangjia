@@ -1214,3 +1214,288 @@ def test_repository_source_index_covers_applied_objects() -> None:
     for record in applied:
         source = DEFAULT_ROOT / record["local_path"]
         assert hashlib.sha256(source.read_bytes()).hexdigest() == record["local_sha256_after"]
+
+
+RECORD_VO_PATH = JAVA_PATH.replace("EvidenceDemo.java", "EvidenceVO.java")
+VO_QUALIFIED_NAME = "example.EvidenceVO"
+
+
+def continuation_notes(
+    segments: list[str], *, local_modification: str = "调整包名与类名。"
+) -> list[str]:
+    """按裁决 D13 生成带可选续行的来源说明行。
+
+    Args:
+        segments: 路径段序列，按出现顺序直接拼接即为完整上游路径。
+        local_modification: 本地修改行正文。
+
+    Returns:
+        来源说明块的 JavaDoc 正文行。
+    """
+
+    lines = [
+        f" * 来源：{UPSTREAM_REPO} @ {UPSTREAM_COMMIT}（该版本未声明作者）",
+        f" * 上游文件：{segments[0]}",
+    ]
+    lines.extend(f" * 上游文件续：{segment}" for segment in segments[1:])
+    lines.extend([f" * {java.SOURCE_BASIS_FIXED}", f" * 本地修改：{local_modification}"])
+    return lines
+
+
+def broken_continuation_cases() -> list[tuple[str, list[str], str]]:
+    """返回裁决 D13 要求拒绝的续行用例：名称、来源说明行、期望诊断子串。"""
+
+    header = f" * 来源：{UPSTREAM_REPO} @ {UPSTREAM_COMMIT}（该版本未声明作者）"
+    first = f" * 上游文件：{UPSTREAM_PATH[:40]}"
+    second = f" * 上游文件续：{UPSTREAM_PATH[40:]}"
+    basis = f" * {java.SOURCE_BASIS_FIXED}"
+    local = " * 本地修改：调整包名与类名。"
+    return [
+        ("删除续行导致路径截断", [header, first, basis, local], "上游文件路径与清单不一致"),
+        ("续段截掉一个字符", [header, first, second[:-1], basis, local], "上游文件路径与清单不一致"),
+        (
+            "调换段顺序",
+            [header, f" * 上游文件：{UPSTREAM_PATH[40:]}", f" * 上游文件续：{UPSTREAM_PATH[:40]}", basis, local],
+            "上游文件路径与清单不一致",
+        ),
+        ("缺少首行只留续行", [header, second, basis, local], "上游文件首行必须以"),
+        ("首行前缀错误", [header, f" * 上游文件X：{UPSTREAM_PATH[:40]}", second, basis, local], "上游文件首行必须以"),
+        ("首段为空", [header, " * 上游文件：", second, basis, local], "上游文件首行必须以"),
+        ("空续行载荷", [header, first, " * 上游文件续：", basis, local], "上游文件续行载荷为空"),
+        ("只有空白的续行载荷", [header, first, " * 上游文件续：   ", basis, local], "上游文件续行载荷为空"),
+        ("段边界插入空格", [header, first, f" * 上游文件续： {UPSTREAM_PATH[40:]}", basis, local], "上游文件路径与清单不一致"),
+        ("续行位于本地修改之后", [header, first, basis, local, second], "续行必须紧跟"),
+        ("首行与续行之间插空行", [header, first, " *", second, basis, local], "来源依据行不是固定取值"),
+        ("首行与续行之间插块标签", [header, first, " * @author 李杰", second, basis, local], "来源依据行不是固定取值"),
+        (
+            "首行加三条续行",
+            [
+                header,
+                f" * 上游文件：{UPSTREAM_PATH[:20]}",
+                f" * 上游文件续：{UPSTREAM_PATH[20:40]}",
+                f" * 上游文件续：{UPSTREAM_PATH[40:60]}",
+                f" * 上游文件续：{UPSTREAM_PATH[60:]}",
+                basis,
+                local,
+            ],
+            "最多 3 段",
+        ),
+        (
+            "重复斜杠",
+            [header, " * 上游文件：yudao-framework//yudao-common/", f" * 上游文件续：{UPSTREAM_PATH[25:]}", basis, local],
+            "不是有效的上游仓库相对路径",
+        ),
+        (
+            "省略号替代原字符",
+            [header, " * 上游文件：yudao-framework/…/", f" * 上游文件续：{UPSTREAM_PATH.rsplit('/', 1)[1]}", basis, local],
+            "上游文件路径与清单不一致",
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "segments",
+    [
+        [UPSTREAM_PATH],
+        [UPSTREAM_PATH[:40], UPSTREAM_PATH[40:]],
+        [UPSTREAM_PATH[:20], UPSTREAM_PATH[20:45], UPSTREAM_PATH[45:]],
+    ],
+    ids=["一段", "两段", "三段"],
+)
+def test_path_continuation_segments_pass_the_real_checker(
+    tmp_path: Path, segments: list[str]
+) -> None:
+    """一段、两段、三段路径都必须通过真实暂存入口，且拼接字节与清单逐字节一致。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    assert "".join(segments) == UPSTREAM_PATH
+    source = demo_source(notes=continuation_notes(segments))
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "name,notes,expected",
+    broken_continuation_cases(),
+    ids=[item[0] for item in broken_continuation_cases()],
+)
+def test_path_continuation_broken_forms_are_rejected(
+    tmp_path: Path, name: str, notes: list[str], expected: str
+) -> None:
+    """续行的语法、位置、段数与载荷问题都必须因预期原因被真实入口拒绝。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    source = demo_source(notes=notes)
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert expected in result.stderr, result.stderr
+
+
+def test_continuation_never_rebuilds_a_path_from_a_broken_first_line(tmp_path: Path) -> None:
+    """首行前缀错误时不能靠续行拼出与清单一致的路径。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    notes = [
+        f" * 来源：{UPSTREAM_REPO} @ {UPSTREAM_COMMIT}（该版本未声明作者）",
+        f" * 上游文件x：{UPSTREAM_PATH[:40]}",
+        f" * 上游文件续：{UPSTREAM_PATH[40:]}",
+        f" * {java.SOURCE_BASIS_FIXED}",
+        " * 本地修改：调整包名与类名。",
+    ]
+    source = demo_source(notes=notes)
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "上游文件首行必须以" in result.stderr, result.stderr
+    assert "上游文件路径与清单不一致" not in result.stderr, result.stderr
+
+
+def test_registry_path_whitespace_is_not_trimmed_away(tmp_path: Path) -> None:
+    """清单路径值首尾空白属于值本身，不能被 strip 后放行。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    source = demo_source()
+    record = evidence_record(source)
+    record["upstream_path"] = f" {UPSTREAM_PATH} "
+    registry, snapshots = prepare_case(sandbox, evidence, source, record=record)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "上游文件路径与清单不一致" in result.stderr, result.stderr
+
+
+def record_vo_source(
+    *,
+    header_params: bool = True,
+    component_javadoc: bool = False,
+    empty_param_text: bool = False,
+) -> str:
+    """生成一个 VO record 样本，用于验证组件职责说明的两条等价通道。
+
+    Args:
+        header_params: 是否在 record 头部 JavaDoc 写 ``@param``。
+        component_javadoc: 是否在每个组件上方写 JavaDoc。
+        empty_param_text: ``@param`` 只写组件名、不写说明。
+
+    Returns:
+        完整的 Java 源码。
+    """
+
+    body = [" * 演示 record 组件职责说明通道。", " *"]
+    if header_params:
+        if empty_param_text:
+            body.append(" * @param code")
+            body.append(" * @param message")
+        else:
+            body.append(" * @param code 编码；0 表示成功，其它值表示失败")
+            body.append(" * @param message 描述；固定文案，不回显原始报文")
+    body.append(" * @author 李杰")
+    components = []
+    if component_javadoc:
+        components.append("        /** 编码：0 表示成功，其它值表示失败。 */")
+    components.append("        Integer code,")
+    if component_javadoc:
+        components.append("        /** 描述：固定文案，不回显原始报文。 */")
+    components.append("        String message) {")
+    components.append("}")
+    return (
+        "package example;\n\n"
+        + "\n".join(["/**", *body, " */"])
+        + "\npublic record EvidenceVO(\n"
+        + "\n".join(components)
+        + "\n"
+    )
+
+
+def prepare_vo_case(tmp_path: Path, source: str) -> tuple[GitSandbox, list[str]]:
+    """构造 VO record 的隔离夹具，返回沙箱与真实检查参数。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    record = evidence_record(source, local_path=RECORD_VO_PATH)
+    record["type_evidence"] = type_evidence_value(
+        source,
+        qualified_name=VO_QUALIFIED_NAME,
+        simple_name="EvidenceVO",
+        kind="record",
+        review_conclusion="逐项复核 EvidenceVO.java：来源、指纹与无作者结论一致。",
+    )
+    registry, snapshots = prepare_case(
+        sandbox, evidence, source, local_path=RECORD_VO_PATH, record=record
+    )
+    return sandbox, checker_args(registry, snapshots)
+
+
+def test_record_component_header_param_satisfies_responsibility(tmp_path: Path) -> None:
+    """record 头部 @param 是组件职责说明的等价通道，不再要求悬空 JavaDoc。"""
+
+    source = record_vo_source(header_params=True, component_javadoc=False)
+    sandbox, arguments = prepare_vo_case(tmp_path, source)
+    result = run_checker(
+        sandbox, "scripts/code/java/check_staged_java_comments.py", *arguments
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_record_component_without_any_responsibility_is_rejected(tmp_path: Path) -> None:
+    """既无组件上方 JavaDoc 又无头部 @param 时仍必须拒绝。"""
+
+    source = record_vo_source(header_params=False, component_javadoc=False)
+    sandbox, arguments = prepare_vo_case(tmp_path, source)
+    result = run_checker(
+        sandbox, "scripts/code/java/check_staged_java_comments.py", *arguments
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "record 组件 code 缺少职责说明" in result.stderr, result.stderr
+    assert "record 组件 message 缺少职责说明" in result.stderr, result.stderr
+
+
+def test_record_component_header_param_without_text_is_rejected(tmp_path: Path) -> None:
+    """头部 @param 只写组件名、没有说明时不算通过。"""
+
+    source = record_vo_source(
+        header_params=True, component_javadoc=False, empty_param_text=True
+    )
+    sandbox, arguments = prepare_vo_case(tmp_path, source)
+    result = run_checker(
+        sandbox, "scripts/code/java/check_staged_java_comments.py", *arguments
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "record 组件 code 缺少职责说明" in result.stderr, result.stderr
+
+
+def test_record_component_attached_javadoc_still_passes(tmp_path: Path) -> None:
+    """原有的组件上方 JavaDoc 通道保持兼容。"""
+
+    source = record_vo_source(header_params=False, component_javadoc=True)
+    sandbox, arguments = prepare_vo_case(tmp_path, source)
+    result = run_checker(
+        sandbox, "scripts/code/java/check_staged_java_comments.py", *arguments
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

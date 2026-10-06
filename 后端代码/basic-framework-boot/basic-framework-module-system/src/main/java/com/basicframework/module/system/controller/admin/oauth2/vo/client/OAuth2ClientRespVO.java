@@ -12,9 +12,10 @@ import java.util.List;
  * <p>响应不得包含客户端密钥；密钥只在创建或主动轮换时由调用方提交，服务端不提供反向读取。</p>
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/oauth2/vo/client/OAuth2ClientRespVO.java
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+ * 上游文件续：system/controller/admin/oauth2/vo/client/OAuth2ClientRespVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 3 行，上游代码 5 行在本地被移除或改写，例如 @Schema(description = "应用图标", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.example.com/xx.png")；@Schema(description = "可重定向的 URI 地址", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.example.com")；本地补充注释 48 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 3 行，移除或改写上游 5 行；补充注释 55 行。
  */
 @Schema(description = "管理后台 - OAuth2 客户端 Response VO")
 @Data

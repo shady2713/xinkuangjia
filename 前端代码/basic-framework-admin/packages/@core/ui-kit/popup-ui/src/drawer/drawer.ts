@@ -160,14 +160,14 @@ export interface DrawerState extends DrawerProps {
  * 在 DrawerApi 上补出的状态订阅入口，供抽屉视图按需订阅状态或其中某个字段。
  * useStore 由 useVbenDrawer 在创建 API 后挂载，因此类型上通过交叉声明补齐。
  */
-export type ExtendedDrawerApi = DrawerApi & {
+export type ExtendedDrawerApi = {
   /**
    * 订阅抽屉状态；不传选择器时返回整个状态，只读且随状态写入自动更新。
    */
   useStore: <T = NoInfer<DrawerState>>(
     selector?: /** 状态选择器，缺省取整份 */ (state: NoInfer<DrawerState>) => T,
   ) => Readonly<Ref<T>>;
-};
+} & DrawerApi;
 
 /**
  * 创建抽屉 API 时可传入的选项：继承全部状态字段，并追加生命周期回调。

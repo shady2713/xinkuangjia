@@ -170,14 +170,14 @@ export interface ModalState extends ModalProps {
  * 在 ModalApi 之上补出订阅入口的交叉类型，由 useVbenModal 挂到实例上。
  * 有了它，视图侧能只订阅需要的几个字段，而不必把整个 api 传进组件。
  */
-export type ExtendedModalApi = ModalApi & {
+export type ExtendedModalApi = {
   /**
    * 订阅 store 的一段状态，返回只读 ref；不传选择器时拿到整份状态。
    */
   useStore: <T = NoInfer<ModalState>>(
     selector?: /** 状态选择器，省略取整份 */ (state: NoInfer<ModalState>) => T,
   ) => Readonly<Ref<T>>;
-};
+} & ModalApi;
 
 /**
  * 创建 api 用的选项：在状态字段之上收拢六个生命周期回调。

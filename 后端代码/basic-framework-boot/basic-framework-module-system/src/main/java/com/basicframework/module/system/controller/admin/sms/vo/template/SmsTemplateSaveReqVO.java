@@ -10,9 +10,10 @@ import jakarta.validation.constraints.Size;
  * 管理后台短信模板创建或修改请求。
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/sms/vo/template/SmsTemplateSaveReqVO.java
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+ * 上游文件续：system/controller/admin/sms/vo/template/SmsTemplateSaveReqVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 6 行，上游代码 1 行在本地被移除或改写，例如 @Size(max = 63, message = "模板编码长度不能超过 63 个字符")；@Schema(description = "模板名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "登录验证码")；本地补充注释 27 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 6 行，移除或改写上游 1 行；import 新增 2 行、移除 1 行；补充注释 32 行。
  */
 @Schema(description = "管理后台 - 短信模板创建/修改 Request VO")
 @Data

@@ -6,14 +6,12 @@ package com.basicframework.module.system.controller.admin.sms.vo.callback;
  * <p>只承载阿里云要求的两个字段：{@code code} 与 {@code msg}。应答描述固定为「接收成功」或
  * 「接收失败」，不回显阿里云推送的原始报文，避免把回执正文写进响应或日志。</p>
  *
- * @param code 应答编码；0 与 HTTP 200 一起返回表示回执已接收，1 表示处理失败
- * @param msg 应答描述；固定为「接收成功」或「接收失败」
+ * @param code 应答编码；0 与 HTTP 200 一起返回表示回执已接收，1 表示处理失败；只取这两个值
+ * @param msg 应答描述；固定为「接收成功」或「接收失败」；不回显回执正文
  * @author 李杰
  */
 public record AliyunSmsCallbackRespVO(
-        /** 应答编码：0 与 HTTP 200 一起返回表示回执已接收，1 表示处理失败；只取这两个值。 */
         Integer code,
-        /** 应答描述：固定为「接收成功」或「接收失败」；不回显回执正文。 */
         String msg) {
 
     /**

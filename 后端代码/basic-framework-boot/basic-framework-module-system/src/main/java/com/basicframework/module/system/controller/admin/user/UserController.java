@@ -53,7 +53,7 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
  * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/user/UserController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 39 行，上游代码 47 行在本地被移除或改写，例如 private static final int MAX_EXPORT_SIZE = 10_000;；private PermissionService permissionService;；本地补充注释 95 行，上游注释 2 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 39 行，移除或改写上游 47 行；import 新增 17 行、移除 8 行；补充注释 100 行，上游注释 2 行未保留。
  */
 @Tag(name = "管理后台 - 用户")
 @RestController

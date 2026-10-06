@@ -57,13 +57,10 @@ type UseCrudItemActionsOptions<Row, Id extends RowKey> = {
 } & DeleteOptions<Row, Id>;
 
 /** 批量删除动作的配置：在删除契约之上补一个批量删除接口。 */
-type UseCrudDeleteActionsOptions<Row, Id extends RowKey> = DeleteOptions<
-  Row,
-  Id
-> & {
+type UseCrudDeleteActionsOptions<Row, Id extends RowKey> = {
   /** 批量删除接口，一次接收勾选到的主键列表。 */
   batchDeleteApi: (ids: Id[]) => Promise<unknown>;
-};
+} & DeleteOptions<Row, Id>;
 
 /** 完整增删改动作的配置：批量删除配置加上可选的行键兜底。 */
 type UseCrudActionsOptions<

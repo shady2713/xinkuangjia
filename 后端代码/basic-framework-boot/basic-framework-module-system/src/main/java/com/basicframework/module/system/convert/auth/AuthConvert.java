@@ -28,7 +28,7 @@ import static com.basicframework.module.system.dal.dataobject.permission.MenuDO.
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
  * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/convert/auth/AuthConvert.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；上游代码 1 行在本地被移除或改写，例如 SocialUserBindReqDTO convert(Long userId, Integer userType, AuthSocialLoginReqVO reqVO);；本地补充注释 13 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；移除或改写上游 1 行；import 新增 0 行、移除 2 行；补充注释 15 行。
  */
 @Mapper
 public interface AuthConvert {

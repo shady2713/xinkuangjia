@@ -13,9 +13,10 @@ import java.util.Set;
  * AuthPermissionInfoRespVO 响应对象，承载接口输出数据。
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+ * 上游文件续：system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 8 行，上游代码 6 行在本地被移除或改写，例如 @Schema(description = "用户昵称", requiredMode = Schema.RequiredMode.REQUIRED, example = "目录")；@Schema(description = "用户头像", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.example.com/xx.jpg")；本地补充注释 28 行，上游注释 1 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 8 行，移除或改写上游 6 行；补充注释 31 行，上游注释 1 行未保留。
  */
 @Schema(description = "管理后台 - 登录用户的权限信息 Response VO，额外包括用户信息和角色列表")
 @Data
@@ -52,9 +53,10 @@ public class AuthPermissionInfoRespVO {
      * UserVO 内部数据模型，用于封装 AuthPermissionInfoRespVO 的组成信息。
      *
      * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
-     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
+     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+     * 上游文件续：system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
      * 来源依据：固定见证版本；历史引入版本未核实。
-     * 本地修改：本地改写/新增代码 6 行，上游代码 4 行在本地被移除或改写，例如 @Schema(description = "用户昵称", requiredMode = Schema.RequiredMode.REQUIRED, example = "目录")；@Schema(description = "用户头像", requiredMode = Schema.RequiredMode.REQUIRED, example = "https://www.example.com/xx.jpg")；本地补充注释 21 行。
+     * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 8 行，移除或改写上游 6 行；补充注释 31 行，上游注释 1 行未保留。
      */
     @Schema(description = "用户信息 VO")
     @Data
@@ -111,9 +113,10 @@ public class AuthPermissionInfoRespVO {
      * MenuVO 内部数据模型，用于封装 AuthPermissionInfoRespVO 的组成信息。
      *
      * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
-     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
+     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/
+     * 上游文件续：system/controller/admin/auth/vo/AuthPermissionInfoRespVO.java
      * 来源依据：固定见证版本；历史引入版本未核实。
-     * 本地修改：本地改写/新增代码 2 行，上游代码 2 行在本地被移除或改写，例如 @Schema(description = "菜单名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "目录")；@Schema(description = "菜单名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "目录")；本地补充注释 11 行，上游注释 1 行未保留。
+     * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 8 行，移除或改写上游 6 行；补充注释 31 行，上游注释 1 行未保留。
      */
     @Schema(description = "管理后台 - 登录用户的菜单信息 Response VO")
     @Data

@@ -14,9 +14,10 @@ import java.util.stream.Collectors;
  * 针对 MyBatis Plus 的 {@link DbType} 增强，补充更多信息
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/enums/DbTypeEnum.java
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
+ * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/enums/DbTypeEnum.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 23 行，上游代码 18 行在本地被移除或改写，例如 H2(DbType.H2, "H2", ""),；MY_SQL(DbType.MYSQL, "MySQL", findInSetExpression()),；本地补充注释 11 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 23 行，移除或改写上游 18 行；import 新增 0 行、移除 1 行；补充注释 12 行。
  */
 @Getter
 @AllArgsConstructor

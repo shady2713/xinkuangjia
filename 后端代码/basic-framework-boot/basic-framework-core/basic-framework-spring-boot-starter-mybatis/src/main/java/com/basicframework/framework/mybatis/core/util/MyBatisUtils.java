@@ -27,9 +27,10 @@ import java.util.List;
 /**
  * MyBatis 工具类
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/util/MyBatisUtils.java
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
+ * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/util/MyBatisUtils.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 22 行，上游代码 50 行在本地被移除或改写，例如 page.setOptimizeJoinOfCountSql(false); // 关联 issue：https://example.com/external/yudao/basic_framework-cloud/issues/ID2QL；validateSortingField(sortingField);；本地补充注释 14 行，上游注释 12 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 22 行，移除或改写上游 50 行；import 新增 0 行、移除 3 行；补充注释 15 行，上游注释 12 行未保留。
  */
 public class MyBatisUtils {
 

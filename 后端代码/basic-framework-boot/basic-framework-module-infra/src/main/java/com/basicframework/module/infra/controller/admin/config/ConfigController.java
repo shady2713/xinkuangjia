@@ -39,7 +39,7 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.EXPORT_SI
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
  * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/config/ConfigController.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 18 行，上游代码 13 行在本地被移除或改写，例如 private static final int MAX_BATCH_DELETE_SIZE = 100;；private static final int MAX_CONFIG_KEY_LENGTH = 100;；本地补充注释 55 行。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 18 行，移除或改写上游 13 行；import 新增 7 行、移除 5 行；补充注释 62 行。
  */
 @Tag(name = "管理后台 - 参数配置")
 @RestController

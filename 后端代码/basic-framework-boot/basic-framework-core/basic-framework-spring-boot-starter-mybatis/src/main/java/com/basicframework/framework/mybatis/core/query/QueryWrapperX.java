@@ -15,9 +15,10 @@ import java.util.Collection;
  * 1. 拼接条件的方法，增加 xxxIfPresent 方法，用于判断值不存在的时候，不要拼接到条件中。
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/query/QueryWrapperX.java
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/
+ * 上游文件续：cn/iocoder/yudao/framework/mybatis/core/query/QueryWrapperX.java
  * 来源依据：固定见证版本；历史引入版本未核实。
- * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 6 行，上游代码 5 行在本地被移除或改写，例如 if (values!= null && values.length != 0 && values[0] != null && values[1] != null) {；return (QueryWrapperX<T>) super.between(column, values[0], values[1]);；本地补充注释 65 行，上游注释 1 行未保留。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；改写/新增 6 行，移除或改写上游 5 行；补充注释 66 行，上游注释 1 行未保留。
  *
  * @param <T> 数据类型
  */

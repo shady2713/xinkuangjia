@@ -29,7 +29,8 @@ import java.time.LocalTime;
  * 3. 初始化 JsonUtils，复用工程内统一的对象映射能力
  *
  * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
- * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/yudao/framework/jackson/config/YudaoJacksonAutoConfiguration.java
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/
+ * 上游文件续：yudao/framework/jackson/config/YudaoJacksonAutoConfiguration.java
  * 来源依据：固定见证版本；历史引入版本未核实。
  * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 11 行，上游注释 1 行未保留。
  */

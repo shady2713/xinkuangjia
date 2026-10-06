@@ -136,12 +136,23 @@ SOURCE_HEADER_PATTERN = re.compile(
 SOURCE_REPOSITORY_PATTERN = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
 )
+SOURCE_PATH_PREFIX = "上游文件："
 SOURCE_PATH_PATTERN = re.compile(r"^上游文件：(?P<path>.+)$")
+# 长上游路径的续行前缀。PMD 7.17 的 CommentSize 只有 maxLineLength 一个全局旋钮，
+# 注释不是 XPath 节点，按行放宽无法表达（抑制表达式在实际求值上下文里只能看到编译单元，
+# 无法只豁免一行），因此按裁决 D13 把来源说明块扩展为“四行基础格式 + 可选的上游文件续行”：
+# 续行只续接路径值本身，路径总段数（含首行）上限 3，拼接结果仍与清单 upstream_path
+# 逐字节全等比较，且不对路径载荷或清单值做任何 strip / 归一化，证据门槛不变。
+SOURCE_PATH_CONTINUATION_PREFIX = "上游文件续："
+SOURCE_PATH_MAX_SEGMENTS = 3
 SOURCE_LOCAL_PATTERN = re.compile(r"^本地修改：(?P<text>.*)$")
 SOURCE_BASIS_FIXED = "来源依据：固定见证版本；历史引入版本未核实。"
 SOURCE_BASIS_VERIFIED = "来源依据：已核实引入版本。"
 SOURCE_BASIS_LINES = (SOURCE_BASIS_FIXED, SOURCE_BASIS_VERIFIED)
 SOURCE_NOTE_LINE_COUNT = 4
+SOURCE_NOTE_INCOMPLETE_MESSAGE = (
+    "来源说明不完整：必须依次给出来源、上游文件（可用“上游文件续：”续行）、来源依据、本地修改"
+)
 LOCAL_MODIFICATION_NONE_LINE = "无。"
 LOCAL_MODIFICATION_NONE_MARKERS = {"无", "无本地修改", "no-local-modification", "none"}
 # 受控清单的逐类型证据 schema；类型映射与复核结论必须是结构化结果。
@@ -195,6 +206,12 @@ PROVENANCE_TAG_PATTERN = re.compile(
 )
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+# record 组件职责说明的等价通道：record 头部 JavaDoc 的 @param <组件名> <非空说明>。
+# 组件位置上的 /** */ 在 PMD 里属于悬空 JavaDoc（DanglingJavadoc 会报违规），
+# 该位置的规范写法是 record 头部 JavaDoc 的 @param；说明正文仍必须非空。
+RECORD_COMPONENT_PARAM_PATTERN = re.compile(
+    r"^@param\s+(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)\s+(?P<text>\S.*)$"
+)
 
 
 @dataclass(frozen=True)
@@ -877,6 +894,24 @@ def _text(record: dict[str, object], key: str) -> str:
     return "" if value is None else str(value).strip()
 
 
+def _raw_text(record: dict[str, object], key: str) -> str:
+    """读取清单字段的原始字符串值，不做 strip。
+
+    路径载荷与清单路径值都必须按原字符序列比较（裁决 D13）：前导或尾随空白属于值本身，
+    未经裁剪的值与原值不同时必须拒绝，不能先裁剪再比较。
+
+    Args:
+        record: 清单记录。
+        key: 字段名。
+
+    Returns:
+        字段的原始字符串值；缺失或为 ``null`` 时返回空串。
+    """
+
+    value = record.get(key)
+    return "" if value is None else str(value)
+
+
 def _provenance_tag_errors(javadoc: str) -> list[str]:
     """识别自造的来源块标签；来源说明只能写在职责 JavaDoc 正文。
 
@@ -981,6 +1016,13 @@ def _parse_source_notes(javadoc: str) -> tuple[list[SourceNote], list[str]]:
     index = 0
     while index < len(lines):
         line = lines[index]
+        if line.startswith(SOURCE_PATH_CONTINUATION_PREFIX):
+            errors.append(
+                "“上游文件续：”续行必须紧跟在“上游文件：”行之后："
+                f"第 {index + 1} 行"
+            )
+            index += 1
+            continue
         if not line.startswith(SOURCE_HEADER_PREFIX):
             index += 1
             continue
@@ -992,7 +1034,7 @@ def _parse_source_notes(javadoc: str) -> tuple[list[SourceNote], list[str]]:
             continue
         block = lines[index : index + SOURCE_NOTE_LINE_COUNT]
         if len(block) < SOURCE_NOTE_LINE_COUNT:
-            errors.append("来源说明不完整：必须依次给出来源、上游文件、来源依据、本地修改四行")
+            errors.append(SOURCE_NOTE_INCOMPLETE_MESSAGE)
             break
         header, header_error = _parse_source_header(block[0])
         if header is None:
@@ -1000,19 +1042,57 @@ def _parse_source_notes(javadoc: str) -> tuple[list[SourceNote], list[str]]:
             index += 1
             continue
         path_match = SOURCE_PATH_PATTERN.match(block[1])
-        upstream_path = "" if path_match is None else path_match.group("path").strip()
+        if path_match is None:
+            # 首行必须自身成立：载荷非空且前缀正确，续行不得替代或重建首行。
+            errors.append(
+                f"上游文件首行必须以“{SOURCE_PATH_PREFIX}”开头且载荷非空：{block[1]!r}"
+            )
+            index += 1
+            continue
+        # 长上游路径可以在“上游文件：”行之后用“上游文件续：”逐段续写；各段按原字符序列
+        # 直接拼接（不做 strip、空白折叠或任何归一化），再按同一口径做相对路径校验，
+        # 并与清单 upstream_path 逐字节比较；路径总段数（含首行）上限 3。
+        segments: list[str] = [path_match.group("path")]
+        cursor = index + 2
+        continuation_error = ""
+        while cursor < len(lines) and lines[cursor].startswith(
+            SOURCE_PATH_CONTINUATION_PREFIX
+        ):
+            segment = lines[cursor][len(SOURCE_PATH_CONTINUATION_PREFIX) :]
+            if not segment.strip():
+                continuation_error = f"上游文件续行载荷为空：{lines[cursor]!r}"
+                break
+            if len(segments) >= SOURCE_PATH_MAX_SEGMENTS:
+                continuation_error = (
+                    f"上游文件路径最多 {SOURCE_PATH_MAX_SEGMENTS} 段（首行加两条续行），"
+                    f"第 {cursor + 1} 行是多余续行"
+                )
+                break
+            segments.append(segment)
+            cursor += 1
+        if continuation_error:
+            errors.append(continuation_error)
+            index = cursor + 1
+            continue
+        if cursor + 1 >= len(lines):
+            errors.append(SOURCE_NOTE_INCOMPLETE_MESSAGE)
+            break
+        upstream_path = "".join(segments)
+        basis_line, local_line = lines[cursor], lines[cursor + 1]
         if not _is_safe_upstream_path(upstream_path):
             errors.append(f"上游文件行不是有效的上游仓库相对路径：{block[1]!r}")
             index += 1
             continue
-        if block[2] not in SOURCE_BASIS_LINES:
-            errors.append(f"来源依据行不是固定取值：{block[2]!r}")
+        if basis_line not in SOURCE_BASIS_LINES:
+            errors.append(f"来源依据行不是固定取值：{basis_line!r}")
             index += 1
             continue
-        local_match = SOURCE_LOCAL_PATTERN.match(block[3])
-        local_modification = "" if local_match is None else local_match.group("text").strip()
+        local_match = SOURCE_LOCAL_PATTERN.match(local_line)
+        local_modification = (
+            "" if local_match is None else local_match.group("text").strip()
+        )
         if not local_modification:
-            errors.append(f"本地修改行缺少实际差异说明：{block[3]!r}")
+            errors.append(f"本地修改行缺少实际差异说明：{local_line!r}")
             index += 1
             continue
         notes.append(
@@ -1020,12 +1100,12 @@ def _parse_source_notes(javadoc: str) -> tuple[list[SourceNote], list[str]]:
                 repository=header[0],
                 commit=header[1],
                 upstream_path=upstream_path,
-                basis=block[2],
+                basis=basis_line,
                 local_modification=local_modification,
                 line=index + 1,
             )
         )
-        index += SOURCE_NOTE_LINE_COUNT
+        index = cursor + 2
     return notes, errors
 
 
@@ -1551,7 +1631,7 @@ def _upstream_binding_reasons(record: dict[str, object], note: SourceNote) -> li
         reasons.append("清单的上游提交不是完整 40 位小写 SHA")
     elif commit != note.commit:
         reasons.append(f"固定提交与清单不一致：注释 {note.commit}，清单 {commit}")
-    upstream_path = _text(record, "upstream_path")
+    upstream_path = _raw_text(record, "upstream_path")
     if upstream_path != note.upstream_path:
         reasons.append(
             f"上游文件路径与清单不一致：注释 {note.upstream_path}，清单 {upstream_path or '空'}"
@@ -1728,7 +1808,7 @@ def _source_entry_matches(entry: dict[str, object], note: SourceNote) -> bool:
     return (
         _text(entry, "repository") == note.repository
         and _text(entry, "commit") == note.commit
-        and _text(entry, "path") == note.upstream_path
+        and _raw_text(entry, "path") == note.upstream_path
     )
 
 
@@ -2365,6 +2445,34 @@ def _record_component_boundaries(
     return boundaries
 
 
+def _record_component_param_documented(
+    source: str, declaration: TypeDeclaration, component: str
+) -> bool:
+    """判断 record 头部 JavaDoc 是否以 ``@param`` 给出了该组件的职责说明。
+
+    record 组件位置上的 ``/** */`` 在 PMD 里是悬空 JavaDoc（DanglingJavadoc 报违规），
+    该位置的规范写法是 record 头部 JavaDoc 的 ``@param``。本函数提供这条等价通道，
+    但说明正文仍必须非空，缺说明的 ``@param`` 不算通过。
+
+    Args:
+        source: 原始 Java 源码。
+        declaration: record 类型声明。
+        component: 组件名称。
+
+    Returns:
+        头部 JavaDoc 存在 ``@param <组件名> <非空说明>`` 时返回 ``True``。
+    """
+
+    javadoc = _attached_javadoc(source, declaration.declaration_offset)
+    if javadoc is None:
+        return False
+    for line in _javadoc_body_lines(javadoc):
+        match = RECORD_COMPONENT_PARAM_PATTERN.match(line.strip())
+        if match is not None and match.group("name") == component:
+            return True
+    return False
+
+
 def _scan_do_vo_record_components(
     path: str,
     source: str,
@@ -2375,7 +2483,10 @@ def _scan_do_vo_record_components(
     paren_pairs: dict[int, int],
     declarations: list[TypeDeclaration],
 ) -> list[Finding]:
-    """检查 DO、VO record 中本次新增或修改的组件 JavaDoc。
+    """检查 DO、VO record 中本次新增或修改的组件职责说明。
+
+    组件说明可以写在组件上方的 JavaDoc，或写在 record 头部 JavaDoc 的 ``@param``；
+    两者都没有时按 ``do-vo-field-javadoc`` 报违规。
 
     Args:
         path: 仓库相对路径。
@@ -2413,13 +2524,16 @@ def _scan_do_vo_record_components(
                 starts, declaration_offset, component_end, added_lines
             ):
                 continue
-            if _attached_javadoc(source, declaration_offset) is None:
+            if _attached_javadoc(source, declaration_offset) is None and not (
+                _record_component_param_documented(source, declaration, name)
+            ):
                 findings.append(
                     Finding(
                         path,
                         _line_number(starts, declaration_offset),
                         "do-vo-field-javadoc",
-                        f"{declaration.name} record 组件 {name} 缺少职责 JavaDoc",
+                        f"{declaration.name} record 组件 {name} 缺少职责说明"
+                        "（组件上方 JavaDoc 或 record 头部 @param）",
                     )
                 )
     return findings
