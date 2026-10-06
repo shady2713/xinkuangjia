@@ -13,6 +13,7 @@ import { ElDescriptions, ElDescriptionsItem } from 'element-plus';
 const props = {
   border: { default: true, type: Boolean },
   column: {
+    /** 缺省列数：宽屏一行 3~4 列，窄屏降到 1~2 列，避免长表单在窄屏被压扁 */
     default: () => {
       return { lg: 3, md: 3, sm: 2, xl: 3, xs: 1, xxl: 4 };
     },
@@ -20,12 +21,14 @@ const props = {
   },
   data: { type: Object },
   schema: {
+    /** 缺省为空配置，此时组件只渲染容器与标题，不产生任何描述项 */
     default: () => [],
     type: Array as PropType<DescriptionItemSchema[]>,
   },
   size: {
     default: 'default',
     type: String,
+    /** 只放行 Element Plus 支持的三档尺寸，并容许内部透传的 undefined 走缺省值 */
     validator: (v: string) =>
       ['default', 'middle', 'small', undefined].includes(v),
   },
@@ -95,16 +98,29 @@ export default defineComponent({
       },
     );
 
-    const getProps = computed(() => {
-      const opt = {
-        ...unref(getMergeProps),
-      };
-      return opt as DescriptionProps;
-    });
+    const getProps = computed(
+      /**
+       * 组件内部统一读取的属性入口，取值处不必再关心属性与异步回填数据的来源差异。
+       * @returns 合并并收窄后的描述列表属性。
+       */
+      () => {
+        const opt = {
+          ...unref(getMergeProps),
+        };
+        return opt as DescriptionProps;
+      },
+    );
 
-    const getDescriptionsProps = computed(() => {
-      return { ...unref(attrs), ...unref(getProps) } as DescriptionProps;
-    });
+    const getDescriptionsProps = computed(
+      /**
+       * 传给 ElDescriptions 的属性：透传属性在前、组件自身属性在后，
+       * 使 schema、data 这类显式声明不会被同名透传属性覆盖。
+       * @returns 合并后的 ElDescriptions 属性。
+       */
+      () => {
+        return { ...unref(attrs), ...unref(getProps) } as DescriptionProps;
+      },
+    );
 
     // 防止换行
     function renderLabel({
@@ -123,6 +139,11 @@ export default defineComponent({
       return <div style={labelStyles}>{label}</div>;
     }
 
+    /**
+     * 按 schema 逐项生成描述项：show 判定为假的项直接跳过，
+     * 内容优先取具名插槽，其次按 field 从 data 取值。
+     * @returns 描述项节点数组，已过滤掉不展示的项。
+     */
     function renderItem() {
       const { data, schema } = unref(getProps);
       return unref(schema)
@@ -133,6 +154,11 @@ export default defineComponent({
             return null;
           }
 
+          /**
+           * 取出当前描述项要展示的内容：配置了 render 就走自定义渲染，
+           * 否则按 field 从 data 取值。
+           * @returns 描述项内容；字段取值缺省时返回空串，data 尚未回填时返回 null 表示暂不渲染。
+           */
           function getContent() {
             const _data = unref(getProps)?.data;
             if (!_data) {
@@ -150,9 +176,15 @@ export default defineComponent({
           return (
             <ElDescriptionsItem key={field} span={span}>
               {{
+                /** 标签按 schema 的 label 与最小宽度配置决定是否需要额外容器 */
                 label: () => {
                   return renderLabel(item);
                 },
+                /**
+                 * 内容优先取具名插槽；未配置插槽时按字段取值，
+                 * 配置了 contentMinWidth 时再包一层定宽容器，避免长内容挤压同排标签。
+                 * @returns 描述项内容节点；插槽缺失且 data 未回填时返回 null。
+                 */
                 default: () => {
                   if (item.slot) {
                     return getSlot(slots, item.slot, data);
@@ -181,6 +213,7 @@ export default defineComponent({
       const extraSlot = getSlot(slots, 'extra');
       // 描述项插槽只由本组件生成，签名是“无参返回渲染结果数组”的函数。
       const slotsObj: DescriptionSlots = {
+        /** 默认插槽输出按 schema 生成的全部描述项 */
         default: () => renderItem(),
       };
       if (extraSlot) {

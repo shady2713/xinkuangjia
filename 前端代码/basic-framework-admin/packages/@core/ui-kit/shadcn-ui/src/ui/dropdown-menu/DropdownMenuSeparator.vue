@@ -16,6 +16,7 @@ const props = defineProps<
   }
 >();
 
+/** 去掉 class 后的分隔线属性，转交 DropdownMenuSeparator 作为纯展示节点，不参与键盘导航。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

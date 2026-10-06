@@ -23,10 +23,18 @@ const props = defineProps<{
   icon?: Component | string;
 }>();
 
+/**
+ * 判断 icon 是否是远程图片地址，即字符串且可识别为 http 链接。
+ * 命中时模板走 img 分支，其余字符串交给 iconify 解析，两者互斥不会同时命中。
+ */
 const isRemoteIcon = computed(() => {
   return isString(props.icon) && isHttpUrl(props.icon);
 });
 
+/**
+ * 判断 icon 是否是组件形态（含函数式组件）。
+ * 只有对象或函数才认定为组件，字符串一律不算，因此这条分支优先于远程图片与 iconify。
+ */
 const isComponent = computed(() => {
   const { icon } = props;
   return !isString(icon) && (isObject(icon) || isFunction(icon));

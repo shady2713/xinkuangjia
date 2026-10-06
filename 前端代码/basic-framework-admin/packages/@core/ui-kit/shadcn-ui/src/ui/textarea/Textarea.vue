@@ -13,6 +13,11 @@ const props = defineProps<{
 }>();
 
 const emits = defineEmits<{
+  /**
+   * 多行文本变更事件：useVModel 处于 passive 模式，每次触发都把新值同步给父组件。
+   * @param e 事件名，固定为 update:modelValue。
+   * @param payload 文本域当前的新值，未做去空白或长度截断，按用户输入原样传出。
+   */
   (e: 'update:modelValue', payload: number | string): void;
 }>();
 

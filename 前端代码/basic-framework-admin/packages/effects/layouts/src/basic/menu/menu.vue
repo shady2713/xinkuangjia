@@ -10,12 +10,14 @@ import type { MenuProps } from '@vben-core/menu-ui';
 
 import { Menu } from '@vben-core/menu-ui';
 
+/** 菜单容器属性：在菜单内核属性上补充菜单树。 */
 interface Props extends MenuProps {
   menus?: MenuRecordRaw[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   accordion: true,
+  /** 菜单树的默认值：空数组，未传入时不渲染菜单项。 */
   menus: () => [],
 });
 
@@ -24,10 +26,12 @@ const emit = defineEmits<{
   select: [string, string?];
 }>();
 
+/** 菜单选中回调：把选中键与当前菜单模式一并抛给父级。 */
 function handleMenuSelect(key: string) {
   emit('select', key, props.mode);
 }
 
+/** 菜单展开回调：把展开的键与完整路径链抛给父级。 */
 function handleMenuOpen(key: string, path: string[]) {
   emit('open', key, path);
 }

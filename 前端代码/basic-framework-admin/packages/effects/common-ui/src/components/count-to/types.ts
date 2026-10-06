@@ -8,12 +8,15 @@ import type { StyleValue } from 'vue';
 
 import { TransitionPresets as TransitionPresetsData } from '@vueuse/core';
 
+/** 过渡曲线名：取自 @vueuse 过渡预设表的键，可直接写入 transition 属性。 */
 export type TransitionPresets = keyof typeof TransitionPresetsData;
 
+/** 全部过渡曲线名列表，供调用方枚举可选曲线。 */
 export const TransitionPresetsKeys = Object.keys(
   TransitionPresetsData,
 ) as TransitionPresets[];
 
+/** 数字滚动属性：起止值、时长与延迟、分隔符与小数位、前后缀，以及四段样式类名与内联样式。 */
 export interface CountToProps {
   /** 初始值 */
   startVal?: number;

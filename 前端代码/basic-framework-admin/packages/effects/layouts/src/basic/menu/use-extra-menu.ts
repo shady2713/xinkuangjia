@@ -16,10 +16,12 @@ import { findRootMenuByPath } from '@vben/utils';
 
 import { useNavigation } from './use-navigation';
 
+/** 维护混合布局侧边扩展列的子菜单、激活项与可见性，并提供选择、移入移出等交互处理。 */
 function useExtraMenu(useRootMenus?: ComputedRef<MenuRecordRaw[]>) {
   const accessStore = useAccessStore();
   const { navigation, willOpenedByWindow } = useNavigation();
 
+  /** 参与扩展列计算的一级菜单：优先用调用方传入的菜单，未传时退回权限仓库的菜单。 */
   const menus = computed(() => useRootMenus?.value ?? accessStore.accessMenus);
 
   /** 记录当前顶级菜单下哪个子菜单最后激活 */
@@ -29,13 +31,14 @@ function useExtraMenu(useRootMenus?: ComputedRef<MenuRecordRaw[]>) {
   const extraMenus = ref<MenuRecordRaw[]>([]);
   const sidebarExtraVisible = ref<boolean>(false);
   const extraActiveMenu = ref('');
+  /** 一级菜单在 parents 路径链中的层级下标：header-mixed-nav 布局下为 1，其余为 0。 */
   const parentLevel = computed(() =>
     preferences.app.layout === 'header-mixed-nav' ? 1 : 0,
   );
 
   /**
    * 选择混合菜单事件
-   * @param menu
+   * @param menu 被选中的一级菜单；无子菜单时直接跳转，有子菜单时按需展开扩展列并按配置激活子项。
    */
   const handleMixedMenuSelect = async (menu: MenuRecordRaw) => {
     const _extraMenus = menu?.children ?? [];
@@ -91,6 +94,7 @@ function useExtraMenu(useRootMenus?: ComputedRef<MenuRecordRaw[]>) {
     extraMenus.value = rootMenu?.children ?? [];
   };
 
+  /** 鼠标移入一级菜单时预展开其子菜单并校正激活项；仅在悬浮展开模式下生效。 */
   const handleMenuMouseEnter = (menu: MenuRecordRaw) => {
     if (!preferences.sidebar.expandOnHover) {
       const { findMenu } = findRootMenuByPath(menus.value, menu.path);
@@ -100,6 +104,10 @@ function useExtraMenu(useRootMenus?: ComputedRef<MenuRecordRaw[]>) {
     }
   };
 
+  /**
+   * 按当前路由重新计算扩展列的子菜单、激活项与可见性，并记录一级菜单下最后激活的子项。
+   * @param path 备用路径；路由 meta 配置了 activePath 时优先使用 activePath。
+   */
   function calcExtraMenus(path: string) {
     const currentPath = route.meta?.activePath || path;
     const { findMenu, rootMenu, rootMenuPath } = findRootMenuByPath(

@@ -4,6 +4,7 @@
  */
 import type { SystemOperateLogApi } from '#/api/system/operate-log';
 
+/** 操作日志列表的入参：只接收已查好的日志行，分页与筛选由调用页面负责。 */
 export interface OperateLogProps {
   logList: SystemOperateLogApi.OperateLog[]; // 操作日志列表
 }

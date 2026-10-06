@@ -34,10 +34,23 @@ export const backtopProps = {
   },
 } as const;
 
+/**
+ * 回到顶部按钮的入参类型：字段与同文件 backtopProps 的运行时声明对齐
+ * （后者另带 Vue 侧默认值与类型校验），让组件与组合式函数复用同一份类型。
+ * 全部字段可选，组件未传时由 back-top.vue 的 withDefaults 兜底。
+ */
 export interface BacktopProps {
+  /** 按钮距视口底部的像素距离，缺省时组件填 20。 */
   bottom?: number;
+  /** 预留的分组标记：当前组件的渲染与显隐逻辑都不读取它。 */
   isGroup?: boolean;
+  /** 按钮距视口右侧的像素距离，缺省时组件填 24。 */
   right?: number;
+  /**
+   * 滚动容器选择器；留空表示用 document.documentElement，
+   * 非空但挂载时查不到元素会直接抛错，不降级。
+   */
   target?: string;
+  /** 按钮出现所需的滚动距离阈值（像素），组合式函数读到缺失值时按 0 比较。 */
   visibilityHeight?: number;
 }

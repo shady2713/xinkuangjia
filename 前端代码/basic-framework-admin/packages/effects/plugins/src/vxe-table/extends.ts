@@ -108,14 +108,28 @@ function extendProxyOption(
   });
 }
 
+/**
+ * 向 vxe-table 注册日期与日期时间两个单元格格式化器，注册名分别为 formatDate 与 formatDateTime。
+ * @param vxeUI vxe-table 的 UI 实例；注册后对全部表格生效，同名格式化器会被覆盖。
+ */
 export function extendsDefaultFormatter(vxeUI: VxeUIExport) {
   vxeUI.formats.add('formatDate', {
+    /**
+     * 把单元格原始值格式化为日期（不含时间）。
+     * @param context 格式化上下文，cellValue 为当前单元格的原始值。
+     * @returns 格式化后的日期字符串。
+     */
     tableCellFormatMethod({ cellValue }) {
       return formatDate(cellValue) as string;
     },
   });
 
   vxeUI.formats.add('formatDateTime', {
+    /**
+     * 把单元格原始值格式化为日期时间。
+     * @param context 格式化上下文，cellValue 为当前单元格的原始值。
+     * @returns 格式化后的日期时间字符串。
+     */
     tableCellFormatMethod({ cellValue }) {
       return formatDateTime(cellValue) as string;
     },

@@ -16,8 +16,10 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const { destroyWatermark, updateWatermark } = useWatermark();
 
+/** 用户下拉菜单项：只提供个人中心入口，点击后跳转到 Profile 路由。 */
 const menus = computed(() => [
   {
+    /** 跳转到个人中心页面。 */
     handler: () => {
       router.push({ name: 'Profile' });
     },
@@ -26,10 +28,12 @@ const menus = computed(() => [
   },
 ]);
 
+/** 用户头像：优先用用户信息的头像，未取得用户信息时回落到偏好设置的默认头像。 */
 const avatar = computed(() => {
   return userStore.userInfo?.avatar ?? preferences.app.defaultAvatar;
 });
 
+/** 退出登录：清空登录态并交由框架跳转登录页，用户下拉菜单与锁屏都复用该处理函数。 */
 async function handleLogout() {
   await authStore.logout(false);
 }

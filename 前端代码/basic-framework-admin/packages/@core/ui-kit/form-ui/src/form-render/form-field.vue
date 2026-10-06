@@ -74,7 +74,10 @@ const values = useFormValues();
 const errors = useFieldError(fieldName);
 const fieldComponentRef = useTemplateRef<HTMLInputElement>('fieldComponentRef');
 const formApi = formRenderProps.form;
+/** 紧凑模式标记，来自表单级配置而非字段自身，决定是否省略校验信息的底部留白。 */
 const compact = computed(() => formRenderProps.compact);
+
+/** 本字段是否存在校验错误，直接由 vee-validate 的错误数组长度判定。 */
 const isInValid = computed(() => errors.value?.length > 0);
 const DEFAULT_NAME_MAX_LENGTH = 64;
 const DEFAULT_INPUT_MAX_LENGTH = 128;
@@ -83,6 +86,11 @@ const DEFAULT_LONG_TEXT_MAX_LENGTH = 500;
 const DEFAULT_NUMBER_MAX = 999_999_999;
 const DEFAULT_NUMBER_MIN = 0;
 
+/**
+ * 本表单项最终渲染的控件。
+ * schema 给的是控件名时从控件表里取，给的就是组件定义时直接使用；
+ * 两种情况都取不到时打印告警并渲染空节点，由页面自己发现漏注册。
+ */
 const FieldComponent = computed(() => {
   const finalComponent = isString(component)
     ? componentMap.value[component]
@@ -94,6 +102,7 @@ const FieldComponent = computed(() => {
   return finalComponent;
 });
 
+/** 按当前 schema 的依赖声明计算联动结果；schema 里的 dependencies 为空时全部保持默认展开。 */
 const {
   dynamicComponentProps,
   dynamicRules,
@@ -103,6 +112,10 @@ const {
   isShow,
 } = useDependencies(() => dependencies);
 
+/**
+ * 标签的固定宽度样式。
+ * 页面已经用 w- 类指定宽度、或表单为纵向布局时不再补内联宽度，避免覆盖页面意图。
+ */
 const labelStyle = computed(() => {
   return labelClass?.includes('w-') || isVertical.value
     ? {}
@@ -111,10 +124,12 @@ const labelStyle = computed(() => {
       };
 });
 
+/** 联动声明了动态规则时以动态规则为准，否则使用 schema 上静态声明的规则。 */
 const currentRules = computed(() => {
   return dynamicRules.value || rules;
 });
 
+/** 表单项是否进入渲染：schema 的 hide 与联动的 if、show 三者都放行才渲染。 */
 const visible = computed(() => {
   return !hide && isIf.value && isShow.value;
 });
@@ -373,6 +388,7 @@ watch(
   { immediate: true },
 );
 
+/** 三处禁用来源的合并结果：联动禁用、字段自身禁用与控件参数里的 disabled，任一为真即禁用。 */
 const shouldDisabled = computed(() => {
   return isDisabled.value || disabled || computedProps.value?.disabled;
 });
@@ -391,6 +407,7 @@ const customContentRender = computed(
   },
 );
 
+/** 需要渲染进控件的具名插槽名列表，直接取自联动渲染函数返回对象的键。 */
 const renderContentKey = computed(() => {
   return Object.keys(customContentRender.value);
 });
@@ -502,6 +519,10 @@ function createComponentProps(slotProps: FieldSlotProps<unknown>) {
   return binds;
 }
 
+/**
+ * 把焦点交给本字段的控件，用于 autofocus 场景。
+ * 控件实例没有 focus 方法或焦点已经在此处时什么都不做，避免打断用户正在进行的输入。
+ */
 function autofocus() {
   if (
     fieldComponentRef.value &&

@@ -18,6 +18,7 @@ const props = defineProps<
   DropdownMenuSubTriggerProps & { class?: ClassValue }
 >();
 
+/** 去掉 class 后的子菜单触发器属性，转交 DropdownMenuSubTrigger；展开时机由 reka-ui 的指针与键盘逻辑决定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

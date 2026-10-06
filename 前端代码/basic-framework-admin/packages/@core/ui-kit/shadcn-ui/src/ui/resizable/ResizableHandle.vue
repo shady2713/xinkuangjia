@@ -25,6 +25,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<SplitterResizeHandleEmits>();
 
+/** 去掉 class 后的拖拽条属性，连同 emits 转发给 SplitterResizeHandle；withHandle 只控制图标渲染，不下发给底层。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

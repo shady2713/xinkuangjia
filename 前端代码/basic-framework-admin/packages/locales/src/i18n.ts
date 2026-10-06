@@ -38,9 +38,16 @@ let loadMessages: LoadMessageFn;
 
 /**
  * Load locale modules
- * @param modules
+ * 从模块路径里取出文件名作为语言键，把同一语言的分片导入函数收集成映射。
+ * @param modules - 路径到动态导入函数的映射，通常来自 import.meta.glob，键形如 ./langs/zh-CN/common.json。
+ * @returns 语言到其分片导入函数的映射；路径里取不出文件名的模块会被跳过。
  */
-function loadLocalesMap(modules: Record<string, () => Promise<unknown>>) {
+function loadLocalesMap(
+  modules: Record<
+    string,
+    /* 按路径懒加载单个语言包分片。 */ () => Promise<unknown>
+  >,
+) {
   const localesMap: Record<Locale, ImportLocaleFn> = {};
 
   for (const [path, loadLocale] of Object.entries(modules)) {
@@ -74,9 +81,16 @@ function readDefaultExport(module: unknown): unknown {
  */
 function loadLocalesMapFromDir(
   regexp: RegExp,
-  modules: Record<string, () => Promise<unknown>>,
+  modules: Record<
+    string,
+    /* 按路径懒加载单个语言包分片。 */ () => Promise<unknown>
+  >,
 ): Record<Locale, ImportLocaleFn> {
-  const localesRaw: Record<Locale, Record<string, () => Promise<unknown>>> = {};
+  // 语言到「文件名 → 导入函数」的临时分组，稍后再折叠成每语言一个导入函数。
+  const localesRaw: Record<
+    Locale,
+    Record<string, /* 按路径懒加载单个语言包分片。 */ () => Promise<unknown>>
+  > = {};
   const localesMap: Record<Locale, ImportLocaleFn> = {};
 
   // Iterate over the modules to extract language and file names
@@ -120,7 +134,8 @@ function loadLocalesMapFromDir(
 
 /**
  * Set i18n language
- * @param locale
+ * 切换 vue-i18n 的当前语言，并把 html 标签的 lang 属性改成同一取值。
+ * @param locale - 目标语言标识。
  */
 function setI18nLanguage(locale: Locale) {
   i18n.global.locale.value = locale;
@@ -128,6 +143,13 @@ function setI18nLanguage(locale: Locale) {
   document?.querySelector('html')?.setAttribute('lang', locale);
 }
 
+/**
+ * 安装 vue-i18n 并载入默认语言包。
+ * 缺词告警默认关闭，只有 options.missingWarn 为真时才会在控制台提示。
+ * @param app - 目标应用实例，i18n 会以插件形式注册到它上面。
+ * @param options - 初始化选项：默认语言、追加消息的加载函数与缺词告警开关。
+ * @returns 默认语言包载入完成后的 Promise，没有业务返回值。
+ */
 async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   const { defaultLocale = 'zh-CN' } = options;
   // app可以自行扩展一些第三方库和组件库的国际化
@@ -147,7 +169,9 @@ async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
 
 /**
  * Load locale messages
- * @param lang
+ * 切换语言：已经是当前语言时只同步 html lang，否则载入该语言分片并合并调用方追加的消息。
+ * @param lang - 目标语言标识。
+ * @returns 语言切换流程的完成信号，没有业务返回值。
  */
 async function loadLocaleMessages(lang: SupportedLanguagesType) {
   if (unref(i18n.global.locale) === lang) {

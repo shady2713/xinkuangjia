@@ -23,6 +23,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的上一页跳转属性，转交 PaginationPrev；首屏禁用由分页根节点上下文提供。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

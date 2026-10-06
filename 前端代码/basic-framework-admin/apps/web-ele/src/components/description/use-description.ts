@@ -20,6 +20,10 @@ export function useDescription(options?: Partial<DescriptionProps>) {
   const propsState = reactive<Partial<DescriptionProps>>(options || {});
 
   const api: DescInstance = {
+    /**
+     * 把传入的属性片段合并进响应式状态，供包装组件在下次渲染时读取。
+     * @param descProps 需要覆盖的描述列表属性，通常是异步取数后回填的 schema 与 data。
+     */
     setDescProps: (descProps: Partial<DescriptionProps>): void => {
       Object.assign(propsState, descProps);
     },

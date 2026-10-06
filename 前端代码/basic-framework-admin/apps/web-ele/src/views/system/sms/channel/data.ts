@@ -22,6 +22,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -89,7 +90,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 短信渠道列表的检索条件：签名模糊匹配，渠道编码与状态精确匹配。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -124,7 +128,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 短信渠道列表的列定义：编号、签名、渠道编码、状态与创建时间。
+ * @returns 列定义数组；首列为多选列，渠道编码用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

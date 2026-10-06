@@ -54,6 +54,7 @@ export function useUploadType({
     }
     return [];
   });
+  /** 把 accept 列表拼成 input 的 accept 字符串：已带斜杠或点号的原样使用，其余补点号。 */
   const getStringAccept = computed(() => {
     return unref(getAccept)
       .map((item) => {

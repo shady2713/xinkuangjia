@@ -93,6 +93,7 @@ const defineRules: Record<string, NamedFormRule> = {
   uploadRequired: (value, _params, ctx) => {
     return !isEmpty(value) || getRequiredFieldMessage(ctx.label, 'upload');
   },
+  /** 校验用户名格式；空值放行，非空时必须为 4-30 位字母或数字，否则返回带字段名的中文错误。 */
   username: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -101,6 +102,7 @@ const defineRules: Record<string, NamedFormRule> = {
       isUsernameValue(String(value)) || `${ctx.label}必须为 4-30 位字母或数字`
     );
   },
+  /** 校验必填用户名；空值直接返回必填提示，非空时仍需满足 4-30 位字母或数字。 */
   usernameRequired: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return $t('ui.formRules.required', [ctx.label]);
@@ -109,6 +111,7 @@ const defineRules: Record<string, NamedFormRule> = {
       isUsernameValue(String(value)) || `${ctx.label}必须为 4-30 位字母或数字`
     );
   },
+  /** 校验密码强度；空值放行，非空时必须为 6-16 位且同时包含大写字母、小写字母和数字。 */
   password: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -118,6 +121,7 @@ const defineRules: Record<string, NamedFormRule> = {
       `${ctx.label}必须为 6-16 位，且同时包含大写字母、小写字母和数字`
     );
   },
+  /** 校验必填密码；空值返回必填提示，非空时仍需满足 6-16 位且含大小写字母与数字。 */
   passwordRequired: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return $t('ui.formRules.required', [ctx.label]);
@@ -127,6 +131,7 @@ const defineRules: Record<string, NamedFormRule> = {
       `${ctx.label}必须为 6-16 位，且同时包含大写字母、小写字母和数字`
     );
   },
+  /** 校验手机号；空值放行，非空时必须匹配手机号规则，否则返回框架的手机号错误文案。 */
   mobile: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -135,6 +140,7 @@ const defineRules: Record<string, NamedFormRule> = {
       isMobileValue(String(value)) || $t('ui.formRules.mobile', [ctx.label])
     );
   },
+  /** 校验必填手机号；空值返回必填提示，非空时仍要匹配手机号规则。 */
   mobileRequired: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return $t('ui.formRules.required', [ctx.label]);
@@ -143,24 +149,28 @@ const defineRules: Record<string, NamedFormRule> = {
       isMobileValue(String(value)) || $t('ui.formRules.mobile', [ctx.label])
     );
   },
+  /** 校验邮箱；空值放行，非空时必须匹配邮箱规则，否则返回「格式不正确」。 */
   email: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
     }
     return isEmailValue(String(value)) || `${ctx.label}格式不正确`;
   },
+  /** 校验必填邮箱；空值返回必填提示，非空时仍要匹配邮箱规则。 */
   emailRequired: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return $t('ui.formRules.required', [ctx.label]);
     }
     return isEmailValue(String(value)) || `${ctx.label}格式不正确`;
   },
+  /** 校验身份证号；空值放行，非空时必须是合法身份证号，否则返回「格式不正确」。 */
   idCard: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
     }
     return isIdCardValue(String(value)) || `${ctx.label}格式不正确`;
   },
+  /** 校验真实姓名；空值放行，非空时必须为 2-30 位中文、英文或中点。 */
   realName: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -170,12 +180,14 @@ const defineRules: Record<string, NamedFormRule> = {
       `${ctx.label}必须为 2-30 位中文、英文或中点`
     );
   },
+  /** 校验银行卡号；空值放行，非空时必须是合法卡号，否则返回「格式不正确」。 */
   bankCardNo: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
     }
     return isBankCardNoValue(String(value)) || `${ctx.label}格式不正确`;
   },
+  /** 校验百分比；空值放行，非空时必须在 0-100 之间且最多保留两位小数。 */
   percent: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -185,6 +197,7 @@ const defineRules: Record<string, NamedFormRule> = {
       `${ctx.label}必须在 0-100 之间，最多保留两位小数`
     );
   },
+  /** 校验数量；空值放行，非空时必须为非负整数。 */
   quantity: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
@@ -258,5 +271,6 @@ export {
   z,
 };
 
+/** 本应用的表单 schema 类型：组件类型收敛为已注册的 ComponentType，页面据此获得控件名与属性的类型提示。 */
 export type VbenFormSchema = FormSchema<ComponentType>;
 export type { ComponentType, FormValues, FormValuesConstraint, VbenFormProps };

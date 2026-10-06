@@ -22,7 +22,9 @@ type SecureLsOptions = {
   metaKey: string;
 } & ConstructorParameters<typeof SecureLS>[0];
 
+/** initStores 的初始化选项。 */
 export interface InitStoreOptions {
+  /** 存储命名空间：作为持久化键与 secure-ls 元数据键的前缀，各应用之间必须唯一。 */
   namespace: string;
 }
 
@@ -61,14 +63,24 @@ export async function initStores(app: App, options: InitStoreOptions) {
   } as SecureLsOptions);
   pinia.use(
     createPersistedState({
-      // key $appName-$store.id
+      // key $appName-$store.id：持久化键由命名空间与 store 标识拼成，避免不同应用互相覆盖。
       key: (storeKey) => `${namespace}-${storeKey}`,
       storage: import.meta.env.DEV
         ? localStorage
         : {
+            /**
+             * 读取持久化项。
+             * @param key - 完整持久化键，已由上面的 key 选项拼好命名空间前缀。
+             * @returns 此前 setItem 写入的同一个持久化字符串，解密由 secure-ls 负责。
+             */
             getItem(key) {
               return ls.get(key);
             },
+            /**
+             * 写入持久化项，落盘前由 secure-ls 按 AES 加密并压缩。
+             * @param key - 完整持久化键，已由上面的 key 选项拼好命名空间前缀。
+             * @param value - 待加密保存的值，通常是持久化插件序列化后的字符串。
+             */
             setItem(key, value) {
               ls.set(key, value);
             },

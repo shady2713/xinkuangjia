@@ -17,6 +17,7 @@ const props = defineProps<
   DropdownMenuItemProps & { class?: ClassValue; inset?: boolean }
 >();
 
+/** 去掉 class 后的普通菜单项属性，转交 DropdownMenuItem；inset 只影响模板内边距，不下发给底层。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

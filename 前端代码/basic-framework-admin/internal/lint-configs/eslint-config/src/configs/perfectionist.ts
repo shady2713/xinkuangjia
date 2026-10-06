@@ -6,6 +6,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成排序规则配置片段。
+ * @returns 基于 perfectionist 推荐集统一导入、导出与命名导出的排列顺序，
+ *   导入按 vue、@vben 与内部别名分组；对象键排序关闭，避免误排业务字段。
+ */
 export async function perfectionist(): Promise<Linter.Config[]> {
   const perfectionistPlugin = await interopDefault(
     import('eslint-plugin-perfectionist'),

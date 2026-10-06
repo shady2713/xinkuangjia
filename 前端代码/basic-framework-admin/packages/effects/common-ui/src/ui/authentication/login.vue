@@ -20,6 +20,7 @@ import { VbenButton, VbenCheckbox } from '@vben-core/shadcn-ui';
 
 import Title from './auth-title.vue';
 
+/** 登录界面属性：在认证页公共属性之上补充表单结构。 */
 interface Props extends AuthenticationProps {
   formSchema?: VbenFormSchema[];
 }
@@ -43,6 +44,7 @@ defineOptions({
 const props = withDefaults(defineProps<Props>(), {
   codeLoginPath: '/auth/code-login',
   forgetPasswordPath: '/auth/forget-password',
+  /** 表单结构默认值：空数组，未传入时表单没有字段。 */
   formSchema: () => [],
   loading: false,
   registerPath: '/auth/register',
@@ -66,6 +68,7 @@ const [Form, formApi] = useVbenForm<BaseFormComponentType, LoginForm>(
       hideLabel: true,
       hideRequiredMark: true,
     },
+    /** 表单结构：直接沿用调用方传入的字段定义，随 props 变化重建。 */
     schema: computed(() => props.formSchema),
     showDefaultActions: false,
   }),
@@ -94,6 +97,7 @@ async function handleSubmit() {
   }
 }
 
+/** 跳转到指定路径，用于验证码登录、忘记密码与注册三个入口。 */
 function handleGo(path: string) {
   router.push(path);
 }
@@ -105,6 +109,7 @@ onMounted(() => {
 });
 
 defineExpose({
+  /** 暴露内部表单 API，供上层主动取值、设值或触发表单校验。 */
   getFormApi: () => formApi,
 });
 </script>

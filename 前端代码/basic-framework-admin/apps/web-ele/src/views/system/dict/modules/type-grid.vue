@@ -52,6 +52,7 @@ const {
 } = useCrudActions<SystemDictTypeApi.DictType>({
   batchDeleteApi: deleteDictTypeList,
   deleteApi: deleteDictType,
+  /** 二次确认与成功提示中展示的字典类型名称；取不到名称时退化为不带名称的通用文案。 */
   getDeleteName: (row) => row.name || '',
   modalApi: typeFormModalApi,
   refresh: handleRefresh,
@@ -66,6 +67,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 分页查询字典类型：页码与每页条数取自表格分页，检索条件由搜索表单透传。 */
         query: async ({ page }, formValues) => {
           return await getDictTypePage({
             pageNo: page.currentPage,
@@ -86,6 +88,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
   } as VxeTableGridOptions<SystemDictTypeApi.DictType>,
   gridEvents: getGridEvents({
+    /** 点击类型行时把该类型的编码抛给父组件，由父组件联动右侧的字典数据列表。 */
     cellClick: ({ row }: { row: SystemDictTypeApi.DictType }) => {
       emit('select', row.type);
     },

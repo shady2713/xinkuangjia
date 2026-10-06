@@ -27,4 +27,5 @@ export const MotionPresets = [
   'slideVisibleTop',
 ] as const;
 
+/** 动效预设名：取自 MotionPresets 的字面量联合，用于约束动效指令 preset 的合法取值。 */
 export type MotionPreset = (typeof MotionPresets)[number];

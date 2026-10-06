@@ -18,6 +18,7 @@ describe('mergeRouteModules', () => {
       './dynamic-routes/about.ts': {
         default: [
           {
+            // 用惰性组件模拟动态导入的页面，合并逻辑不关心它何时被调用。
             component: () => Promise.resolve({ template: '<div>About</div>' }),
             name: 'About',
             path: '/about',
@@ -27,6 +28,7 @@ describe('mergeRouteModules', () => {
       './dynamic-routes/home.ts': {
         default: [
           {
+            // 同上，Home 模块的页面同样用惰性组件占位。
             component: () => Promise.resolve({ template: '<div>Home</div>' }),
             name: 'Home',
             path: '/',

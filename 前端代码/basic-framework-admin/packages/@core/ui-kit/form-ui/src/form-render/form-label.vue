@@ -9,6 +9,7 @@ import {
 } from '@vben-core/shadcn-ui';
 import { cn } from '@vben-core/shared/utils';
 
+/** 标签组件的属性契约：必填星号、标签文本、帮助提示与冒号都由上层字段传入。 */
 interface Props {
   class?: string;
   colon?: boolean;

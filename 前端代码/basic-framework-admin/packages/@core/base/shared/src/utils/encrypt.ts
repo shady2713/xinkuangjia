@@ -12,6 +12,13 @@ const AES_IV_SIZE_BYTES = 16;
 const AES_IV_SIZE_WORDS = AES_IV_SIZE_BYTES / 4;
 const AES_KEY_LENGTHS = new Set([16, 24, 32]);
 
+/**
+ * 校验 AES 密钥非空且长度合法，让配置问题在首次加解密时就暴露出来。
+ * @param key - 待校验的密钥字符串，长度必须是 16、24 或 32。
+ * @param operation - 出错提示中使用的中文操作名，如「加密」「解密」，只影响文案。
+ * @returns 无返回值；校验通过即正常返回，调用方随后可安全使用该密钥。
+ * @throws {Error} - 密钥为空串、或长度不是 16/24/32 时抛出，抛错时不产生任何加密结果。
+ */
 function assertAesKey(key: string, operation: string) {
   if (!key) {
     throw new Error(`AES ${operation}密钥不能为空`);
@@ -70,6 +77,8 @@ export const AES = {
    * @param encryptedData 加密的数据
    * @param key 解密密钥
    * @returns 解密后的字符串
+   * @throws 密钥为空或长度非法、密文为空、密文长度不足一个 IV、
+   *   以及解密结果为空（通常是密钥不匹配或数据损坏）时抛出 Error，调用方必须处理。
    */
   decrypt(encryptedData: string, key: string): string {
     try {
@@ -166,6 +175,8 @@ export const RSA = {
    * @param data 要加密的数据
    * @param publicKey 公钥（必需）
    * @returns 加密后的字符串
+   * @throws 公钥为空、公钥格式错误或数据过长导致底层加密失败时抛出 Error；
+   * 失败一律走异常路径，不会以返回 false 表示失败。
    */
   encrypt(data: string, publicKey: string): false | string {
     try {
@@ -191,6 +202,8 @@ export const RSA = {
    * @param encryptedData 加密的数据
    * @param privateKey 私钥（必需）
    * @returns 解密后的字符串
+   * @throws 私钥为空、待解密数据为空、私钥错误或数据损坏时抛出 Error；
+   * 失败一律走异常路径，不会以返回 false 表示失败。
    */
   decrypt(encryptedData: string, privateKey: string): false | string {
     try {
@@ -243,6 +256,10 @@ export interface ApiEncryptConfig {
 export class ApiEncrypt {
   private config: ApiEncryptConfig;
 
+  /**
+   * 保存加解密配置，构造期间不做任何校验。
+   * @param config - 加解密配置；algorithm、requestKey、responseKey 是否合法推迟到真正加解密时判断。
+   */
   constructor(config: ApiEncryptConfig) {
     this.config = config;
   }
@@ -336,6 +353,7 @@ export class ApiEncrypt {
 
   /**
    * 获取加密头名称
+   * @returns 配置里的加密头名；由 createApiEncrypt 构造且未配置环境变量时为 'X-Api-Encrypt'。
    */
   getEncryptHeader(): string {
     return this.config.header;

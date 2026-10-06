@@ -65,6 +65,10 @@ export async function jsonc(): Promise<Linter.Config[]> {
   ];
 }
 
+/**
+ * package.json 的排序规则：顶层键按固定顺序排列，files 与 pnpm.neverBuiltDependencies 数组升序，
+ * 依赖、overrides 与 exports 等子对象各自按键名升序。
+ */
 function sortPackageJson(): Linter.Config {
   return {
     files: ['**/package.json'],
@@ -144,6 +148,9 @@ function sortPackageJson(): Linter.Config {
   };
 }
 
+/**
+ * cspell 词表文件的排序规则：words 与 ignorePaths 数组按升序排列，避免多人改动时反复冲突。
+ */
 function sortCspellJson(): Linter.Config {
   return {
     files: ['**/cspell.json', '**/.cspell.json'],
@@ -159,6 +166,10 @@ function sortCspellJson(): Linter.Config {
   };
 }
 
+/**
+ * tsconfig 的排序规则：顶层键按 extends、compilerOptions、references 等顺序，
+ * compilerOptions 内部按 TypeScript 官方文档的分组顺序排列。
+ */
 function sortTsconfig(): Linter.Config {
   return {
     files: [

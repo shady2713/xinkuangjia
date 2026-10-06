@@ -14,6 +14,7 @@ import { findRootMenuByPath } from '@vben/utils';
 
 import { useNavigation } from './use-navigation';
 
+/** 把完整菜单按混合导航需要拆成头部与侧边两份，并给出两侧激活路径、可见性与菜单交互处理。 */
 function useMixedMenu() {
   const { navigation, willOpenedByWindow } = useNavigation();
   const accessStore = useAccessStore();
@@ -26,12 +27,14 @@ function useMixedMenu() {
   const defaultSubMap = new Map<string, string>();
   const { isMixedNav, isHeaderMixedNav } = usePreferences();
 
+  /** 是否需要拆分菜单：混合导航下开启拆分开关，或当前为顶栏混合导航布局。 */
   const needSplit = computed(
     () =>
       (preferences.navigation.split && isMixedNav.value) ||
       isHeaderMixedNav.value,
   );
 
+  /** 侧边栏是否可见：需要拆分时要求侧边栏开启且侧边菜单非空，否则只取决于侧边栏开关。 */
   const sidebarVisible = computed(() => {
     const enableSidebar = preferences.sidebar.enable;
     if (needSplit.value) {
@@ -39,6 +42,7 @@ function useMixedMenu() {
     }
     return enableSidebar;
   });
+  /** 权限仓库中的完整菜单树，是头部与侧边菜单的共同数据来源。 */
   const menus = computed(() => accessStore.accessMenus);
 
   /**
@@ -63,6 +67,7 @@ function useMixedMenu() {
     return needSplit.value ? splitSideMenus.value : menus.value;
   });
 
+  /** 实际渲染在头部的菜单：顶栏混合导航改用侧边菜单，否则用拆分后的一级菜单。 */
   const mixHeaderMenus = computed(() => {
     return isHeaderMixedNav.value ? sidebarMenus.value : headerMenus.value;
   });
@@ -94,6 +99,7 @@ function useMixedMenu() {
       navigation(key);
       return;
     }
+    /** 被点击的一级菜单本身，用于取其子菜单填入侧边列；菜单树中找不到时为 undefined。 */
     const rootMenu = menus.value.find((item) => item.path === key);
     const _splitSideMenus = rootMenu?.children ?? [];
 

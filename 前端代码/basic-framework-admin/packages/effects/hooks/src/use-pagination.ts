@@ -48,14 +48,17 @@ export function usePagination<T = unknown>(
   const currentPage = ref(1);
   const pageSizeRef = ref(pageSize);
 
+  /** 总页数：按列表长度与每页条数向上取整；列表为空时为 0 页。 */
   const totalPages = computed(() =>
     Math.ceil(unref(list).length / unref(pageSizeRef)),
   );
 
+  /** 当前页的数据切片；页码越界时由 pagination 直接抛错，不做静默兜底。 */
   const paginationList = computed(() => {
     return pagination(unref(list), unref(currentPage), unref(pageSizeRef));
   });
 
+  /** 列表总条数，随 list 变化；只统计已在内存中的数组，不含服务端总数。 */
   const total = computed(() => {
     return unref(list).length;
   });
@@ -66,6 +69,11 @@ export function usePagination<T = unknown>(
     });
   }
 
+  /**
+   * 设置当前页码。
+   * @param page 目标页码，从 1 开始；列表为空时仅接受 1，其余越界值直接报错。
+   * @throws {Error} 页码小于 1 或超出总页数时抛出，避免停留在不存在的页。
+   */
   function setCurrentPage(page: number) {
     if (page === 1 && unref(totalPages) === 0) {
       currentPage.value = 1;
@@ -77,6 +85,7 @@ export function usePagination<T = unknown>(
     }
   }
 
+  /** 修改每页条数并回到第一页；调用方需自行确认调用后页码仍在有效范围内。 */
   function setPageSize(pageSize: number) {
     if (pageSize < 1) {
       throw new Error('Page size must be positive');

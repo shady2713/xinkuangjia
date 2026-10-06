@@ -9,6 +9,7 @@ import { computed } from 'vue';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@vben-core/shadcn-ui';
 
+/** 图表切换容器属性：标签清单，每项需与插槽名一致。 */
 interface Props {
   tabs?: TabOption[];
 }
@@ -18,9 +19,11 @@ defineOptions({
 });
 
 const props = withDefaults(defineProps<Props>(), {
+  /** 标签清单默认值：空数组，未传入时没有可切换的标签。 */
   tabs: () => [],
 });
 
+/** 默认选中的标签值：取第一个标签；清单为空时为 undefined，标签头不预选。 */
 const defaultValue = computed(() => {
   return props.tabs?.[0]?.value;
 });

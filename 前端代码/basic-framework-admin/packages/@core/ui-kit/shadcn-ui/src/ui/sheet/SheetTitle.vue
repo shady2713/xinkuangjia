@@ -12,6 +12,7 @@ import { DialogTitle } from 'reka-ui';
 
 const props = defineProps<DialogTitleProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的标题节点属性，转交 DialogTitle，供 reka-ui 建立 aria-labelledby 关联。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

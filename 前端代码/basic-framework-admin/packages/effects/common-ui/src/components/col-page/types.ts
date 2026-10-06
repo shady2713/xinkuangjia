@@ -5,6 +5,7 @@
  */
 import type { PageProps } from '../page/types';
 
+/** 分栏页面属性：在页面属性之上追加左右两栏的宽度约束、折叠开关与拖拽相关开关。 */
 export interface ColPageProps extends PageProps {
   /**
    * 左侧宽度

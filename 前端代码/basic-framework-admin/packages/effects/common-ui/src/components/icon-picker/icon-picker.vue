@@ -34,6 +34,7 @@ import { objectOmit, refDebounced, watchDebounced } from '@vueuse/core';
 
 import { fetchIconsData } from './icons';
 
+/** 图标选择器属性：图标集前缀与远程拉取开关、每页数量、候选图标、输入框组件与图标插槽等。 */
 interface Props {
   pageSize?: number;
   /** 图标集的名字 */
@@ -58,6 +59,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   prefix: 'ant-design',
   pageSize: 36,
+  /** 候选图标默认值：空数组，未传入且未启用远程拉取时没有可选图标。 */
   icons: () => [],
   iconSlot: 'default',
   iconClass: 'size-4',
@@ -91,6 +93,7 @@ watchDebounced(
   { immediate: true, debounce: 500, maxWait: 1000 },
 );
 
+/** 当前图标集的全量图标：按前缀从本地注册表或远程缓存取；取用失败时返回空数组。 */
 const currentList = computed(() => {
   try {
     if (props.prefix) {
@@ -115,6 +118,7 @@ const currentList = computed(() => {
   }
 });
 
+/** 关键字筛选后的图标列表；关键字经 300ms 防抖，避免每次输入都重算。 */
 const showList = computed(() => {
   return currentList.value.filter((item) =>
     item.includes(keywordDebounce.value),
@@ -137,32 +141,39 @@ watch(
   },
 );
 
+/** 选中图标：写回内部选中值与 v-model，并收起弹层。 */
 const handleClick = (icon: string) => {
   currentSelect.value = icon;
   modelValue.value = icon;
   close();
 };
 
+/** 翻页：把目标页交给分页状态；越界页码由分页逻辑抛错。 */
 const handlePageChange = (page: number) => {
   setCurrentPage(page);
 };
 
+/** 在展开与收起之间切换弹层。 */
 function toggleOpenState() {
   visible.value = !visible.value;
 }
 
+/** 展开弹层。 */
 function open() {
   visible.value = true;
 }
 
+/** 收起弹层。 */
 function close() {
   visible.value = false;
 }
 
+/** 搜索框输入变化时更新筛选关键字。 */
 function onKeywordChange(v: string) {
   keyword.value = v;
 }
 
+/** 搜索输入框的属性：占位文案、当前值、更新回调与类名；值字段名由 modelValueProp 决定。 */
 const searchInputProps = computed(() => {
   return {
     placeholder: $t('ui.iconPicker.search'),
@@ -172,6 +183,7 @@ const searchInputProps = computed(() => {
   };
 });
 
+/** 更新选中图标，并把值透传给同名外部监听；外部未注册该监听时只更新内部状态。 */
 function updateCurrentSelect(v: string) {
   currentSelect.value = v;
   const eventKey = `onUpdate:${props.modelValueProp}`;
@@ -179,6 +191,7 @@ function updateCurrentSelect(v: string) {
     attrs[eventKey](v);
   }
 }
+/** 透传给根元素的属性：剔除已被内部接管的 update 监听，避免同一次改动被重复处理。 */
 const getBindAttrs = computed(() => {
   return objectOmit(attrs, [`onUpdate:${props.modelValueProp}`]);
 });

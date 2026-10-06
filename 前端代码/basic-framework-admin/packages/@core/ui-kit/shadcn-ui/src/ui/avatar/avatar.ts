@@ -6,6 +6,11 @@ import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';
 
+/**
+ * cva 变体表：基础类名锁定行内弹性居中、文字禁止选中与溢出裁剪，
+ * shape、size 两轴可任意组合；某个轴不传时只输出基础类名，
+ * 不会隐式补上任何默认形状或默认尺寸。
+ */
 export const avatarVariant = cva(
   'inline-flex items-center justify-center font-normal text-foreground select-none shrink-0 bg-secondary overflow-hidden',
   {
@@ -23,4 +28,5 @@ export const avatarVariant = cva(
   },
 );
 
+/** avatarVariant 两个变体轴的可选取值集合，由 cva 反推得出；值为 undefined 表示该轴不指定。 */
 export type AvatarVariants = VariantProps<typeof avatarVariant>;

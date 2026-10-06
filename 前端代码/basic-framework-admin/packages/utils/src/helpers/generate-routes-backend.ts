@@ -19,6 +19,10 @@ function menuHasVisibleWithForbidden(route: RouteRecordRaw): boolean {
 /**
  * 动态生成路由 - 后端方式
  * 对 meta.menuVisibleWithForbidden 为 true 的项直接替换为 403 组件，让用户知悉功能并申请权限。
+ * @param options - 生成参数：后端菜单拉取函数、布局与页面映射、兜底 403 组件以及静态路由。
+ * @returns 静态路由在前、转换结果在后的完整路由数组；
+ *   菜单拉取函数没有返回结果时直接给出空数组，此时静态路由也不会被带上。
+ * @throws 菜单拉取或路由转换抛出的任何异常都会在打印后原样继续抛出，由调用方决定如何降级。
  */
 async function generateRoutesByBackend(
   options: GenerateMenuAndRoutesOptions,

@@ -36,7 +36,11 @@ export namespace SystemSmsChannelApi {
   }
 }
 
-/** 查询短信渠道列表 */
+/**
+ * 分页查询短信渠道。
+ * @param params 分页与筛选条件，支持按状态、签名、渠道编码及创建时间区间过滤。
+ * @returns 当前页的渠道记录及总条数；响应不含短信 API 密钥。
+ */
 export function getSmsChannelPage(params: PageParam) {
   return requestClient.get<PageResult<SystemSmsChannelApi.Channel>>(
     '/system/sms-channel/page',
@@ -44,7 +48,11 @@ export function getSmsChannelPage(params: PageParam) {
   );
 }
 
-/** 查询短信渠道详情 */
+/**
+ * 查询短信渠道详情。
+ * @param id 渠道编号；编号不存在时后端按业务码拒绝。
+ * @returns 渠道配置，含签名、状态、回调地址与创建时间，不含已存储的短信 API 密钥。
+ */
 export function getSmsChannel(id: number) {
   return requestClient.get<SystemSmsChannelApi.Channel>(
     `/system/sms-channel/get?id=${id}`,
@@ -69,7 +77,11 @@ export function updateSmsChannel(data: SystemSmsChannelApi.ChannelSaveReq) {
   return requestClient.put('/system/sms-channel/update', data);
 }
 
-/** 删除短信渠道 */
+/**
+ * 删除短信渠道。
+ * @param id 渠道编号；仍有短信模板引用该渠道时后端按业务码拒绝，需先改绑或删除相关模板。
+ * @returns 删除结果标识。
+ */
 export function deleteSmsChannel(id: number) {
   return requestClient.delete(`/system/sms-channel/delete?id=${id}`);
 }

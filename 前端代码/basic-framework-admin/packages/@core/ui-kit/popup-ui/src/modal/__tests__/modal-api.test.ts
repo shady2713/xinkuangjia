@@ -99,6 +99,9 @@ describe('modalApi', /** 逐项核对弹窗 API 的状态读写、回调转发�
   });
 
   it('should not close the modal if onBeforeClose returns false', () => {
+    /**
+     * 返回 false 的关闭拦截钩子：用来验证 close 会被拦下，isOpen 不会写回 false。
+     */
     const onBeforeClose = vi.fn(() => false);
     const modalApiWithHook = new ModalApi({ onBeforeClose });
     modalApiWithHook.open();

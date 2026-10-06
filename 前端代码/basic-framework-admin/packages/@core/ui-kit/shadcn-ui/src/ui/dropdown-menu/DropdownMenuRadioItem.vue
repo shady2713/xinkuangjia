@@ -27,6 +27,7 @@ const props = defineProps<
 
 const emits = defineEmits<DropdownMenuRadioItemEmits>();
 
+/** 剔除 class 后的单选菜单项属性，连同 emits 转发给 DropdownMenuRadioItem；组内选中值由单选组上下文维护。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

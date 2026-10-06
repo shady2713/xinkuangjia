@@ -25,6 +25,15 @@ const router = createRouter({
       : createWebHistory(import.meta.env.VITE_BASE),
   // 应该添加到路由的初始路由列表。
   routes,
+  /**
+   * 路由切换后的滚动恢复策略：浏览器记录了历史位置就直接回到该位置，
+   * 否则 URL 带 hash 时平滑滚动到对应元素，没有 hash 时回到页面顶部。
+   *
+   * @param to 目标路由，用它的 hash 判断是否需要滚动到锚点
+   * @param _from 出发路由；本策略与来源页面无关，因此不使用
+   * @param savedPosition 浏览器为前进或后退保存的历史滚动位置，存在时优先复用
+   * @returns vue-router 的滚动目标：历史位置、锚点或页面顶部三者之一
+   */
   scrollBehavior: (to, _from, savedPosition) => {
     if (savedPosition) {
       return savedPosition;

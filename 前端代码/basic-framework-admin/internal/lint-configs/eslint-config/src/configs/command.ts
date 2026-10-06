@@ -4,6 +4,10 @@
  */
 import createCommand from 'eslint-plugin-command/config';
 
+/**
+ * 生成注释指令（`///`）的配置片段。
+ * @returns 只含 eslint-plugin-command 一个配置项的数组，不设 files 范围，也不主动报错。
+ */
 export async function command() {
   return [
     {

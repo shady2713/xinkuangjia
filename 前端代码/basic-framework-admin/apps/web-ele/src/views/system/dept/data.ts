@@ -33,6 +33,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },

@@ -34,6 +34,7 @@ const tabbarMiddleClickToClose = defineModel<boolean>(
   'tabbarMiddleClickToClose',
 );
 
+/** 标签栏样式选项：chrome、plain、card、brisk 四种，文案随当前语言变化。 */
 const styleItems = computed((): SelectOption[] => [
   {
     label: $t('preferences.tabbar.styleType.chrome'),

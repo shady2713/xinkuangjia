@@ -31,6 +31,7 @@ export type LoadMessageFn = (
   lang: SupportedLanguagesType,
 ) => Promise<LocaleMessagesRecord | undefined>;
 
+/** setupI18n 的初始化选项：默认语言与调用方追加消息的加载函数。 */
 export interface LocaleSetupOptions {
   /**
    * Default language

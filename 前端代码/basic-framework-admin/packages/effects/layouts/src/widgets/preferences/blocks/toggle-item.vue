@@ -13,6 +13,7 @@ defineOptions({
 
 withDefaults(defineProps<{ disabled?: boolean; items?: SelectOption[] }>(), {
   disabled: false,
+  /** 可选项的默认值：空数组，未传入时不渲染任何分段按钮。 */
   items: () => [],
 });
 

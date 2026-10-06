@@ -8,6 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import TableAction from './table-action.vue';
 
+/**
+ * 权限判定的桩：整组用例共用同一个可变码表，用例内赋值后由断言核对过滤结果。
+ */
 const permissions = vi.hoisted(() => ({ codes: [] as string[] }));
 
 vi.mock('@vben/access', () => ({

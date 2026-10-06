@@ -35,6 +35,7 @@ const [Modal, modalApi] = useVbenModal({
   draggable: true,
   overlayBlur: 5,
   footer: false,
+  /** 关闭回调：直接收起帮助弹窗；弹窗内容为静态文案，无需额外清理。 */
   onCancel() {
     modalApi.close();
   },

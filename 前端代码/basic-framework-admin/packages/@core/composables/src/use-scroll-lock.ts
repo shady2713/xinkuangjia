@@ -12,8 +12,13 @@ import {
   tryOnMounted,
 } from '@vueuse/core';
 
+/** 需要跟随滚动条宽度一起补偿的固定定位元素类名，由布局层标记在浮层上。 */
 export const SCROLL_FIXED_CLASS = `_scroll__fixed_`;
 
+/**
+ * 锁住 body 滚动并补偿滚动条宽度，卸载时还原；补偿同时作用于带 SCROLL_FIXED_CLASS 标记的元素。
+ * 依赖组件的挂载与卸载钩子，必须在 setup 中调用；浮层的显隐、层级与焦点不归它管。
+ */
 export function useScrollLock() {
   const isLocked = _useScrollLock(document.body);
   const scrollbarWidth = getScrollbarWidth();

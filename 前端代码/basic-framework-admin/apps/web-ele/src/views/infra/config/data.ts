@@ -25,6 +25,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** 参数主键只在编辑时回显，不作为可填字段展示，避免被误改后指向别的配置项。 */
         show: () => false,
       },
     },
@@ -88,7 +89,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 列表的搜索表单
+ * @returns 搜索字段：参数名称与参数键名按输入内容模糊匹配，系统内置为下拉，创建时间为区间选择。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -131,7 +135,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 列表的字段
+ * @returns 列定义：是否可见与系统内置按字典翻译，创建时间统一格式化，操作列固定在右侧由插槽渲染。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

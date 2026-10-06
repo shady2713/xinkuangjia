@@ -23,6 +23,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的首页跳转属性，转交 PaginationFirst；按钮外观由内部 Button 组件提供。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

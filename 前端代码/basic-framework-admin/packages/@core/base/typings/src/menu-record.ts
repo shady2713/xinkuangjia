@@ -31,6 +31,9 @@ type ExRouteRecordRaw = RouteRecordRaw & {
   parents?: string[];
 };
 
+/**
+ * 菜单徽标字段：`badge` 决定角标文本，`badgeType` 决定是圆点还是文本，`badgeVariants` 决定配色。
+ */
 interface MenuRecordBadgeRaw {
   /**
    * 徽标

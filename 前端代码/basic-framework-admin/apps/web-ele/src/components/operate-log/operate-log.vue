@@ -14,6 +14,7 @@ import { ElTag, ElTimeline, ElTimelineItem } from 'element-plus';
 defineOptions({ name: 'OperateLogV2' });
 
 withDefaults(defineProps<OperateLogProps>(), {
+  /** 缺省空列表，此时时间线不渲染任何条目，页面其余部分不受影响 */
   logList: () => [],
 });
 

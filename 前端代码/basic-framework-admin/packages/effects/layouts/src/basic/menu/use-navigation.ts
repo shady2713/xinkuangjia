@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router';
 
 import { isHttpUrl, openRouteInNewWindow, openWindow } from '@vben/utils';
 
+/** 提供菜单跳转与「是否新窗口打开」判定；跳转按外链、新窗口、站内跳转三种方式分流。 */
 function useNavigation() {
   const router = useRouter();
   const routeMetaMap = new Map<string, RouteRecordNormalized>();
@@ -38,10 +39,16 @@ function useNavigation() {
     return !!(route?.meta?.link || route?.meta?.openInNewWindow);
   };
 
+  /** 把站内路径解析为完整可访问的 href，供浏览器新窗口打开时使用。 */
   const resolveHref = (path: string): string => {
     return router.resolve(path).href;
   };
 
+  /**
+   * 执行一次菜单跳转：外链直接新窗口打开，站内路径按是否新窗口打开分流，否则走路由跳转。
+   * @param path 目标路径或外链地址；站内路径会先查路由表以读取 meta 中的跳转配置。
+   * @throws {unknown} 路由跳转失败时先记录日志再原样抛出，交由调用方处理。
+   */
   const navigation = async (path: string) => {
     try {
       const route = routeMetaMap.get(path);
@@ -69,6 +76,7 @@ function useNavigation() {
     }
   };
 
+  /** 判断该路径是否会以新窗口方式打开，供菜单渲染时决定是否显示外链标识。 */
   const willOpenedByWindow = (path: string) => {
     return shouldOpenInNewWindow(path);
   };

@@ -9,7 +9,12 @@ import { useForwardPropsEmits } from 'reka-ui';
 import BreadcrumbBackground from './breadcrumb-background.vue';
 import Breadcrumb from './breadcrumb.vue';
 
+/**
+ * 视图层入参：在面包屑契约上补一个 class，
+ * 由 Vue 的属性透传合并到实际渲染的样式组件根节点，便于外部定制外观。
+ */
 interface Props extends BreadcrumbProps {
+  /** 透传给当前样式组件根节点的类名。 */
   class?: ClassValue;
 }
 

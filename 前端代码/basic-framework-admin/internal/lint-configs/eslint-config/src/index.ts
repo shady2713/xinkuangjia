@@ -29,14 +29,22 @@ import {
 } from './configs';
 import { customConfig } from './custom-config';
 
+/** 单条 ESLint 扁平配置项，直接复用 Linter.Config。 */
 type FlatConfig = Linter.Config;
 
+/** 配置工厂的返回形态：单条、数组或它们的 Promise，由 defineConfig 统一展开。 */
 type FlatConfigPromise =
   | FlatConfig
   | FlatConfig[]
   | Promise<FlatConfig>
   | Promise<FlatConfig[]>;
 
+/**
+ * 把内置片段与调用方追加的配置组装成一个扁平配置数组。
+ * 片段之间按固定顺序排列，自定义片段与入参排在最后，便于就近覆盖默认规则。
+ * @param config - 调用方追加的配置，排在内置片段之后；省略时只用内置片段。
+ * @returns 展开并扁平化后的配置数组，可直接交给 ESLint。
+ */
 async function defineConfig(config: FlatConfig[] = []) {
   const configs: FlatConfigPromise[] = [
     vue(),

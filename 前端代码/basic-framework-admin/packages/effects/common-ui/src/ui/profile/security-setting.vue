@@ -20,6 +20,7 @@ import {
 } from '@vben-core/shadcn-ui';
 
 withDefaults(defineProps<SettingProps>(), {
+  /** 开关字段清单默认值：空数组，未传入时不渲染任何开关项。 */
   formSchema: () => [],
 });
 
@@ -27,6 +28,7 @@ const emit = defineEmits<{
   change: [Recordable<unknown>];
 }>();
 
+/** 单个开关变化时把字段名与新值合并后抛给调用方；本组件不保存取值。 */
 function handleChange(fieldName: string, value: boolean) {
   emit('change', { fieldName, value });
 }

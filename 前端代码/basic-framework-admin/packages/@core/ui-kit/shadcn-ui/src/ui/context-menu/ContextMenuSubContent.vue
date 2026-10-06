@@ -21,6 +21,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<DropdownMenuSubContentEmits>();
 
+/** 去掉 class 后的子菜单浮层属性，连同 emits 转发给 ContextMenuSubContent；弹出方向由父级子菜单上下文决定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -32,15 +32,19 @@ const rootMenu = useMenuContext();
 const subMenu = useSubMenuContext();
 const { parentMenu, parentPaths } = useMenu();
 
+/** 菜单项的 path 与根菜单当前激活路径一致时为 true，用于高亮当前所在菜单。 */
 const active = computed(() => props.path === rootMenu?.activePath);
+/** 激活时优先用激活图标，未激活时用普通图标；两者都未传时为 undefined，图标组件走 fallback。 */
 const menuIcon = computed(() =>
   active.value ? props.activeIcon || props.icon : props.icon,
 );
 
+/** 直属父级是根 Menu（而非 SubMenu）时为 true，用于区分一级项与嵌套项的展示差异。 */
 const isTopLevelMenuItem = computed(
   () => parentMenu.value?.type.name === 'Menu',
 );
 
+/** 折叠态下且菜单开启 collapseShowTitle 时为 true，一级项在折叠时仍以小字显示名称。 */
 const collapseShowTitle = computed(
   () =>
     rootMenu.props?.collapseShowTitle &&
@@ -48,6 +52,10 @@ const collapseShowTitle = computed(
     rootMenu.props.collapse,
 );
 
+/**
+ * 垂直且折叠态下的一级菜单项改用悬浮卡展示标题，避免文字挤压只剩图标。
+ * 未提供 title 插槽时无需悬浮提示，保持 false。
+ */
 const showTooltip = computed(
   () =>
     rootMenu.props.mode === 'vertical' &&

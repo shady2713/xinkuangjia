@@ -33,12 +33,14 @@ const DEFAULT_CONFIG = {
 // 类型定义
 type CircularDependencyResult = string[];
 
+/** 循环依赖检查配置：扫描的扩展名、忽略的目录与告警阈值。 */
 interface CheckCircularConfig {
   allowedExtensions?: string[];
   ignoreDirs?: string[];
   threshold?: number;
 }
 
+/** 子命令选项：循环依赖检查配置，以及是否只检查暂存文件、是否输出详细过程。 */
 interface CommandOptions {
   config?: CheckCircularConfig;
   staged: boolean;

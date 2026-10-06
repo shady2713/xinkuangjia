@@ -20,6 +20,7 @@ import {
 const props = defineProps<ContextMenuContentProps & { class?: ClassValue }>();
 const emits = defineEmits<ContextMenuContentEmits>();
 
+/** 去掉 class 后的浮层属性，转交 ContextMenuContent；传送门与贴边翻转策略沿用 reka-ui 默认值。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

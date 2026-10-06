@@ -98,6 +98,7 @@ function extractOptions(
  */
 type ApiFetchResult = OptionsItem[] | Record<string, unknown>;
 
+/** 接口选项组件属性：组件与字段映射、数据来源（api 或 options）、请求时机、加载前后回调与自动选择策略。 */
 interface Props {
   /** 组件 */
   component: Component;
@@ -152,12 +153,9 @@ interface Props {
    * - 函数：自定义选择逻辑，函数的参数为请求的结果数组，返回值为选择的选项
    * - false：不自动选择(默认)
    */
-  autoSelect?:
-    | 'first'
-    | 'last'
-    | 'one'
-    | ((item: OptionsItem[]) => OptionsItem)
-    | false;
+  // 保持单行：prettier 会把括号内的 JSDoc 上提到括号外，使函数类型的中文说明脱离节点。
+  // prettier-ignore
+  autoSelect?: 'first' | 'last' | 'one' | (/** 自定义选择逻辑：入参为请求到的选项数组，返回要选中的选项。 */ (item: OptionsItem[]) => OptionsItem) | false;
 }
 
 const modelValue = defineModel<unknown>({ default: undefined });
@@ -248,10 +246,12 @@ function buildOptions(): OptionsItem[] {
 
 const getOptions = computed(buildOptions);
 
+/** 透传给内部组件的属性：绑定值、选项数据、更新回调、外部透传属性与可见性事件。 */
 const bindProps = computed(() => {
   return {
     [props.modelPropName]: unref(modelValue),
     [props.optionsPropName]: unref(getOptions),
+    /** 把内部组件的更新回调收敛为只写回 v-model，避免与外部监听重复处理。 */
     [`onUpdate:${props.modelPropName}`]: (val: string) => {
       modelValue.value = val;
     },
@@ -321,6 +321,10 @@ async function fetchApi() {
   }
 }
 
+/**
+ * 内部组件上报可见性时按需拉取数据。
+ * @param visible 组件上报的可见性；为 false（已隐藏）时不触发请求。
+ */
 async function handleFetchForVisible(visible: boolean) {
   if (visible) {
     if (props.alwaysLoad) {
@@ -331,6 +335,7 @@ async function handleFetchForVisible(visible: boolean) {
   }
 }
 
+/** 合并后的请求参数：以外部 params 为基础，内部参数覆盖同名字段。 */
 const mergedParams = computed(() => {
   return {
     ...props.params,
@@ -349,6 +354,7 @@ watch(
   { deep: true, immediate: props.immediate },
 );
 
+/** 数据就绪后按 autoSelect 策略补选默认值并向外部抛出变更；已有选中值或没有选项时不处理。 */
 function emitChange() {
   if (
     modelValue.value === undefined &&

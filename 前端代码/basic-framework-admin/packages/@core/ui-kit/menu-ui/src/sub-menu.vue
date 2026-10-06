@@ -12,6 +12,9 @@ import { MenuBadge, MenuItem, SubMenu as SubMenuComp } from './components';
 // eslint-disable-next-line import/no-self-import
 import SubMenu from './sub-menu.vue';
 
+/**
+ * 菜单树递归节点属性：只接收单条菜单数据，由本层判断它是叶子项还是可展开的子菜单。
+ */
 interface Props {
   /**
    * 菜单项
@@ -23,6 +26,7 @@ defineOptions({
   name: 'SubMenuUi',
 });
 
+/** 注册单条菜单数据，本层没有需要兜底的默认字段。 */
 const props = withDefaults(defineProps<Props>(), {});
 
 /**

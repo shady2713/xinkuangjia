@@ -30,6 +30,11 @@ const props = withDefaults(defineProps<Props>(), {
 
 /** update:modelValue：选中部门变化时触发，载荷口径由 returnType 决定（部门 id 或名称），清空时为 undefined */
 const emit = defineEmits<{
+  /**
+   * 事件签名：载荷类型同时覆盖 id 与名称两种口径，实际传出哪一套由 returnType 决定。
+   * @param e 事件名，固定为 update:modelValue。
+   * @param value 最新的选中值；多选为数组、单选为标量，清空时为 undefined。
+   */
   (
     e: 'update:modelValue',
     value: number | number[] | string | string[] | undefined,
@@ -96,6 +101,10 @@ async function loadDeptTree(): Promise<void> {
 
 /** 根据 ID 获取部门名称 */
 function getDeptNameById(id: number): string | undefined {
+  /**
+   * 在已加载的简表里按主键查部门；查不到时告警而不是静默返回，
+   * 因为结果会直接回填表单，静默失败会让用户只看到空值却无从判断原因。
+   */
   const dept = deptList.value.find((item: DeptVO) => item.id === id);
   if (!dept) {
     logWarn(
@@ -108,11 +117,16 @@ function getDeptNameById(id: number): string | undefined {
 
 /** 根据名称获取部门 ID */
 function getDeptIdByName(name: string): number | undefined {
+  /** 在已加载的简表里按名称反查主键，供 returnType 为 name 时把外部值转成树选择器需要的 id。 */
   const dept = deptList.value.find((item: DeptVO) => item.name === name);
   return dept?.id;
 }
 
-/** 处理选中值变化 */
+/**
+ * 处理选中值变化：按 returnType 把树选择器的 id 转成对外口径后抛给表单。
+ * 清空时多选回填空数组、单选回传 undefined，避免把 undefined 写进必填项。
+ * @param value 树选择器当前选中的值，多选时为数组，单选时为部门主键。
+ */
 function handleChange(value: number | number[] | undefined): void {
   if (value === undefined || value === null) {
     emit('update:modelValue', props.multiple ? [] : undefined);
@@ -122,6 +136,10 @@ function handleChange(value: number | number[] | undefined): void {
   // 根据 returnType 决定返回值类型
   if (props.returnType === 'name') {
     if (props.multiple && Array.isArray(value)) {
+      /**
+       * 把选中的 id 批量翻成部门名称；简表里查不到的 id 会被 filter 剔除，
+       * 因此名称数组可能比 id 数组短，调用方不能按下标一一对应回写。
+       */
       const names = value
         .map((id) => getDeptNameById(id))
         .filter(Boolean) as string[];
@@ -176,7 +194,10 @@ watch(() => props.modelValue, syncSelectedValue, { immediate: true });
 /** 监听 deptList 变化，重新同步选中值（解决数据加载完成后的回显问题） */
 watch(() => deptList.value, syncSelectedValue);
 
-/** 检查是否有有效的预设值 */
+/**
+ * 检查外部是否已给出有效预设值：undefined、null、空串与空数组都算没有预设。
+ * @returns 存在至少一个有效预设值时为 true，否则为 false。
+ */
 function hasValidPresetValue(): boolean {
   const value = props.modelValue;
   if (value === undefined || value === null || value === '') {

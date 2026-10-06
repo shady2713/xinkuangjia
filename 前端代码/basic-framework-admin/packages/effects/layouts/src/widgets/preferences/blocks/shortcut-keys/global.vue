@@ -22,6 +22,7 @@ const shortcutKeysGlobalSearch = defineModel<boolean>(
 const shortcutKeysLogout = defineModel<boolean>('shortcutKeysLogout');
 const shortcutKeysLockScreen = defineModel<boolean>('shortcutKeysLockScreen');
 
+/** 修饰键提示：Windows 显示 Alt，其他平台显示 ⌥。 */
 const altView = computed(() => (isWindowsOs() ? 'Alt' : '⌥'));
 </script>
 

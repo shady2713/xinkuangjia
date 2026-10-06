@@ -16,12 +16,16 @@ import { getSimpleUserList } from '#/api/system/user';
 import { DictTag } from '#/components/dict-tag';
 import { getRangePickerDefaultProps } from '#/utils';
 
+/** 详情渲染时用到的日志附加字段：请求方法用于与请求地址拼成一行，其余字段按后端返回可选。 */
 type OperateLogDetail = {
   requestMethod?: string;
   traceId?: string;
 };
 
-/** 列表的搜索表单 */
+/**
+ * 操作日志列表的检索条件：操作人从用户列表中选择，模块、操作名与操作内容模糊匹配。
+ * @returns 表单 schema 列表；各项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -84,7 +88,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 操作日志列表的列定义：编号、操作人、模块、操作名、内容、时间、业务编号与操作 IP。
+ * @returns 列定义数组；操作时间用 formatDateTime 格式化，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
@@ -203,11 +210,13 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'extra',
       label: '操作拓展参数',
+      /** 该项是否渲染：show 收到整条记录，这里只在记录为空时保留，正常有数据时不展示。 */
       show: (val) => !val,
     },
     {
       field: 'requestUrl',
       label: '请求 URL',
+      /** 把请求方法与请求地址拼成一行展示；缺少请求方法或取值不是字符串时返回空串。 */
       render: (val, data) => {
         const detail = data as OperateLogDetail | undefined;
         if (detail?.requestMethod && typeof val === 'string') {

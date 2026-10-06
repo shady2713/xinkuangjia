@@ -10,7 +10,11 @@ package com.basicframework.module.system.controller.admin.sms.vo.callback;
  * @param msg 应答描述；固定为「接收成功」或「接收失败」
  * @author 李杰
  */
-public record AliyunSmsCallbackRespVO(Integer code, String msg) {
+public record AliyunSmsCallbackRespVO(
+        /** 应答编码：0 与 HTTP 200 一起返回表示回执已接收，1 表示处理失败；只取这两个值。 */
+        Integer code,
+        /** 应答描述：固定为「接收成功」或「接收失败」；不回显回执正文。 */
+        String msg) {
 
     /**
      * 创建成功响应。

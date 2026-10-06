@@ -26,6 +26,7 @@ const COMMAND_DESCRIPTIONS = {
 
 /**
  * Initialize and run the CLI
+ * 注册全部子命令并交给 cac 解析；未知命令时列出可用命令，捕获到异常时以状态码 1 退出。
  */
 async function main(): Promise<void> {
   try {

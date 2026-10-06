@@ -1,3 +1,4 @@
+<!-- 布局选项的「顶栏导航」缩略图：纯静态 SVG，无脚本与交互，供布局选择卡片展示。 -->
 <template>
   <svg
     class="custom-radio-image"

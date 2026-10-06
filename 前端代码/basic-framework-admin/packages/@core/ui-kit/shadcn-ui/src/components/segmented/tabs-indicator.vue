@@ -16,6 +16,10 @@ import { TabsIndicator, useForwardProps } from 'reka-ui';
 
 const props = defineProps<TabsIndicatorProps & { class?: ClassValue }>();
 
+/**
+ * 需要转交给 reka-ui 指示器的属性集合，剔除了只用于本组件样式合并的 class。
+ * 分段控件用外部 style 传入宽度，因此这里不能带 class，否则会与内部类名冲突。
+ */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

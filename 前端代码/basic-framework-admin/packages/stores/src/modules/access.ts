@@ -5,8 +5,10 @@ import type { AppRouteRecordRaw, MenuRecordRaw } from '@vben-core/typings';
 
 import { acceptHMRUpdate, defineStore } from 'pinia';
 
+/** 访问凭据的取值：未登录时为 null，已登录时是非空字符串。 */
 type AccessToken = null | string;
 
+/** 访问权限 store 的状态：凭据、权限码、展示菜单与路由，以及锁屏和登录过期标记。 */
 interface AccessState {
   /**
    * 权限码
@@ -59,7 +61,18 @@ export const useAccessStore = defineStore('core-access', {
     setServerMenus(menus: AppRouteRecordRaw[]) {
       this.serverMenus = menus;
     },
+    /**
+     * 在已生成的展示菜单树里按路径查找菜单项。
+     * @param path - 菜单路径，需要与菜单自身的 path 完全相等。
+     * @returns 第一个命中的菜单；整棵树都没有该路径时返回 undefined。
+     */
     getMenuByPath(path: string) {
+      /**
+       * 深度优先递归查找：先比对当前层，再按顺序下探子菜单。
+       * @param menus - 当前层的菜单数组。
+       * @param path - 目标菜单路径。
+       * @returns 命中的菜单；本层及其后代都没有时返回 undefined。
+       */
       function findMenu(
         menus: MenuRecordRaw[],
         path: string,
@@ -78,31 +91,64 @@ export const useAccessStore = defineStore('core-access', {
       }
       return findMenu(this.accessMenus, path);
     },
+    /**
+     * 进入锁屏状态并记下解锁口令。
+     * @param password - 锁屏口令；该字段在 persist 的 pick 列表内，会被写入本地存储。
+     */
     lockScreen(password: string) {
       this.isLockScreen = true;
       this.lockScreenPassword = password;
     },
+    /**
+     * 覆盖当前身份拥有的权限码集合。
+     * @param codes - 权限码数组，直接替换而不与旧值合并。
+     */
     setAccessCodes(codes: string[]) {
       this.accessCodes = codes;
     },
+    /**
+     * 覆盖供界面展示的菜单树。
+     * @param menus - 已由服务端菜单转换好的展示菜单，直接替换而不合并。
+     */
     setAccessMenus(menus: MenuRecordRaw[]) {
       this.accessMenus = menus;
     },
+    /**
+     * 覆盖当前身份可访问的动态路由表。
+     * @param routes - 经过权限过滤的 vue-router 路由数组。
+     */
     setAccessRoutes(routes: RouteRecordRaw[]) {
       this.accessRoutes = routes;
     },
+    /**
+     * 写入登录访问令牌。
+     * @param token - 新的 accessToken；传 null 表示清除登录态。
+     */
     setAccessToken(token: AccessToken) {
       this.accessToken = token;
     },
+    /**
+     * 标记权限校验流程是否已经跑完，用于避免重复生成动态路由。
+     * @param isAccessChecked - 校验完成传 true；退出登录或需要重新校验时传 false。
+     */
     setIsAccessChecked(isAccessChecked: boolean) {
       this.isAccessChecked = isAccessChecked;
     },
+    /**
+     * 标记登录态是否已过期，供界面提示重新登录。
+     * @param loginExpired - 已过期传 true。
+     */
     setLoginExpired(loginExpired: boolean) {
       this.loginExpired = loginExpired;
     },
+    /**
+     * 写入刷新令牌。
+     * @param token - 新的 refreshToken；传 null 表示清除。
+     */
     setRefreshToken(token: AccessToken) {
       this.refreshToken = token;
     },
+    /** 退出锁屏状态并清空锁屏口令，使后续访问不再需要解锁。 */
     unlockScreen() {
       this.isLockScreen = false;
       this.lockScreenPassword = undefined;

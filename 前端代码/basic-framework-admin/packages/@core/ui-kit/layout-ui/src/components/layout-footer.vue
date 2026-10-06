@@ -8,6 +8,10 @@ import type { CSSProperties } from 'vue';
 
 import { computed } from 'vue';
 
+/**
+ * 页脚的属性契约：height 是页脚撑出的固定高度（像素），fixed 决定用 fixed 还是 static 定位；
+ * show 为假时改用等高的负下边距抵消自身占用的高度；width 与 zIndex 由外壳按主内容列宽度与基线层级传入。
+ */
 interface Props {
   /**
    * 是否固定在底部
@@ -27,6 +31,10 @@ const props = withDefaults(defineProps<Props>(), {
   show: true,
 });
 
+/**
+ * 页脚的定位与尺寸样式：高度固定为 height；fixed 为真时用 fixed 定位配合容器上的 bottom-0 贴底，否则退回文档流；
+ * show 为假时把 marginBottom 换成等高负值以让出高度；width 与 zIndex 直接采用外壳传入值。
+ */
 const style = computed((): CSSProperties => {
   const { fixed, height, show, width, zIndex } = props;
   return {

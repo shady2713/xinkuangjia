@@ -16,6 +16,7 @@ import { Label } from 'reka-ui';
 
 const props = defineProps<LabelProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的标签属性，转交 reka-ui Label；只做样式与 class 合并，不建立与具体字段的关联。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

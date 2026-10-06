@@ -6,20 +6,31 @@
  */
 type StorageType = 'localStorage' | 'sessionStorage';
 
+/** 构造参数：`prefix` 决定键名命名空间，`storageType` 决定落到哪种 Web Storage。 */
 interface StorageManagerOptions {
   prefix?: string;
   storageType?: StorageType;
 }
 
+/** 实际落盘结构：`value` 为业务数据，`expiry` 为绝对过期毫秒时间戳，省略表示永不过期。 */
 interface StorageItem<T> {
   expiry?: number;
   value: T;
 }
 
+/**
+ * 带前缀与过期能力的本地存储读写类，实例固定绑定 localStorage 或 sessionStorage 之一。
+ * 只做 JSON 序列化与过期清理，不加密、不跨标签页同步，也不校验写入内容。
+ */
 class StorageManager {
   private prefix: string;
   private storage: Storage;
 
+  /**
+   * 绑定存储介质并记录键名前缀。
+   * @param options - 构造参数；解构出的 `prefix` 省略时为空串（键名不加命名空间），
+   *   `storageType` 省略时用 localStorage，传 sessionStorage 则随标签页关闭失效。
+   */
   constructor({
     prefix = '',
     storageType = 'localStorage',

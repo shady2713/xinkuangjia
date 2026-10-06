@@ -16,6 +16,7 @@ const barRef = useTemplateRef<HTMLDivElement>('barRef');
 
 const width = ref('0');
 
+/** 进度条的最终样式：调用方传入的样式叠加当前宽度。 */
 const style = computed(() => {
   const { barStyle } = props;
   return {
@@ -25,9 +26,11 @@ const style = computed(() => {
 });
 
 defineExpose({
+  /** 返回进度条根元素；尚未挂载时为 null。 */
   getEl: () => {
     return barRef.value;
   },
+  /** 设置进度条宽度，取值为形如 '120px' 的字符串。 */
   setWidth: (val: string) => {
     width.value = val;
   },

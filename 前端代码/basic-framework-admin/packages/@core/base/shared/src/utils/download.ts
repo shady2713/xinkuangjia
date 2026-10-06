@@ -5,6 +5,9 @@
  */
 import { openWindow } from './window';
 
+/**
+ * 下载入参：`source` 是待下载内容本身，`fileName` 与 `target` 只影响落盘名和打开方式。
+ */
 interface DownloadOptions<T = string> {
   fileName?: string;
   source: T;
@@ -15,7 +18,9 @@ const DEFAULT_FILENAME = 'downloaded_file';
 
 /**
  * 通过 URL 下载文件，支持跨域
- * @throws {Error} - 当下载失败时抛出错误
+ * @param options - 下载参数；`source` 必须是浏览器可直接访问的字符串地址，`fileName` 省略时取路径末段，
+ *   `target` 只在非 Chrome/Safari 的新窗口回退路径上生效。
+ * @throws {Error} - source 为空或不是字符串时抛出，此时不会发起任何下载。
  */
 export async function downloadFileFromUrl({
   fileName,
@@ -86,6 +91,8 @@ export function downloadImageByCanvas({
 
 /**
  * 通过 Base64 下载文件
+ * @param options - 下载参数；`source` 必须是带 `data:` 前缀的 Base64 字符串，`fileName` 省略时落盘为 downloaded_file。
+ * @throws {Error} - source 为空或不是字符串时抛出，校验发生在创建临时链接之前。
  */
 export function downloadFileFromBase64({ fileName, source }: DownloadOptions) {
   if (!source || typeof source !== 'string') {
@@ -98,6 +105,8 @@ export function downloadFileFromBase64({ fileName, source }: DownloadOptions) {
 
 /**
  * 通过图片 URL 下载图片文件
+ * @param options - 下载参数；`source` 为图片地址，会先经画布转成 Base64 再触发下载，
+ *   因此图片必须允许跨域读取像素；`fileName` 省略时由 Base64 分支补上默认名。
  */
 export async function downloadFileFromImageUrl({
   fileName,
@@ -109,6 +118,8 @@ export async function downloadFileFromImageUrl({
 
 /**
  * 通过 Blob 下载文件
+ * @param options - 下载参数；`source` 必须是 Blob 实例，`fileName` 省略时落盘为 downloaded_file。
+ * @throws {TypeError} - source 不是 Blob 时抛出，用于在生成临时 URL 前拦下类型错误。
  */
 export function downloadFileFromBlob({
   fileName = DEFAULT_FILENAME,
@@ -124,6 +135,8 @@ export function downloadFileFromBlob({
 
 /**
  * 下载文件，支持 Blob、字符串和其他 BlobPart 类型
+ * @param options - 下载参数；非 Blob 的 `source` 会被包成 application/octet-stream 的 Blob，
+ *   字符串因此按 UTF-8 编码写入，`fileName` 省略时落盘为 downloaded_file。
  */
 export function downloadFileFromBlobPart({
   fileName = DEFAULT_FILENAME,
@@ -142,6 +155,10 @@ export function downloadFileFromBlobPart({
 
 /**
  * @description: base64 to blob
+ * 把 data URL 形式的 Base64 文本还原为二进制 Blob；
+ * 依赖输入严格符合 `data:<MIME>;base64,<数据>`，缺少分号或逗号时会在非空断言处直接失败，不做兜底。
+ * @param base64Buf - 完整 data URL，逗号前必须带 MIME 声明。
+ * @returns 字节为解码结果、类型取自 MIME 前缀的 Blob。
  */
 export function dataURLtoBlob(base64Buf: string): Blob {
   const arr = base64Buf.split(',');
@@ -161,7 +178,11 @@ export function dataURLtoBlob(base64Buf: string): Blob {
 
 /**
  * img url to base64
- * @param url
+ * 把图片地址经 canvas 转成 Base64 data URL，crossOrigin 置空以尝试跨域加载。
+ * 画布创建失败会 reject；图片加载失败时没有 error 监听，Promise 会一直挂起。
+ * @param url - 图片地址，需允许跨域读取像素，否则绘制结果不可用。
+ * @param mineType - 输出 data URL 的 MIME 类型，省略时用 `image/png`。
+ * @returns 图片加载完成后 resolve 的 data URL 字符串。
  */
 export function urlToBase64(url: string, mineType?: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -189,6 +210,8 @@ export function urlToBase64(url: string, mineType?: string): Promise<string> {
  * @param base64 - Base64 字符串
  * @param fileName - 文件名
  * @returns File 对象
+ * @throws {Error} - Base64 为空或非字符串、不是 `data:` 两段式、缺少 MIME 声明，
+ *   或 atob 解码失败时抛出；抛出前不会创建任何文件对象。
  */
 export function base64ToFile(base64: string, fileName: string): File {
   // 输入验证
@@ -272,6 +295,12 @@ export function triggerDownload(
   setTimeout(() => URL.revokeObjectURL(href), revokeDelay);
 }
 
+/**
+ * 解析最终落盘文件名：依次回退到调用方给定名、URL 最后一段、DEFAULT_FILENAME。
+ * @param url - 下载地址，用于在未指定文件名时截取路径末段。
+ * @param fileName - 调用方指定的文件名，可为空。
+ * @returns 必定非空的文件名；三段都取不到时返回 DEFAULT_FILENAME。
+ */
 function resolveFileName(url: string, fileName?: string): string {
   return fileName || url.slice(url.lastIndexOf('/') + 1) || DEFAULT_FILENAME;
 }

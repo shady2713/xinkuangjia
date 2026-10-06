@@ -44,6 +44,7 @@ type RequestResponse<T = unknown> = {
   statusText?: string;
 } & Omit<AxiosResponse<T, unknown>, 'config' | 'statusText'>;
 
+/** 请求体可用的 Content-Type 取值：JSON、二进制流、URL 编码表单与文件上传表单。 */
 type RequestContentType =
   | 'application/json;charset=utf-8'
   | 'application/octet-stream;charset=utf-8'
@@ -108,6 +109,10 @@ interface PageParam {
   pageSize: number;
 }
 
+/**
+ * 分页查询结果外壳。
+ * list 仅含当前页记录，total 是符合条件的总条数而非本页条数，分页控件需按 total 计算页数。
+ */
 interface PageResult<T> {
   list: T[];
   total: number;

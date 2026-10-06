@@ -34,12 +34,14 @@ export interface JsonViewerProps {
   showDoubleQuotes?: boolean;
 }
 
+/** 复制或点击等交互的动作载荷：动作名、展示文本与触发元素。 */
 export interface JsonViewerAction {
   action: string;
   text: string;
   trigger: HTMLElement;
 }
 
+/** 被点击节点的信息：原始值、数据路径、嵌套深度与对应元素。 */
 export interface JsonViewerValue {
   /**
    * 被点击节点的原始值
@@ -53,6 +55,7 @@ export interface JsonViewerValue {
   el: HTMLElement;
 }
 
+/** 展开或收起事件的载荷：触发用的鼠标事件与切换后的展开状态。 */
 export interface JsonViewerToggle {
   /** 鼠标事件 */
   event: MouseEvent;

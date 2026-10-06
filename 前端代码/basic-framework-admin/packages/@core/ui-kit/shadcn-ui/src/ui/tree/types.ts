@@ -15,6 +15,10 @@ import type { Recordable } from '@vben-core/typings';
  */
 export type TreeNode = Recordable<unknown>;
 
+/**
+ * 树组件的对外属性契约：仅 treeData 必填，其余字段既描述取值、标签、子级、禁用等键名，也描述多选、
+ * 父子联动、清空与展开等行为开关。键名可配置意味着真实键类型要到读取处才能收窄，因此这里只用 string 描述键空间。
+ */
 export interface TreeProps {
   /** 单选时允许取消已有选项 */
   allowClear?: boolean;

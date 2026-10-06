@@ -16,6 +16,7 @@ import { PaginationEllipsis } from 'reka-ui';
 
 const props = defineProps<PaginationEllipsisProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的省略号节点属性，转交 PaginationEllipsis，只作占位不可点击。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

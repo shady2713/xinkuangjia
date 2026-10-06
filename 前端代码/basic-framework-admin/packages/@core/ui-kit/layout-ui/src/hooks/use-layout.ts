@@ -9,7 +9,14 @@ import type { VbenLayoutProps } from '../admin-layout';
 
 import { computed } from 'vue';
 
+/**
+ * 把布局属性折算成当前布局与五个模式标志，供布局组件取舍各区域。
+ * 移动端一律按 sidebar-nav 处理，此时忽略 props.layout。
+ * @param props 布局属性，只读取 isMobile 与 layout 两项。
+ * @returns currentLayout 以及 isFullContent、isHeaderMixedNav、isHeaderNav、isMixedNav、isSidebarMixedNav 五个计算属性。
+ */
 export function useLayout(props: VbenLayoutProps) {
+  /** 当前生效的布局类型：移动端强制为 sidebar-nav，桌面端沿用 props.layout 传入的类型。 */
   const currentLayout = computed(() =>
     props.isMobile ? 'sidebar-nav' : (props.layout as LayoutType),
   );

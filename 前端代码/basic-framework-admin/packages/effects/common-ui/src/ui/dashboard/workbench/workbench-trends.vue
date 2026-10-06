@@ -13,6 +13,7 @@ import {
   VbenIcon,
 } from '@vben-core/shadcn-ui';
 
+/** 动态卡片属性：卡片标题与动态条目清单。 */
 interface Props {
   items?: WorkbenchTrendItem[];
   title: string;
@@ -23,6 +24,7 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
+  /** 动态清单默认值：空数组，未传入时卡片内没有动态。 */
   items: () => [],
 });
 </script>

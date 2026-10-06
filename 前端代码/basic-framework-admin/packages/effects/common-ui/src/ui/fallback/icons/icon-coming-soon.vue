@@ -1,3 +1,4 @@
+<!-- 即将上线兜底页的插图：纯静态 SVG，无脚本与交互，由 fallback.vue 按状态异步加载。 -->
 <template>
   <svg
     data-name="Layer 1"

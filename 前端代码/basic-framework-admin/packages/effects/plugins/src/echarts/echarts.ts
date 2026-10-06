@@ -51,6 +51,7 @@ import * as echarts from 'echarts/core';
 import { LabelLayout, UniversalTransition } from 'echarts/features';
 import { CanvasRenderer } from 'echarts/renderers';
 
+/** 本项目按需打包的 ECharts 图表配置类型：只包含已注册的图表与组件，避免全量引入 echarts。 */
 // 通过 ComposeOption 来组合出一个只有必须组件和图表的 Option 类型
 export type ECOption = ComposeOption<
   | BarSeriesOption

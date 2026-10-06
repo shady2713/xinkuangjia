@@ -107,8 +107,12 @@ async function generateAccessible(
 
 /**
  * Generate routes
- * @param mode
- * @param options
+ * 按权限模式生成可访问路由：backend 取后端下发的菜单，frontend 按角色过滤本地路由表，
+ * mixed 同时取两者并按「前端在前、后端在后」合并。生成结果还会补齐一级重定向，
+ * 并把开启 keep-alive 的懒加载组件改包成与路由同名的组件。
+ * @param mode 权限来源模式，决定路由由前端、后端还是两者共同生成。
+ * @param options 生成路由所需的角色、待过滤路由表与无权限兜底组件。
+ * @returns 可直接安装到 Router 的可访问路由树。
  */
 async function generateRoutes(
   mode: AccessModeType,
@@ -154,14 +158,21 @@ async function generateRoutes(
       route.name &&
       isString(route.name)
     ) {
-      const originalComponent = route.component as () => Promise<{
-        default: Component | DefineComponent;
-      }>;
+      const originalComponent =
+        route.component as /* 断言为懒加载工厂：调用后返回含 default 的组件模块。 */ () => Promise<{
+          default: Component | DefineComponent;
+        }>;
       route.component = async () => {
         const component = await originalComponent();
         if (!component.default) return component;
         return defineComponent({
           name: route.name as string,
+          /**
+           * 用原组件重建一个与路由同名的包装组件，使 keep-alive 能按路由名命中缓存。
+           * @param props 路由透传给页面的 props，原样转发给被包装组件。
+           * @param context 组件上下文，attrs 与 props 合并转发，slots 原样透传。
+           * @returns 渲染被包装组件的渲染函数。
+           */
           setup(props, { attrs, slots }) {
             return () => h(component.default, { ...props, ...attrs }, slots);
           },

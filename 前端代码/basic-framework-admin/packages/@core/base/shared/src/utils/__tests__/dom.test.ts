@@ -45,6 +45,7 @@ describe('getElementVisibleRect', /** 元素可见矩形要把超出视口的部
 
   it('should return correct visible rect when element is fully visible', () => {
     const element = {
+      // 元素完全落在 1000x800 的视口内，矩形原样返回。
       getBoundingClientRect: () => ({
         bottom: 400,
         height: 300,
@@ -67,6 +68,7 @@ describe('getElementVisibleRect', /** 元素可见矩形要把超出视口的部
 
   it('should return correct visible rect when element is partially off-screen at the top', () => {
     const element = {
+      // 顶部超出视口 50px，返回时 top 被裁剪到 0、高度相应缩短。
       getBoundingClientRect: () => ({
         bottom: 200,
         height: 250,
@@ -89,6 +91,7 @@ describe('getElementVisibleRect', /** 元素可见矩形要把超出视口的部
 
   it('should return correct visible rect when element is partially off-screen at the right', () => {
     const element = {
+      // 右侧超出视口，返回时 right 被裁剪到视口宽度 1000。
       getBoundingClientRect: () => ({
         bottom: 400,
         height: 300,
@@ -111,6 +114,7 @@ describe('getElementVisibleRect', /** 元素可见矩形要把超出视口的部
 
   it('should return all zeros when element is completely off-screen', () => {
     const element = {
+      // 元素整体在视口右下方，判为完全不可见，矩形六项全部归零。
       getBoundingClientRect: () => ({
         bottom: 1200,
         height: 300,

@@ -6,6 +6,11 @@ import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';
 
+/**
+ * cva 变体表：基础类名给出面板底色、边框、阴影与进出场的时长曲线，
+ * side 轴按四向补齐定位、边框方向和滑入滑出类名；
+ * 不传 side 时按 defaultVariants 从右侧滑入。
+ */
 export const sheetVariants = cva(
   'bg-background shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 border-border',
   {
@@ -25,4 +30,5 @@ export const sheetVariants = cva(
   },
 );
 
+/** sheetVariants 变体轴的可选取值类型，SheetContent 用它把 side 属性约束在四个滑入方向内。 */
 export type SheetVariants = VariantProps<typeof sheetVariants>;

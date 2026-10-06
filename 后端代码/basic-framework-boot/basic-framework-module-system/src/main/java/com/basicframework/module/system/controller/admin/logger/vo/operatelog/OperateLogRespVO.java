@@ -17,7 +17,10 @@ import java.time.LocalDateTime;
 /**
  * OperateLogRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/logger/vo/operatelog/OperateLogRespVO.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 4 行，上游代码 3 行在本地被移除或改写，例如 @Schema(description = "用户昵称", requiredMode = Schema.RequiredMode.REQUIRED, example = "管理员")；@Schema(description = "操作明细", example = "修改编号为 1 的用户信息，将性别从男改成女，将姓名从张三改成李四。")；本地补充注释 45 行。
  */
 @Schema(description = "管理后台 - 操作日志 Response VO")
 @Data

@@ -41,6 +41,11 @@ const [Form, formApi] = useVbenForm<
         placeholder: '请输入新密码',
       },
       dependencies: {
+        /**
+         * 新密码除强度校验外还必须与旧密码不同，避免用户把改密当成空操作。
+         * @param values 当前表单值，取旧密码做相同性比较。
+         * @returns 叠加了新旧密码不同约束的校验规则对象。
+         */
         rules(values) {
           return buildRequiredPasswordSchema('新密码').refine(
             (value) => value !== values.oldPassword,
@@ -60,6 +65,11 @@ const [Form, formApi] = useVbenForm<
         placeholder: $t('authentication.confirmPassword'),
       },
       dependencies: {
+        /**
+         * 确认密码除强度校验外还必须与新密码逐字一致，两者不一致时不允许提交。
+         * @param values 当前表单值，取新密码做一致性比较。
+         * @returns 叠加了与新密码一致约束的校验规则对象。
+         */
         rules(values) {
           return buildRequiredPasswordSchema('确认密码').refine(
             (value) => value === values.newPassword,

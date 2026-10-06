@@ -30,16 +30,19 @@ import { AjCaptchaAES } from '@vben-core/shared/utils';
 import { resetSize } from './utils/util';
 
 const props = withDefaults(defineProps<VerificationProps>(), {
+  /** 提示条尺寸默认值：310×40 像素。 */
   barSize: () => ({
     height: '40px',
     width: '310px',
   }),
+  /** 拼图切块尺寸默认值：50×50 像素。 */
   blockSize: () => ({
     height: '50px',
     width: '50px',
   }),
   captchaType: 'blockPuzzle',
   explain: '',
+  /** 底图区域尺寸默认值：310×155 像素。 */
   imgSize: () => ({
     height: '155px',
     width: '310px',
@@ -92,6 +95,7 @@ const transitionLeft = ref();
 const transitionWidth = ref();
 const startLeft = ref(0);
 
+/** 提示条区域的 DOM 元素，用于按真实宽度夹紧拖动位移；组件尚未挂载时为 undefined。 */
 const barArea = computed(() => {
   return proxy?.$el.querySelector('.verify-bar-area');
 });
@@ -149,6 +153,10 @@ onMounted(() => {
 });
 
 // 鼠标按下
+/**
+ * 按下滑块：记录起始位置与开始时间，并切到拖动中的配色。
+ * @param e 鼠标或触摸的按下事件，用于换算滑块的起始横坐标。
+ */
 function start(e: MouseEvent | TouchEvent) {
   const x =
     ((e as TouchEvent).touches
@@ -166,6 +174,10 @@ function start(e: MouseEvent | TouchEvent) {
   }
 }
 // 鼠标移动
+/**
+ * 拖动中：把位移夹紧在提示条范围内，并同步滑块位置与进度条宽度。
+ * @param e 拖动过程中的鼠标或触摸事件，用于计算当前横坐标。
+ */
 function move(e: MouseEvent | TouchEvent) {
   if (status.value && isEnd.value === false) {
     const x =
@@ -283,6 +295,7 @@ function end() {
   }
 }
 
+/** 复位到初始状态：清空提示与位移、恢复初始配色，并重新拉取底图。 */
 async function refresh() {
   showRefresh.value = true;
   finishText.value = '';

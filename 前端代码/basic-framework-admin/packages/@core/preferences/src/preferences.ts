@@ -23,12 +23,17 @@ const STORAGE_KEYS = {
   THEME: 'preferences-theme',
 } as const;
 
+/** 偏好设置的唯一持有者：负责默认值合并、变更下发与初始化期的各类监听。 */
 class PreferenceManager {
   private cache: StorageManager;
   private initialPreferences: Preferences = defaultPreferences;
   private isInitialized = false;
   private state: Preferences;
 
+  /**
+   * 建立初始状态：缓存管理器先用默认前缀，状态用默认偏好的浅拷贝包成响应式对象。
+   * 真正的命名空间与项目覆盖项要等 initPreferences 才会写入。
+   */
   constructor() {
     this.cache = new StorageManager();
     this.state = reactive<Preferences>({ ...defaultPreferences });

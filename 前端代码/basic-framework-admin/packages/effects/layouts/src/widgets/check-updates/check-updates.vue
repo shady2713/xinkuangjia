@@ -10,6 +10,7 @@ import { $t } from '@vben/locales';
 
 import { useVbenModal } from '@vben-core/popup-ui';
 
+/** 版本更新检查属性：轮询间隔（分钟）与检查地址，默认指向部署入口根路径。 */
 interface Props {
   // 轮询时间，分钟
   checkUpdatesInterval?: number;
@@ -35,6 +36,7 @@ const [UpdateNoticeModal, modalApi] = useVbenModal({
   closable: false,
   closeOnPressEscape: false,
   closeOnClickModal: false,
+  /** 确认更新：先把当前版本记为新基线，再整页重载以加载最新静态资源。 */
   onConfirm() {
     lastVersionTag.value = currentVersionTag.value;
     window.location.reload();
@@ -42,6 +44,10 @@ const [UpdateNoticeModal, modalApi] = useVbenModal({
   },
 });
 
+/**
+ * 读取部署入口的版本标记，用于判断静态资源是否已更新。
+ * @returns 响应头中的 etag 或 last-modified；本机调试地址、请求失败或两个头都缺失时为 null。
+ */
 async function getVersionTag() {
   try {
     if (
@@ -65,6 +71,7 @@ async function getVersionTag() {
   }
 }
 
+/** 比对版本标记：首次运行只记录基线不提示，此后标记变化才停止轮询并弹出更新提示。 */
 async function checkForUpdates() {
   const versionTag = await getVersionTag();
   if (!versionTag) {
@@ -82,6 +89,7 @@ async function checkForUpdates() {
     handleNotice(versionTag);
   }
 }
+/** 记录最新版本标记并打开更新提示弹窗；页面重载要等用户确认后才执行。 */
 function handleNotice(versionTag: string) {
   currentVersionTag.value = versionTag;
   modalApi.open();
@@ -135,6 +143,7 @@ function handleVisibilitychange() {
   }
 }
 
+/** 停止版本轮询；未安装定时器时调用无副作用。 */
 function stop() {
   clearInterval(timer.value);
 }

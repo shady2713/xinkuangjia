@@ -52,7 +52,13 @@ const showPreview = computed(() => {
   return displayUrl.value && isValidUrl(displayUrl.value);
 });
 
-// URL 验证
+/**
+ * 校验待嵌入地址是否可以渲染。
+ * 只放行 http/https：javascript:、data: 等协议即使能构造出合法 URL 也不允许，
+ * 避免表单配置把脚本注入设计器页面。
+ * @param url 待校验的地址文本。
+ * @returns 地址可被 URL 解析且协议为 http 或 https 时为 true；空地址与非法地址均为 false。
+ */
 function isValidUrl(url: string): boolean {
   if (!url || url.trim() === '') return false;
   try {

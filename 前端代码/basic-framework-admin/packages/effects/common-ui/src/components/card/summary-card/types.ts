@@ -4,6 +4,7 @@
  */
 import type { Component } from 'vue';
 
+/** 概要卡片属性：title 必填，提示、图标、配色、前后缀、数值与百分比均可选。 */
 export interface SummaryCardProps {
   /** 标题 */
   title: string;

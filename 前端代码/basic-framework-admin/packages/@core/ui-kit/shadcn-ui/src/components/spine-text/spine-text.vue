@@ -15,6 +15,11 @@ const { animationDuration = 2, animationIterationCount = 'infinite' } =
     animationIterationCount?: 'infinite' | number;
   }>();
 
+/**
+ * 拼出流光动画的 shorthand 属性，把 shine 关键帧接上时长、缓动与循环次数。
+ * 这两个值都来自解构出的 props，组件自身不持有也不改写它们，
+ * 因此改 prop 就能立即反映到动画节奏上。
+ */
 const style = computed(() => {
   return {
     animation: `shine ${animationDuration}s linear ${animationIterationCount}`,

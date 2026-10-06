@@ -16,6 +16,7 @@ import { SelectScrollUpButton, useForwardProps } from 'reka-ui';
 
 const props = defineProps<SelectScrollUpButtonProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的上翻按钮属性，转交 SelectScrollUpButton；点击一次上移一屏，显示与否同样由底层判断。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

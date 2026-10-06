@@ -26,6 +26,7 @@ import {
   SidebarNav,
 } from '../../icons';
 
+/** 布局预设项：缩略图对应的布局类型，以及界面上显示的布局名与悬浮提示。 */
 interface PresetItem {
   name: string;
   tip: string;
@@ -48,6 +49,7 @@ const components: Record<LayoutType, Component> = {
   'header-sidebar-nav': HeaderSidebarNav,
 };
 
+/** 七种布局预设，数组顺序即界面展示顺序；名称与提示随当前语言变化。 */
 const PRESET = computed((): PresetItem[] => [
   {
     name: $t('preferences.vertical'),
@@ -86,6 +88,7 @@ const PRESET = computed((): PresetItem[] => [
   },
 ]);
 
+/** 缩略图的高亮样式：与当前布局一致时返回描边类名，否则返回空数组。 */
 function activeClass(theme: string): string[] {
   return theme === modelValue.value ? ['outline-box-active'] : [];
 }

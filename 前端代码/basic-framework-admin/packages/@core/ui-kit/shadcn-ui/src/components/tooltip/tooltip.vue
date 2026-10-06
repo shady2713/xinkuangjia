@@ -18,6 +18,12 @@ import {
   TooltipTrigger,
 } from '../../ui';
 
+/**
+ * 提示气泡的入参。
+ * delayDuration 作用于整组 Provider，决定悬停后多久才弹出；side 决定浮层相对触发元素的方向。
+ * contentClass 与 contentStyle 只作用于浮层内容，不影响触发区；
+ * 提示文案本身走默认插槽，不在属性里声明。
+ */
 interface Props {
   contentClass?: ClassType;
   contentStyle?: StyleValue;

@@ -91,7 +91,15 @@ const components = [
   ElCard,
 ];
 
-// 参考 http://www.form-create.com/v3/element-ui/auto-import.html 文档
+/**
+ * 注册 form-create 所需的组件与运行时，使 JSON 描述的表单能按组件名解析到具体控件。
+ *
+ * components 中的组件按各自的 name 全局注册，名称冲突时后注册者覆盖先注册者。
+ *
+ * 参考 http://www.form-create.com/v3/element-ui/auto-import.html 文档
+ *
+ * @param app 待安装 form-create 的应用实例
+ */
 export const setupFormCreate = (app: App<Element>) => {
   components.forEach((component) => {
     app.component(component.name as string, component as Component);

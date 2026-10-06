@@ -29,7 +29,9 @@ const CROPPER_CONSTANTS = {
   MAX_PADDING: 50 as const,
 } as const;
 
+/** 指针坐标元组：按 [clientX, clientY] 排列。 */
 type Point = [number, number]; // [clientX, clientY]
+/** 裁剪区域四边元组：按 [top, right, bottom, left] 排列，单位像素。 */
 type Dimension = [number, number, number, number]; // [top, right, bottom, left]
 
 // 拖拽点类型
@@ -338,6 +340,11 @@ const handleMoveCropBox = (diffX: number, diffY: number) => {
   setDimension(newDimension);
 };
 
+/**
+ * 自由比例缩放：按拖拽方向与位移同时调整四边，并保证宽高不小于最小值。
+ * @param diffX 相对拖拽起点的横向位移。
+ * @param diffY 相对拖拽起点的纵向位移。
+ */
 const handleFreeAspectResize = (diffX: number, diffY: number) => {
   const cropperWidth = containerWidth.value;
   const cropperHeight = containerHeight.value;
@@ -393,6 +400,11 @@ const handleFreeAspectResize = (diffX: number, diffY: number) => {
   setDimension(currentDimensionNew);
 };
 
+/**
+ * 固定比例缩放：按拖拽方向调整尺寸并保持有效宽高比；未设置比例时直接返回。
+ * @param diffX 相对拖拽起点的横向位移。
+ * @param diffY 相对拖拽起点的纵向位移。
+ */
 const handleFixedAspectResize = (diffX: number, diffY: number) => {
   if (validAspectRatio.value === null) return;
   const cropperWidth = containerWidth.value;
@@ -535,6 +547,8 @@ const handleImageLoad = () => {
  * @param {'blob' | 'base64'} outputType - 输出类型
  * @param {number} targetWidth - 目标宽度（可选，不传则为原始裁剪宽度）
  * @param {number} targetHeight - 目标高度（可选，不传则为原始裁剪高度）
+ * @returns 裁剪结果：outputType 为 base64 时是 dataURL 字符串，否则是 Blob；
+ * 缺少图片或容器、裁剪尺寸非法、取不到画布上下文、图片加载失败时返回 undefined。
  */
 const getCropImage = async (
   format: 'image/jpeg' | 'image/png' = 'image/jpeg',
@@ -564,11 +578,13 @@ const getCropImage = async (
 
   // 等待临时图片加载完成
   await new Promise<void>((resolve, reject) => {
+    /** 10 秒仍未加载完成即判定超时，清理监听后以中文提示拒绝。 */
     const timeout = setTimeout(() => {
       tempImg.removeEventListener('load', handleLoad);
       tempImg.removeEventListener('error', handleError);
       reject(new Error('图片加载超时，超时时间10秒'));
     }, 10_000);
+    /** 加载完成：清理定时器与两个监听后结束等待。 */
     const handleLoad = () => {
       clearTimeout(timeout);
       tempImg.removeEventListener('load', handleLoad);
@@ -576,6 +592,7 @@ const getCropImage = async (
       resolve();
     };
 
+    /** 加载失败：清理定时器与监听，并把原始错误包装成中文提示后拒绝。 */
     const handleError = (err: ErrorEvent) => {
       clearTimeout(timeout);
       tempImg.removeEventListener('load', handleLoad);

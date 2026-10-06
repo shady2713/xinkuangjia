@@ -26,6 +26,7 @@ const props = withDefaults(
   defineProps<{ keyword?: string; menus?: MenuRecordRaw[] }>(),
   {
     keyword: '',
+    /** 菜单数据的默认值：空数组，此时没有可搜索的内容。 */
     menus: () => [],
   },
 );
@@ -42,6 +43,10 @@ const searchResults = ref<MenuRecordRaw[]>([]);
 
 const handleSearch = useThrottleFn(search, 200);
 
+/**
+ * 按关键词在菜单树中做大小写无关的正则匹配，更新结果列表并把选中项复位到第一项。
+ * @param searchKey 搜索关键词；首尾空格会被忽略，为空时清空结果并直接返回。
+ */
 // 搜索函数，用于根据搜索关键词查找匹配的菜单项
 function search(searchKey: string) {
   // 去除搜索关键词的前后空格
@@ -81,6 +86,7 @@ function search(searchKey: string) {
 
 // When the keyboard up and down keys move to an invisible place
 // the scroll bar needs to scroll automatically
+/** 让当前选中项滚动到可视区域，避免键盘上下移动后选中项落在视口之外。 */
 function scrollIntoView() {
   const element = document.querySelector(
     `[data-search-item="${activeIndex.value}"]`,
@@ -92,6 +98,7 @@ function scrollIntoView() {
 }
 
 // enter keyboard event
+/** 回车确认：写入搜索历史、关闭面板并跳转；站外地址新窗口打开，站内路径用 replace 跳转。 */
 async function handleEnter() {
   if (searchResults.value.length === 0) {
     return;
@@ -115,6 +122,7 @@ async function handleEnter() {
 }
 
 // Arrow key up
+/** 上方向键：选中项上移，越过第一项时回到最后一项并滚动到可视区域。 */
 function handleUp() {
   if (searchResults.value.length === 0) {
     return;
@@ -127,6 +135,7 @@ function handleUp() {
 }
 
 // Arrow key down
+/** 下方向键：选中项下移，越过最后一项时回到第一项并滚动到可视区域。 */
 function handleDown() {
   if (searchResults.value.length === 0) {
     return;
@@ -139,17 +148,20 @@ function handleDown() {
 }
 
 // close search modal
+/** 关闭搜索结果面板：清空结果并抛出 close 事件，实际的关闭动作由父级执行。 */
 function handleClose() {
   searchResults.value = [];
   emit('close');
 }
 
 // Activate when the mouse moves to a certain line
+/** 鼠标移入结果项时把选中项切到该行，与键盘选择保持一致。 */
 function handleMouseenter(e: MouseEvent) {
   const index = (e.target as HTMLElement)?.dataset.index;
   activeIndex.value = Number(index);
 }
 
+/** 删除指定下标的条目并修正选中下标；有关键词时删搜索结果，否则删搜索历史。 */
 function removeItem(index: number) {
   if (props.keyword) {
     searchResults.value.splice(index, 1);

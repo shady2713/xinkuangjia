@@ -11,6 +11,10 @@ import type {
   ThemeModeType,
 } from '@vben-core/typings';
 
+/**
+ * 后台布局的属性契约：内容区的定宽模式与四边内边距、顶栏/标签栏/页脚/侧边栏的尺寸与显隐开关、主题与层级。
+ * 成员全部可选，实际默认值由 admin-layout.vue 的 withDefaults 统一兜底，这里只声明类型。
+ */
 interface VbenLayoutProps {
   /**
    * 内容区域宽度模式。

@@ -12,7 +12,10 @@ import lombok.extern.slf4j.Slf4j;
  * 目的在于，格式化异常信息提示。
  * 考虑到 String.format 在参数不正确时会报错，因此使用 {} 作为占位符，并使用 {@link #doFormat(int, String, Object...)} 方法来格式化
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-common/src/main/java/cn/iocoder/yudao/framework/common/exception/util/ServiceExceptionUtil.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 16 行。
  */
 @Slf4j
 public class ServiceExceptionUtil {

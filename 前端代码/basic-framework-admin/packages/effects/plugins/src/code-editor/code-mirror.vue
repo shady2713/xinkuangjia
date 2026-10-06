@@ -84,6 +84,7 @@ watch(
   },
 );
 
+/** 按当前明暗偏好在 material-palenight 与 idea 两套主题间切换；实例未创建时不处理。 */
 function setTheme() {
   unref(editor)?.setOption(
     'theme',
@@ -91,6 +92,7 @@ function setTheme() {
   );
 }
 
+/** 请求内核按当前容器尺寸重绘；用于窗口缩放后修正滚动与光标位置，实例未创建时静默跳过。 */
 function refresh() {
   editor?.refresh();
 }

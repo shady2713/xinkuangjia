@@ -31,6 +31,7 @@ const ARTIFACT_EXTENSIONS = new Set([
  * 扫描源码和生产产物中的高风险残留。
  *
  * @return 无风险时正常退出；发现问题时抛出异常并由 CI 阻断发布
+ * @throws {Error} 扫描到任一高风险残留时抛出，错误信息里逐条列出问题文件与原因。
  */
 async function main() {
   const findings = [];
@@ -60,7 +61,12 @@ async function main() {
   console.log(sourceOnly ? '源码安全扫描通过' : '生产配置及产物安全扫描通过');
 }
 
-/** 递归收集指定扩展名的文件，忽略依赖和构建缓存。 */
+/** 递归收集指定扩展名的文件，忽略依赖和构建缓存。
+ * @param directory - 起始目录；目录不存在时直接给出空数组，不视为错误。
+ * @param extensions - 允许的扩展名集合，含前导点号，例如 .mjs。
+ * @returns 命中的文件路径数组，顺序为目录遍历顺序。
+ * @throws {Error} 读取目录失败且原因不是 ENOENT 时抛出原始错误，交由调用方决定是否中止。
+ */
 async function collectFiles(directory, extensions) {
   const result = [];
   let entries;
@@ -86,7 +92,9 @@ async function collectFiles(directory, extensions) {
   return result;
 }
 
-/** 校验生产构建参数和运行时默认配置不会携带开发地址或预填密码。 */
+/** 校验生产构建参数和运行时默认配置不会携带开发地址或预填密码。
+ * @param findings - 收集问题的数组，命中时追加中文描述，由主流程统一阻断发布。
+ */
 function validateProductionConfiguration(findings) {
   const production = readEnvFile(join(appRoot, '.env.production'));
   const common = readEnvFile(join(appRoot, '.env'));
@@ -187,6 +195,7 @@ function requireText(path) {
   }
 }
 
+/** 把绝对路径转成相对工作区根、以正斜杠分隔的展示路径，供日志与问题列表统一输出。 */
 function displayPath(path) {
   return relative(workspaceRoot, path).replaceAll('\\', '/');
 }

@@ -31,6 +31,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** 任务主键只在编辑时回显，不作为可填字段展示，避免提交时指向别的任务。 */
         show: () => false,
       },
     },
@@ -52,6 +53,9 @@ export function useFormSchema(): VbenFormSchema[] {
       },
       dependencies: {
         triggerFields: ['id'],
+        /**
+         * 已存在的任务锁定处理器名：它决定调度时调用的 Bean，改名会让任务在下次触发时无法执行。
+         */
         disabled: (values) => !!values.id,
       },
       rules: 'required',
@@ -111,7 +115,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 列表的搜索表单
+ * @returns 搜索字段：任务名称与处理器名字按输入内容模糊匹配，任务状态为字典下拉。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -145,7 +152,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 表格列配置 */
+/**
+ * 表格列配置
+ * @returns 列定义：任务状态按字典渲染为标签，操作列固定在右侧由页面插槽渲染。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
@@ -241,6 +251,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       label: '重试间隔',
       field: 'retryInterval',
+      /**
+       * 重试间隔以毫秒为单位，便于与监控超时时间对照；未配置时展示为无间隔。
+       * @param val 当前字段值，只有数字才被视为有效的毫秒数。
+       * @returns 带毫秒单位的文本，值无效或为 0 时返回无间隔。
+       */
       render: (val) => {
         const value = typeof val === 'number' ? val : undefined;
         return value ? `${value} 毫秒` : '无间隔';
@@ -249,6 +264,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       label: '监控超时时间',
       field: 'monitorTimeout',
+      /**
+       * 监控超时时间以毫秒为单位；为 0 或未配置说明该任务没有开启超时监控。
+       * @param val 当前字段值，只有数字才被视为有效的毫秒数。
+       * @returns 带毫秒单位的文本，值无效或不大于 0 时返回未开启。
+       */
       render: (val) => {
         const value = typeof val === 'number' ? val : undefined;
         return value && value > 0 ? `${value} 毫秒` : '未开启';
@@ -257,6 +277,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'nextTimes',
       label: '后续执行时间',
+      /**
+       * 把后端推算出的后续执行时间按时间轴逐条展示，便于预判调度节奏与是否已停用。
+       * @param val 当前字段值，期望为日期数组；非数组按空数组处理。
+       * @returns 时间轴节点；没有后续执行时间时返回提示文本。
+       */
       render: (val) => {
         const times: Date[] = Array.isArray(val) ? (val as Date[]) : [];
         if (times.length === 0) {

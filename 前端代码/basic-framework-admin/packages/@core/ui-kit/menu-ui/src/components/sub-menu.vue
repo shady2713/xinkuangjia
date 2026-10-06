@@ -23,12 +23,16 @@ import {
 import CollapseTransition from './collapse-transition.vue';
 import SubMenuContent from './sub-menu-content.vue';
 
+/**
+ * 子菜单属性：在子菜单字段之上补充溢出「更多」标记，标识这是水平菜单裁剪出来的汇总入口。
+ */
 interface Props extends SubMenuProps {
   isSubMenuMore?: boolean;
 }
 
 defineOptions({ name: 'SubMenu' });
 
+/** 注册子菜单属性，禁用开关与更多标记缺省为 false。 */
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   isSubMenuMore: false,
@@ -55,19 +59,26 @@ createSubMenuContext({
   removeSubMenu,
 });
 
+/** 本子菜单是否已展开，由根菜单的展开集合按 path 判定。 */
 const opened = computed(() => {
   return rootMenu?.openedMenus.includes(props.path);
 });
+/** 直属父级是根 Menu 时为 true，用于区分一级子菜单与嵌套子菜单的样式差异。 */
 const isTopLevelMenuSubmenu = computed(
   () => parentMenu.value?.type.name === 'Menu',
 );
+/** 跟随根菜单的排列模式，取不到上下文时按垂直菜单处理。 */
 const mode = computed(() => rootMenu?.props.mode ?? 'vertical');
+/** 跟随根菜单的圆润风格开关，决定子菜单容器是否加圆角类名。 */
 const rounded = computed(() => rootMenu?.props.rounded);
+/** 本层子菜单所处的层级，取自向上取到的子菜单上下文，缺省为 0。 */
 const currentLevel = computed(() => subMenu?.level ?? 0);
+/** 层级为 1 即根菜单下的直接子菜单，悬浮卡弹出方向与折叠态标题取舍都以此为界。 */
 const isFirstLevel = computed(() => {
   return currentLevel.value === 1;
 });
 
+/** 悬浮卡弹出参数：水平一级菜单向下弹出，其余向右弹出，并留出固定的顶部避让距离。 */
 const contentProps = computed((): HoverCardContentProps => {
   const isHorizontal = mode.value === 'horizontal';
   const side = isHorizontal && isFirstLevel.value ? 'bottom' : 'right';
@@ -109,6 +120,10 @@ function addSubMenu(subMenu: MenuItemRegistered) {
   subMenus.value[subMenu.path] = subMenu;
 }
 
+/**
+ * 注销一个下级子菜单；卸载时由组件生命周期调用，使本层不再汇总它的激活态。
+ * @param subMenu 待注销的子菜单登记信息。
+ */
 function removeSubMenu(subMenu: MenuItemRegistered) {
   Reflect.deleteProperty(subMenus.value, subMenu.path);
 }
@@ -135,6 +150,12 @@ function handleClick() {
   });
 }
 
+/**
+ * 鼠标或焦点移入本层时的处理：垂直非折叠菜单靠点击展开，只标记父层鼠标已移入；
+ * 折叠态与水平模式则延时自动展开，并向上补发一次 mouseenter 让外层弹层保持可见。
+ * @param event 触发事件，focus 事件直接返回，只处理鼠标移入。
+ * @param showTimeout 自动展开前的等待毫秒数，弹层内容区用更短的 100 毫秒以衔接移动。
+ */
 function handleMouseenter(event: FocusEvent | MouseEvent, showTimeout = 300) {
   if (event.type === 'focus') {
     return;
@@ -160,6 +181,11 @@ function handleMouseenter(event: FocusEvent | MouseEvent, showTimeout = 300) {
   parentMenu.value?.vnode.el?.dispatchEvent(new MouseEvent('mouseenter'));
 }
 
+/**
+ * 鼠标移出本层时的处理：垂直非折叠菜单只清除父层鼠标标记，不做延时收回；
+ * 折叠态与水平模式先取消未触发的展开定时器，再延时 300 毫秒收回，期间若鼠标进入下级子菜单则放弃收回。
+ * @param deepDispatch 为真时继续把收回意图向父层逐级传递，避免嵌套弹层被提前关闭。
+ */
 function handleMouseleave(deepDispatch = false) {
   if (
     !rootMenu?.props.collapse &&
@@ -184,6 +210,7 @@ function handleMouseleave(deepDispatch = false) {
   }
 }
 
+/** 激活时优先用激活图标，未激活时用普通图标；两者都未传时为 undefined，图标组件走 fallback。 */
 const menuIcon = computed(() =>
   active.value ? props.activeIcon || props.icon : props.icon,
 );

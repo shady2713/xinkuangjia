@@ -13,6 +13,7 @@ import {
   VbenCheckbox,
 } from '@vben-core/shadcn-ui';
 
+/** 待办卡片属性：卡片标题与待办条目清单。 */
 interface Props {
   items?: WorkbenchTodoItem[];
   title: string;
@@ -23,6 +24,7 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
+  /** 待办清单默认值：空数组，未传入时卡片内没有待办项。 */
   items: () => [],
 });
 </script>

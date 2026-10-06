@@ -10,6 +10,12 @@ import { cn } from '@vben-core/shared/utils';
 import { Input } from '../../ui';
 import PasswordStrength from './password-strength.vue';
 
+/**
+ * 密码输入框的入参。
+ * passwordStrength 为真时才在输入框下方挂载强度条与 strengthText 插槽，
+ * 并把明文切换按钮上移让位给它；class 只作用于内部 Input 本身。
+ * 其余输入框属性（placeholder、autocomplete 等）通过 $attrs 透传，本接口不重复声明。
+ */
 interface Props {
   class?: ClassValue;
   /**

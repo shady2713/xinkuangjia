@@ -37,6 +37,11 @@ export function useDictSelectRule() {
     icon: 'icon-descriptions',
     label,
     name,
+    /**
+     * 生成字典选择器在设计器画布上的表单规则。
+     * 字段名用 UUID 而不是标题，避免同一画布放多个字典选择器时绑定名互相覆盖。
+     * @returns 该组件的表单规则对象，modelField 与运行时的字段绑定名保持一致。
+     */
     rule() {
       return {
         type: name,

@@ -13,6 +13,7 @@ import { Copyright } from '../basic/copyright';
 import AuthenticationFormView from './form.vue';
 import SloganIcon from './icons/slogan.vue';
 
+/** 认证页外壳属性：控制 logo 与标题描述、slogan 配图、版权区显隐以及 logo 点击回调。 */
 interface Props {
   appName?: string;
   logo?: string;
@@ -21,6 +22,7 @@ interface Props {
   pageDescription?: string;
   sloganImage?: string;
   copyright?: boolean;
+  /** 点击左上角 logo 时的回调；不传时点击不产生任何动作。 */
   clickLogo?: () => void;
 }
 
@@ -32,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
   pageDescription: '',
   pageTitle: '',
   sloganImage: '',
+  /** logo 点击回调的默认值：空实现，保证模板可直接绑定而不判空。 */
   clickLogo: () => {},
 });
 
@@ -40,6 +43,7 @@ const { authPanelCenter, authPanelLeft, authPanelRight, isDark } =
 
 /**
  * @zh_CN 根据明暗模式选择合适的 logo 图标
+ * 深色模式且配置了 logoDark 时用深色 logo，否则回退到普通 logo。
  */
 const logoSrc = computed(() => {
   // 如果是暗色风格，并且提供了 logoDark，则使用白色背景的 logo

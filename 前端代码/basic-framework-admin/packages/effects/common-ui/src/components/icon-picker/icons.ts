@@ -12,6 +12,7 @@ import type { Recordable } from '@vben/types';
  */
 export const ICONS_MAP: Recordable<string[]> = {};
 
+/** Iconify 集合接口的响应：图标集前缀、图标总数、标题，以及未分类与分类图标名。 */
 interface IconifyResponse {
   prefix: string;
   total: number;
@@ -40,7 +41,9 @@ export async function fetchIconsData(prefix: string): Promise<string[]> {
   PENDING_REQUESTS[prefix] = (async () => {
     try {
       const controller = new AbortController();
+      /** 10 秒超时后中止请求，避免远程接口无响应时一直挂起。 */
       const timeoutId = setTimeout(() => controller.abort(), 1000 * 10);
+      /** 拉取图标集并解析为 JSON；响应结构与 IconifyResponse 一致。 */
       const response: IconifyResponse = await fetch(
         `https://api.iconify.design/collection?prefix=${prefix}`,
         { signal: controller.signal },

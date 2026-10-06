@@ -44,6 +44,10 @@ import { cn } from '@vben-core/shared/utils';
 
 import { useModalDraggable } from './use-modal-draggable';
 
+/**
+ * modal.vue 自身的 props：在 ModalProps 之外多接一个 modalApi，
+ * 视图的状态读写都走它；不传 api 时相关的交互会静默失效。
+ */
 interface Props extends ModalProps {
   modalApi?: ExtendedModalApi;
 }
@@ -107,16 +111,20 @@ const {
   zIndex,
 } = usePriorityValues(props, state);
 
+/** 全屏的最终判定：显式打开 fullscreen 或处于移动端都算全屏，移动端无法被 centered 之类的配置覆盖。 */
 const shouldFullscreen = computed(() => fullscreen.value || isMobile.value);
 
+/** 拖拽开关的最终判定：可拖拽、未全屏、且渲染了标题栏三者同时成立才会绑手柄。 */
 const shouldDraggable = computed(
   () => draggable.value && !shouldFullscreen.value && header.value,
 );
 
+/** 居中的最终判定：全屏时固定铺满，忽略 centered，因此全屏与居中互斥。 */
 const shouldCentered = computed(
   () => centered.value && !shouldFullscreen.value,
 );
 
+/** 挂载目标选择器：appendToMain 为真时挂进主内容区，否则留在 Dialog 的默认位置。 */
 const getAppendTo = computed(() => {
   return appendToMain.value
     ? `#${ELEMENT_ID_MAIN_CONTENT}>div:not(.absolute)>div`
@@ -176,6 +184,7 @@ onDeactivated(() => {
   }
 });
 
+/** 全屏按钮的点击处理：以函数式更新翻转 store 里的 fullscreen，居中与拖拽会随之自动失效。 */
 function handleFullscreen() {
   props.modalApi?.setState((prev) => {
     // if (prev.fullscreen) {
@@ -184,18 +193,21 @@ function handleFullscreen() {
     return { ...prev, fullscreen: !fullscreen.value };
   });
 }
+/** 遮罩被点按时决定是否放行：禁止点遮罩关闭或处于提交中时阻止事件，锁定期间不会被误关。 */
 function interactOutside(e: Event) {
   if (!closeOnClickModal.value || submitting.value) {
     e.preventDefault();
     e.stopPropagation();
   }
 }
+/** ESC 关闭的放行判断：禁止 ESC 关闭或提交中时阻止默认行为，锁定期间按 ESC 无效。 */
 function escapeKeyDown(e: KeyboardEvent) {
   if (!closeOnPressEscape.value || submitting.value) {
     e.preventDefault();
   }
 }
 
+/** 未开启 openAutoFocus 时拦掉打开即聚焦，避免弹窗一出现就抢走输入焦点。 */
 function handleOpenAutoFocus(e: Event) {
   if (!openAutoFocus.value) {
     e?.preventDefault();
@@ -203,6 +215,10 @@ function handleOpenAutoFocus(e: Event) {
 }
 
 // pointer-down-outside
+/**
+ * 外部按下的最终拦截：只有按到本弹窗自己的遮罩、允许点遮罩关闭且不在提交中时才放行。
+ * 嵌套弹窗靠 data-dismissable-modal 与本弹窗的 id 比对来区分归属。
+ */
 function pointerDownOutside(e: Event) {
   const target = e.target as HTMLElement;
   const isDismissableModal = target?.dataset.dismissableModal;
@@ -216,21 +232,25 @@ function pointerDownOutside(e: Event) {
   }
 }
 
+/** 焦点移出弹窗时一律拦截，弹窗内的表单控件因此不会因为点击外部而丢焦点。 */
 function handleFocusOutside(e: Event) {
   e.preventDefault();
   e.stopPropagation();
 }
 
+/** 首次打开之后且不是用完即销毁时让内容常驻 DOM，关闭期间靠 hidden 隐藏，重开可保留内部状态。 */
 const getForceMount = computed(() => {
   return !unref(destroyOnClose) && unref(firstOpened);
 });
 
+/** 打开动画播完才通知 api：多等一帧，确保回调触发时弹窗已经完整可见。 */
 const handleOpened = () => {
   requestAnimationFrame(() => {
     props.modalApi?.onOpened();
   });
 };
 
+/** 关闭动画播完时标记为已关闭并转发给 api，模板据此加上 hidden 把残留内容藏起来。 */
 function handleClosed() {
   isClosed.value = true;
   props.modalApi?.onClosed();

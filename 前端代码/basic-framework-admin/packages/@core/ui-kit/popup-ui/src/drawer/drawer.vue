@@ -43,6 +43,11 @@ import { ELEMENT_ID_MAIN_CONTENT } from '@vben-core/shared/constants';
 import { globalShareState } from '@vben-core/shared/global-state';
 import { cn } from '@vben-core/shared/utils';
 
+/**
+ * 抽屉视图的属性契约：在 DrawerProps 之外补一个可选的 drawerApi。
+ * 传入 API 时视图订阅它的状态，并把确认、取消、关闭动作转发回 API；
+ * 不传时只按 props 渲染，状态订阅与回调转发都不会发生。
+ */
 interface Props extends DrawerProps {
   drawerApi?: ExtendedDrawerApi;
 }
@@ -120,17 +125,27 @@ onDeactivated(() => {
   }
 });
 
+/**
+ * 交互发生在抽屉外部时决定是否拦截：closeOnClickModal 为假或正处于提交等待中时阻止默认行为，
+ * 避免误触遮罩把正在提交的抽屉关掉。
+ */
 function interactOutside(e: Event) {
   if (!closeOnClickModal.value || submitting.value) {
     e.preventDefault();
   }
 }
+
+/** 按下 ESC 时按同样口径拦截：closeOnPressEscape 为假或提交中时，不放行 ESC 带来的关闭动作。 */
 function escapeKeyDown(e: KeyboardEvent) {
   if (!closeOnPressEscape.value || submitting.value) {
     e.preventDefault();
   }
 }
 // pointer-down-outside
+/**
+ * 指针按下落在抽屉外部时判断是否拦截：提交中、已关闭点击遮罩关闭，
+ * 或按下位置带的抽屉标记与当前 id 不一致时，都阻止默认行为。
+ */
 function pointerDownOutside(e: Event) {
   const target = e.target as HTMLElement;
   const dismissableDrawer = target?.dataset.dismissableDrawer;
@@ -143,17 +158,26 @@ function pointerDownOutside(e: Event) {
   }
 }
 
+/** 抽屉打开时决定是否接管初始焦点：未开启 openAutoFocus 时拦掉自动聚焦，焦点留给用户手动切换。 */
 function handerOpenAutoFocus(e: Event) {
   if (!openAutoFocus.value) {
     e?.preventDefault();
   }
 }
 
+/**
+ * 打开与关闭两个方向的焦点事件都不做处理：同时阻止默认行为与冒泡，
+ * 避免焦点被移出抽屉或穿透到背后的内容。
+ */
 function handleFocusOutside(e: Event) {
   e.preventDefault();
   e.stopPropagation();
 }
 
+/**
+ * 关闭按钮的点击入口：交给 api.close() 先过 onBeforeClose 校验，
+ * 确认允许关闭后立刻收口关闭状态，不必再等关闭动画事件才隐藏内容。
+ */
 async function handleClose() {
   // 自定义图标按钮不再依赖 SheetClose 的 as-child 事件透传，避免关闭事件被组件封装吞掉。
   await props.drawerApi?.close();
@@ -163,6 +187,10 @@ async function handleClose() {
   }
 }
 
+/**
+ * 抽屉的挂载点选择器：appendToMain 为真时挂到主内容区下一个非绝对定位 div 的内部，
+ * 让抽屉随布局一起滚动；缺省为 undefined，交给 Sheet 自行决定挂载位置。
+ */
 const getAppendTo = computed(() => {
   return appendToMain.value
     ? `#${ELEMENT_ID_MAIN_CONTENT}>div:not(.absolute)>div`
@@ -177,6 +205,7 @@ const hasOpened = ref(false);
 const isClosed = ref(true);
 let closeFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** 清掉关闭兜底定时器，避免抽屉重新打开后仍被上一轮的兜底回调误判为已关闭。 */
 function clearCloseFallbackTimer() {
   if (!closeFallbackTimer) {
     return;
@@ -185,6 +214,10 @@ function clearCloseFallbackTimer() {
   closeFallbackTimer = undefined;
 }
 
+/**
+ * 关闭完成的统一收口：已收口时直接返回，只在首次执行时置位 isClosed 并转发 onClosed，
+ * 避免关闭动画回调与兜底定时器都触发时上层回调被执行两次。
+ */
 function markClosed() {
   // 关闭动画回调和兜底定时器都可能触发，这里统一收口，避免重复执行 onClosed。
   if (isClosed.value) {
@@ -213,10 +246,15 @@ watch(
     }
   },
 );
+/** 关闭动画播放完毕的回调：转入 markClosed，与兜底定时器共用同一条收口路径。 */
 function handleClosed() {
   markClosed();
 }
 onUnmounted(clearCloseFallbackTimer);
+/**
+ * 是否让 Sheet 常驻 DOM：未开启 destroyOnClose 且抽屉打开过一次时保持挂载，
+ * 关闭后只靠 isClosed 隐藏内容，这样反复打开不会丢失抽屉内部状态。
+ */
 const getForceMount = computed(() => {
   return !unref(destroyOnClose) && unref(hasOpened);
 });

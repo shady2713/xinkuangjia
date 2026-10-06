@@ -29,7 +29,7 @@ function asRecord(value: object): Record<string, unknown> {
  */
 function traverseTreeValues<T, V>(
   tree: T[],
-  getValue: (node: T) => V,
+  getValue: /* 取出该节点上需要收集的值。 */ (node: T) => V,
   options?: TreeConfigOptions,
 ): V[] {
   const result: V[] = [];
@@ -70,7 +70,9 @@ function traverseTreeValues<T, V>(
  */
 function filterTree<T extends object>(
   tree: T[],
-  filter: (node: T) => boolean,
+  filter: /* 返回 true 表示保留该节点，其子树仍会继续过滤。 */ (
+    node: T,
+  ) => boolean,
   options?: TreeConfigOptions,
 ): T[] {
   const { childProps } = options || {
@@ -116,7 +118,9 @@ function filterTree<T extends object>(
  */
 function mapTree<T, V extends object>(
   tree: T[],
-  mapper: (node: T) => V,
+  mapper: /* 把节点映射成新形状，返回值需自带同名的子节点字段。 */ (
+    node: T,
+  ) => V,
   options?: TreeConfigOptions,
 ): V[] {
   const { childProps } = options || {
@@ -292,7 +296,10 @@ function treeToString(tree: NamedTreeNode[], nodeId: number | string) {
  */
 function sortTree<T extends object>(
   treeData: T[],
-  sortFunction: (a: T, b: T) => number,
+  sortFunction: /* 同级节点的比较函数，返回值语义与 Array.prototype.sort 一致。 */ (
+    a: T,
+    b: T,
+  ) => number,
   options?: TreeConfigOptions,
 ): T[] {
   const { childProps } = options || {

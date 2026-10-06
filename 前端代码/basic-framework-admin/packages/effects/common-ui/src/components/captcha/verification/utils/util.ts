@@ -64,6 +64,7 @@ export function resetSize(
   };
 }
 
+/** 图形验证码可选字符集：数字 1-9 与大小写字母，用于生成随机验证码文本。 */
 export const _code_chars = [
   1,
   2,
@@ -127,7 +128,9 @@ export const _code_chars = [
   'Y',
   'Z',
 ];
+/** 验证码底纹的颜色候选：四个近似白色的十六进制色值。 */
 export const _code_color1 = ['#fffff0', '#f0ffff', '#f0fff0', '#fff0f0'];
+/** 验证码字符的颜色候选：用于给每个字符随机上色。 */
 export const _code_color2 = [
   '#FF0033',
   '#006699',

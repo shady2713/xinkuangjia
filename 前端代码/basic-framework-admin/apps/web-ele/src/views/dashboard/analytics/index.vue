@@ -13,9 +13,15 @@ const router = useRouter();
 const userStore = useUserStore();
 const accessStore = useAccessStore();
 
+/** 当前登录用户的信息，取自用户 Store；登录后由框架写入，模板中按可空处理。 */
 const userInfo = computed(() => userStore.userInfo);
+/** 当前登录用户的角色名列表，欢迎卡片中以标签形式展示。 */
 const userRoles = computed(() => userStore.userRoles);
 
+/**
+ * 按当前账号的菜单权限过滤后的快捷入口。
+ * 没有对应菜单权限的入口不会进入列表，因此模板中无需再判断可见性。
+ */
 const quickLinks = [
   { title: '用户管理', path: '/system/user', description: '管理系统用户账号' },
   { title: '角色管理', path: '/system/role', description: '配置角色与权限' },
@@ -27,10 +33,18 @@ const quickLinks = [
   { title: '字典管理', path: '/system/dict', description: '维护系统字典数据' },
 ].filter((link) => accessStore.getMenuByPath(link.path));
 
+/**
+ * 跳转到目标菜单页面。
+ * @param path 目标路由路径，取自已按权限过滤的快捷入口列表。
+ */
 function navigateTo(path: string) {
   router.push(path);
 }
 
+/**
+ * 按当前小时生成问候语。
+ * @returns 0-5 点为夜深了，6-8 点为早上好，9-11 点为上午好，12-13 点为中午好，14-17 点为下午好，其余为晚上好。
+ */
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 6) return '夜深了';

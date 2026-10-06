@@ -6,6 +6,10 @@
  */
 import type { UserConfig } from 'vite';
 
+/**
+ * 应用与库构建共用的 build 段兜底值。
+ * @returns 只含 build 字段的配置：放宽 chunk 体积告警阈值，关闭压缩体积上报与 sourcemap。
+ */
 async function getCommonConfig(): Promise<UserConfig> {
   return {
     build: {

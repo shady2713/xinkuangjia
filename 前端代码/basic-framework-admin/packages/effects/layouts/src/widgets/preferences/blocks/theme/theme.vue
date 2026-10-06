@@ -35,10 +35,12 @@ const THEME_PRESET: Array<{ icon: Component; name: ThemeModeType }> = [
   },
 ];
 
+/** 主题卡片的高亮样式：与当前模式一致时返回描边类名，否则返回空数组。 */
 function activeClass(theme: string): string[] {
   return theme === modelValue.value ? ['outline-box-active'] : [];
 }
 
+/** 把主题模式名翻译为界面文案；传入未知名称时返回 undefined，界面不显示名称。 */
 function nameView(name: string) {
   switch (name) {
     case 'auto': {

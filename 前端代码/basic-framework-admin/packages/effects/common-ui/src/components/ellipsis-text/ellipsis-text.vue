@@ -21,6 +21,7 @@ import { VbenTooltip } from '@vben-core/shadcn-ui';
 
 import { useElementSize } from '@vueuse/core';
 
+/** 省略文本属性：展开开关、最大行数与宽度、提示框开关与位置，以及提示框的配色与尺寸。 */
 interface Props {
   /**
    * 是否启用点击文本展开全部
@@ -92,11 +93,13 @@ const props = withDefaults(defineProps<Props>(), {
   tooltipColor: '',
   tooltipFontSize: 14,
   tooltipMaxWidth: undefined,
+  /** 提示框内容区样式默认值：两端对齐，避免多行提示参差不齐。 */
   tooltipOverlayStyle: () => ({ textAlign: 'justify' }),
 });
 
 const emit = defineEmits<{ expandChange: [boolean] }>();
 
+/** 文本最大宽度的 CSS 取值：数字补 px，字符串原样使用。 */
 const textMaxWidth = computed(() => {
   if (typeof props.maxWidth === 'number') {
     return `${props.maxWidth}px`;
@@ -177,6 +180,7 @@ watchEffect(
   { flush: 'post' },
 );
 
+/** 切换展开状态并抛出 expandChange；开启截断提示时同步重新检测是否被截断。 */
 function onExpand() {
   isExpand.value = !isExpand.value;
   emit('expandChange', isExpand.value);
@@ -185,6 +189,7 @@ function onExpand() {
   }
 }
 
+/** 点击文本时的处理：仅在启用 expand 时切换展开状态，否则不做任何事。 */
 function handleExpand() {
   props.expand && onExpand();
 }

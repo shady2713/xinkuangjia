@@ -44,6 +44,10 @@ const {
   showScrollButton,
 } = useTabsViewScroll(props);
 
+/**
+ * 滚轮滚动入口：wheelable 关闭时完全不处理；开启时把事件转给滚动区，
+ * 并拦下冒泡与默认行为，避免纵向滚轮继续滚动标签栏外层的布局。
+ */
 function onWheel(e: WheelEvent) {
   if (props.wheelable) {
     handleWheel(e);

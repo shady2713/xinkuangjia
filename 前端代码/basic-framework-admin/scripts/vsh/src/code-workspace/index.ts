@@ -22,17 +22,24 @@ import {
 
 const CODE_WORKSPACE_FILE = join('vben-admin.code-workspace');
 
+/** 子命令选项：spaces 为工作区文件的缩进宽度，autoCommit 决定生成后是否加入 git 暂存。 */
 interface CodeWorkspaceCommandOptions {
   autoCommit?: boolean;
   spaces?: number;
 }
 
+/**
+ * 生成工作区文件：把各包目录写成 folders 条目，输出到 monorepo 根并统一格式。
+ * @param options - 子命令选项；解构出的 spaces 为缩进宽度，autoCommit 为真时把结果加入 git 暂存。
+ * @returns 写入与格式化完成后的 Promise，没有业务返回值。
+ */
 async function createCodeWorkspace({
   autoCommit = false,
   spaces = 2,
 }: CodeWorkspaceCommandOptions) {
   const { packages, rootDir } = await getPackages();
 
+  // 只保留包名与相对 monorepo 根的 POSIX 路径，VS Code 不认反斜杠。
   let folders = packages.map((pkg) => {
     const { dir, packageJson } = pkg;
     return {
@@ -53,6 +60,11 @@ async function createCodeWorkspace({
   }
 }
 
+/**
+ * 子命令入口：生成工作区文件，未开启 autoCommit 时额外打印一条成功提示。
+ * @param options - 子命令选项，原样透传给 createCodeWorkspace。
+ * @returns 流程结束后的 Promise；autoCommit 为真时提前返回，不打印提示。
+ */
 async function runCodeWorkspace({
   autoCommit,
   spaces,
@@ -69,6 +81,7 @@ async function runCodeWorkspace({
   consola.log('');
 }
 
+/** 把 code-workspace 子命令注册到 cac 实例上，命令名与选项在这里固定。 */
 function defineCodeWorkspaceCommand(cac: CAC) {
   cac
     .command('code-workspace')

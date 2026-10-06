@@ -17,11 +17,19 @@ import dayjs from 'dayjs';
 
 import { DictTag } from '#/components/dict-tag';
 
+/**
+ * 日志详情渲染时要用的结束时间。
+ * 描述项的渲染函数会收到整行数据，而列表行类型未声明该字段，这里只收窄实际用到的字段。
+ */
 type JobLogDetail = {
   endTime?: Date | string;
 };
 
-/** 列表的搜索表单 */
+/**
+ * 列表的搜索表单
+ * @returns 搜索字段：处理器名字按输入内容模糊匹配，任务状态为字典下拉，
+ * 开始与结束时间各自为带时分的单点选择，提交时按 YYYY-MM-DD HH:mm:ss 传给后端。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -127,6 +135,9 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'duration',
       title: '执行时长',
       minWidth: 120,
+      /**
+       * 执行时长由后端以毫秒返回，这里补上单位后直接展示，不做单位换算。
+       */
       formatter: ({ row }) => {
         return `${row.duration} 毫秒`;
       },
@@ -179,6 +190,10 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'beginTime',
       label: '执行时间',
+      /**
+       * 详情中的执行时间是开始与结束组成的区间，结束时间需要从整行数据里取；
+       * 任一端缺失时返回空串，不展示半截区间。
+       */
       render: (val, data) => {
         const detail = data as JobLogDetail | undefined;
         if (val && detail?.endTime) {
@@ -190,6 +205,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'duration',
       label: '执行时长',
+      /**
+       * 执行时长以毫秒为单位展示；后端未给出数值时留空，避免把非法值当成 0 毫秒误导读者。
+       * @param val 当前字段值，只有数字才被视为有效的毫秒数。
+       * @returns 带毫秒单位的文本，值无效或为 0 时返回空串。
+       */
       render: (val) => {
         const value = typeof val === 'number' ? val : undefined;
         return value ? `${value} 毫秒` : '';

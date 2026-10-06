@@ -35,6 +35,7 @@ const props = withDefaults(
 
 const emits = defineEmits<ToggleEmits>();
 
+/** 剔除 class、size、variant 三个样式轴后，把其余属性连同 emits 转发给 Toggle；样式轴在模板里单独喂给 toggleVariants。 */
 const delegatedProps = computed(() => {
   const { class: _, size: _size, variant: _variant, ...delegated } = props;
 

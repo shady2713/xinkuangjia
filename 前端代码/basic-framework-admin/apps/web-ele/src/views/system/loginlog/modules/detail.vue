@@ -22,6 +22,11 @@ const [Descriptions] = useDescription({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 弹窗显隐回调：打开时直接取列表传入的整行日志作为展示数据，缺少主键时保持空展示；
+   * 关闭时清空本地副本，避免下次打开残留上一次的日志。
+   * @param isOpen 弹窗是否打开。
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;

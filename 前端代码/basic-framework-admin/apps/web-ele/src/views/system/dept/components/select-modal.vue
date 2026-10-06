@@ -107,6 +107,9 @@ const [Modal, modalApi] = useVbenModal({
         const isValidDeptId = (id: number | undefined): id is number =>
           id !== undefined;
 
+        /**
+         * 回显已选部门：只把主键有效的部门交给树组件，未落库的部门无法被 setCheckedKeys 命中。
+         */
         const selectedIds = data.selectedList
           .map((dept: SystemDeptApi.Dept) => dept.id)
           .filter(

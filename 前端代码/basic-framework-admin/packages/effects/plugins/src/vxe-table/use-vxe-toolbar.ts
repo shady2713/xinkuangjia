@@ -12,6 +12,7 @@ import VbenVxeTableToolbar from './table-toolbar.vue';
 /**
  * vxe 原生工具栏挂载封装
  * 解决每个组件使用 vxe-table 组件时都需要写一遍的问题
+ * @returns hiddenSearchBar 搜索栏显隐状态，tableToolbarRef 工具栏组件引用，tableRef 表格实例引用。
  */
 export function useTableToolbar() {
   const hiddenSearchBar = ref(false); // 隐藏搜索栏

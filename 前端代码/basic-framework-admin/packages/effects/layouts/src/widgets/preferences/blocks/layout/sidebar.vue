@@ -40,6 +40,7 @@ watch(
     }
 
     const current = sidebarButtons.value || [];
+    /** 新按钮集合与当前值是否等价：只比较集合内容，不要求顺序一致。 */
     const isSame =
       current.length === newButtons.length &&
       current.every((item) => newButtons.includes(item));
@@ -51,6 +52,7 @@ watch(
   { immediate: true },
 );
 
+/** 按钮多选变化后回写折叠与固定两个布尔开关；只按是否包含对应项取值。 */
 const handleCheckboxChange = () => {
   sidebarCollapsedButton.value = !!sidebarButtons.value.includes('collapsed');
   sidebarFixedButton.value = !!sidebarButtons.value.includes('fixed');

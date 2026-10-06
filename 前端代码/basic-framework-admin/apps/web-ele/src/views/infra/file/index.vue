@@ -42,6 +42,10 @@ const {
   batchDeleteApi: (ids) =>
     deleteFileBatchAndRefreshOnFailure(ids, handleRefresh),
   deleteApi: deleteFile,
+  /**
+   * 删除提示里展示的名称：文件名缺失时退回文件路径，两者都为空才返回空串，
+   * 由增删改组合式函数改用不带名称的通用提示文案。
+   */
   getDeleteName: (row) => row.name || row.path || '',
   modalApi: formModalApi,
   refresh: handleRefresh,
@@ -49,6 +53,11 @@ const {
 
 /** 复制链接到剪贴板 */
 const { copy } = useClipboard({ legacy: true });
+/**
+ * 复制当前行的文件访问链接并给出结果提示。
+ * URL 为空说明该文件记录缺少可访问地址，直接提示而不发起复制；剪贴板写入失败同样以提示结束。
+ * @param row 当前操作的文件行，提供需要复制的文件 URL。
+ */
 async function handleCopyUrl(row: InfraFileApi.File) {
   if (!row.url) {
     showErrorMessage('文件 URL 为空');
@@ -72,6 +81,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /**
+         * 按当前分页与搜索条件请求文件列表。
+         * page 提供页码与每页条数，formValues 是搜索表单的值，按后端分页字段名一并透传。
+         */
         query: async ({ page }, formValues) => {
           return await getFilePage({
             pageNo: page.currentPage,

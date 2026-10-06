@@ -7,6 +7,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成 Unicorn 规则配置片段。
+ * @returns 在 unicorn 推荐集之上关闭与现有写法冲突的条目（null、for-each、filename-case 等），
+ *   并在单独的文件范围内对 scripts 与 internal 放行 process 相关规则的配置数组。
+ */
 export async function unicorn(): Promise<Linter.Config[]> {
   const [pluginUnicorn] = await Promise.all([
     interopDefault(import('eslint-plugin-unicorn')),

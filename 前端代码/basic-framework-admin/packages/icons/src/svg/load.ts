@@ -13,6 +13,13 @@ if (!loaded) {
   loaded = true;
 }
 
+/**
+ * 把 svg 原文解析成 iconify 的图标结构。
+ * 保留根元素上的 fill、stroke、fill-rule 与 stroke-width，并在有值时用 <g> 包裹内容；
+ * viewBox 拆成 left/top/width/height，分段不是数字时对应项为 undefined。
+ * @param svgData - svg 文件的原始文本。
+ * @returns 可直接交给 addIcon 的图标结构。
+ */
 function parseSvg(svgData: string): IconifyIconStructure {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(svgData, 'image/svg+xml');
@@ -34,6 +41,7 @@ function parseSvg(svgData: string): IconifyIconStructure {
     'stroke-width',
   ]);
 
+  // 只序列化元素节点，文本与注释节点会被丢弃，避免把格式化空白带进图标体。
   const svgContent = [...svgElement.childNodes]
     .filter((node) => node.nodeType === Node.ELEMENT_NODE)
     .map((node) => new XMLSerializer().serializeToString(node))
@@ -42,6 +50,7 @@ function parseSvg(svgData: string): IconifyIconStructure {
   const body = rootAttrs ? `<g ${rootAttrs}>${svgContent}</g>` : svgContent;
 
   const viewBoxValue = svgElement.getAttribute('viewBox') || '';
+  // viewBox 缺省时各项为 undefined，交由 iconify 按默认视图盒渲染。
   const [left, top, width, height] = viewBoxValue.split(' ').map((val) => {
     const num = Number(val);
     return Number.isNaN(num) ? undefined : num;

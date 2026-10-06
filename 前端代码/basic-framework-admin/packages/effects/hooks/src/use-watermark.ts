@@ -43,7 +43,13 @@ const cachedOptions = ref<Partial<WatermarkOptions>>({
   width: 160,
 });
 
+/**
+ * 水印控制入口：动态加载 watermark-js-plus，并暴露创建、更新与销毁方法。
+ * 配置在模块级累积，重复调用共享同一实例；首次调用只注册一次卸载钩子。
+ * @returns 含 destroyWatermark、updateWatermark 与只读 watermark 实例引用的对象。
+ */
 export function useWatermark() {
+  /** 合并传入配置后新建水印实例并立即创建；已存在实例会被覆盖，旧实例不会自动销毁。 */
   async function initWatermark(options: Partial<WatermarkOptions>) {
     const { Watermark } = await import('watermark-js-plus');
 
@@ -55,6 +61,7 @@ export function useWatermark() {
     await watermark.value?.create();
   }
 
+  /** 合并配置后更新水印；实例尚未创建时退化为新建，等待下一帧再提交改动。 */
   async function updateWatermark(options: Partial<WatermarkOptions>) {
     if (watermark.value) {
       await nextTick();
@@ -67,6 +74,7 @@ export function useWatermark() {
     }
   }
 
+  /** 销毁水印并清空实例引用；尚未创建时不做任何处理。 */
   function destroyWatermark() {
     if (watermark.value) {
       watermark.value.destroy();

@@ -8,6 +8,7 @@
  */
 export const LOGIN_PATH = '/auth/login';
 
+/** 语言下拉项：label 为展示名，value 为语言标识。 */
 export interface LanguageOption {
   label: string;
   value: 'en-US' | 'zh-CN';
@@ -15,6 +16,7 @@ export interface LanguageOption {
 
 /**
  * Supported languages
+ * 界面可选语言列表，顺序即语言切换组件的展示顺序。
  */
 export const SUPPORT_LANGUAGES: LanguageOption[] = [
   {

@@ -28,6 +28,7 @@ const colorInput = ref();
 const modelValue = defineModel<BuiltinThemeType>({ default: 'default' });
 const themeColorPrimary = defineModel<string>('themeColorPrimary');
 
+/** 节流写入主题色：300ms 内的连续取色只提交最后一次，首次与末次都会执行。 */
 const updateThemeColorPrimary = useThrottleFn(
   (value: string) => {
     themeColorPrimary.value = value;
@@ -37,14 +38,17 @@ const updateThemeColorPrimary = useThrottleFn(
   true,
 );
 
+/** 取色器显示的十六进制颜色值；主题色为空时由 TinyColor 回退为默认颜色。 */
 const inputValue = computed(() => {
   return new TinyColor(themeColorPrimary.value || '').toHexString();
 });
 
+/** 内置主题预设清单的副本，供模板遍历渲染色板且不直接改动原数组。 */
 const builtinThemePresets = computed(() => {
   return [...BUILT_IN_THEME_PRESETS];
 });
 
+/** 把内置主题类型翻译为界面文案；传入清单外的类型时返回 undefined。 */
 function typeView(name: BuiltinThemeType) {
   switch (name) {
     case 'custom': {
@@ -95,15 +99,18 @@ function typeView(name: BuiltinThemeType) {
   }
 }
 
+/** 选中某个内置主题预设时写入其类型；具体颜色由下方的监听按明暗模式回填。 */
 function handleSelect(theme: BuiltinThemePreset) {
   modelValue.value = theme.type;
 }
 
+/** 取色器变化：把原生颜色值转成 HSL 后经节流写入主题色。 */
 function handleInputChange(e: Event) {
   const target = e.target as HTMLInputElement;
   updateThemeColorPrimary(convertToHsl(target.value));
 }
 
+/** 以编程方式触发隐藏的原生取色器；取色器尚未渲染时静默跳过。 */
 function selectColor() {
   colorInput.value?.[0]?.click?.();
 }
@@ -111,6 +118,7 @@ function selectColor() {
 watch(
   () => [modelValue.value, props.isDark] as [BuiltinThemeType, boolean],
   ([themeType, isDark], [_, isDarkPrev]) => {
+    /** 与当前类型匹配的预设；类型不在预设清单中时为 undefined，此时不改动主题色。 */
     const theme = builtinThemePresets.value.find(
       (item) => item.type === themeType,
     );

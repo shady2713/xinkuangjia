@@ -1,5 +1,10 @@
-// 比较两个数组是否相等
-
+/**
+ * 比较两个数组是否相等
+ * 忽略元素顺序，按各元素出现次数做多重集比较，重复元素会参与计数。
+ * @param a - 基准数组，只读取不改写。
+ * @param b - 待比较数组，长度与 a 不同时直接判为不相等。
+ * @returns 长度相同且每个元素出现次数一致时为 true；元素按 Map 键比较，因此对象按引用判定。
+ */
 function arraysEqual<T>(a: T[], b: T[]): boolean {
   if (a.length !== b.length) return false;
   const counter = new Map<T, number>();
@@ -16,6 +21,9 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
   return true;
 }
 
+/**
+ * 差异结果：与对比对象同形，只保留存在差异的键；嵌套对象继续向下递归。
+ */
 type DiffResult<T> = Partial<{
   [K in keyof T]: T[K] extends object ? DiffResult<T[K]> : T[K];
 }>;

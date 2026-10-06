@@ -16,6 +16,7 @@ import { SelectIcon, SelectTrigger, useForwardProps } from 'reka-ui';
 
 const props = defineProps<SelectTriggerProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的触发器属性，转交 SelectTrigger；箭头图标与当前值展示在插槽侧，不参与属性转发。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -15,7 +15,10 @@ import java.time.LocalDateTime;
  *
  * 同时用于参数配置 Excel 导出。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/controller/admin/config/vo/ConfigRespVO.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 3 行，上游代码 3 行在本地被移除或改写，例如 @Schema(description = "参数键名", requiredMode = Schema.RequiredMode.REQUIRED, example = "")；@Schema(description = "参数类型，参见 ConfigTypeEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")；本地补充注释 27 行。
  */
 @Schema(description = "管理后台 - 参数配置信息 Response VO")
 @Data

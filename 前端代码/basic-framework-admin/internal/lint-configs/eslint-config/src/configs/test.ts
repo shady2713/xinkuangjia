@@ -7,6 +7,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成测试文件的规则配置片段。
+ * @returns 仅对 __tests__、*.spec、*.test、*.bench 等路径生效的配置数组，
+ *   内含 vitest 推荐规则、拦截 .only 的规则，并放开 console 与 process。
+ */
 export async function test(): Promise<Linter.Config[]> {
   const [pluginTest, pluginNoOnlyTests] = await Promise.all([
     interopDefault(import('eslint-plugin-vitest')),

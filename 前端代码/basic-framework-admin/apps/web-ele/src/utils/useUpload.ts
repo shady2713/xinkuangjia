@@ -8,6 +8,7 @@ import type { UploadRawFile } from 'element-plus';
 
 import { showErrorMessage } from '#/utils/feedback';
 
+/** 上传校验类型：决定允许的 MIME 白名单与体积上限，同时作为提示文案中的类别名。 */
 enum UploadType {
   Image = 'image',
   Video = 'video',
@@ -16,6 +17,12 @@ enum UploadType {
 
 /** 上传前校验函数，检查文件格式和大小是否符合要求 */
 const useBeforeUpload = (type: UploadType, maxSizeMB: number) => {
+  /**
+   * 按类型校验单个文件的 MIME 与体积，并在不合规时给出对应的中文错误提示。
+   *
+   * @param rawFile 待校验的原始文件，取其浏览器识别的 MIME 与字节数
+   * @returns 校验通过返回 true；MIME 不在白名单内或体积超过上限时返回 false
+   */
   const fn = (rawFile: UploadRawFile): boolean => {
     let allowTypes: string[] = [];
     let name = '';

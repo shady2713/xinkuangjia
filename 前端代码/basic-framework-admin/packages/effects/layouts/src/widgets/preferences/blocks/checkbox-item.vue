@@ -21,13 +21,16 @@ withDefaults(
     disabled?: boolean;
     items?: SelectOption[];
     multiple?: boolean;
+    /** 点击按钮时的回调；不传时点击只更新 v-model，不做额外处理。 */
     onBtnClick?: (value: string) => void;
     placeholder?: string;
   }>(),
   {
     disabled: false,
     placeholder: '',
+    /** 可选项的默认值：空数组，未传入时不渲染任何按钮。 */
     items: () => [],
+    /** 点击回调的默认值：空实现，保证按钮点击始终可安全调用。 */
     onBtnClick: () => {},
     multiple: false,
   },

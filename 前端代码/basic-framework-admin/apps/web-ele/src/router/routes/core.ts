@@ -10,10 +10,13 @@ import { preferences } from '@vben/preferences';
 
 import { $t } from '#/locales';
 
+/** 后台页面布局的懒加载函数，作为根路由的容器组件。 */
 const BasicLayout = () => import('#/layouts/basic.vue');
+/** 认证页面布局的懒加载函数，作为 /auth 下登录类页面的容器组件。 */
 const AuthPageLayout = () => import('#/layouts/auth.vue');
 /** 全局404页面 */
 const fallbackNotFoundRoute: RouteRecordRaw = {
+  /** 404 兜底页面组件；任何路由都匹配不到时由它渲染。 */
   component: () => import('#/views/_core/fallback/not-found.vue'),
   meta: {
     hideInBreadcrumb: true,
@@ -56,6 +59,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Login',
         path: 'login',
+        /** 账号密码登录页面。 */
         component: () => import('#/views/_core/authentication/login.vue'),
         meta: {
           title: $t('page.auth.login'),
@@ -64,6 +68,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'CodeLogin',
         path: 'code-login',
+        /** 验证码登录页面。 */
         component: () => import('#/views/_core/authentication/code-login.vue'),
         meta: {
           title: $t('page.auth.codeLogin'),
@@ -72,6 +77,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'ForgetPassword',
         path: 'forget-password',
+        /** 忘记密码页面。 */
         component: () =>
           import('#/views/_core/authentication/forget-password.vue'),
         meta: {
@@ -81,6 +87,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Register',
         path: 'register',
+        /** 注册页面。 */
         component: () => import('#/views/_core/authentication/register.vue'),
         meta: {
           title: $t('page.auth.register'),
@@ -89,6 +96,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'SSOLogin',
         path: 'sso-login',
+        /** SSO 单点登录页面。 */
         component: () => import('#/views/_core/authentication/sso-login.vue'),
         meta: {
           title: $t('page.auth.login'),

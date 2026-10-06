@@ -14,6 +14,7 @@ import { useQRCode } from '@vueuse/integrations/useQRCode';
 
 import Title from './auth-title.vue';
 
+/** 二维码登录属性：加载态、登录路径、标题与描述、提交按钮文案及二维码提示文案。 */
 interface Props {
   /**
    * @zh_CN 是否处于加载处理状态
@@ -68,6 +69,7 @@ const qrcode = useQRCode(text, {
   margin: 4,
 });
 
+/** 返回登录页；目标路径由 props.loginPath 决定。 */
 function goToLogin() {
   router.push(props.loginPath);
 }

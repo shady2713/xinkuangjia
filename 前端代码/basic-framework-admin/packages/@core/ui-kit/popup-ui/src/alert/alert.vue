@@ -48,15 +48,24 @@ const { $t } = useSimpleLocale();
 const components = globalShareState.getComponents();
 const isConfirm = ref(false);
 
+/**
+ * 关闭动画播完时对外广播 closed，并把 isConfirm 复位，
+ * 让下一次打开时不会沿用上一次的确认标记。
+ */
 function onAlertClosed() {
   emits('closed', isConfirm.value);
   isConfirm.value = false;
 }
 
+/** ESC 关闭属于取消路径，先把确认标记清掉，closed 事件才能报出取消。 */
 function onEscapeKeyDown() {
   isConfirm.value = false;
 }
 
+/**
+ * 按 props.icon 解析标题前的图标节点：字符串按语义色映射成内置图标，
+ * 组件直接透传；未传 icon 或类型不匹配时得到 null，模板上不渲染图标。
+ */
 const getIconRender = computed(() => {
   let iconRender: Component | null = null;
   if (props.icon) {
@@ -100,11 +109,16 @@ const getIconRender = computed(() => {
   return iconRender;
 });
 
+/**
+ * 暴露给内容区的取消动作：先标记为取消，再走统一的关闭流程，
+ * 这样 beforeClose 收到的 isConfirm 才是 false。
+ */
 function doCancel() {
   handleCancel();
   handleOpenChange(false);
 }
 
+/** 暴露给内容区的确认动作：标记为确认后关闭，beforeClose 收到的 isConfirm 为 true。 */
 function doConfirm() {
   handleConfirm();
   handleOpenChange(false);
@@ -115,16 +129,23 @@ provideAlertContext({
   doConfirm,
 });
 
+/** 确认按钮与内容区确认共用：置位确认标记并广播 confirm 事件，关闭动作由调用方接着发起。 */
 function handleConfirm() {
   isConfirm.value = true;
   emits('confirm');
 }
 
+/** 取消按钮、关闭按钮与 ESC 共用：清掉确认标记，不直接改 open。 */
 function handleCancel() {
   isConfirm.value = false;
 }
 
 const loading = ref(false);
+/**
+ * open 变化的统一入口：关闭方向且配了 beforeClose 时先等它放行，
+ * 期间打开 loading 遮罩，只有返回值不是 false 才真正写入 open。
+ * @param val 目标打开状态；false 表示本次是关闭，true 表示直接打开。
+ */
 async function handleOpenChange(val: boolean) {
   await nextTick(); // 等待标记isConfirm状态
   if (!val && props.beforeClose) {

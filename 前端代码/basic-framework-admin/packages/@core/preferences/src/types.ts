@@ -21,8 +21,10 @@ import type {
   ThemeModeType,
 } from '@vben-core/typings';
 
+/** 界面支持的语言标识：美式英文与简体中文。 */
 type SupportedLanguagesType = 'en-US' | 'zh-CN';
 
+/** 应用级偏好：权限模式、登录页布局、语言、检查更新与各类全局开关。 */
 interface AppPreferences {
   /** 权限模式 */
   accessMode: AccessModeType;
@@ -92,6 +94,7 @@ interface AppPreferences {
   zIndex: number;
 }
 
+/** 面包屑偏好：显隐、首页图标、图标与风格。 */
 interface BreadcrumbPreferences {
   /** 面包屑是否启用 */
   enable: boolean;
@@ -105,6 +108,7 @@ interface BreadcrumbPreferences {
   styleType: BreadcrumbStyleType;
 }
 
+/** 版权信息偏好：公司名与链接、版权日期、备案号，以及是否在设置面板中显示。 */
 interface CopyrightPreferences {
   /** 版权公司名 */
   companyName: string;
@@ -122,6 +126,7 @@ interface CopyrightPreferences {
   settingShow?: boolean;
 }
 
+/** 底栏偏好：显隐、是否固定与高度。 */
 interface FooterPreferences {
   /** 底栏是否可见 */
   enable: boolean;
@@ -131,6 +136,7 @@ interface FooterPreferences {
   height: number;
 }
 
+/** 顶栏偏好：显隐、高度、菜单对齐方式与显示模式。 */
 interface HeaderPreferences {
   /** 顶栏是否启用 */
   enable: boolean;
@@ -144,6 +150,7 @@ interface HeaderPreferences {
   mode: LayoutHeaderModeType;
 }
 
+/** Logo 偏好：显隐、图片适应方式，以及明暗两套图片地址。 */
 interface LogoPreferences {
   /** logo是否可见 */
   enable: boolean;
@@ -155,6 +162,7 @@ interface LogoPreferences {
   sourceDark?: string;
 }
 
+/** 导航菜单偏好：手风琴模式、是否切割与菜单风格。 */
 interface NavigationPreferences {
   /** 导航菜单手风琴模式 */
   accordion: boolean;
@@ -164,6 +172,7 @@ interface NavigationPreferences {
   styleType: NavigationStyleType;
 }
 
+/** 侧边栏偏好：折叠状态与宽度、显隐、自动展开，以及附属扩展区域。 */
 interface SidebarPreferences {
   /** 点击目录时自动激活子菜单   */
   autoActivateChild: boolean;
@@ -193,6 +202,7 @@ interface SidebarPreferences {
   width: number;
 }
 
+/** 快捷键偏好：总开关，以及锁屏、注销、偏好设置、搜索四项全局快捷键的开关。 */
 interface ShortcutKeyPreferences {
   /** 是否启用快捷键-全局 */
   enable: boolean;
@@ -206,6 +216,7 @@ interface ShortcutKeyPreferences {
   globalSearch: boolean;
 }
 
+/** 标签页偏好：显隐、拖拽、缓存、数量上限、各类按钮与标签风格。 */
 interface TabbarPreferences {
   /** 是否开启多标签页拖拽 */
   draggable: boolean;
@@ -237,6 +248,7 @@ interface TabbarPreferences {
   wheelable: boolean;
 }
 
+/** 主题偏好：内置主题名、语义色、字号、圆角与暗色模式。 */
 interface ThemePreferences {
   /** 内置主题名 */
   builtinType: BuiltinThemeType;
@@ -260,6 +272,7 @@ interface ThemePreferences {
   semiDarkSidebar: boolean;
 }
 
+/** 页面切换动画偏好：开关、动画名与加载进度。 */
 interface TransitionPreferences {
   /** 页面切换动画是否启用 */
   enable: boolean;
@@ -271,6 +284,7 @@ interface TransitionPreferences {
   progress: boolean;
 }
 
+/** 功能部件偏好：全屏、全局搜索、语言切换、锁屏、通知、刷新、侧边栏与主题切换。 */
 interface WidgetPreferences {
   /** 是否启用全屏部件 */
   fullscreen: boolean;
@@ -292,6 +306,7 @@ interface WidgetPreferences {
   timezone: boolean;
 }
 
+/** 偏好设置的完整结构：按分区聚合全部可配置项，各分区的字段含义见上方对应接口。 */
 interface Preferences {
   /** 全局配置 */
   app: AppPreferences;
@@ -321,8 +336,10 @@ interface Preferences {
   widget: WidgetPreferences;
 }
 
+/** 偏好设置的分区键名联合类型，取值与 Preferences 的顶层字段一致。 */
 type PreferencesKeys = keyof Preferences;
 
+/** 初始化偏好时的选项：存储命名空间与项目级覆盖项。 */
 interface InitialOptions {
   namespace: string;
   overrides?: DeepPartial<Preferences>;

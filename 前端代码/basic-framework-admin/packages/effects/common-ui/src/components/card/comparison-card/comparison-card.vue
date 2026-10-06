@@ -29,6 +29,7 @@ const iconMap: Record<string, string> = {
   message: 'ant-design:message-outlined',
 };
 
+/** 实际渲染的图标名：按 icon 从内置映射中取，未命中时回退到 menu 图标。 */
 const iconName = computed(() => iconMap[props.icon] || iconMap.menu);
 </script>
 

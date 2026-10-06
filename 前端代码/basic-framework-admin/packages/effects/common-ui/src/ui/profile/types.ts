@@ -6,6 +6,7 @@
  */
 import type { BasicUserInfo } from '@vben/types';
 
+/** 个人中心页面外壳属性：标题、当前用户信息与标签页清单。 */
 export interface Props {
   title?: string;
   userInfo: BasicUserInfo | null;
@@ -15,6 +16,7 @@ export interface Props {
   }[];
 }
 
+/** 开关表单的单个字段：字段名、标签与说明文案，以及当前开关值。 */
 export interface FormSchemaItem {
   description: string;
   fieldName: string;
@@ -22,6 +24,7 @@ export interface FormSchemaItem {
   value: boolean;
 }
 
+/** 开关表单属性：字段清单，取值与变更由使用方以双向绑定维护。 */
 export interface SettingProps {
   formSchema: FormSchemaItem[];
 }

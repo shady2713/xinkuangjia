@@ -126,6 +126,10 @@ const {
 } = useCrudActions<InfraJobApi.Job>({
   batchDeleteApi: deleteJobList,
   deleteApi: deleteJob,
+  /**
+   * 删除提示里展示的名称：取任务名称，名称为空时返回空串，
+   * 由增删改组合式函数改用不带名称的通用提示文案。
+   */
   getDeleteName: (row) => row.name || '',
   modalApi: formModalApi,
   refresh: handleRefresh,
@@ -141,6 +145,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /**
+         * 按当前分页与搜索条件请求定时任务列表。
+         * page 提供页码与每页条数，formValues 是搜索表单的值，按后端分页字段名一并透传。
+         */
         query: async ({ page }, formValues) => {
           return await getJobPage({
             pageNo: page.currentPage,

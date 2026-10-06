@@ -39,6 +39,10 @@ const emits = defineEmits<
   AlertDialogContentEmits & { close: []; closed: []; opened: [] }
 >();
 
+/**
+ * 剔除 class、modal、open 三个由本组件自行消费的字段后，把其余属性转交 AlertDialogContent，
+ * 避免只服务于遮罩显隐与居中定位的开关泄漏到底层弹窗。
+ */
 const delegatedProps = computed(() => {
   const { class: _, modal: _modal, open: _open, ...delegated } = props;
 
@@ -48,6 +52,10 @@ const delegatedProps = computed(() => {
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
 const contentRef = ref<InstanceType<typeof AlertDialogContent> | null>(null);
+/**
+ * 警告框面板自身的动画播完时按 open 抛出 opened 或 closed，供使用方在动画真正结束后再回调完成钩子。
+ * @param event 面板节点冒泡的 animationend 事件，target 与面板根元素一致才认为面板动画结束，子元素动画会被忽略。
+ */
 function onAnimationEnd(event: AnimationEvent) {
   // 只有在 contentRef 的动画结束时才触发 opened/closed 事件
   if (event.target === contentRef.value?.$el) {
@@ -59,6 +67,7 @@ function onAnimationEnd(event: AnimationEvent) {
   }
 }
 defineExpose({
+  /** 暴露给上层的内容节点引用，面板未挂载时为 null，供调用方测量尺寸或聚焦面板内元素。 */
   getContentRef: () => contentRef.value,
 });
 </script>

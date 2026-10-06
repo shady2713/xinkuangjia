@@ -8,6 +8,12 @@ import { computed } from 'vue';
 
 import { VbenAvatar } from '../avatar';
 
+/**
+ * Logo 的入参。
+ * src 与 srcDark 是同一张品牌图在不同主题下的两套资源，text 为必填的站点名；
+ * collapsed 只控制文字的显隐，logoSize 与 fit 控制图片尺寸与填充方式；
+ * href 决定整块标识的跳转目标，theme 额外作用到外层容器用于挂主题相关样式。
+ */
 interface Props {
   /**
    * @zh_CN 是否收起文本
@@ -59,6 +65,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 /**
  * @zh_CN 根据主题选择合适的 logo 图标
+ *
+ * 暗色主题且配了 srcDark 时用暗色图，否则回落到通用 src。
+ * 回落是刻意保留的——浅色主题下不区分两套图，srcDark 未配置时暗色主题也照常显示 src。
+ * 结果为空串时模板不渲染头像，只留文字。
  */
 const logoSrc = computed(() => {
   // 如果是暗色主题且提供了 srcDark，则使用暗色主题的 logo

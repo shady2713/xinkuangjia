@@ -123,6 +123,10 @@ function updateMainColorVariables(preference: Preferences) {
   executeUpdateCSSVariables(colorVariables);
 }
 
+/**
+ * 按主题模式判断当前是否使用暗色主题。
+ * 'auto' 会读取系统的 prefers-color-scheme；其余取值只有 'dark' 算暗色。
+ */
 function isDarkTheme(theme: string) {
   let dark = theme === 'dark';
   if (theme === 'auto') {

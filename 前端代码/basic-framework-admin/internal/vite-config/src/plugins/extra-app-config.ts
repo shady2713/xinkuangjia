@@ -19,6 +19,7 @@ import {
 
 import { loadEnv } from '../utils/env.ts';
 
+/** 插件选项：isBuild 决定是否启用，root 用于定位应用 package.json 与 .env 文件。 */
 interface PluginOptions {
   isBuild: boolean;
   root: string;
@@ -50,10 +51,18 @@ async function viteExtraAppConfigPlugin({
   const { version = '' } = await readPackageJSON(root);
 
   return {
+    /**
+     * 记录最终的公共路径与运行时配置源码，供本插件后续钩子复用。
+     * @param config - Vite 解析完成的配置，这里读取其中的 base 与 mode。
+     */
     async configResolved(config) {
       publicPath = ensureTrailingSlash(config.base);
       source = await getConfigSource(root, config.mode);
     },
+    /**
+     * 把运行时配置作为独立资源写入产物，避免被打进 bundle。
+     * 写入失败只打印错误、不中断本次构建。
+     */
     async generateBundle() {
       try {
         this.emitFile({
@@ -70,6 +79,11 @@ async function viteExtraAppConfigPlugin({
       }
     },
     name: 'vite:extra-app-config',
+    /**
+     * 在 index.html 中注入指向运行时配置的 script 标签，并带上版本与内容哈希以破除缓存。
+     * @param html - Vite 传入的 index.html 原文。
+     * @returns 原 HTML 加一条 script 标签，标签地址为公共路径 + 配置文件名 + 内容哈希。
+     */
     async transformIndexHtml(html) {
       const hash = `v=${version}-${generatorContentHash(source, 8)}`;
       const appConfigSrc = `${publicPath}${GLOBAL_CONFIG_FILE_NAME}?${hash}`;

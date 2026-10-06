@@ -46,7 +46,7 @@ function resolveValueByFieldName(
  * @throws {Error} 未在 `VbenForm` 内部使用，拿不到表单值上下文。
  */
 export default function useDependencies(
-  getDependencies: () => FormItemDependencies | undefined,
+  getDependencies: /** 当前依赖声明 */ () => FormItemDependencies | undefined,
 ) {
   const values = useFormValues();
 
@@ -71,6 +71,7 @@ export default function useDependencies(
   /** 组件销毁后置位，阻止在途异步结果落地。 */
   let disposed = false;
 
+  /** 依赖字段的当前取值列表，作为监听的触发源；只有一个依赖字段变化才会重新计算联动。 */
   const triggerFieldValues = computed(() => {
     // 该字段可能会被多个字段触发
     const triggerFields = getDependencies()?.triggerFields ?? [];
@@ -79,6 +80,7 @@ export default function useDependencies(
     });
   });
 
+  /** 把联动状态恢复到初始值，在每次重算开始时清掉上一轮留下的显隐、禁用、规则与参数。 */
   const resetConditionState = () => {
     isDisabled.value = false;
     isIf.value = true;

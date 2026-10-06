@@ -16,6 +16,7 @@ import { NumberFieldRoot, useForwardPropsEmits } from 'reka-ui';
 const props = defineProps<NumberFieldRootProps & { class?: ClassValue }>();
 const emits = defineEmits<NumberFieldRootEmits>();
 
+/** 去掉 class 后的根节点属性，连同 emits 转发给 NumberFieldRoot；数值状态与步进逻辑全在底层。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

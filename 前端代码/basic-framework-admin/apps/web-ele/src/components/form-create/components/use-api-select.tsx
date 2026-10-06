@@ -141,16 +141,19 @@ export function useApiSelect(option: ApiSelectProps) {
       // 选项标签
       labelField: {
         type: String,
+        /** 缺省取工厂参数给的字段名，参数也没给时用通用的 label */
         default: () => option.labelField ?? 'label',
       },
       // 选项的值
       valueField: {
         type: String,
+        /** 缺省取工厂参数给的字段名，参数也没给时用通用的 value */
         default: () => option.valueField ?? 'value',
       },
       // api 接口
       url: {
         type: String,
+        /** 缺省取工厂参数给的接口地址，参数也没给时为空串，请求会因此被跳过 */
         default: () => option.url ?? '',
       },
       // 请求类型
@@ -226,6 +229,10 @@ export function useApiSelect(option: ApiSelectProps) {
       };
 
       // 检查是否有有效的预设值
+      /**
+       * 检查外部是否已给出有效选中值：undefined、null、空串与空数组都算没有预设。
+       * @returns 存在至少一个有效选中值时为 true，否则为 false。
+       */
       function hasValidPresetValue(): boolean {
         const value = attrs.modelValue;
         if (value === undefined || value === null || value === '') {

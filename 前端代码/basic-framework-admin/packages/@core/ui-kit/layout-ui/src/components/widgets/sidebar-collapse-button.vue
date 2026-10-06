@@ -8,6 +8,7 @@ import { ChevronsLeft, ChevronsRight } from '@vben-core/icons';
 
 const collapsed = defineModel<boolean>('collapsed');
 
+/** 点击时翻转 collapsed 双向值，模板据此切换图标方向；宽度收缩由侧边栏监听该值后自行计算。 */
 function handleCollapsed() {
   collapsed.value = !collapsed.value;
 }

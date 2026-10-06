@@ -32,6 +32,7 @@ const props = withDefaults(
   defineProps<{ enableShortcutKey?: boolean; menus?: MenuRecordRaw[] }>(),
   {
     enableShortcutKey: true,
+    /** 菜单数据的默认值：空数组，未传入时没有可搜索的菜单项。 */
     menus: () => [],
   },
 );
@@ -40,17 +41,25 @@ const keyword = ref('');
 const searchInputRef = ref<HTMLInputElement>();
 
 const [Modal, modalApi] = useVbenModal({
+  /** 取消（关闭）回调：直接收起搜索弹窗。 */
   onCancel() {
     modalApi.close();
   },
+  /**
+   * 弹窗显隐变化回调。
+   * @param isOpen 弹窗是否已打开；为 false（已关闭）时清空关键词，避免下次打开残留上次输入。
+   */
   onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       keyword.value = '';
     }
   },
 });
+
+/** 弹窗当前是否打开；供快捷键命中与切换方法读取，本身只读。 */
 const open = modalApi.useStore((state) => state.isOpen);
 
+/** 关闭搜索弹窗并清空关键词。 */
 function handleClose() {
   modalApi.close();
   keyword.value = '';
@@ -80,12 +89,14 @@ whenever(open, () => {
   });
 });
 
+/** 拦截浏览器自带的 Ctrl/⌘+K 行为，避免与系统搜索快捷键冲突。 */
 const preventDefaultBrowserSearchHotKey = (event: KeyboardEvent) => {
   if (event.key?.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
     event.preventDefault();
   }
 };
 
+/** 按快捷键开关挂载或卸载 keydown 拦截器；关闭时不注册监听。 */
 const toggleKeydownListener = () => {
   if (props.enableShortcutKey) {
     window.addEventListener('keydown', preventDefaultBrowserSearchHotKey);
@@ -94,6 +105,7 @@ const toggleKeydownListener = () => {
   }
 };
 
+/** 在打开与关闭之间切换搜索弹窗。 */
 const toggleOpen = () => {
   open.value ? modalApi.close() : modalApi.open();
 };

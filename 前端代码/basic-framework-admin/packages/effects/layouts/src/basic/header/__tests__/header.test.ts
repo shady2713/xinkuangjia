@@ -10,7 +10,9 @@ import { describe, expect, it, vi } from 'vitest';
 import LayoutHeader from '../header.vue';
 
 vi.mock('@vben/hooks', () => ({
+  /** useRefresh 的替身：只提供空实现的 refresh，避免测试触发真实刷新。 */
   useRefresh: () => ({
+    /** 刷新方法的替身：空实现，仅满足头部对刷新能力的调用契约。 */
     refresh: () => undefined,
   }),
 }));
@@ -30,6 +32,7 @@ vi.mock('@vben/preferences', () => ({
       timezone: true,
     },
   },
+  /** usePreferences 的替身：只返回头部入口判定所需的两个偏好字段。 */
   usePreferences: () => ({
     globalSearchShortcutKey: { value: false },
     preferencesButtonPosition: { value: { header: true } },
@@ -37,6 +40,7 @@ vi.mock('@vben/preferences', () => ({
 }));
 
 vi.mock('@vben/stores', () => ({
+  /** useAccessStore 的替身：菜单为空，头部入口只由偏好开关决定。 */
   useAccessStore: () => ({
     accessMenus: [],
   }),

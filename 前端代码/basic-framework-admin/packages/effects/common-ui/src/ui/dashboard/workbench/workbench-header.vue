@@ -5,6 +5,7 @@
  */
 import { VbenAvatar } from '@vben-core/shadcn-ui';
 
+/** 工作台问候区属性：用户头像地址。 */
 interface Props {
   avatar?: string;
 }

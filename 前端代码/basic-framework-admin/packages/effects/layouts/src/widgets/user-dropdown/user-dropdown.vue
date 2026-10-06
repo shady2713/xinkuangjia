@@ -36,6 +36,7 @@ import { useMagicKeys, whenever } from '@vueuse/core';
 
 import { LockScreenModal } from '../lock-screen';
 
+/** 用户下拉属性：头像与描述、自定义菜单项、标签文案，以及触发方式、hover 延迟与快捷键开关。 */
 interface Props {
   /**
    * 头像
@@ -81,6 +82,7 @@ const props = withDefaults(defineProps<Props>(), {
   avatar: '',
   description: '',
   enableShortcutKey: true,
+  /** 菜单项的默认值：空数组，未传入时不渲染任何自定义菜单项。 */
   menus: () => [],
   showShortcutKey: true,
   tagText: '',
@@ -98,6 +100,7 @@ const [LockModal, lockModalApi] = useVbenModal({
   connectedComponent: LockScreenModal,
 });
 const [LogoutModal, logoutModalApi] = useVbenModal({
+  /** 确认退出登录：转发给统一的退出处理。 */
   onConfirm() {
     handleSubmitLogout();
   },
@@ -105,6 +108,7 @@ const [LogoutModal, logoutModalApi] = useVbenModal({
 
 const refTrigger = useTemplateRef('refTrigger');
 const refContent = useTemplateRef('refContent');
+/** 悬浮触发时按需读取最新延迟毫秒数，使运行期修改 hoverDelay 立即生效。 */
 const [openPopover, hoverWatcher] = useHoverToggle(
   [refTrigger, refContent],
   () => props.hoverDelay,
@@ -124,35 +128,43 @@ watch(
   },
 );
 
+/** 快捷键提示前缀：Windows 显示 Alt，其他平台显示 ⌥。 */
 const altView = computed(() => (isWindowsOs() ? 'Alt' : '⌥'));
 
+/** 是否启用退出登录快捷键：需组件开关与全局退出快捷键同时开启。 */
 const enableLogoutShortcutKey = computed(() => {
   return props.enableShortcutKey && globalLogoutShortcutKey.value;
 });
 
+/** 是否启用锁屏快捷键：需组件开关与全局锁屏快捷键同时开启。 */
 const enableLockScreenShortcutKey = computed(() => {
   return props.enableShortcutKey && globalLockScreenShortcutKey.value;
 });
 
+/** 是否启用任意快捷键：需组件开关与偏好中的快捷键总开关同时开启。 */
 const enableShortcutKey = computed(() => {
   return props.enableShortcutKey && preferences.shortcutKeys.enable;
 });
 
+/** 打开锁屏弹窗；密码校验由弹窗内部完成。 */
 function handleOpenLock() {
   lockModalApi.open();
 }
 
+/** 提交锁屏密码：先关闭弹窗，再把密码交给状态层进入锁屏。 */
 function handleSubmitLock(lockScreenPassword: string) {
   lockModalApi.close();
   accessStore.lockScreen(lockScreenPassword);
 }
 
+/** 打开退出登录确认弹窗并收起用户下拉；真正的退出发生在确认之后。 */
 function handleLogout() {
   // emit
   logoutModalApi.open();
   openPopover.value = false;
 }
 
+/** 确认退出：向父级抛 logout 事件并关闭确认弹窗。 */
 function handleSubmitLogout() {
   emit('logout');
   logoutModalApi.close();

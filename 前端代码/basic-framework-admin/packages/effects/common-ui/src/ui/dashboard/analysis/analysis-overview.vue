@@ -15,6 +15,7 @@ import {
   VbenIcon,
 } from '@vben-core/shadcn-ui';
 
+/** 指标概览属性：指标卡片清单。 */
 interface Props {
   items?: AnalysisOverviewItem[];
 }
@@ -24,6 +25,7 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
+  /** 指标清单默认值：空数组，未传入时栅格为空。 */
   items: () => [],
 });
 </script>

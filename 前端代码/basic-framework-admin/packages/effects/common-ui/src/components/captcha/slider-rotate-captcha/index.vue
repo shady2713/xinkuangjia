@@ -62,6 +62,7 @@ watch(
   },
 );
 
+/** 图片外层的尺寸样式：按 imageSize 生成正方形，并叠加调用方传入的样式。 */
 const getImgWrapStyleRef = computed(() => {
   const { imageSize, imageWrapperStyle } = props;
   return {
@@ -71,6 +72,7 @@ const getImgWrapStyleRef = computed(() => {
   };
 });
 
+/** 角度缩放系数：区间退化成一个点时取 1 附近的随机数，否则固定为 1；min 大于 max 时只告警不中断。 */
 const getFactorRef = computed(() => {
   const { maxDegree, minDegree } = props;
   if (minDegree > maxDegree) {
@@ -83,6 +85,7 @@ const getFactorRef = computed(() => {
   return 1;
 });
 
+/** 开始拖动时记录起始时间，用于验证成功后回传耗时。 */
 function handleStart() {
   state.startTime = Date.now();
 }
@@ -122,6 +125,7 @@ function handleImgOnLoad() {
   setImgRotate(ranRotate);
 }
 
+/** 拖动结束：角度差超过容差时回弹到目标角度并显示提示，否则直接判定通过。 */
 function handleDragEnd() {
   const { currentRotate, randomRotate } = state;
   const { diffDegree } = props;
@@ -141,17 +145,20 @@ function handleDragEnd() {
   state.dragging = false;
 }
 
+/** 把指定角度应用到图片的 rotateZ 变换上。 */
 function setImgRotate(deg: number) {
   state.imgStyle = {
     transform: `rotateZ(${deg}deg)`,
   };
 }
 
+/** 判定验证通过并记录结束时间。 */
 function checkPass() {
   state.isPassing = true;
   state.endTime = Date.now();
 }
 
+/** 复位：隐藏提示、清空通过状态，让滑块回到起点并重新随机目标角度。 */
 function resume() {
   state.showTip = false;
   const basicEl = unref(slideBarRef);
@@ -164,10 +171,12 @@ function resume() {
   handleImgOnLoad();
 }
 
+/** 图片的过渡类名：回弹过程中启用 300ms 的 transform 过渡，其余时刻不加类。 */
 const imgCls = computed(() => {
   return state.toOrigin ? ['transition-transform duration-300'] : [];
 });
 
+/** 验证提示文案：通过时附带按秒保留一位小数的耗时，未通过时为默认提示。 */
 const verifyTip = computed(() => {
   return state.isPassing
     ? $t('ui.captcha.sliderRotateSuccessTip', [

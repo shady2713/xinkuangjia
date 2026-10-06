@@ -32,6 +32,7 @@ const headerRef = useTemplateRef<HTMLDivElement>('headerRef');
 const footerRef = useTemplateRef<HTMLDivElement>('footerRef');
 const docRef = useTemplateRef<HTMLDivElement>('docRef');
 
+/** 内容区样式：开启自动高度时按布局内容高度减去头、尾、文档区与自定义偏移，否则不附加样式。 */
 const contentStyle = computed<StyleValue>(() => {
   if (autoContentHeight) {
     return {
@@ -42,6 +43,7 @@ const contentStyle = computed<StyleValue>(() => {
   return {};
 });
 
+/** 计算内容区可用高度：渲染完成后读取头、尾与文档区实高；未开启自动高度时直接返回。 */
 async function calcContentHeight() {
   if (!autoContentHeight) {
     return;

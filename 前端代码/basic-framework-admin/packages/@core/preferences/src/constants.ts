@@ -5,6 +5,10 @@
  */
 import type { BuiltinThemeType, TimezoneOption } from '@vben-core/typings';
 
+/**
+ * 内置主题预设：`type` 为主题标识，`color` 为选中色，
+ * `primaryColor` 与 `darkPrimaryColor` 只在需要区分明暗主色时给出。
+ */
 interface BuiltinThemePreset {
   color: string;
   darkPrimaryColor?: string;
@@ -114,6 +118,10 @@ const DEFAULT_TIME_ZONE_OPTIONS: TimezoneOption[] = [
   },
 ];
 
+/**
+ * 供布局层选色组件使用的预设色集合。
+ * 取内置预设的前 7 项（default 到 zinc），不含后面的深色系与 custom 项。
+ */
 export const COLOR_PRESETS = [...BUILT_IN_THEME_PRESETS].slice(0, 7);
 
 export { BUILT_IN_THEME_PRESETS, DEFAULT_TIME_ZONE_OPTIONS };

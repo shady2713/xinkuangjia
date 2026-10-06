@@ -61,16 +61,19 @@ const accessStore = useAccessStore();
 const timezoneStore = useTimezoneStore();
 const { refresh } = useRefresh();
 
+/** 侧边栏主题：整体为暗色或偏好开启半暗侧边栏时用 dark，否则用 light。 */
 const sidebarTheme = computed(() => {
   const dark = isDark.value || preferences.theme.semiDarkSidebar;
   return dark ? 'dark' : 'light';
 });
 
+/** 头部主题：整体为暗色或偏好开启半暗头部时用 dark，否则用 light。 */
 const headerTheme = computed(() => {
   const dark = isDark.value || preferences.theme.semiDarkHeader;
   return dark ? 'dark' : 'light';
 });
 
+/** logo 区域的附加类名：折叠且要求显示标题时居中，侧边混合导航下整体居中。 */
 const logoClass = computed(() => {
   const { collapsedShowTitle } = preferences.sidebar;
   const classes: string[] = [];
@@ -86,10 +89,12 @@ const logoClass = computed(() => {
   return classes.join(' ');
 });
 
+/** 菜单是否使用圆角风格；由导航样式偏好决定。 */
 const isMenuRounded = computed(() => {
   return preferences.navigation.styleType === 'rounded';
 });
 
+/** logo 是否按折叠态显示：移动端折叠时收起，顶栏与混合导航下不收起，其余按侧边栏折叠态判断。 */
 const logoCollapsed = computed(() => {
   if (isMobile.value && sidebarCollapsed.value) {
     return true;
@@ -102,6 +107,7 @@ const logoCollapsed = computed(() => {
   );
 });
 
+/** 是否在头部渲染导航菜单：非移动端，且布局为顶栏导航、混合导航或顶栏混合导航。 */
 const showHeaderNav = computed(() => {
   return (
     !isMobile.value &&
@@ -146,6 +152,7 @@ function wrapperMenus(menus: MenuRecordRaw[], deep: boolean = true) {
       });
 }
 
+/** 切换侧边栏显隐；只改偏好中的 hidden 标志，不改变折叠状态。 */
 function toggleSidebar() {
   updatePreferences({
     sidebar: {
@@ -154,14 +161,17 @@ function toggleSidebar() {
   });
 }
 
+/** 请求父级清空偏好并退出登录；本组件只转发事件，不执行实际清理。 */
 function clearPreferencesAndLogout() {
   emit('clearPreferencesAndLogout');
 }
 
+/** 把 logo 点击事件抛给父级处理，本组件不做跳转。 */
 function clickLogo() {
   emit('clickLogo');
 }
 
+/** 路由标记 hideInMenu 时收起侧边扩展列；仅在顶栏混合与侧边混合两种双列布局下生效。 */
 function autoCollapseMenuByRouteMeta(route: RouteLocationNormalizedLoaded) {
   // 只在双列模式下生效
   if (
@@ -196,6 +206,7 @@ watch(
 
 const tabbarStore = useTabbarStore();
 
+/** 清空标签缓存并刷新当前页面；语言或时区变更后用它整体重载视图。 */
 function refreshAll() {
   tabbarStore.cachedTabs.clear();
   refresh();
@@ -209,6 +220,7 @@ watch(i18n.global.locale, refreshAll, { flush: 'post' });
 watch(() => timezoneStore.timezone, refreshAll, { flush: 'post' });
 
 const slots: SetupContext['slots'] = useSlots();
+/** 需要透传给头部的插槽名：取所有 header- 前缀的插槽。 */
 const headerSlots = computed(() => {
   return Object.keys(slots).filter((key) => key.startsWith('header-'));
 });

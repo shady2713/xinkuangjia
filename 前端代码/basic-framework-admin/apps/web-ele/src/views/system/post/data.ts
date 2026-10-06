@@ -11,7 +11,10 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * 岗位新增/修改弹窗的表单字段：名称、编码与显示顺序必填，状态默认启用。
+ * @returns 表单 schema 列表；id 为隐藏字段，仅用于区分新增与编辑。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -19,6 +22,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -72,7 +76,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 岗位列表的检索条件：名称与编码模糊匹配，状态精确匹配。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -106,7 +113,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 岗位列表的列定义：编号、名称、编码、显示顺序、备注与状态。
+ * @returns 列定义数组；首列为多选列，状态列用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

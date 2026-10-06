@@ -17,7 +17,10 @@ import { isFunction, isObject, isString } from '@vben/utils';
 import { useUpload } from './use-upload';
 
 /**
- * 解开 AxiosResponse 包装：含 data 字段的对象视为包装响应并取其 data，其余原样返回
+ * 解开 AxiosResponse 包装：含 data 字段的对象视为包装响应并取其 data，其余原样返回。
+ * 判定只看有没有 data 键，因此业务返回体自身带 data 字段时也会被当作包装层，这是与后端约定的口径。
+ * @param response 上传接口的原始返回值，形态不确定。
+ * @returns 去掉 AxiosResponse 包装后的返回体；入参不是包装响应时原样返回。
  */
 export function unwrapUploadResponse(response: unknown): unknown {
   if (isObject(response) && 'data' in (response as Record<string, unknown>)) {
@@ -27,7 +30,9 @@ export function unwrapUploadResponse(response: unknown): unknown {
 }
 
 /**
- * 从上传接口返回值中提取文件访问地址；依次尝试纯字符串、对象 url 字段、对象 data 字段，均不匹配时返回空字符串
+ * 从上传接口返回值中提取文件访问地址；依次尝试纯字符串、对象 url 字段、对象 data 字段，均不匹配时返回空字符串。
+ * @param response 上传接口的原始返回值，形态不确定。
+ * @returns 可直接访问的文件地址；返回体里没有可用地址时返回空串，调用方据此判定该文件不可用。
  */
 export function resolveUploadUrl(response: unknown): string {
   const value = unwrapUploadResponse(response);
@@ -103,6 +108,7 @@ export async function requestUpload(
   if (!api || !isFunction(api)) {
     api = useUpload(props.directory).httpRequest;
   }
+  /** 把 Axios 原始进度换算为 Element Plus 的百分比事件；总长度未知时按 0% 上报。 */
   const progressEvent: AxiosProgressEvent = (event) => {
     const total = event.total || 0;
     const percent = total > 0 ? Math.trunc((event.loaded / total) * 100) : 0;

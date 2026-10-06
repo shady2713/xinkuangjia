@@ -16,6 +16,7 @@ defineOptions({
   name: 'LanguageToggle',
 });
 
+/** 选中语言后写入语言偏好并加载对应语言包；值为空时不做任何处理。 */
 async function handleUpdate(value: string | undefined) {
   if (!value) return;
   const locale = value as SupportedLanguagesType;

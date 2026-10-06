@@ -18,6 +18,7 @@ import { AccordionHeader, AccordionTrigger } from 'reka-ui';
 
 const props = defineProps<AccordionTriggerProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的触发件属性，只转给 AccordionTrigger；箭头旋转与悬停下划线靠类名，不在此处理展开态。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

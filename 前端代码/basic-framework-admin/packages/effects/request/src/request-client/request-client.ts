@@ -146,6 +146,7 @@ class RequestClient {
 
   /**
    * 获取基础URL
+   * @returns 创建实例时配置的 baseURL；未配置时为 undefined，此时请求地址需自带协议与主机。
    */
   public getBaseUrl() {
     return this.instance.defaults.baseURL;

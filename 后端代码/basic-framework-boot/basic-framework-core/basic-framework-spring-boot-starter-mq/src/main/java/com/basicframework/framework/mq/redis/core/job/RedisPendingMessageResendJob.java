@@ -18,7 +18,10 @@ import java.util.Objects;
 
 /**
  * 这个任务用于处理，crash 之后的消费者未消费完的消息
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mq/src/main/java/cn/iocoder/yudao/framework/mq/redis/core/job/RedisPendingMessageResendJob.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 3 行，上游代码 8 行在本地被移除或改写，例如 private static final String LOCK_KEY = "redis:stream:pending-message-resend:lock";；RLock lock = redissonClient.getLock(LOCK_KEY);；本地补充注释 2 行，上游注释 1 行未保留。
  */
 @Slf4j
 @AllArgsConstructor

@@ -19,7 +19,10 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
  *
  * 目前，GlobalResponseBodyHandler 的主要作用是，记录 Controller 的返回结果，
  * 方便 {@link com.basicframework.framework.apilog.core.filter.ApiAccessLogFilter} 记录访问日志
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/yudao/framework/web/core/handler/GlobalResponseBodyHandler.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 18 行。
  */
 @ControllerAdvice
 public class GlobalResponseBodyHandler implements ResponseBodyAdvice {

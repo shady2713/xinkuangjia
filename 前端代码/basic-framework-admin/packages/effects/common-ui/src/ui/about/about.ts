@@ -4,12 +4,14 @@
  */
 import type { Component } from 'vue';
 
+/** 关于页属性：项目名称、页面标题与描述，三者均可选。 */
 interface AboutProps {
   description?: string;
   name?: string;
   title?: string;
 }
 
+/** 信息条目：条目标题，以及组件或文本形式的内容。 */
 interface DescriptionItem {
   content: Component | string;
   title: string;

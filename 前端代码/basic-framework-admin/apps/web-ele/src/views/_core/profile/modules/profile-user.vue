@@ -24,9 +24,17 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  /**
+   * 通知父组件当前用户的资料已经变更。
+   * @param e 固定为 success 事件名，不携带数据；父组件收到后重新拉取资料并同步用户状态。
+   */
   (e: 'success'): void;
 }>();
 
+/**
+ * 卡片展示用的头像地址：优先取后端返回的用户头像，
+ * 资料尚未加载或用户没有设置过头像时回落到全局默认头像。
+ */
 const avatar = computed(
   () => props.profile?.avatar || preferences.app.defaultAvatar,
 );

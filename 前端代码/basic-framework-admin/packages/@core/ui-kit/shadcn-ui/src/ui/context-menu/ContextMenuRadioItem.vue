@@ -21,6 +21,7 @@ import {
 const props = defineProps<ContextMenuRadioItemProps & { class?: ClassValue }>();
 const emits = defineEmits<ContextMenuRadioItemEmits>();
 
+/** 剔除 class 后的单选项属性，连同 emits 转发给 ContextMenuRadioItem；同组互斥由菜单根节点裁决。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

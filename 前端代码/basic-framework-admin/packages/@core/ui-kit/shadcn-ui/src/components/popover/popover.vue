@@ -22,6 +22,11 @@ import {
   PopoverTrigger,
 } from '../../ui';
 
+/**
+ * 气泡浮层的入参：透传 reka-ui 根组件属性，并补三项只由本组件消费的样式入口——
+ * triggerClass 给触发器、contentClass 给内容浮层、contentProps 原样转交内容浮层，
+ * class 预留给使用方在根节点上做覆盖。
+ */
 interface Props extends PopoverRootProps {
   class?: ClassType;
   contentClass?: ClassType;
@@ -33,6 +38,10 @@ const props = withDefaults(defineProps<Props>(), {});
 
 const emits = defineEmits<PopoverRootEmits>();
 
+/**
+ * 需要转交给底层 Popover 根组件的属性集合，剔除了只在本组件内部消费的三项样式/内容属性。
+ * 剔除后连同 emits 一起交给 useForwardPropsEmits，使显隐与开关状态仍由使用方掌控。
+ */
 const delegatedProps = computed(() => {
   const {
     class: _cls,

@@ -29,6 +29,7 @@ const props = withDefaults(
 
 const emits = defineEmits<TooltipContentEmits>();
 
+/** 去掉 class 后的提示浮层属性，连同 emits 转发给 TooltipContent；side 与 sideOffset 缺省值已固定，$attrs 在模板里另行合并。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

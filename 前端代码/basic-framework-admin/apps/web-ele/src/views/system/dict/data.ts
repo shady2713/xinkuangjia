@@ -13,7 +13,10 @@ import { getSimpleDictTypeList } from '#/api/system/dict/type';
 
 // ============================== 字典类型 ==============================
 
-/** 类型新增/修改的表单 */
+/**
+ * 字典类型新增/修改弹窗的表单字段：名称与类型必填，类型在已有记录时锁定不可改。
+ * @returns 表单 schema 列表；id 为隐藏字段，仅用于区分新增与编辑。
+ */
 export function useTypeFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -21,6 +24,7 @@ export function useTypeFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -37,6 +41,7 @@ export function useTypeFormSchema(): VbenFormSchema[] {
       fieldName: 'type',
       label: '字典类型',
       component: 'Input',
+      /** 字典类型建好后不再允许改动，这里按是否已带 id 决定该字段是否可编辑。 */
       componentProps: (values) => {
         return {
           placeholder: '请输入字典类型',
@@ -68,7 +73,10 @@ export function useTypeFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 类型列表的搜索表单 */
+/**
+ * 字典类型列表的检索条件：名称与类型按输入值模糊匹配，状态精确匹配。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useTypeGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -102,7 +110,10 @@ export function useTypeGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 类型列表的字段 */
+/**
+ * 字典类型列表的列定义：编号、名称、类型、状态与创建时间。
+ * @returns 列定义数组；首列为多选列，状态列用 CellDict 渲染成字典标签。
+ */
 export function useTypeGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
@@ -170,7 +181,11 @@ const colorOptions = [
   { value: 'purple', label: 'purple' },
 ];
 
-/** 数据新增/修改的表单 */
+/**
+ * 字典数据新增/修改弹窗的表单字段：所属字典类型、标签、键值、排序必填，
+ * 颜色类型与 CSS Class 只影响标签展示样式。
+ * @returns 表单 schema 列表；id 为隐藏字段，字典类型在已有记录时锁定不可改。
+ */
 export function useDataFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -178,6 +193,7 @@ export function useDataFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -185,6 +201,7 @@ export function useDataFormSchema(): VbenFormSchema[] {
       fieldName: 'dictType',
       label: '字典类型',
       component: 'ApiSelect',
+      /** 字典数据必须归属一个已存在的字典类型，建好后不再允许改挂，这里按是否已带 id 锁定。 */
       componentProps: (values) => {
         return {
           api: getSimpleDictTypeList,
@@ -267,7 +284,10 @@ export function useDataFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 字典数据列表搜索表单 */
+/**
+ * 字典数据列表的检索条件：标签按输入值模糊匹配，状态精确匹配。
+ * @returns 表单 schema 列表；两项均非必填，清空即表示不按该条件过滤。
+ */
 export function useDataGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -292,7 +312,10 @@ export function useDataGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 字典数据表格列 */
+/**
+ * 字典数据列表的列定义：编码、标签、键值、排序、状态、颜色与创建时间。
+ * @returns 列定义数组；首列为多选列，状态列用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useDataGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

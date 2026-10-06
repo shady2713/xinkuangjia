@@ -240,6 +240,136 @@ def test_endpoint_without_authorization_is_rejected(tmp_path: Path) -> None:
     assert findings[0].line == 9
 
 
+def test_comment_quoted_mapping_annotation_is_not_an_endpoint(tmp_path: Path) -> None:
+    """注释里引用的映射注解不是真实契约面，不得产生幽灵端点或挪走真实注解窗口。
+
+    来源说明会逐字引用被改写或移除的上游映射注解；若参与端点解析，会多出一条幽灵
+    端点，并把紧随其后的真实方法的注解窗口挪空，使真实授权声明读不出来。
+    """
+    build_project(tmp_path)
+    write(
+        tmp_path,
+        f"{BACKEND}/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/demo/QuotedController.java",
+        "package com.basicframework.module.system.controller.admin.demo;\n\n"
+        "import com.basicframework.framework.common.pojo.CommonResult;\n"
+        "import jakarta.annotation.security.PermitAll;\n\n"
+        "/**\n"
+        " * 演示控制器。\n"
+        " *\n"
+        " * 本地修改：上游代码在本地被移除或改写，例如 "
+        "@PostMapping(\"/super-admin-login\")；\n"
+        " */\n"
+        "public class QuotedController {\n\n"
+        "    @PostMapping(\"/login\")\n"
+        "    @PermitAll\n"
+        "    public CommonResult<Long> login(Long id) {\n        return null;\n    }\n"
+        "}\n",
+    )
+    endpoints = [
+        item
+        for item in contracts.collect_endpoints(tmp_path)
+        if item.path.endswith("QuotedController.java")
+    ]
+    assert [(item.method, item.line, item.permit_all) for item in endpoints] == [
+        ("login", 13, True)
+    ]
+    _, findings = contracts.verify(tmp_path)
+    assert findings == []
+
+
+def test_comment_quoted_authorization_is_not_authorization(tmp_path: Path) -> None:
+    """注释里引用的 `@PreAuthorize`/`@PermitAll` 不是授权声明，端点必须仍被拒绝。"""
+    build_project(tmp_path)
+    write(
+        tmp_path,
+        f"{BACKEND}/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/demo/CommentAuthController.java",
+        "package com.basicframework.module.system.controller.admin.demo;\n\n"
+        "import com.basicframework.framework.common.pojo.CommonResult;\n\n"
+        "/**\n"
+        " * 演示控制器。\n"
+        " *\n"
+        " * 本地修改：上游代码例如 "
+        "@PreAuthorize(\"@ss.hasPermission('system:demo:query')\") 与 @PermitAll。\n"
+        " */\n"
+        "public class CommentAuthController {\n\n"
+        "    @GetMapping(\"/secret\")\n"
+        "    public CommonResult<Long> getSecret(Long id) {\n        return null;\n    }\n"
+        "}\n",
+    )
+    _, findings = contracts.verify(tmp_path)
+    assert [item.rule for item in findings] == ["endpoint-authorization-missing"]
+    assert findings[0].line == 12
+
+
+def test_literal_content_is_not_parsed_as_annotation(tmp_path: Path) -> None:
+    """字符串与文本块里的注解文本不是契约面，真实注解与表达式仍必须被读出。
+
+    这条同时是“剥离不能把真实注解一起剥掉”的负对照：字面量里的 `@PreAuthorize` 与
+    `@PostMapping` 都不得授权或生成端点；字符串里的 ``//`` 不得把同一行其后的真实
+    `@PreAuthorize` 一起剥掉；真实表达式必须完整读出。文本块里的引号无需转义，因此
+    它也是“只按注释窗口判断注解是否存在”这一层的必要对照。
+    """
+    build_project(tmp_path)
+    write(
+        tmp_path,
+        f"{BACKEND}/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/demo/LiteralController.java",
+        "package com.basicframework.module.system.controller.admin.demo;\n\n"
+        "import com.basicframework.framework.common.pojo.CommonResult;\n\n"
+        "public class LiteralController {\n\n"
+        "    private static final String TEMPLATE = \"@PostMapping(\\\"/ghost\\\")\";\n\n"
+        "    private static final String DOC = \"\"\"\n"
+        "            本地修改：上游代码例如 @PostMapping(\"/text-block-ghost\") 与\n"
+        "            @PreAuthorize(\"@ss.hasPermission('system:demo:query')\")\n"
+        "            \"\"\";\n\n"
+        "    @GetMapping(\"/ghost\")\n"
+        "    public CommonResult<Long> ghost(Long id) {\n        return null;\n    }\n\n"
+        "    @GetMapping(\"/real\")\n"
+        "    @Operation(summary = \"见 https://example.com/docs\") "
+        "@PreAuthorize(\"@ss.hasPermission('system:demo:query')\")\n"
+        "    public CommonResult<Long> real(Long id) {\n        return null;\n    }\n"
+        "}\n",
+    )
+    endpoints = [
+        item
+        for item in contracts.collect_endpoints(tmp_path)
+        if item.path.endswith("LiteralController.java")
+    ]
+    assert [item.method for item in endpoints] == ["ghost", "real"]
+    assert endpoints[0].pre_authorize is None
+    assert endpoints[0].permit_all is False
+    assert endpoints[1].pre_authorize == "@ss.hasPermission('system:demo:query')"
+    _, findings = contracts.verify(tmp_path)
+    assert [item.rule for item in findings] == ["endpoint-authorization-missing"]
+
+
+def test_class_level_pre_authorize_is_still_read(tmp_path: Path) -> None:
+    """类级 `@PreAuthorize` 是授权声明：字面量被屏蔽后表达式仍必须读出并落到端点上。"""
+    build_project(tmp_path)
+    write(
+        tmp_path,
+        f"{BACKEND}/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/demo/ClassScopedController.java",
+        "package com.basicframework.module.system.controller.admin.demo;\n\n"
+        "import com.basicframework.framework.common.pojo.CommonResult;\n\n"
+        "@RestController\n"
+        "@PreAuthorize(\"@ss.hasPermission('system:demo:query')\")\n"
+        "public class ClassScopedController {\n\n"
+        "    @GetMapping(\"/first\")\n"
+        "    @PreAuthorize(\"@ss.hasPermission('system:demo:query')\")\n"
+        "    public CommonResult<Long> first(Long id) {\n        return null;\n    }\n\n"
+        "    @GetMapping(\"/second\")\n"
+        "    public CommonResult<Long> second(Long id) {\n        return null;\n    }\n"
+        "}\n",
+    )
+    endpoints = [
+        item
+        for item in contracts.collect_endpoints(tmp_path)
+        if item.path.endswith("ClassScopedController.java")
+    ]
+    assert [item.pre_authorize for item in endpoints] == ["@ss.hasPermission('system:demo:query')"] * 2
+    _, findings = contracts.verify(tmp_path)
+    assert findings == []
+
+
 def test_registered_identity_scoped_endpoint_is_accepted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

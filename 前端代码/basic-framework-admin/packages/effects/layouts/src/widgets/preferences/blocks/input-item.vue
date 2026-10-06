@@ -25,6 +25,7 @@ withDefaults(
   {
     disabled: false,
     placeholder: '',
+    /** 选项属性的默认值：空数组；本输入行不读取该属性，仅与选择行保持一致的签名。 */
     items: () => [],
   },
 );

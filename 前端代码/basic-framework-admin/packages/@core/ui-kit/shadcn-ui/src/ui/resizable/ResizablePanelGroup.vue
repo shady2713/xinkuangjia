@@ -18,6 +18,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<SplitterGroupEmits>();
 
+/** 去掉 class 后的面板组属性，连同 emits 转发给 SplitterGroup；面板尺寸由组内各面板与拖拽条协商。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

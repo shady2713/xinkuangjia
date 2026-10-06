@@ -17,6 +17,7 @@ const routes: RouteRecordRaw[] = [
   {
     name: 'Dashboard',
     path: '/dashboard',
+    /** 仪表盘首页组件；meta 中的 order 为 -1，使其排在菜单首位。 */
     component: () => import('#/views/dashboard/analytics/index.vue'),
     meta: {
       affixTab: true,
@@ -28,6 +29,7 @@ const routes: RouteRecordRaw[] = [
   {
     name: 'Profile',
     path: '/profile',
+    /** 个人中心页面组件；meta 中隐藏菜单，只能从头像下拉菜单进入。 */
     component: () => import('#/views/_core/profile/index.vue'),
     meta: {
       icon: 'ant-design:profile-outlined',

@@ -9,6 +9,11 @@ import { ref, watch } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';
 
+/**
+ * 加载遮罩的入参。
+ * spinning 是唯一的显隐开关，组件只在它为真且持续超过 minLoadingTime 毫秒后才显示；
+ * text 是动画下方的提示语，为空串时整行不渲染；class 用于追加遮罩层的样式。
+ */
 interface Props {
   class?: string;
   /**
@@ -64,6 +69,12 @@ watch(
   },
 );
 
+/**
+ * 遮罩淡出动画结束后卸载动画节点。
+ * 用动画结束而非定时器来回收，是为了让最后一次淡出自然播完；
+ * 此时 showSpinner 已为 false 说明确实是关闭而非开启方向的过渡，
+ * 期间若又被打开成 loading，showSpinner 会重新为真，本次回收自动作废。
+ */
 function onTransitionEnd() {
   if (!showSpinner.value) {
     renderSpinner.value = false;

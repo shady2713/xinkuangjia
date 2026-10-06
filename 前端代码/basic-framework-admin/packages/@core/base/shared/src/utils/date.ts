@@ -9,8 +9,10 @@ import utc from 'dayjs/plugin/utc';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+/** 日期工具可接受的时间取值：时间戳、日期字符串、Date 或 dayjs 对象。 */
 type FormatDate = Date | dayjs.Dayjs | number | string;
 
+/** 允许的格式串：内置常用粒度字面量，同时开放任意 dayjs 格式串。 */
 type Format =
   | 'HH'
   | 'HH:mm'
@@ -23,6 +25,12 @@ type Format =
   | 'YYYY-MM-DD HH:mm:ss'
   | (string & {});
 
+/**
+ * 按指定格式输出日期时间，时间值会先转换到当前默认时区。
+ * @param time - 待格式化的时间戳、日期串、Date 或 dayjs 对象；省略或为假值时返回空串。
+ * @param format - dayjs 格式串，默认 'YYYY-MM-DD'。
+ * @returns 格式化后的文本；时间无法解析时记录一条 console.error，并回退为入参的字符串形式。
+ */
 export function formatDate(time?: FormatDate, format: Format = 'YYYY-MM-DD') {
   // 日期不存在，则返回空
   if (!time) {
@@ -40,10 +48,21 @@ export function formatDate(time?: FormatDate, format: Format = 'YYYY-MM-DD') {
   }
 }
 
+/**
+ * 以 'YYYY-MM-DD HH:mm:ss' 输出日期时间，等价于 formatDate(time, 'YYYY-MM-DD HH:mm:ss')。
+ * @param time - 待格式化的时间戳、日期串、Date 或 dayjs 对象；省略或为假值时返回空串。
+ * @returns 格式化后的文本；无法解析时与 formatDate 一样回退为入参的字符串形式。
+ */
 export function formatDateTime(time?: FormatDate) {
   return formatDate(time, 'YYYY-MM-DD HH:mm:ss');
 }
 
+/**
+ * 按指定格式输出 Date，不做时区换算，直接按运行环境的本地时区格式化。
+ * @param date - 待格式化的 Date；为假值时返回空串。
+ * @param format - dayjs 格式串，省略时用 'YYYY-MM-DD HH:mm:ss'。
+ * @returns 格式化后的时间文本；date 为假值时为 ''。
+ */
 export function formatDate2(date: Date, format?: string): string {
   // 日期不存在，则返回空
   if (!date) {
@@ -120,7 +139,7 @@ let currentTimezone = getSystemTimezone();
 
 /**
  * 设置默认时区
- * @param timezone
+ * @param timezone - IANA 时区名，如 'Asia/Shanghai'；省略或为空时回退到浏览器推断的时区。
  */
 export const setCurrentTimezone = (timezone?: string) => {
   currentTimezone = timezone || getSystemTimezone();

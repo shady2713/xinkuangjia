@@ -23,6 +23,11 @@ const [Descriptions] = useDescription({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 弹窗开关时按传入的日志编号加载单条日志，关闭时清空已展示的数据。
+   * 编号缺失时保持空描述区而不发请求；加载期间锁定弹窗，加载结束后解锁。
+   * @param isOpen 弹窗当前是否打开，打开时加载数据，关闭时释放本地状态。
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;

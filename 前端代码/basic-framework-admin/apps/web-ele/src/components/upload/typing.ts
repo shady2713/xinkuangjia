@@ -17,12 +17,20 @@ export enum UploadResultStatus {
 /** 文件上传列表的显示类型 */
 export type UploadListType = 'picture' | 'picture-card' | 'text';
 
+/**
+ * 上传接口返回体：data 是新增后的文件地址，url 是可直接访问的完整地址，
+ * 其余键由后端业务自行附加，上传组件不解析。
+ */
 export interface UploadApiPayload {
   data?: string;
   url?: string;
   [key: string]: unknown;
 }
 
+/**
+ * 上传接口允许的返回形态：完整 Axios 响应、去掉包装的返回体或直接是地址字符串。
+ * use-upload-core 会把这三种形态统一收敛成文件地址字符串。
+ */
 export type UploadApiResult =
   | AxiosResponse<UploadApiPayload>
   | string

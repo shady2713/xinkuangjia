@@ -33,6 +33,7 @@ const CACHE_FILE = join(
   '.pkglintcache.json',
 );
 
+/** publint 子命令选项：check 为真时只报告问题，不因发现问题而退出进程。 */
 interface PubLintCommandOptions {
   /**
    * Only errors are checked, no program exit is performed
@@ -42,7 +43,10 @@ interface PubLintCommandOptions {
 
 /**
  * Get files that require lint
- * @param files
+ * 解析要校验的 package.json 列表：显式传入时只保留文件名恰为 package.json 的项，
+ * 否则取全部工作区包。
+ * @param files - 命令行传入的文件路径；非 package.json 的项会被剔除。
+ * @returns 待校验的 package.json 路径列表。
  */
 async function getLintFiles(files: string[] = []) {
   const lintFiles: string[] = [];
@@ -59,11 +63,17 @@ async function getLintFiles(files: string[] = []) {
   return lintFiles;
 }
 
+/** 拼出缓存文件路径：monorepo 根目录下的 node_modules/.cache/publint/.pkglintcache.json。 */
 function getCacheFile() {
   const root = findMonorepoRoot();
   return join(root, CACHE_FILE);
 }
 
+/**
+ * 读取 publint 结果缓存，文件不存在时先创建空文件。
+ * @param cacheFile - 缓存文件的绝对路径。
+ * @returns 缓存内容；读取或解析失败时返回空对象，相当于本次全部重新校验。
+ */
 async function readCache(cacheFile: string) {
   try {
     await ensureFile(cacheFile);
@@ -73,6 +83,13 @@ async function readCache(cacheFile: string) {
   }
 }
 
+/**
+ * 逐包执行 publint 校验：跳过 private 包，命中缓存的包直接复用上次结果。
+ * 校验前会剔除三类依赖字段，避免版本变动触发无意义的重新校验；
+ * 结束时写回缓存并打印结果，check 为假时发现问题即以状态码 1 退出。
+ * @param files - 命令行传入的文件路径，为空时校验全部工作区包。
+ * @param options - 子命令选项，check 为真时不退出进程。
+ */
 async function runPublint(files: string[], { check }: PubLintCommandOptions) {
   const lintFiles = await getLintFiles(files);
   const cacheFile = getCacheFile();
@@ -80,6 +97,7 @@ async function runPublint(files: string[], { check }: PubLintCommandOptions) {
   const cacheData = await readCache(cacheFile);
   const cache: Record<string, { hash: string; result: Result }> = cacheData;
 
+  // private 包与读取失败的包都返回 null，由打印阶段按空值跳过。
   const results = await Promise.all(
     lintFiles.map(async (file) => {
       try {
@@ -120,6 +138,11 @@ async function runPublint(files: string[], { check }: PubLintCommandOptions) {
   printResult(results, check);
 }
 
+/**
+ * 打印各包的问题明细并汇总数量。
+ * @param results - 各包的校验结果，null 表示该包被跳过或校验失败。
+ * @param check - 为真时只报告问题，不调用 process.exit；否则发现问题即退出码 1。
+ */
 function printResult(
   results: Array<null | {
     pkgJson: Record<string, number | string>;
@@ -182,6 +205,7 @@ function printResult(
   }
 }
 
+/** 把 publint 子命令注册到 cac 实例上，命令名与选项在这里固定。 */
 function definePubLintCommand(cac: CAC) {
   cac
     .command('publint [...files]')

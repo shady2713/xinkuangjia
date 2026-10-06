@@ -14,6 +14,11 @@ type ErrorLike = {
   status?: number;
 };
 
+/**
+ * 把未知抛出值收窄成可安全读取字段的错误对象。
+ * @param error - 任意抛出值。
+ * @returns 原对象引用；null、undefined 与字符串等非对象一律返回空对象，避免读取字段时报错。
+ */
 function toErrorLike(error: unknown): ErrorLike {
   if (!error || typeof error !== 'object') {
     return {};
@@ -21,6 +26,13 @@ function toErrorLike(error: unknown): ErrorLike {
   return error as ErrorLike;
 }
 
+/**
+ * 按优先级从任意抛出值里提取可展示的错误文案。
+ * 依次尝试字符串本身、Error 实例的 message、普通对象上的 message，以及响应体里的 error/message/msg。
+ * @param error - 任意抛出值；null、undefined 与数字等都会走到兜底分支。
+ * @param fallback - 所有来源都取不到时使用的文案，可传空串。
+ * @returns 第一个非空文案；除 fallback 本身为空串外不会返回空串，也不会再次抛出。
+ */
 export function getErrorMessage(error: unknown, fallback = 'Unknown error') {
   if (typeof error === 'string') {
     return error;
@@ -52,6 +64,12 @@ export function getErrorMessage(error: unknown, fallback = 'Unknown error') {
   return fallback;
 }
 
+/**
+ * 提取错误里可用于检索的元数据，供日志按单行输出。
+ * 只取 name、code 与 status（无顶层 status 时回退到 response.status），其余字段忽略。
+ * @param error - 任意抛出值；非对象时得不到任何字段。
+ * @returns 字段名到字符串或数字的映射；一个字段都没取到时为空对象。
+ */
 function getErrorMeta(error: unknown) {
   const errorLike = toErrorLike(error);
   const meta: Record<string, number | string> = {};
@@ -97,10 +115,20 @@ function formatLogMessage(
   console.error(base);
 }
 
+/**
+ * 以 warn 级别输出一条带作用域的错误日志。
+ * @param scope - 出错的作用域名，会作为 `[作用域]` 前缀出现在同一条日志里。
+ * @param error - 原始错误；省略或为空时只输出作用域，不附加任何元数据。
+ */
 export function logWarn(scope: string, error?: unknown) {
   formatLogMessage('warn', scope, error);
 }
 
+/**
+ * 以 error 级别输出一条带作用域的错误日志。
+ * @param scope - 出错的作用域名，会作为 `[作用域]` 前缀出现在同一条日志里。
+ * @param error - 原始错误；省略或为空时只输出作用域，不附加任何元数据。
+ */
 export function logError(scope: string, error?: unknown) {
   formatLogMessage('error', scope, error);
 }

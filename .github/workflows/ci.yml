@@ -123,6 +123,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # 注释检查器同样已登记在 run_checks.py 的 comments 组（全量 Java 注释与增量
+      # Web、Python 注释），但在本次改动前从未接入任何作业，属于"已登记却没真正运行"。
+      # 这里显式运行并复核报告：全量 Java 注释欠账、零对象、报告缺失都会让本作业红灯，
+      # 汇总门禁随即拒绝，不会静默通过。
+      # 不写进上面的 checked 计数：该计数只表示文档与工具检查对象数，混入其他范围会失真。
+      - name: 运行注释检查
+        run: |
+          # 全量 Java 注释检查在无受控快照时需按固定提交地址实时取回上游内容并复算
+          # SHA-256（实测单项约 128 秒，云端更慢），默认 180 秒余量不足，故显式放宽
+          # 单项超时；这不改变任何判定标准，超时仍按 environment-error 让本作业红灯。
+          python -B -X utf8 scripts/workflow/run_checks.py --group comments --timeout 600 --json \
+            --report "$RUNNER_TEMP/comments-report.json"
+          python -B -X utf8 scripts/workflow/verify_report.py "$RUNNER_TEMP/comments-report.json" --json
+          python -B -X utf8 - <<'PY'
+          import json, os, sys
+          report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
+          passed = [item for item in report["results"] if item.get("status") == "passed"]
+          total = sum(int(item["checked"]) for item in passed)
+          if total <= 0:
+              sys.exit("注释检查没有任何实际对象，不计为通过")
+          print(f"注释检查对象：{total}")
+          PY
+        env:
+          REPORT: ${{ runner.temp }}/comments-report.json
+
+      - name: 上传注释检查报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comments-report
+          path: ${{ runner.temp }}/comments-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
       # 失败也要留下真实报告：$RUNNER_TEMP/docs-report.json 由上面的 run_checks.py 实际写出，
       # 记录每项检查的真实状态与诊断。依赖安装等更早的失败会让该文件不存在，此时只用
       # warn 记录缺文件，不改变作业结论，也不把失败包装成通过。

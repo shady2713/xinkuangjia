@@ -16,7 +16,10 @@ import { getDictOptions } from '@vben/hooks';
 import { z } from '#/adapter/form';
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 新增/修改的表单 */
+/**
+ * 角色新增/修改弹窗的表单字段：名称、标识与显示顺序必填，状态默认启用。
+ * @returns 表单 schema 列表；id 为隐藏字段，仅用于区分新增与编辑。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -24,6 +27,7 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -77,7 +81,11 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 分配数据权限的表单 */
+/**
+ * 分配数据权限弹窗的表单字段：角色名称与标识只读回显，权限范围可改，
+ * 选择「自定义部门」时才出现部门范围字段。
+ * @returns 表单 schema 列表；id 为隐藏字段，部门范围由 dataScope 联动显隐。
+ */
 export function useAssignDataPermissionFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -85,6 +93,7 @@ export function useAssignDataPermissionFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -119,6 +128,7 @@ export function useAssignDataPermissionFormSchema(): VbenFormSchema[] {
       formItemClass: 'items-start',
       dependencies: {
         triggerFields: ['dataScope'],
+        /** 部门范围只在权限范围选为「自定义部门」时出现，其余范围沿用角色已有的数据权限。 */
         show: (values) => {
           return values.dataScope === SystemDataScopeEnum.DEPT_CUSTOM;
         },
@@ -127,7 +137,10 @@ export function useAssignDataPermissionFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 分配菜单的表单 */
+/**
+ * 分配菜单弹窗的表单字段：角色名称与标识只读回显，菜单勾选由弹窗内的树组件承载。
+ * @returns 表单 schema 列表；id 为隐藏字段，随记录带回以便提交时定位角色。
+ */
 export function useAssignMenuFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -135,6 +148,7 @@ export function useAssignMenuFormSchema(): VbenFormSchema[] {
       component: 'Input',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -163,7 +177,10 @@ export function useAssignMenuFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 角色列表的检索条件：名称与标识模糊匹配，状态精确匹配，创建时间按区间筛选。
+ * @returns 表单 schema 列表；各项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -206,7 +223,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 角色列表的列定义：编号、名称、类型、标识、显示顺序、备注、状态与创建时间。
+ * @returns 列定义数组；首列为多选列，类型与状态用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

@@ -64,6 +64,11 @@ const props = defineProps({
   gridX: {
     type: Number,
     default: 50,
+    /**
+     * 校验横向网格吸附步长。
+     * @param val 传入的步长值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -71,6 +76,11 @@ const props = defineProps({
   gridY: {
     type: Number,
     default: 50,
+    /**
+     * 校验纵向网格吸附步长。
+     * @param val 传入的步长值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -78,6 +88,11 @@ const props = defineProps({
   parentW: {
     type: Number,
     default: 0,
+    /**
+     * 校验父容器宽度。
+     * @param val 传入的宽度值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -85,6 +100,11 @@ const props = defineProps({
   parentH: {
     type: Number,
     default: 0,
+    /**
+     * 校验父容器高度。
+     * @param val 传入的高度值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -92,6 +112,11 @@ const props = defineProps({
   w: {
     type: [String, Number],
     default: 200,
+    /**
+     * 校验宽度取值：字符串只接受 'auto'，数字要求非负。
+     * @param val 传入的宽度，可能是数字或字符串。
+     * @returns 是否合法。
+     */
     validator(val: number) {
       return typeof val === 'string' ? val === 'auto' : val >= 0;
     },
@@ -99,6 +124,11 @@ const props = defineProps({
   h: {
     type: [String, Number],
     default: 200,
+    /**
+     * 校验高度取值：字符串只接受 'auto'，数字要求非负。
+     * @param val 传入的高度，可能是数字或字符串。
+     * @returns 是否合法。
+     */
     validator(val: number) {
       return typeof val === 'string' ? val === 'auto' : val >= 0;
     },
@@ -106,6 +136,11 @@ const props = defineProps({
   minw: {
     type: Number,
     default: 50,
+    /**
+     * 校验最小宽度。
+     * @param val 传入的宽度值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -113,6 +148,11 @@ const props = defineProps({
   minh: {
     type: Number,
     default: 50,
+    /**
+     * 校验最小高度。
+     * @param val 传入的高度值。
+     * @returns 是否合法（大于等于 0）。
+     */
     validator(val: number) {
       return val >= 0;
     },
@@ -120,6 +160,11 @@ const props = defineProps({
   x: {
     type: Number,
     default: 0,
+    /**
+     * 校验横坐标：只接受数字类型。
+     * @param val 传入的坐标值。
+     * @returns 是否为数字。
+     */
     validator(val: number) {
       return typeof val === 'number';
     },
@@ -127,6 +172,11 @@ const props = defineProps({
   y: {
     type: Number,
     default: 0,
+    /**
+     * 校验纵坐标：只接受数字类型。
+     * @param val 传入的坐标值。
+     * @returns 是否为数字。
+     */
     validator(val: number) {
       return typeof val === 'number';
     },
@@ -134,6 +184,11 @@ const props = defineProps({
   z: {
     type: [String, Number],
     default: 'auto',
+    /**
+     * 校验层级取值：字符串只接受 'auto'，数字要求非负。
+     * @param val 传入的层级，可能是数字或字符串。
+     * @returns 是否合法。
+     */
     validator(val: number) {
       return typeof val === 'string' ? val === 'auto' : val >= 0;
     },
@@ -148,6 +203,10 @@ const props = defineProps({
   },
   sticks: {
     type: Array<'bl' | 'bm' | 'br' | 'ml' | 'mr' | 'tl' | 'tm' | 'tr'>,
+    /**
+     * 控制点默认值。
+     * @returns 八向控制点名称数组，八个方向全部开启。
+     */
     default() {
       return ['tl', 'tm', 'tr', 'mr', 'br', 'bm', 'bl', 'ml'];
     },
@@ -155,6 +214,11 @@ const props = defineProps({
   axis: {
     type: String,
     default: 'both',
+    /**
+     * 校验可拖动方向：只接受 both、none、x、y 四个取值。
+     * @param val 传入的方向值。
+     * @returns 是否在允许的取值集合内。
+     */
     validator(val: string) {
       return ['both', 'none', 'x', 'y'].includes(val);
     },
@@ -354,6 +418,7 @@ const rect = computed(
   }),
 );
 
+/** 记录拖动开始时的指针位置与四边、宽高，作为本次位移计算的基准，并记下当前宽高比。 */
 const saveDimensionsBeforeMove = ({
   pointerX,
   pointerY,
@@ -375,6 +440,12 @@ const saveDimensionsBeforeMove = ({
   aspectFactor.value = width.value / height.value;
 };
 
+/**
+ * 把单边坐标夹紧到允许区间内。
+ * @param limit 该边的上下限；某一侧为 null 表示该方向不限制。
+ * @param current 待修正的坐标值。
+ * @returns 夹紧后的坐标。
+ */
 const sideCorrectionByLimit = (
   limit: { max: number; min: number },
   current: number,
@@ -390,6 +461,7 @@ const sideCorrectionByLimit = (
   return value;
 };
 
+/** 按当前边界限制逐边修正矩形，返回修正后的四边坐标。 */
 const rectCorrectionByLimit = (rect: {
   newBottom: number;
   newLeft: number;
@@ -399,6 +471,7 @@ const rectCorrectionByLimit = (rect: {
   // const { limits } = this;
   let { newRight, newLeft, newBottom, newTop } = rect;
 
+  /** 单边坐标的允许区间；上限或下限为 null 表示该侧不限制。 */
   type RectRange = {
     max: number;
     min: number;
@@ -577,6 +650,7 @@ const stickMove = (delta: { x: number; y: number }) => {
   emit('resizing', rect.value);
 };
 
+/** 结束控制点缩放：清除缩放标记并把基准尺寸复位。 */
 const stickUp = () => {
   stickDrag.value = false;
   // dimensionsBeforeMove.value = {
@@ -727,11 +801,13 @@ const positionStyle = computed(
   }),
 );
 
+/** 内容尺寸样式：宽高为 auto 时保持自适应，否则写成像素值。 */
 const sizeStyle = computed(() => ({
   width: w.value === 'auto' ? 'auto' : `${width.value}px`,
   height: h.value === 'auto' ? 'auto' : `${height.value}px`,
 }));
 
+/** 控制点样式生成器：按控制点方向给出尺寸与负偏移，使控制点居中压在边框线上。 */
 const stickStyles = computed(() => (stick: string) => {
   const stickStyle = {
     width: `${stickSize.value / parentScaleX.value}px`,
@@ -744,6 +820,10 @@ const stickStyles = computed(() => (stick: string) => {
   return stickStyle;
 });
 
+/**
+ * 整体拖动：按位移同时平移四边，必要时做网格吸附与父级范围限制。
+ * @param delta 相对拖动起点的横向与纵向位移。
+ */
 const bodyMove = (delta: { x: number; y: number }) => {
   let newTop = dimensionsBeforeMove.value.top - delta.y;
   let newBottom = dimensionsBeforeMove.value.bottom + delta.y;
@@ -803,6 +883,7 @@ const bodyMove = (delta: { x: number; y: number }) => {
   emit('dragging', rect.value);
 };
 
+/** 结束整体拖动：清除拖动标记，并依次抛出 dragging 与 dragstop 事件。 */
 const bodyUp = () => {
   bodyDrag.value = false;
   emit('dragging', rect.value);
@@ -909,6 +990,7 @@ const move = (ev: ResizePointerEvent) => {
   }
 };
 
+/** 指针抬起时的统一处理：按当前模式分派到控制点缩放结束或整体拖动结束。 */
 const up = () => {
   if (stickDrag.value) {
     stickUp();
@@ -917,6 +999,7 @@ const up = () => {
   }
 };
 
+/** 取消选中态；开启「阻止自动激活」时保持现状不做处理。 */
 const deselect = () => {
   if (preventActiveBehavior.value) {
     return;

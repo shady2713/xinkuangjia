@@ -17,10 +17,12 @@ defineOptions({
 
 const props = withDefaults(defineProps<VerificationProps>(), {
   arith: 0,
+  /** 底部提示条尺寸默认值：310×40 像素。 */
   barSize: () => ({
     height: '40px',
     width: '310px',
   }),
+  /** 拼图切块尺寸默认值：50×50 像素。 */
   blockSize: () => ({
     height: '50px',
     width: '50px',
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<VerificationProps>(), {
   captchaType: 'blockPuzzle',
   explain: '',
   figure: 0,
+  /** 底图区域尺寸默认值：310×155 像素。 */
   imgSize: () => ({
     height: '155px',
     width: '310px',
@@ -38,7 +41,9 @@ const props = withDefaults(defineProps<VerificationProps>(), {
 
 const emit = defineEmits(['onSuccess', 'onError', 'onClose', 'onReady']);
 
+/** 点选文字验证码的异步组件，仅在切换到该类型时按需加载。 */
 const VerifyPoints = defineAsyncComponent(() => import('./verify-points.vue'));
+/** 滑块拼图验证码的异步组件，仅在切换到该类型时按需加载。 */
 const VerifySlide = defineAsyncComponent(() => import('./verify-slide.vue'));
 
 const { captchaType, mode, checkCaptchaApi, getCaptchaApi } = toRefs(props);
@@ -57,6 +62,7 @@ const refresh = () => {
   if (instance.value && instance.value.refresh) instance.value.refresh();
 };
 
+/** 弹出模式下打开验证码浮层；内嵌模式不做任何处理。 */
 const show = () => {
   if (mode.value === 'pop') showBox.value = true;
 };

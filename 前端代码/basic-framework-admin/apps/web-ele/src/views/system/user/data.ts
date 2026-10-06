@@ -30,6 +30,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -54,6 +55,7 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'passwordRequired',
       dependencies: {
         triggerFields: ['id'],
+        /** 密码只在新增时录入；编辑已有用户时该字段隐藏，改密走重置密码入口。 */
         show: (values) => !values.id,
       },
     },
@@ -71,6 +73,7 @@ export function useFormSchema(): VbenFormSchema[] {
       label: '归属部门',
       component: 'ApiTreeSelect',
       componentProps: {
+        /** 归属部门候选取自真实部门列表并转成树；这里不追加虚拟顶级节点，只能选到已存在的部门。 */
         api: async () => {
           const data = await getDeptList();
           return handleTree(data);
@@ -152,7 +155,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 重置密码的表单 */
+/**
+ * 重置密码弹窗的表单字段：新密码与确认密码两次录入，长度 5-20 位且两者必须一致。
+ * @returns 表单 schema 列表；id 为隐藏字段，新旧密码相同或两次输入不一致时校验不通过。
+ */
 export function useResetPasswordFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -160,6 +166,7 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -170,6 +177,11 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         placeholder: '请输入新密码',
       },
       dependencies: {
+        /**
+         * 新密码的前端校验：长度 5-20 位，且不得与旧密码相同。
+         * @param values 当前表单全部取值，用其中的 oldPassword 判断新旧是否重复。
+         * @returns 校验新密码的 zod 规则。
+         */
         rules(values) {
           return z
             .string({ message: '请输入新密码' })
@@ -193,6 +205,11 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         placeholder: $t('authentication.confirmPassword'),
       },
       dependencies: {
+        /**
+         * 确认密码的前端校验：长度 5-20 位，且必须与新密码一致。
+         * @param values 当前表单全部取值，用其中的 newPassword 判断两次输入是否一致。
+         * @returns 校验确认密码的 zod 规则。
+         */
         rules(values) {
           return z
             .string({ message: '请输入确认密码' })
@@ -223,6 +240,7 @@ export function useAssignRoleFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -263,7 +281,10 @@ export function useAssignRoleFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 用户导入的表单 */
+/**
+ * 用户导入弹窗的表单字段：选择一个 xls/xlsx 文件，并决定是否覆盖已存在的用户。
+ * @returns 表单 schema 列表；覆盖开关默认为否，避免误改既有用户数据。
+ */
 export function useImportFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -287,7 +308,10 @@ export function useImportFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 用户列表的检索条件：用户名称与手机号码模糊匹配，创建时间按区间筛选。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -320,9 +344,13 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 用户列表的列定义：编号、名称、昵称、部门、手机号、状态与创建时间。
+ * @param onStatusChange 状态开关变更前的回调，返回 false 时不写回行数据；不传则该列只展示状态。
+ * @returns 列定义数组；首列为多选列，状态列用 CellSwitch 渲染并接入 onStatusChange。
+ */
 export function useGridColumns(
-  onStatusChange?: (
+  onStatusChange?: /** 状态开关变更回调的类型：入参为新状态与当前行，返回 false 时放弃写回。 */ (
     newStatus: number,
     row: SystemUserApi.User,
   ) => PromiseLike<boolean | undefined>,

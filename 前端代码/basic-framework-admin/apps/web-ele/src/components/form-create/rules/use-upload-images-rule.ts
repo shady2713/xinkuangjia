@@ -19,6 +19,11 @@ export function useUploadImagesRule() {
     icon: 'icon-image',
     label,
     name,
+    /**
+     * 生成多图上传组件在设计器画布上的表单规则。
+     * 字段名用 UUID 而不是标题，避免同一画布放多个多图上传组件时绑定名互相覆盖。
+     * @returns 该组件的表单规则对象，默认非必填，数量上限由属性面板配置。
+     */
     rule() {
       return {
         type: name,

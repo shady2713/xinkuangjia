@@ -27,8 +27,10 @@ import { defineRule } from 'vee-validate';
 
 const DEFAULT_MODEL_PROP_NAME = 'modelValue';
 
+/** 全局表单公共配置的单例，由 setupVbenForm 在应用启动时写入，各表单渲染时按需读取。 */
 export const DEFAULT_FORM_COMMON_CONFIG: FormCommonConfig = {};
 
+/** schema 中控件名到实际组件的登记表；业务注册的控件会追加或覆盖这里的内置默认项。 */
 export const COMPONENT_MAP: Record<BaseFormComponentType, Component> = {
   DefaultButton: h(VbenButton, { size: 'sm', variant: 'outline' }),
   PrimaryButton: h(VbenButton, { size: 'sm', variant: 'default' }),
@@ -39,6 +41,10 @@ export const COMPONENT_MAP: Record<BaseFormComponentType, Component> = {
   VbenSelect,
 };
 
+/**
+ * 控件名到其 v-model 绑定属性名的对照表。
+ * 取值属性名与默认 modelValue 相同的控件不需要登记，登记项会覆盖内置默认。
+ */
 export const COMPONENT_BIND_EVENT_MAP: Partial<
   Record<BaseFormComponentType, string>
 > = {

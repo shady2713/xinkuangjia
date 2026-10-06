@@ -35,6 +35,7 @@ withDefaults(
     disabled: false,
     placeholder: '',
     tip: '',
+    /** 选项属性的默认值：空数组；本数字行不读取该属性，仅与其它偏好行保持一致的签名。 */
     items: () => [],
   },
 );

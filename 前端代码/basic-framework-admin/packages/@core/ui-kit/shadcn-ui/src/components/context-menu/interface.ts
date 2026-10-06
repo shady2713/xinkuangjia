@@ -11,6 +11,13 @@ import type { Component } from 'vue';
  */
 export type ContextMenuHandlerData = object;
 
+/**
+ * 单条右键菜单项的结构。
+ * key 必填且需在整个菜单内唯一，作为渲染循环的 key；
+ * hidden 与 disabled 是两条独立的可见性/可点击性开关；
+ * inset 决定是否按缩进渲染（无图标时模板会自动补缩进），
+ * separator 为真时该项只渲染成一条分割线。
+ */
 interface IContextMenuItem {
   /**
    * 是否禁用

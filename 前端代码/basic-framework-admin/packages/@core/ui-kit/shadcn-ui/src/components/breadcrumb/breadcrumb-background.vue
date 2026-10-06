@@ -16,6 +16,10 @@ const { breadcrumbs, showIcon } = defineProps<Props>();
 
 const emit = defineEmits<{ select: [string] }>();
 
+/**
+ * 抛出被点击层级的路径，交由调用方决定跳转：末级是当前页、留空 path 的占位层级都直接返回，
+ * 避免把用户送回当前页或跳到空地址。
+ */
 function handleClick(index: number, path?: string) {
   if (!path || index === breadcrumbs.length - 1) {
     return;

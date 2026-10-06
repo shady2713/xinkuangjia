@@ -28,6 +28,10 @@ const props = withDefaults(defineProps<Props>(), {
   variant: 'default',
 });
 
+/**
+ * 把 disabled 与 loading 合成最终的禁用标记。
+ * loading 期间按钮同样不可点，这样调用方只切 loading 就能挡住重复提交，不必再手动置 disabled。
+ */
 const isDisabled = computed(() => {
   return props.disabled || props.loading;
 });

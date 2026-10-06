@@ -28,7 +28,10 @@ const props = withDefaults(defineProps<PointSelectionCaptchaProps>(), {
 });
 const emit = defineEmits<{
   click: [CaptchaPoint];
-  confirm: [Array<CaptchaPoint>, clear: () => void];
+  confirm: [
+    Array<CaptchaPoint>,
+    clear: /* 由父级调用以清空已采集的点位。 */ () => void,
+  ];
   refresh: [];
 }>();
 const { addPoint, clearPoints, points } = useCaptchaPoints();
@@ -39,6 +42,7 @@ if (!props.hintImage && !props.hintText) {
 
 const POINT_OFFSET = 11;
 
+/** 取元素相对文档左上角的坐标，已计入页面滚动偏移。 */
 function getElementPosition(element: HTMLElement) {
   const rect = element.getBoundingClientRect();
   return {
@@ -47,6 +51,10 @@ function getElementPosition(element: HTMLElement) {
   };
 }
 
+/**
+ * 记录一次点击：换算成相对图片的坐标并按点击顺序编号。
+ * @param e 底图上的鼠标点击事件；元素缺失或坐标越界时只告警并丢弃本次点击。
+ */
 function handleClick(e: MouseEvent) {
   try {
     const dom = e.currentTarget as HTMLElement;
@@ -92,6 +100,7 @@ function handleClick(e: MouseEvent) {
   }
 }
 
+/** 清空已采集的全部点位；异常只记录日志，不向上抛出。 */
 function clear() {
   try {
     clearPoints();
@@ -100,6 +109,7 @@ function clear() {
   }
 }
 
+/** 刷新：先清空已采集点位，再通知父级重新取图。 */
 function handleRefresh() {
   try {
     clear();
@@ -109,6 +119,7 @@ function handleRefresh() {
   }
 }
 
+/** 确认：仅在启用确定按钮时把点位与清空回调交给父级；异常只记录日志。 */
 function handleConfirm() {
   if (!props.showConfirm) return;
   try {

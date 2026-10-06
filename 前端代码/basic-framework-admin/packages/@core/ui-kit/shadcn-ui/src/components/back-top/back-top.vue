@@ -26,6 +26,10 @@ const props = withDefaults(defineProps<Props>(), {
   visibilityHeight: 200,
 });
 
+/**
+ * 把 bottom/right 换算成 px 内联样式，决定按钮 fixed 定位的偏移；
+ * 只管位置，显隐仍由 useBackTop 返回的 visible 控制。
+ */
 const backTopStyle = computed(() => ({
   bottom: `${props.bottom}px`,
   right: `${props.right}px`,

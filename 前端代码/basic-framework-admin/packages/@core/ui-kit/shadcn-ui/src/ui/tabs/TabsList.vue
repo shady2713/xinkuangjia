@@ -15,6 +15,7 @@ import { TabsList } from 'reka-ui';
 
 const props = defineProps<TabsListProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的页签容器属性，转交 TabsList，让 reka-ui 接管方向键在触发件间移动焦点。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

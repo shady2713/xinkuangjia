@@ -16,6 +16,7 @@ import { PinInputRoot, useForwardPropsEmits } from 'reka-ui';
 const props = defineProps<PinInputRootProps & { class?: ClassValue }>();
 const emits = defineEmits<PinInputRootEmits>();
 
+/** 去掉 class 后的验证码根节点属性，连同 emits 转发给 PinInputRoot；输入编排与完成时机由底层决定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

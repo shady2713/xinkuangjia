@@ -7,8 +7,10 @@
 import { useDictStore } from '@vben/stores';
 import { isObject } from '@vben/utils';
 
+/** 字典项在界面上的语义色，与 Element Plus 标签的 type 取值一致。 */
 type ColorType = 'error' | 'info' | 'success' | 'warning';
 
+/** 字典项的通用结构：value 为存储值，label 为展示文本，colorType 与 cssClass 控制样式。 */
 export interface DictDataType {
   dictType?: string;
   label: string;
@@ -17,10 +19,12 @@ export interface DictDataType {
   cssClass?: string;
 }
 
+/** value 已收窄为数字的字典项，可直接参与数值比较与计算。 */
 export interface NumberDictDataType extends DictDataType {
   value: number;
 }
 
+/** value 已收窄为字符串的字典项，可直接用于文本比较与展示。 */
 export interface StringDictDataType extends DictDataType {
   value: string;
 }

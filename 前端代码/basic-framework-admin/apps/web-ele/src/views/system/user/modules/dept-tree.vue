@@ -24,6 +24,7 @@ const searchValue = ref(''); // 搜索值
 /** 处理搜索逻辑 */
 function handleSearch(value: string) {
   searchValue.value = value;
+  /** 过滤后的部门列表：有关键字时按名称忽略大小写匹配，否则沿用完整列表。 */
   const filteredList = value
     ? deptList.value.filter((item) =>
         item.name.toLowerCase().includes(value.toLowerCase()),

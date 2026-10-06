@@ -49,6 +49,11 @@ let scaleY = 1;
 
 const [Modal, modalApi] = useVbenModal({
   onConfirm: handleOk,
+  /**
+   * 弹窗开关变化时同步 loading 与预览态：打开先置 loading，等裁剪画布就绪再关闭；
+   * 关闭时清空预览并复位 loading，避免下次打开残留上一次的裁剪结果。
+   * @param isOpen 当前弹窗是否处于打开状态。
+   */
   onOpenChange(isOpen) {
     if (isOpen) {
       // 打开时，进行 loading 加载。后续 CropperImage 组件加载完毕，会自动关闭 loading（通过 handleReady）
@@ -61,11 +66,18 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
+/** 同步弹窗的确定按钮与遮罩 loading 状态：裁剪画布加载中与上传中共用这一状态。 */
 function modalLoading(loading: boolean) {
   modalApi.setState({ confirmLoading: loading, loading });
 }
 
 // Block upload
+/**
+ * 选图后的本地处理：先按 size 上限拦截超限图片，再读成 dataURL 作为裁剪源。
+ * 恒返回 false 以阻止 Element Plus 自行上传，真实上传只在确认裁剪时由 uploadApi 发起。
+ * @param file 用户选中的图片文件。
+ * @returns 恒为 false，表示不走组件内置的上传流程。
+ */
 function handleBeforeUpload(file: File) {
   if (props.size > 0 && file.size > 1024 * 1024 * props.size) {
     emit('uploadError', { msg: $t('ui.cropper.imageTooBig') });
@@ -82,10 +94,12 @@ function handleBeforeUpload(file: File) {
   return false;
 }
 
+/** 裁剪完成只更新右侧预览，不触发上传：用户可继续调整，确认后才发起真实上传。 */
 function handleCropend({ imgBase64 }: CropendResult) {
   previewSource.value = imgBase64;
 }
 
+/** 裁剪画布就绪后保存实例供工具栏按钮调用，并关闭打开阶段的 loading。 */
 function handleReady(cropperInstance: CropperType) {
   cropper.value = cropperInstance;
   // 画布加载完毕 关闭 loading
@@ -118,6 +132,10 @@ function handlerToolbar(event: string, arg?: number) {
   instance?.[event]?.(arg);
 }
 
+/**
+ * 确认裁剪：把预览的 base64 转成 Blob 交给 uploadApi 上传，成功后抛 uploadSuccess 并关闭弹窗。
+ * 未选图时只提示并中止；上传失败不在本地吞掉，异常继续抛给调用方，弹窗保持打开以便重试。
+ */
 async function handleOk() {
   const uploadApi = props.uploadApi;
   if (uploadApi && isFunction(uploadApi)) {

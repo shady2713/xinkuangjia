@@ -18,6 +18,7 @@ const props = defineProps<{
 
 const contentRef = useTemplateRef<HTMLDivElement>('contentRef');
 
+/** 内容层的最终样式：把调用方传入的样式原样透传。 */
 const style = computed(() => {
   const { contentStyle } = props;
 
@@ -27,6 +28,7 @@ const style = computed(() => {
 });
 
 defineExpose({
+  /** 返回内容层根元素，供父级在拖拽结束后接管宽度；尚未挂载时为 null。 */
   getEl: () => {
     return contentRef.value;
   },

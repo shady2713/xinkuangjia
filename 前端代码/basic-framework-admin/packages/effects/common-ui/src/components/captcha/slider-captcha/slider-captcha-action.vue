@@ -22,6 +22,7 @@ const actionRef = useTemplateRef<HTMLDivElement>('actionRef');
 
 const left = ref('0');
 
+/** 滑块的最终样式：调用方传入的样式叠加当前横向偏移。 */
 const style = computed(() => {
   const { actionStyle } = props;
   return {
@@ -30,6 +31,7 @@ const style = computed(() => {
   };
 });
 
+/** 是否处于拖动中：偏移超过 10px 且尚未通过时成立，用于切换圆角外观。 */
 const isDragging = computed(() => {
   const currentLeft = Number.parseInt(left.value as string);
 
@@ -37,12 +39,15 @@ const isDragging = computed(() => {
 });
 
 defineExpose({
+  /** 返回滑块根元素；尚未挂载时为 null。 */
   getEl: () => {
     return actionRef.value;
   },
+  /** 返回滑块根元素的行内样式对象，供父级读取当前 left 值。 */
   getStyle: () => {
     return actionRef?.value?.style;
   },
+  /** 设置滑块的横向偏移，取值为形如 '12px' 的字符串。 */
   setLeft: (val: string) => {
     left.value = val;
   },

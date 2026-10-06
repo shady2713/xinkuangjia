@@ -4,6 +4,10 @@
  */
 import type { Linter } from 'eslint';
 
+/**
+ * 生成 ESLint 的全局忽略清单。
+ * @returns 只含 ignores 的配置数组，覆盖依赖、构建产物、锁文件与生成文件，不含任何规则设置。
+ */
 export async function ignores(): Promise<Linter.Config[]> {
   return [
     {

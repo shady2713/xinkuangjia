@@ -31,6 +31,7 @@ const timezoneOptionsRef = ref<
 
 const [Modal, modalApi] = useVbenModal({
   fullscreenButton: false,
+  /** 确认时区：把选中值写回 store 后关闭弹窗；期间保持确认按钮加载态，未选中时不写入。 */
   onConfirm: async () => {
     try {
       modalApi.setState({ confirmLoading: true });
@@ -43,6 +44,10 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.setState({ confirmLoading: false });
     }
   },
+  /**
+   * 弹窗显隐变化回调：打开时回填当前时区并拉取候选列表，关闭时不做处理。
+   * @param isOpen 弹窗是否已打开；为 false 时直接跳过，不重复请求候选列表。
+   */
   async onOpenChange(isOpen) {
     if (isOpen) {
       timezoneRef.value = unref(timezoneStore.timezone);
@@ -51,6 +56,7 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
+/** 点击图标打开时区弹窗；候选列表要等弹窗打开后才拉取。 */
 const handleClick = () => {
   modalApi.open();
 };

@@ -1,3 +1,4 @@
+<!-- 布局选项的「通栏内容」缩略图：纯静态 SVG，无脚本与交互，供布局选择卡片展示。 -->
 <template>
   <svg
     class="custom-radio-image"

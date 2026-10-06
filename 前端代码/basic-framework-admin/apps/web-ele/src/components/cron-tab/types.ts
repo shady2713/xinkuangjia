@@ -9,11 +9,13 @@ export interface ShortcutsType {
   value: string;
 }
 
+/** 固定区间模式的端点：start 为起始值，end 为结束值，闭区间两端都可等于 undefined 表示不设限。 */
 export interface CronRange<T = number> {
   start: T | undefined;
   end: T | undefined;
 }
 
+/** 周期模式的区间：与固定区间不同，两端允许是不同类型（如周以字符串表示、步长用数字）。 */
 export interface CronLoop<TStart = number, TEnd = number> {
   start: TStart | undefined;
   end: TEnd | undefined;
@@ -38,6 +40,7 @@ export interface CronItem<
   last?: string;
 }
 
+/** 面板当前选中的调度值：键与 CRON 字段一一对应，缺哪个字段就不参与表达式拼装。 */
 export interface CronValue {
   second: CronItem;
   minute: CronItem;
@@ -48,11 +51,13 @@ export interface CronValue {
   year: CronItem;
 }
 
+/** 星期候选项：value 参与 CRON 表达式，label 只用于面板展示。 */
 export interface WeekOption {
   value: string;
   label: string;
 }
 
+/** 各时间单位在面板上的候选项清单，决定可勾选的取值范围。 */
 export interface CronData {
   second: string[];
   minute: string[];
@@ -63,6 +68,7 @@ export interface CronData {
   year: number[];
 }
 
+/** 生成从当前年份起 11 年的候选年份，让年份下拉不必随时间手工维护。 */
 const getYear = (): number[] => {
   const v: number[] = [];
   const y = new Date().getFullYear();
@@ -72,6 +78,7 @@ const getYear = (): number[] => {
   return v;
 };
 
+/** 面板的初始选中值：全部时间单位走 type 为 '0' 的任意模式，只有星期预选工作日区间。 */
 export const CronValueDefault: CronValue = {
   second: {
     type: '0',

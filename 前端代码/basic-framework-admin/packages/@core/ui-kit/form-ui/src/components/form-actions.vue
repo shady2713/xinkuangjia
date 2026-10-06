@@ -19,6 +19,7 @@ const [rootProps, form] = injectFormProps();
 
 const collapsed = defineModel({ default: false });
 
+/** 重置按钮的最终参数：默认显示并用当前语言文案，页面配置可以改文案或整体隐藏。 */
 const resetButtonOptions = computed(() => {
   return {
     content: `${$t.value('reset')}`,
@@ -27,6 +28,7 @@ const resetButtonOptions = computed(() => {
   };
 });
 
+/** 提交按钮的最终参数：同样默认显示并本地化，业务传 show=false 即可只保留重置按钮。 */
 const submitButtonOptions = computed(() => {
   return {
     content: `${$t.value('submit')}`,
@@ -39,6 +41,11 @@ const submitButtonOptions = computed(() => {
 //   return !!unref(rootProps).showCollapseButton;
 // });
 
+/**
+ * 点击提交：先走实例校验，只有全部字段通过才把值交给业务的 handleSubmit。
+ * 校验不通过时到此为止，不会调用业务回调，错误提示与滚动定位由校验过程自行完成。
+ * @param e 按钮点击事件，用于阻止表单默认提交与事件冒泡。
+ */
 async function handleSubmit(e: Event) {
   e?.preventDefault();
   e?.stopPropagation();
@@ -56,6 +63,10 @@ async function handleSubmit(e: Event) {
   await props.handleSubmit?.(values);
 }
 
+/**
+ * 点击重置：优先交由业务的 handleReset 处理，没有提供时退回表单自身的 resetForm。
+ * 无论走哪条分支，都会先把重置前的值取出来交给业务。
+ */
 async function handleReset(e: Event) {
   e?.preventDefault();
   e?.stopPropagation();
@@ -80,6 +91,10 @@ watch(
   },
 );
 
+/**
+ * 操作区的布局类名：由 actionLayout 决定是否独占一行、由 actionPosition 决定对齐方式，
+ * 并按表单布局与紧凑模式补齐底部留白与对齐，页面自定义类名始终拼在最后。
+ */
 const actionWrapperClass = computed(() => {
   const props = unref(rootProps);
   const actionLayout = props.actionLayout || 'rowEnd';

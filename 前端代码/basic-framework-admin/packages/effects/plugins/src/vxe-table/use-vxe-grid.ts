@@ -18,6 +18,7 @@ import { useStore } from '@vben-core/shared/store';
 import { VxeGridApi } from './api';
 import VxeGrid from './use-vxe-grid.vue';
 
+/** 表格插槽集合：在 vxe-grid 原生插槽基础上剔除由搜索表单占用的 form 插槽。 */
 type FilteredSlots<T> = {
   [K in keyof VxeGridSlots<T> as K extends 'form'
     ? never
@@ -39,6 +40,7 @@ export function useVbenVxeGrid<
     return useStore(api.store, selector);
   };
 
+  /** 供模板渲染的表格组件：把属性与透传属性写入 api 状态，并在卸载前通知 api 复位。 */
   const Grid = defineComponent(
     (props: VxeGridProps<T>, { attrs, slots }) => {
       onBeforeUnmount(() => {
@@ -71,4 +73,5 @@ export function useVbenVxeGrid<
   return [Grid, extendedApi] as const;
 }
 
+/** useVbenVxeGrid 的函数类型别名，便于在类型位置引用表格工厂的完整签名。 */
 export type UseVbenVxeGrid = typeof useVbenVxeGrid;

@@ -118,6 +118,8 @@ def test_worktree_comments_do_not_write_original_objects_or_index(
         f"scripts/code/{language}/check_staged_{language}_comments.py",
         "scripts/common/repository_layout.py",
         "scripts/common/check_protocol.py",
+        # Java 检查器复用公共检查错误类型，把证据不可读映射为退出码 2。
+        "scripts/common/quality_common.py",
     ):
         target = sandbox.root / script
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -169,6 +171,8 @@ def test_real_worktree_json_protocol(tmp_path: Path, language: str, populated: b
         f"scripts/code/{language}/check_staged_{language}_comments.py",
         "scripts/common/repository_layout.py",
         "scripts/common/check_protocol.py",
+        # Java 检查器复用公共检查错误类型，把证据不可读映射为退出码 2。
+        "scripts/common/quality_common.py",
     ):
         target = sandbox.root / script
         target.parent.mkdir(parents=True, exist_ok=True)

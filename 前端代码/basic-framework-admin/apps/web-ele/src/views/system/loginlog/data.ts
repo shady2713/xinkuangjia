@@ -15,7 +15,10 @@ import { formatDateTime } from '@vben/utils';
 import { DictTag } from '#/components/dict-tag';
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 列表的搜索表单 */
+/**
+ * 登录日志列表的检索条件：用户名称与登录地址模糊匹配，登录时间按区间筛选。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -48,7 +51,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 登录日志列表的列定义：编号、登录类型、用户、地址、浏览器、结果与登录日期。
+ * @returns 列定义数组；登录类型与结果用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {

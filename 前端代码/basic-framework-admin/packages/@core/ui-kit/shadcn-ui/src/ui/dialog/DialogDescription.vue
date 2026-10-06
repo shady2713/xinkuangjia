@@ -15,6 +15,7 @@ import { DialogDescription, useForwardProps } from 'reka-ui';
 
 const props = defineProps<DialogDescriptionProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的说明节点属性，转交 DialogDescription，由 reka-ui 登记为面板的 aria-describedby 目标。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

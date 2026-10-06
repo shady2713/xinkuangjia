@@ -16,6 +16,7 @@ import { RadioGroupRoot, useForwardPropsEmits } from 'reka-ui';
 const props = defineProps<RadioGroupRootProps & { class?: ClassValue }>();
 const emits = defineEmits<RadioGroupRootEmits>();
 
+/** 去掉 class 后的单选组属性，连同 emits 转发给 RadioGroupRoot；互斥选中与朝向语义由底层维护。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

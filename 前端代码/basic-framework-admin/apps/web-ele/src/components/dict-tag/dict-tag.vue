@@ -9,6 +9,10 @@ import { getDictObj } from '@vben/hooks';
 
 import { ElTag } from 'element-plus';
 
+/**
+ * 字典标签的入参：type 决定查哪一份字典缓存，value 是待翻译的字典值，
+ * icon 为可选的前置图标，留空时只渲染纯文字标签。
+ */
 interface DictTagProps {
   type: string; // 字典类型
   value: boolean | number | string; // 字典值

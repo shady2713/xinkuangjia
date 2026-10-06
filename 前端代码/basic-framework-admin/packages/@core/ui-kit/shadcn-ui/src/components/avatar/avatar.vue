@@ -18,6 +18,11 @@ import { computed } from 'vue';
 
 import { Avatar, AvatarFallback, AvatarImage } from '../../ui';
 
+/**
+ * 头像入参：在 reka-ui 头像三个原语的属性之上补充本组件独有的展示控制。
+ * size 用像素正方形约束外框，fit 决定图片填充方式，dot 开关右下角状态点，
+ * alt 既是图片的替代文本，也是图片加载失败时兜底文字的取字来源。
+ */
 interface Props extends AvatarFallbackProps, AvatarImageProps, AvatarRootProps {
   alt?: string;
   class?: ClassType;
@@ -39,6 +44,10 @@ const props = withDefaults(defineProps<Props>(), {
   fit: 'cover',
 });
 
+/**
+ * 把 fit 映射为图片容器的 object-fit 样式；fit 为空或未设置时返回空对象，
+ * 让图片沿用 AvatarImage 自带的默认填充方式。
+ */
 const imageStyle = computed<CSSProperties>(() => {
   const { fit } = props;
   if (fit) {
@@ -47,10 +56,18 @@ const imageStyle = computed<CSSProperties>(() => {
   return {};
 });
 
+/**
+ * 图片加载失败时展示的兜底文字，取 alt 末两位并转大写，
+ * 目的是在无头像图时仍能看出这个头像属于谁。alt 短于两位时按实际长度截取。
+ */
 const text = computed(() => {
   return props.alt.slice(-2).toUpperCase();
 });
 
+/**
+ * 由 size 生成外框的正方形像素尺寸；size 未设置或非正数时返回空对象，
+ * 此时外框宽度由容器与 Avatar 自身的 size-full 决定。
+ */
 const rootStyle = computed(() => {
   return props.size !== undefined && props.size > 0
     ? {

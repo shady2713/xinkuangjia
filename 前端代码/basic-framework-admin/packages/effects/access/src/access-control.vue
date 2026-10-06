@@ -16,6 +16,7 @@ import { computed } from 'vue';
 
 import { useAccess } from './use-access';
 
+/** 权限包裹组件的属性：codes 给出判定集合，type 决定按角色还是按权限码判定。 */
 interface Props {
   /**
    * Specified codes is visible
@@ -35,12 +36,14 @@ defineOptions({
 });
 
 const props = withDefaults(defineProps<Props>(), {
+  /** 默认插槽默认值：codes 非空时为要求集合，空数组表示不限制。 */
   codes: () => [],
   type: 'role',
 });
 
 const { hasAccessByCodes, hasAccessByRoles } = useAccess();
 
+/** 组件最终是否渲染默认插槽；type 为 role 走角色判定，否则走权限码判定。 */
 const hasAuth = computed(() => {
   const { codes, type } = props;
   return type === 'role' ? hasAccessByRoles(codes) : hasAccessByCodes(codes);

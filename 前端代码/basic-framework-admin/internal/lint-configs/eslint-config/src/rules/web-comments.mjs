@@ -99,19 +99,46 @@ export function documentation(node, sourceFile, start) {
 }
 
 /**
+ * 判断类型包装节点是否不改变注释承载语义。
+ * 圆括号、联合、交叉与类型运算符只是类型表达式的书写包装，自身没有可书写说明的位置：
+ * 说明只能落在最外层声明之前。遇到它们必须继续向上追溯，否则承载节点会退化成函数类型
+ * 自身，注释被夹在两层括号之间而无处安放。
+ * 判据只覆盖类型包装：调用、二元运算等表达式节点会改变实参位置与匿名回调归并的判定，
+ * 不得视为透明。
+ * @param node - 当前类型节点的祖先节点。
+ * @returns 是否为可继续向上追溯承载声明的类型包装节点。
+ */
+function typeWrapper(node) {
+  return (
+    ts.isParenthesizedTypeNode(node) ||
+    ts.isUnionTypeNode(node) ||
+    ts.isIntersectionTypeNode(node) ||
+    ts.isTypeOperatorNode(node)
+  );
+}
+
+/**
  * 找到箭头函数或函数表达式的职责注释承载节点。
  * @param node - 当前语法节点。
  * @returns 变量语句、属性声明或原节点。
  */
 function ownerOf(node) {
-  if (
-    (ts.isFunctionTypeNode(node) || ts.isConstructorTypeNode(node)) &&
-    (ts.isTypeAliasDeclaration(node.parent) ||
-      ts.isPropertySignature(node.parent))
-  )
-    return node.parent;
-  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-    const parent = node.parent;
+  if (ts.isFunctionTypeNode(node) || ts.isConstructorTypeNode(node)) {
+    // 类型包装不改变承载语义：说明只能写在包装之外的最外层声明之前，
+    // 因此先穿过包装，再在最外层祖先上确认承载声明。
+    let outer = node.parent;
+    while (outer && typeWrapper(outer)) outer = outer.parent;
+    if (ts.isTypeAliasDeclaration(outer) || ts.isPropertySignature(outer))
+      return outer;
+  } else if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+    // 具名函数表达式被圆括号包裹（如立即调用的清理入口）时，说明写在最外层左括号
+    // 之前，圆括号是该声明的书写起点。匿名回调仍以自身节点为承载候选，否则会把
+    // 实参或表达式位置的匿名回调直接归到外层声明，改变已校准的归并语义。
+    let target = node;
+    if (ts.isFunctionExpression(node) && node.name)
+      while (ts.isParenthesizedExpression(target.parent))
+        target = target.parent;
+    const parent = target.parent;
     if (ts.isVariableDeclaration(parent)) {
       return ts.isVariableStatement(parent.parent.parent)
         ? parent.parent.parent
@@ -119,6 +146,7 @@ function ownerOf(node) {
     }
     if (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent))
       return parent;
+    return target;
   }
   return node;
 }
@@ -454,7 +482,11 @@ function checkScript(file, source, offset, language, header = '') {
             named.name?.getText(tree) ??
             (ts.isConstructorDeclaration(named) ? 'constructor' : '函数或声明');
           const position = merged ? owner.getStart(tree) : node.getStart(tree);
-          const isPublic = publicDeclaration(node, owner);
+          // 函数类型被类型包装与承载声明隔开时，它只是该类型表达式的一个分支：
+          // 说明由承载声明的注释整体承担，但公开性仍按分支自身裁决，承载声明的导出
+          // 标记不转化为对单个分支的 JSDoc 与契约标签要求（包装上提只改说明的落点）。
+          const branched = callable && typeWrapper(node.parent);
+          const isPublic = !branched && publicDeclaration(node, owner);
           if (!meaningful(doc.text)) {
             fail(position, 'web-doc', `${label} 缺少中文职责注释`);
           } else if (isPublic && !doc.jsdoc) {

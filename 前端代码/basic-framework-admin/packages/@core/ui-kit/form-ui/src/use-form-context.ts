@@ -24,13 +24,23 @@ import { useForm } from 'vee-validate';
 import { object, ZodIntersection, ZodNumber, ZodObject, ZodString } from 'zod';
 import { getDefaultsForSchema } from 'zod-defaults';
 
+/**
+ * 渲染层实际接收到的属性：在通用表单属性上补一个可选实例引用，
+ * 使同一套渲染逻辑既能服务 useVbenForm 的带实例表单，也能服务纯静态表单。
+ */
 type ExtendFormProps = VbenFormProps & { formApi?: ExtendedFormApi };
 
+/**
+ * 表单属性与 vee-validate 上下文的注入/提供对。
+ * 字段子树用 injectFormProps 取值；取到的是响应式引用或普通对象，
+ * 容器用 provideFormProps 下发真实上下文，缺少 provide 时 inject 侧会抛错。
+ */
 export const [injectFormProps, provideFormProps] =
   createContext<[ComputedRef<ExtendFormProps> | ExtendFormProps, FormActions]>(
     'VbenFormProps',
   );
 
+/** 字段名到控件实例引用的注入/提供对：字段把自己的实例登记进来，供聚焦定位与滚动定位使用。 */
 export const [injectComponentRefMap, provideComponentRefMap] =
   createContext<Map<string, unknown>>('ComponentRefMap');
 
@@ -50,6 +60,10 @@ export function useFormInitial(
     ...(Object.keys(initialValues)?.length ? { initialValues } : {}),
   });
 
+  /**
+   * 收集需要原样透传给渲染层的具名插槽名。
+   * `default` 插槽由渲染层自己处理并挂上默认操作按钮，因此不计入其中。
+   */
   const delegatedSlots = computed(() => {
     const resultSlots: string[] = [];
 

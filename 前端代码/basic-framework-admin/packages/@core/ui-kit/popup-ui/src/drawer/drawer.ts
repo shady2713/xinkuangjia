@@ -11,10 +11,17 @@ import type { ClassType, MaybePromise } from '@vben-core/typings';
 
 import type { DrawerApi } from './drawer-api';
 
+/** 抽屉贴靠容器的四条边，决定 Sheet 的展开方向；非移动端下左右方向固定 520px 宽，上下方向改为满宽并限高。 */
 export type DrawerPlacement = 'bottom' | 'left' | 'right' | 'top';
 
+/** 页头关闭按钮停靠在标题左侧还是右侧，为 left 时标题区左侧留出按钮与竖分隔线的位置。 */
 export type CloseIconPlacement = 'left' | 'right';
 
+/**
+ * 抽屉的对外属性契约：描述标题、页头页脚、按钮、遮罩与贴靠方向等可配置项。
+ * 这些字段既可作为 props 直接传给抽屉组件，也可由 DrawerApi 写进状态后覆盖；
+ * 组件侧通过 usePriorityValues 让状态值优先于同名 props。
+ */
 export interface DrawerProps {
   /**
    * 是否挂载到内容区域
@@ -134,6 +141,12 @@ export interface DrawerProps {
   zIndex?: number;
 }
 
+/**
+ * 抽屉状态：在 DrawerProps 的可配置项之上补两个运行时字段。
+ * isOpen 由 DrawerApi 的开合方法维护；sharedData 是给使用方预留的挂载位，
+ * DrawerApi 实际把 setData 的数据放在自身的 sharedData.payload 上，并不写这个状态字段。
+ * 其余字段与 DrawerProps 同名同义，状态值优先于同名 props。
+ */
 export interface DrawerState extends DrawerProps {
   /** 弹窗打开状态 */
   isOpen?: boolean;
@@ -143,12 +156,23 @@ export interface DrawerState extends DrawerProps {
   sharedData?: Record<string, unknown>;
 }
 
+/**
+ * 在 DrawerApi 上补出的状态订阅入口，供抽屉视图按需订阅状态或其中某个字段。
+ * useStore 由 useVbenDrawer 在创建 API 后挂载，因此类型上通过交叉声明补齐。
+ */
 export type ExtendedDrawerApi = DrawerApi & {
+  /**
+   * 订阅抽屉状态；不传选择器时返回整个状态，只读且随状态写入自动更新。
+   */
   useStore: <T = NoInfer<DrawerState>>(
-    selector?: (state: NoInfer<DrawerState>) => T,
+    selector?: /** 状态选择器，缺省取整份 */ (state: NoInfer<DrawerState>) => T,
   ) => Readonly<Ref<T>>;
 };
 
+/**
+ * 创建抽屉 API 时可传入的选项：继承全部状态字段，并追加生命周期回调。
+ * 回调由 DrawerApi 在对应时机转发，onBeforeClose 是唯一能阻止关闭的钩子。
+ */
 export interface DrawerApiOptions extends DrawerState {
   /**
    * 独立的抽屉组件

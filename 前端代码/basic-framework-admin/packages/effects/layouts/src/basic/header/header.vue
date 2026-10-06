@@ -22,6 +22,7 @@ import {
   TimezoneButton,
 } from '../../widgets';
 
+/** 头部属性：theme 决定 logo 使用的明暗配色。 */
 interface Props {
   /**
    * Logo 主题
@@ -111,6 +112,7 @@ const rightSlots = computed(
   },
 );
 
+/** 头部左侧要渲染的入口：刷新入口按偏好决定，业务注入的 header-left-<序号> 插槽按序号并入并升序排列。 */
 const leftSlots = computed(() => {
   const list: Array<{ index: number; name: string }> = [];
 
@@ -130,6 +132,7 @@ const leftSlots = computed(() => {
   return list.toSorted((a, b) => a.index - b.index);
 });
 
+/** 请求父级清空偏好并退出登录；本组件只转发事件，不执行实际的清理与登出。 */
 function clearPreferencesAndLogout() {
   emit('clearPreferencesAndLogout');
 }

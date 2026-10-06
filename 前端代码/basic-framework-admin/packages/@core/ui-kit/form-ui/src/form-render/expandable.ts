@@ -28,6 +28,7 @@ export function useExpandable(
 
   const breakpoints = useBreakpoints(breakpointsTailwind);
 
+  /** 折叠时保留展开的表单项数量：按折叠行数累加每行表单项数，至少保留一个。 */
   const keepFormItemIndex = computed(() => {
     const rows = props.collapsedRows ?? 1;
     const mapping = rowMapping.value;
@@ -56,6 +57,10 @@ export function useExpandable(
     },
   );
 
+  /**
+   * 测量容器实际排出的每一行，并统计折叠行数内各行的表单项数量。
+   * 未开启折叠按钮或容器尚未挂载时直接返回，此时不统计任何行。
+   */
   async function calculateRowMapping() {
     if (!props.showCollapseButton) {
       return;

@@ -16,6 +16,7 @@ import { AccordionItem, useForwardProps } from 'reka-ui';
 
 const props = defineProps<AccordionItemProps & { class?: ClassValue }>();
 
+/** 去掉 class 的项级属性，再经 useForwardProps 交给 AccordionItem；下边框类名由模板追加，不进 reka-ui。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -4,6 +4,7 @@ import { Fullscreen, Minimize2 } from '@vben-core/icons';
 
 const screen = defineModel<boolean>('screen');
 
+/** 全屏按钮的点击处理：翻转 screen 双向绑定的布尔值，模板据此切换进入与退出全屏的图标。 */
 function toggleScreen() {
   screen.value = !screen.value;
 }

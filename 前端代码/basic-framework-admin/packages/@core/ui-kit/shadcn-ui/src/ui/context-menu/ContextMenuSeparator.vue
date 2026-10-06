@@ -12,6 +12,7 @@ import { ContextMenuSeparator } from 'reka-ui';
 
 const props = defineProps<ContextMenuSeparatorProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的分隔线属性，转交 ContextMenuSeparator 作为语义分隔节点，不携带任何交互。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

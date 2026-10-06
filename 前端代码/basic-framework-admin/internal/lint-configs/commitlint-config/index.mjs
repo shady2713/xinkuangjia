@@ -8,6 +8,7 @@ import { getPackagesSync } from '@vben/node-utils';
 
 const { packages } = getPackagesSync();
 
+/** 允许的提交 scope：全部工作区包名，外加 project、style、lint 等通用分类。 */
 const allowedScopes = [
   ...packages.map((pkg) => pkg.packageJson.name),
   'project',
@@ -19,7 +20,7 @@ const allowedScopes = [
   'other',
 ];
 
-// precomputed scope
+// precomputed scope：从 git status 里推断一个默认 scope，供 cz-git 预填提交信息。
 const scopeComplete = execSync('git status --porcelain || true')
   .toString()
   .trim()
@@ -106,6 +107,7 @@ const userConfig = {
     /**
      * type[scope]: [function] description
      *      ^^^^^
+     * scope 必须落在 allowedScopes 白名单内，否则拒绝本次提交并列出全部可选值。
      */
     'function-rules/scope-enum': [
       2, // level: error

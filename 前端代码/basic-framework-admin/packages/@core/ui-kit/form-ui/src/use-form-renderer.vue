@@ -50,12 +50,21 @@ provideComponentRefMap(componentRefMap);
 
 props.formApi?.mount?.(form, componentRefMap);
 
+/**
+ * 折叠开关变化时的写入点：先同步到实例状态，再通知业务的折叠回调。
+ * 不判断折叠是否允许，点击折叠箭头即视为一次显式切换。
+ */
 const handleUpdateCollapsed = (value: boolean) => {
   props.formApi?.setState({ collapsed: value });
   // 同步折叠状态变化回调
   forward.value.handleCollapsedChange?.(value);
 };
 
+/**
+ * 表单区域回车即提交，且只在校验通过后交给业务。
+ * 焦点在 textarea 时保留换行不触发；未开启回车提交或实例尚未挂载时同样直接返回。
+ * @param event 键盘事件，用于识别 textarea 焦点并阻止默认提交行为。
+ */
 function handleKeyDownEnter(event: KeyboardEvent) {
   if (!state?.value.submitOnEnter || !forward.value.formApi?.isMounted) {
     return;

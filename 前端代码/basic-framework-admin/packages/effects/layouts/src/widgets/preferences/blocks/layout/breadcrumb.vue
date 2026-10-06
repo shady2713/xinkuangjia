@@ -30,6 +30,7 @@ const typeItems: SelectOption[] = [
   { label: $t('preferences.breadcrumb.background'), value: 'background' },
 ];
 
+/** 其余选项是否禁用：面包屑总开关关闭，或父级传入 disabled 时整体置灰。 */
 const disableItem = computed(() => {
   return !breadcrumbEnable.value || props.disabled;
 });

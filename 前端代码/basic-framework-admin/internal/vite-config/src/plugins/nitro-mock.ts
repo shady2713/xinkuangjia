@@ -13,6 +13,7 @@ import { colors, consola, getPackage } from '@vben/node-utils';
 import getPort from 'get-port';
 import { build, createDevServer, createNitro, prepare } from 'nitropack';
 
+/** mock 服务插件选项：包名、监听端口，以及是否打印启动与配置变更日志。 */
 type NitroMockPluginOptions = {
   mockServerPackage?: string;
   port?: number;
@@ -21,12 +22,22 @@ type NitroMockPluginOptions = {
 
 const hmrKeyRe = /^runtimeConfig\.|routeRules\./;
 
+/**
+ * 开发期按需拉起独立的 Nitro mock 服务。
+ * 端口被占用或 mock 服务包未安装时静默跳过，不影响主应用启动。
+ * @param options - mock 服务选项；解构出的包名、端口与 verbose 均可省略并使用默认值。
+ * @returns 只在开发服务器上生效的 Vite 插件，地址列表中会追加 mock 服务入口。
+ */
 export const viteNitroMockPlugin = ({
   mockServerPackage = '@vben/backend-mock',
   port = 5320,
   verbose = true,
 }: NitroMockPluginOptions = {}): PluginOption => {
   return {
+    /**
+     * 在开发服务器启动时探测端口并拉起 mock 服务，同时把 mock 地址追加到地址列表输出。
+     * @param server - Vite 开发服务器实例，这里会接管它的 printUrls。
+     */
     async configureServer(server) {
       const availablePort = await getPort({ port });
       if (availablePort !== port) {

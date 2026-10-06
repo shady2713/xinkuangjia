@@ -39,6 +39,7 @@ const props = defineProps({
   },
   shortcuts: {
     type: Array as PropType<ShortcutsType[]>,
+    /** 缺省无预设项，下拉里只保留内置的常用表达式与「自定义」入口 */
     default: () => [],
   },
 });
@@ -51,6 +52,7 @@ const dialogVisible = ref(false);
 const cronValue = reactive<CronValue>(CronValueDefault);
 
 const data = reactive<CronData>(CronDataDefault);
+/** 把秒字段的选择拼成 CRON 片段：任意用 *，固定区间用 start-end，周期用 start/end，指定时刻用逗号连接。 */
 const value_second = computed(() => {
   const v = cronValue.second;
   switch (v.type) {
@@ -72,6 +74,7 @@ const value_second = computed(() => {
   }
 });
 
+/** 把分钟字段的选择拼成 CRON 片段，模式与秒一致；指定时刻为空时退回 *，避免拼出空字段。 */
 const value_minute = computed(() => {
   const v = cronValue.minute;
   switch (v.type) {
@@ -93,6 +96,7 @@ const value_minute = computed(() => {
   }
 });
 
+/** 把小时字段的选择拼成 CRON 片段，模式与秒一致；未勾选任何小时时按 * 处理。 */
 const value_hour = computed(() => {
   const v = cronValue.hour;
   switch (v.type) {
@@ -114,6 +118,10 @@ const value_hour = computed(() => {
   }
 });
 
+/**
+ * 把日字段的选择拼成 CRON 片段。除四种通用模式外，日还支持 L（月末）与 ?（不指定），
+ * 后者由日与周互斥的联动规则置入，此时本片段让位给周字段。
+ */
 const value_day = computed(() => {
   const v = cronValue.day;
   switch (v.type) {
@@ -141,6 +149,7 @@ const value_day = computed(() => {
   }
 });
 
+/** 把月份字段的选择拼成 CRON 片段，模式与秒一致；月份候选项为 1-12，不含 L 与 ?。 */
 const value_month = computed(() => {
   const v = cronValue.month;
   switch (v.type) {
@@ -162,6 +171,10 @@ const value_month = computed(() => {
   }
 });
 
+/**
+ * 把周字段的选择拼成 CRON 片段。周的写法与其它单位不同：
+ * 周期模式输出「第几个#星期几」且首尾与配置顺序相反，末位模式输出 星期+L，另有 ? 表示不指定。
+ */
 const value_week = computed(() => {
   const v = cronValue.week;
   switch (v.type) {
@@ -189,6 +202,10 @@ const value_week = computed(() => {
   }
 });
 
+/**
+ * 把年份字段的选择拼成 CRON 片段。type 为 -1 表示不限定年份，此时返回空串；
+ * 提交时会连同前面的空格一起省略该字段，表达式仍是六段式。
+ */
 const value_year = computed(() => {
   const v = cronValue.year;
   switch (v.type) {
@@ -256,11 +273,16 @@ watch(
   },
 );
 
+/** 打开生成器：先按当前表达式回填面板，再显示弹窗，保证看到的是已有配置而非初始值。 */
 function open() {
   set();
   dialogVisible.value = true;
 }
 
+/**
+ * 把当前表达式反向解析回面板的 cronValue，供生成器逐项展示与编辑。
+ * 段数不足 6 时提示并按默认表达式解析，此时面板内容会与用户原值不一致，需要用户确认后再提交。
+ */
 function set() {
   defaultValue.value = props.modelValue;
   let arr = (props.modelValue || '* * * * * ?').split(' ');
@@ -404,6 +426,7 @@ function set() {
   }
 }
 
+/** 确认生成器配置：拼出完整表达式、同步给外部绑定并关闭弹窗。 */
 function submit() {
   const year = value_year.value ? ` ${value_year.value}` : '';
   defaultValue.value = `${value_second.value} ${value_minute.value} ${
@@ -413,6 +436,7 @@ function submit() {
   dialogVisible.value = false;
 }
 
+/** 输入框内容变化时立即把新值抛给外部，表达式是否合法交由后端判定，组件不拦截。 */
 function inputChange() {
   emit('update:modelValue', defaultValue.value);
 }

@@ -15,6 +15,7 @@ import { TabsContent } from 'reka-ui';
 
 const props = defineProps<TabsContentProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的内容面板属性，转交 TabsContent；显隐与焦点管理由页签根节点上下文决定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -128,6 +128,7 @@ function isNumber(value: unknown): value is number {
 }
 
 /**
+ * 返回候选值列表中第一个既不是 `null` 也不是 `undefined` 的值（空串、0、false 都算有效值）。
  * Returns the first value in the provided list that is neither `null` nor `undefined`.
  *
  * This function iterates over the input values and returns the first one that is
@@ -136,7 +137,9 @@ function isNumber(value: unknown): value is number {
  *
  * @template T - The type of the input values.
  * @param {...(T | null | undefined)[]} values - A list of values to evaluate.
+ *   中文说明：按传入顺序逐个判断，命中第一个非 null 且非 undefined 的值即返回。
  * @returns {T | undefined} - The first value that is not `null` or `undefined`, or `undefined` if none are found.
+ *   中文说明：第一个非空值；全部为 null/undefined 或不传参数时返回 undefined。
  *
  * @example
  * // Returns 42 because it is the first non-null, non-undefined value.

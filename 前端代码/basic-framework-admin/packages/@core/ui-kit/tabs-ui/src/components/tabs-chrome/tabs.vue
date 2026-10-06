@@ -23,8 +23,10 @@ defineOptions({
 
 const props = withDefaults(defineProps<Props>(), {
   contentClass: 'vben-tabs-content',
+  /** 右键菜单的缺省实现：返回空数组表示不弹出菜单；Chrome 风格需要菜单时由使用方传入同名 prop 覆盖。 */
   contextMenus: () => [],
   gap: 7,
+  /** 标签数据缺省为空数组：让标签栏在没有标签时也能正常渲染，此时容器只剩自身留白。 */
   tabs: () => [],
 });
 
@@ -39,6 +41,7 @@ const contentRef = ref();
 // @ts-expect-error unused
 const tabRef = ref();
 
+/** 把 gap 换算成 CSS 变量：标签间的圆角、竖分隔线与左右留白都按这个变量对齐。 */
 const style = computed(() => {
   const { gap } = props;
   return {
@@ -46,6 +49,7 @@ const style = computed(() => {
   };
 });
 
+/** 把路由标签定义摊平成 Chrome 风格标签项的渲染数据：补出关闭与固定标记，标题按新标签标题、路由标题、路由名的顺序兜底。 */
 const tabsView = computed(() => {
   return props.tabs.map((tab) => {
     const { fullPath, meta, name, path, key } = tab || {};
@@ -64,6 +68,7 @@ const tabsView = computed(() => {
   });
 });
 
+/** Chrome 风格标签的中键关闭：可关闭、非固定、不止一个标签且开启 middleClickToClose 时拦下中键并抛出 close，否则交还浏览器默认行为。 */
 function onMouseDown(e: MouseEvent, tab: TabConfig) {
   if (
     e.button === 1 &&

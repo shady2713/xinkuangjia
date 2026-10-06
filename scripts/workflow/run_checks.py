@@ -132,6 +132,47 @@ def command_for(gate: Gate, root: Path) -> list[str]:
     return [*command, "--json"]
 
 
+def evidence_environment(root: Path) -> dict[str, str]:
+    """解析本次 Java 注释检查采用的受控来源证据位置，显式配置优先。
+
+    只导出真正解析到的位置；仓库内默认索引缺失时不导出任何变量，子检查按
+    “未提供证据”拒绝来源说明，不会因此放行。
+    """
+    from scripts.code.java.check_staged_java_comments import (
+        EVIDENCE_REGISTRY_ENV,
+        EVIDENCE_SNAPSHOTS_ENV,
+        resolve_evidence_paths,
+    )
+
+    registry, snapshots, _ = resolve_evidence_paths(root=root)
+    if registry is None:
+        return {}
+    environment = {EVIDENCE_REGISTRY_ENV: str(registry)}
+    if snapshots is not None:
+        environment[EVIDENCE_SNAPSHOTS_ENV] = str(snapshots)
+    return environment
+
+
+def evidence_report(root: Path) -> dict[str, object]:
+    """报告本次检查采用的受控来源证据输入，不含任何证据正文。
+
+    清单不可读时保留真实原因而不抛出：真正消费证据的 Java 子检查会以环境
+    错误退出，未选择该类检查时报告仍如实标记本次输入不可用。
+    """
+    from scripts.code.java.check_staged_java_comments import EvidenceError, resolve_evidence
+
+    try:
+        registry = resolve_evidence(None, None, root)
+    except EvidenceError as error:
+        return {"status": "unusable", "reason": str(error)}
+    if registry is None:
+        return {
+            "status": "absent",
+            "reason": "未配置受控清单与快照，来源说明一律按无逐项依据拒绝",
+        }
+    return {"status": "configured", **registry.describe()}
+
+
 def zero_scope_confirmed(gate: Gate, root: Path) -> bool:
     """独立枚举可适用对象来确认 N/A，不能只依靠子检查的零计数及登记理由。
 
@@ -242,7 +283,12 @@ def execute(
             arguments,
             root,
             timeout=timeout,
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"},
+            env={
+                **os.environ,
+                **evidence_environment(root),
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            },
             cancel=cancel,
         )
         code = result.code
@@ -371,6 +417,7 @@ def run_with_evidence(gates: list[Gate], root: Path, jobs: int, timeout: float) 
         "input_mode": "worktree",
         "selection": [asdict(gate) for gate in gates],
         "execution": {"jobs": jobs, "timeout_seconds": timeout},
+        "evidence": evidence_report(root),
         "before": before, "after": after,
         "inputs_consistent": consistent,
         "evidence_error": evidence_error,
@@ -417,7 +464,7 @@ def main() -> int:
     if args.json:
         print(
             json.dumps(
-                {"code": code, "status": report["status"], "inputs_consistent": report["inputs_consistent"], "evidence_error": report["evidence_error"], "results": [asdict(result) for result in outcomes]},
+                {"code": code, "status": report["status"], "inputs_consistent": report["inputs_consistent"], "evidence_error": report["evidence_error"], "evidence": report["evidence"], "results": [asdict(result) for result in outcomes]},
                 ensure_ascii=False,
             )
         )
@@ -428,6 +475,15 @@ def main() -> int:
                 print(result.output.rstrip())
             if result.reason:
                 print(result.reason)
+        evidence = report["evidence"]
+        if evidence.get("status") == "configured":
+            print(
+                "受控来源证据：清单 "
+                f"{evidence.get('registry')}（SHA-256 {evidence.get('registry_sha256')}，"
+                f"{evidence.get('records')} 条记录）；受控快照 {evidence.get('snapshots') or '未配置'}"
+            )
+        else:
+            print(f"受控来源证据：{evidence.get('reason')}")
         print(
             f"汇总：{report['status']}；{sum(result.status == 'passed' for result in outcomes)}/{len(outcomes)} 项有实际对象并通过，退出码 {code}。"
         )

@@ -1,6 +1,7 @@
 /** 通知列表项的数据契约，字段与后端消息体及跳转配置保持一致。 */
 import type { HistoryState, LocationQueryRaw } from 'vue-router';
 
+/** 通知列表项：承载头像、标题、正文、时间与已读状态，并可携带跳转链接、查询参数与 history state。 */
 interface NotificationItem {
   /** 通知唯一标识；缺省时由列表 key 回退到 title */
   id?: number | string;

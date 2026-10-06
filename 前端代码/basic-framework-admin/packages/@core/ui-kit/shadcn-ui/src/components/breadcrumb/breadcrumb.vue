@@ -32,6 +32,10 @@ withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{ select: [string] }>();
 
+/**
+ * 把被点击层级的路径作为 select 载荷抛给调用方，本组件不自行跳转路由；
+ * 留空 path 的占位层级直接忽略，末级渲染成纯文本也不会走到这里。
+ */
 function handleClick(path?: string) {
   if (!path) {
     return;

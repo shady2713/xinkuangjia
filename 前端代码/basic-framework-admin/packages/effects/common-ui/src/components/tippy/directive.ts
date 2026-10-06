@@ -28,6 +28,7 @@ export default function useTippyDirective(isDark: ComputedRef<boolean>) {
           : binding.value || {};
 
       const modifiers = Object.keys(binding.modifiers || {});
+      /** 第一个非 arrow 修饰符作为气泡方位；没有该修饰符时为 undefined，沿用配置里的 placement。 */
       const placement = modifiers.find((modifier) => modifier !== 'arrow');
       const withArrow = modifiers.includes('arrow');
 
@@ -90,6 +91,10 @@ export default function useTippyDirective(isDark: ComputedRef<boolean>) {
 
       useTippy(el, opts);
     },
+    /**
+     * 卸载时销毁 tippy 实例，避免遗留浮层与事件监听。
+     * @param el 指令作用的 DOM 元素，其上的 tippy 实例会被销毁。
+     */
     unmounted(el) {
       if (el.$tippy) {
         el.$tippy.destroy();
@@ -98,6 +103,11 @@ export default function useTippyDirective(isDark: ComputedRef<boolean>) {
       }
     },
 
+    /**
+     * 更新时重算配置并写入实例，主题改为跟随当前明暗模式。
+     * @param el 指令作用的 DOM 元素，用于取出并更新 tippy 实例。
+     * @param binding 指令绑定值：字符串作为内容，对象作为完整配置。
+     */
     updated(el, binding) {
       const opts =
         typeof binding.value === 'string'

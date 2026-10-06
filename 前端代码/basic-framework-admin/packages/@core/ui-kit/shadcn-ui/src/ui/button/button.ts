@@ -4,6 +4,11 @@
  */
 import { cva } from 'class-variance-authority';
 
+/**
+ * cva 变体表：基础类名统一按钮排版、颜色过渡、聚焦环与禁用态的指针屏蔽和淡出。
+ * variant 八档（default、destructive、ghost、heavy、icon、link、outline、secondary）
+ * 与 size 五档（default、icon、lg、sm、xs）正交组合，两轴都缺省时按 defaultVariants 回落。
+ */
 export const buttonVariants = cva(
   'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:cursor-not-allowed  disabled:opacity-50',
   {

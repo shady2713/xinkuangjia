@@ -84,20 +84,34 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   });
 }
 
+/**
+ * 取注入全局 SCSS 时使用的路径基准：本模块所在目录向上三级。
+ * 按源码路径加载时该基准落在工作区下的 internal 目录，而不是工作区根。
+ */
 function findMonorepoRoot() {
   return path.resolve(__dirnameSafe(), '../../..');
 }
 
+/**
+ * 用 import.meta.url 还原当前模块所在目录，替代 ESM 中不存在的 __dirname。
+ * 取的是 URL 的 pathname，非 ASCII 目录会保留百分号编码，是否解码由调用方决定。
+ */
 function __dirnameSafe() {
   return path.dirname(new URL(import.meta.url).pathname);
 }
 
+/**
+ * 生成 CSS 预处理配置：按需把全局 SCSS 变量注入 apps 下的样式文件。
+ * @param injectGlobalScss - 为 false 时不注入，返回空的 preprocessorOptions。
+ * @returns Vite 的 CSSOptions；注入时只有相对基准路径以 apps 开头的文件会被加上 @use 前置语句。
+ */
 function createCssOptions(injectGlobalScss = true): CSSOptions {
   const root = findMonorepoRoot();
   return {
     preprocessorOptions: injectGlobalScss
       ? {
           scss: {
+            /** 只给 apps 目录下的样式文件前置全局 SCSS 变量，其余文件原样返回。 */
             additionalData: (content: string, filepath: string) => {
               const relativePath = relative(root, filepath);
               if (relativePath.startsWith(`apps${path.sep}`)) {

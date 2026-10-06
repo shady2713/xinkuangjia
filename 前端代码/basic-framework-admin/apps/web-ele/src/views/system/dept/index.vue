@@ -25,6 +25,7 @@ const [FormModal, formModalApi] = useVbenModal({
 
 /** 切换树形展开/收缩状态 */
 const isExpanded = ref(true);
+/** 切换部门树的展开状态：翻转标志后同步应用到表格的全部树节点。 */
 function handleExpand() {
   isExpanded.value = !isExpanded.value;
   gridApi.grid.setAllTreeExpand(isExpanded.value);
@@ -42,6 +43,7 @@ function handleAppend(row: SystemDeptApi.Dept) {
   formModalApi.setData({ parentId: row.id }).open();
 }
 
+/** 判断该部门是否还有下级：既用于禁止删除含下级的部门，也用于禁止勾选这类行。 */
 function hasChildDept(row: SystemDeptApi.Dept) {
   return (gridApi.grid?.getTreeRowChildren(row)?.length ?? 0) > 0;
 }
@@ -54,6 +56,7 @@ const {
   handleEdit,
 } = useCrudActions<SystemDeptApi.Dept>({
   batchDeleteApi: deleteDeptList,
+  /** 删除前校验：仍有下级的部门不允许删除，并提示先处理下级部门。 */
   beforeDelete: (row) => {
     if (!hasChildDept(row)) {
       return true;
@@ -62,6 +65,7 @@ const {
     return false;
   },
   deleteApi: deleteDept,
+  /** 二次确认与成功提示中展示的部门名称；取不到名称时退化为不带名称的通用文案。 */
   getDeleteName: (row) => row.name || '',
   modalApi: formModalApi,
   refresh: handleRefresh,
@@ -100,6 +104,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
     proxyConfig: {
       ajax: {
+        /** 查询全部部门：该表按树展示且关闭了分页，因此不接收分页与检索参数。 */
         query: async () => {
           return await getDeptList();
         },
@@ -110,6 +115,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       isHover: true,
     },
     checkboxConfig: {
+      /** 勾选规则：只允许勾选没有下级的部门，与删除前的下级校验保持一致。 */
       checkMethod: ({ row }) => !hasChildDept(row),
       reserve: false,
       checkStrictly: true,

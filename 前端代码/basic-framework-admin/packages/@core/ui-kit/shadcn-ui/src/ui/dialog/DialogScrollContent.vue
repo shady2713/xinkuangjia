@@ -27,6 +27,7 @@ const props = withDefaults(
 );
 const emits = defineEmits<DialogContentEmits>();
 
+/** 去掉 class 后的弹窗面板属性，连同 emits 转发给 DialogContent；zIndex 与越界拖拽拦截留在模板里处理。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

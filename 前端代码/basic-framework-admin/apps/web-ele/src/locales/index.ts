@@ -115,6 +115,15 @@ async function loadElementLocale(lang: SupportedLanguagesType) {
   }
 }
 
+/**
+ * 按应用偏好装配 vue-i18n，让全站文案、element-plus 与 dayjs 共用同一语言。
+ *
+ * 默认语言取 `preferences.app.locale`，翻译内容由 loadMessages 提供，非生产环境开启缺失文案告警；
+ * options 可覆盖上述任意一项，业务项目接入自有语言包时使用。
+ *
+ * @param app 待安装 i18n 插件的应用实例
+ * @param options 覆盖默认语言、文案加载器与缺失告警开关的配置，缺省沿用上述取值
+ */
 async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await coreSetup(app, {
     defaultLocale: preferences.app.locale,

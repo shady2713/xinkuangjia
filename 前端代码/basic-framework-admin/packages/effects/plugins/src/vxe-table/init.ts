@@ -55,6 +55,7 @@ import { extendsDefaultFormatter } from './extends';
 // 是否加载过
 let isInit = false;
 
+/** 搜索表单创建方法：由 setupVbenVxeTable 注入，注入前为 undefined，仅供表格内部调用。 */
 // eslint-disable-next-line import/no-mutable-exports
 export let useTableForm: typeof useVbenForm;
 
@@ -65,6 +66,7 @@ const createVirtualComponent = (name = '') => {
   });
 };
 
+/** 注册项目用到的全部 vxe-table 与 vxe-pc-ui 组件，重复调用由 isInit 拦截只执行一次。 */
 export function initVxeTable() {
   if (isInit) {
     return;
@@ -105,6 +107,11 @@ export function initVxeTable() {
   isInit = true;
 }
 
+/**
+ * 初始化表格运行环境：注册组件、注入表单创建方法、接入明暗主题与中英文语言包，并注册默认格式化器。
+ * 除组件注册外的步骤不做重复调用保护，调用方需保证本函数只执行一次。
+ * @param setupOptions 初始化回调，提供 configVxeTable 与 useVbenForm 两项能力。
+ */
 export function setupVbenVxeTable(setupOptions: SetupVxeTable) {
   const { configVxeTable, useVbenForm } = setupOptions;
 

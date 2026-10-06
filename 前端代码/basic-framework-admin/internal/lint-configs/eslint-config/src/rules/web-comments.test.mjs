@@ -285,6 +285,156 @@ describe('函数类型与属性承载节点', /** 箭头函数与函数类型的
   });
 });
 
+describe('类型包装的透明承载', /** 函数类型被圆括号与联合包住时注释只能写在最外层声明之前，承载定位必须穿过包装。 */ () => {
+  it('接口属性里的括号函数类型按属性签名取注释', /** 注释写在属性上方是 prettier 的稳定位置，必须能消除诊断，否则只能把说明塞进括号内。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-union-prop.ts',
+        '/** 按钮属性契约。 */\ninterface Props {\n  /** 显隐控制，函数形式按按钮配置判定。 */\n  ifShow?: ((action: ActionItem) => boolean) | boolean;\n}\n',
+      ),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('类型别名里的括号函数类型按别名取注释', /** 联合分支的说明由别名承担，导出别名不把公开契约转嫁给单个分支。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-union-alias.ts',
+        '/** 标题渲染形态：字符串或渲染函数。 */\nexport type CustomRenderType = (() => string) | string;\n',
+      ),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('立即调用的具名函数表达式按左括号之前的注释裁决', /** 圆括号是立即调用写法里函数的书写起点，注释写在它之前必须被接受。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-iife.ts',
+        "/* 清理脚本：删除构建产物。 */\nconst marker = 1;\nvoid marker;\n\n/* 清理入口：按 targets 删除构建产物。 */ (async function startCleanup() {\n  const targets = ['node_modules'];\n  void targets;\n})();\n",
+      ),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('括号透明不改变直接承载的契约裁决', /** 函数类型整体就是别名的类型时仍按公开契约要求返回说明，透明判据不得扩大豁免。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-direct-contract.ts',
+        '/** 标题渲染形态。 */\nexport type RenderType = () => string;\n',
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 2,
+      message: '函数或声明 缺少返回结果的中文说明',
+      path: '/tmp/DUMMY-paren-direct-contract.ts',
+      rule: 'web-returns',
+    });
+  });
+
+  it('括号函数类型没有任何说明时仍报 web-doc', /** 透明只改说明的落点，不能把真实缺口一并豁免。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-missing.ts',
+        '/** 按钮属性契约。 */\ninterface Props {\n  ifShow?: ((action: ActionItem) => boolean) | boolean;\n}\n',
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 3,
+      message: '函数或声明 缺少中文职责注释',
+      path: '/tmp/DUMMY-paren-missing.ts',
+      rule: 'web-doc',
+    });
+  });
+
+  it('左括号之前没有说明的立即调用仍报 web-doc', /** 注释写在括号之内或函数关键字之后都不是可识别的承载位置。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-iife-missing.ts',
+        "/* 清理脚本：删除构建产物。 */\nconst marker = 1;\nvoid marker;\n\n(async function startCleanup() {\n  const targets = ['node_modules'];\n  void targets;\n})();\n",
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 5,
+      message: 'startCleanup 缺少中文职责注释',
+      path: '/tmp/DUMMY-paren-iife-missing.ts',
+      rule: 'web-doc',
+    });
+  });
+
+  it('具名函数表达式没有说明时仍按自身节点报 web-doc', /** 括号透明不能顺带豁免普通具名函数表达式的职责要求。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-named-missing.ts',
+        '/** 模块说明。 */\nconst marker = 1;\nvoid marker;\n\nconst task = function startCleanup() {\n  return 1;\n};\nvoid task;\n',
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 5,
+      message: 'startCleanup 缺少中文职责注释',
+      path: '/tmp/DUMMY-paren-named-missing.ts',
+      rule: 'web-doc',
+    });
+  });
+
+  it('文件以立即调用开头且没有模块说明时报 web-module-doc', /** 透明判据不得让模块头缺口被函数自身的注释吞掉。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-iife-header.ts',
+        '(async function startCleanup() {\n  return 1;\n})();\n',
+        { new: true },
+      ),
+    );
+
+    expect(rules(findings)).toContain('web-module-doc');
+    expect(rules(findings)).toContain('web-doc');
+  });
+
+  it('括号包裹的匿名回调仍按具名承载声明归并', /** 圆括号对匿名回调不是承载节点，归并语义必须保持原样。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-callback-merge.ts',
+        '/** 配置集合。 */\nconst options = {\n  /** 读取固定值。 */\n  read: (() => 1),\n};\nvoid options;\n',
+      ),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('括号匿名回调的承载缺失时报告承载声明的名字', /** 归并后落点仍是具名承载声明，落点退化会让正常写法的缺口指向错误位置。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-callback-carrier.ts',
+        '/** 配置集合。 */\nconst options = {\n  read: (() => 1),\n};\nvoid options;\n',
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 3,
+      message: 'read 缺少中文职责注释',
+      path: '/tmp/DUMMY-paren-callback-carrier.ts',
+      rule: 'web-doc',
+    });
+  });
+
+  it('归并后的括号匿名回调不再按自身签名要求返回标签', /** 归并语义被改变会让正常写法的回调被追加标签要求。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-paren-callback-returns.ts',
+        '/** 计算可见项总量。 */\nconst total = computed(((): number => {\n  if (flag) {\n    return 1;\n  }\n  return 2;\n}));\nvoid total;\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-returns');
+  });
+});
+
 describe('公开性判定', /** 公开性决定是否需要完整 JSDoc 与调用契约标签。 */ () => {
   it('导出函数缺少 JSDoc 时不因行注释放行', /** 公开判定的入口失效会让契约标签整体失效。 */ () => {
     const findings = checkWebFile(

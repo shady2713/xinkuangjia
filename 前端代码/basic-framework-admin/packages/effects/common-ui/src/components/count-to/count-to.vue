@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<CountToProps>(), {
   decimal: '.',
   decimals: 0,
   delay: 0,
+  /** 过渡曲线默认值：easeOutExpo，数值先快后慢地逼近目标值。 */
   transition: () => TransitionPresets.easeOutExpo,
 });
 
@@ -38,22 +39,29 @@ watch(
 );
 
 const currentValue = useTransition(lastValue, {
+  /** 动画开始前的延迟毫秒数，随 props.delay 变化。 */
   delay: computed(() => props.delay),
+  /** 动画持续的毫秒数，随 props.duration 变化。 */
   duration: computed(() => props.duration),
+  /** 是否禁用过渡动画；禁用时数值直接跳到目标值。 */
   disabled: computed(() => props.disabled),
+  /** 过渡曲线：传入字符串时从预设表中取，否则原样使用传入的曲线函数。 */
   transition: computed(() => {
     return isString(props.transition)
       ? TransitionPresets[props.transition]
       : props.transition;
   }),
+  /** 动画开始时抛 started 事件。 */
   onStarted() {
     emit('started');
   },
+  /** 动画结束时抛 finished 事件。 */
   onFinished() {
     emit('finished');
   },
 });
 
+/** 整数部分文本：按 decimals 固定小数位后取整数段，并按 separator 插入千位分隔。 */
 const numMain = computed(() => {
   const result = currentValue.value
     .toFixed(props.decimals)
@@ -62,6 +70,7 @@ const numMain = computed(() => {
   return result;
 });
 
+/** 小数部分文本：小数点符号加固定位数的小数；decimals 为 0 时模板不渲染该段。 */
 const numDec = computed(() => {
   return (
     props.decimal + currentValue.value.toFixed(props.decimals).split('.')[1]

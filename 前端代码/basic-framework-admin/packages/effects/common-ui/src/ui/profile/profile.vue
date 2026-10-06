@@ -25,6 +25,7 @@ defineOptions({
 
 withDefaults(defineProps<Props>(), {
   title: '关于项目',
+  /** 标签页清单默认值：空数组，未传入时不渲染任何标签。 */
   tabs: () => [],
 });
 

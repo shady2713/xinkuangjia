@@ -14,6 +14,7 @@ import { cn } from '@vben-core/shared/utils';
 import { Primitive, useForwardProps } from 'reka-ui';
 
 const props = defineProps<PrimitiveProps & { class?: ClassValue }>();
+/** 去掉 class 后的排列容器属性，转交 Primitive 只做横向排布，焦点流转不由这里控制。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

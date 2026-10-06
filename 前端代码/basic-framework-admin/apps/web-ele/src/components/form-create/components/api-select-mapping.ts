@@ -92,7 +92,13 @@ export function mapApiSelectOptions(
   }));
 }
 
-/** 解析 JSON 规则；返回 undefined 表示输入不是 JSON 对象。 */
+/**
+ * 解析 JSON 形式的声明式映射：只接受 labelField、valueField、listPath 三个键，
+ * 并逐个按安全路径规则校验，避免配置借映射读取原型链成员。
+ * @param text parseFunc 字段中保存的 JSON 文本。
+ * @returns 校验通过时给出映射结果；文本不是 JSON 对象时返回 undefined，
+ * 结构非法时返回带中文原因的失败结果，交由调用方展示给用户。
+ */
 function parseJsonMapping(text: string): ApiSelectMappingResult | undefined {
   let value: unknown;
   try {
@@ -133,6 +139,8 @@ function parseJsonMapping(text: string): ApiSelectMappingResult | undefined {
 /**
  * 仅识别旧配置页面公开过的简单 map 语法，不尝试解释一般 JavaScript。
  * 这是兼容迁移边界，不能扩展为表达式求值器。
+ * @param text 去掉所有空白后的历史 map 表达式。
+ * @returns 命中白名单语法时返回等价的字段映射；语法不匹配或其中字段路径不安全时返回 undefined。
  */
 function parseLegacyMapExpression(text: string): ApiSelectMapping | undefined {
   const normalized = text.replaceAll(/\s+/gu, '');
@@ -156,7 +164,12 @@ function parseLegacyMapExpression(text: string): ApiSelectMapping | undefined {
   return { labelField, listPath, valueField };
 }
 
-/** 仅沿对象自有属性读取点路径，避免访问原型链上的敏感成员。 */
+/**
+ * 沿对象自有属性读取点路径，中途遇到非对象或缺失的自有属性立即停止。
+ * @param value 路径起点，通常是接口返回体或列表中的一项。
+ * @param path 以点分隔的字段路径，调用前已按安全规则校验。
+ * @returns 路径全部命中时返回最末端的值；任一段缺失或中途不是普通对象时返回 undefined。
+ */
 function resolveOwnPath(value: unknown, path: string): unknown {
   let current = value;
   for (const segment of path.split('.')) {
@@ -177,6 +190,7 @@ function isSafePath(path: string): boolean {
   );
 }
 
+/** 判定是否为普通对象：排除 null 与数组，路径读取与配置校验都靠它把 unknown 收窄成可安全取键的记录。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

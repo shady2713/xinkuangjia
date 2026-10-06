@@ -15,6 +15,7 @@ import { SelectSeparator } from 'reka-ui';
 
 const props = defineProps<SelectSeparatorProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的分隔线属性，转交 SelectSeparator 作为纯视觉分组节点，不参与选中。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -14,6 +14,10 @@ import { computed } from 'vue';
 import { useLayoutContentStyle } from '@vben-core/composables';
 import { Slot } from '@vben-core/shadcn-ui';
 
+/**
+ * 内容区的属性契约：contentCompact 决定是否定宽，为 compact 时内容水平居中并按 contentCompactWidth 定死宽度；
+ * padding 是四边内边距的基值，paddingTop、paddingRight、paddingBottom、paddingLeft 逐边覆盖，取值单位均为像素。
+ */
 interface Props {
   /**
    * 内容区域定宽
@@ -35,6 +39,10 @@ const props = withDefaults(defineProps<Props>(), {});
 // @ts-expect-error unused
 const { contentElement, overlayStyle } = useLayoutContentStyle();
 
+/**
+ * 内容区的内联样式：定宽模式为 compact 时附加水平居中与固定宽度，其余模式不加宽度限制；
+ * flex 为 1 让内容区吃掉父级剩余高度。内边距先写 padding 基值，再由四个方向各自的属性逐边覆盖。
+ */
 const style = computed((): CSSProperties => {
   const {
     contentCompact,

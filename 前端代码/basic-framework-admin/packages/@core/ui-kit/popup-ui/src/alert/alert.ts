@@ -11,12 +11,19 @@ import type { Recordable } from '@vben-core/typings';
 
 import { createContext } from '@vben-core/shadcn-ui';
 
+/** 弹窗图标的内置类型名，取值对应按语义色区分的内置图标；传组件实例时不走这套映射。 */
 export type IconType = 'error' | 'info' | 'question' | 'success' | 'warning';
 
+/** 关闭前回调收到的上下文，只用 isConfirm 区分本次关闭是确认还是取消。 */
 export type BeforeCloseScope = {
   isConfirm: boolean;
 };
 
+/**
+ * 弹窗的完整选项契约：content 必填（字符串或组件），
+ * 其余字段决定标题、图标、按钮文案与对齐、遮罩模糊、边框居中，
+ * 以及返回 false 即可拦下关闭动作的 beforeClose。
+ */
 export type AlertProps = {
   /** 关闭前的回调，如果返回false，则终止关闭 */
   beforeClose?: (
@@ -103,12 +110,17 @@ export type AlertContext = {
   doConfirm: () => void;
 };
 
+/**
+ * Alert 上下文的注入与提供函数对：alert.vue 在根上 provide，
+ * 内容区里的自定义元素 inject 后即可触发确认或取消。
+ */
 export const [injectAlertContext, provideAlertContext] =
   createContext<AlertContext>('VbenAlertContext');
 
 /**
  * 获取Alert上下文
- * @returns AlertContext
+ * @returns 注入的上下文对象，含 doConfirm 与 doCancel 两个动作；拿不到上下文时直接抛错，不会返回空值。
+ * @throws 在 Alert 组件之外调用时抛出，提示必须位于提供上下文的子树内。
  */
 export function useAlertContext() {
   const context = injectAlertContext();

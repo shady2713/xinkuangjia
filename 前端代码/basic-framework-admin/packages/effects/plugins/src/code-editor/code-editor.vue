@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<CodeEditorProps>(), {
 
 const emit = defineEmits(['change', 'update:value', 'formatError']);
 
+/** 交给内核渲染的内容：仅当 autoFormat 且 mode 为 JSON 时按两格缩进重排，解析失败时抛 formatError 并原样返回。 */
 const getValue = computed(() => {
   const { value, mode, autoFormat } = props;
   if (!autoFormat || mode !== MODE.JSON) return value as string;
@@ -40,6 +41,7 @@ const getValue = computed(() => {
   return JSON.stringify(result, null, 2);
 });
 
+/** 内核内容变化时同时抛出双向绑定值与 change 事件；不做格式化，原样透传用户输入。 */
 function handleValueChange(v: string) {
   emit('update:value', v);
   emit('change', v);

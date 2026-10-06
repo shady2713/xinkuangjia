@@ -42,6 +42,11 @@ async function viteInjectAppLoadingPlugin(
     enforce: 'pre',
     name: 'vite:inject-app-loading',
     transformIndexHtml: {
+      /**
+       * 把首屏加载动画与主题判定脚本插到 body 开标签之后。
+       * @param html - Vite 传入的 index.html 原文。
+       * @returns 替换过 body 开标签的 HTML；没有匹配到 <body> 时原样返回。
+       */
       handler(html) {
         const re = /<body\s*>/;
         return html.replace(re, `<body>${injectScript}${loadingHtml}`);

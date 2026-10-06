@@ -21,6 +21,10 @@ withDefaults(defineProps<Props>(), {});
 
 const modelValue = defineModel<string>();
 
+/**
+ * 点击某个条目后把该条目的值写回 v-model，当前值即由此高亮，组件不额外派发事件。
+ * @param value 被点击条目的取值，调用方保证它来自 menus。
+ */
 function handleItemClick(value: string) {
   modelValue.value = value;
 }

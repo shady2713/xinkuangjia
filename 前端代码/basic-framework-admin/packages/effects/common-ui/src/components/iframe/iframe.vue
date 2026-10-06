@@ -6,6 +6,7 @@
  */
 import { onMounted, ref } from 'vue';
 
+/** 内嵌页面容器属性：要加载的 iframe 源地址。 */
 interface IFrameProps {
   /** iframe 的源地址 */
   src: string;
@@ -16,6 +17,7 @@ defineProps<IFrameProps>();
 const loading = ref(true);
 const height = ref('');
 
+/** 按视口高度减去固定头尾高度得到容器高度，并关闭加载遮罩；不感知实际内容高度。 */
 function init() {
   height.value = `${document.documentElement.clientHeight - 94.5}px`;
   loading.value = false;

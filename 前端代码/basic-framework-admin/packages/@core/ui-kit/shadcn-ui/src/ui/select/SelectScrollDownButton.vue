@@ -15,6 +15,7 @@ const props = defineProps<
   SelectScrollDownButtonProps & { class?: ClassValue }
 >();
 
+/** 去掉 class 后的下翻按钮属性，转交 SelectScrollDownButton；是否出现由 reka-ui 依当前滚动位置控制。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

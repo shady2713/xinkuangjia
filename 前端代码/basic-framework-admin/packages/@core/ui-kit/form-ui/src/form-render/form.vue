@@ -39,7 +39,9 @@ const props = withDefaults(
   defineProps<Props & { globalCommonConfig?: FormCommonConfig }>(),
   {
     collapsedRows: 1,
+    /** 公共配置的默认值：给空对象而不是 undefined，下沉时无需再判空。 */
     commonConfig: () => ({}),
+    /** 全局公共配置的默认值，由适配层启动时改写，这里先给空对象。 */
     globalCommonConfig: () => ({}),
     showCollapseButton: false,
     wrapperClass: 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3',
@@ -50,6 +52,10 @@ const emits = defineEmits<{
   submit: [event: FormValues];
 }>();
 
+/**
+ * 表单容器的布局类名：按布局选择横向换行或纵向栅格，
+ * 紧凑模式收窄列间距，页面自定义的栅格类名拼在最后覆盖默认值。
+ */
 const wrapperClass = computed(() => {
   const cls = ['flex'];
   if (props.layout === 'inline') {
@@ -67,6 +73,10 @@ provideFormRenderProps(props);
 const wrapperRef = useTemplateRef<HTMLElement>('wrapperRef');
 const { isCalculated, keepFormItemIndex } = useExpandable(props, wrapperRef);
 
+/**
+ * 把 schema 折算成业务插槽需要的字段形状列表。
+ * 必填与否按 zod 规则的外层类型判断，ZodNullable/ZodOptional 不算必填。
+ */
 const shapes = computed(() => {
   const resultShapes: FormShape[] = [];
   props.schema?.forEach((schema) => {
@@ -90,22 +100,34 @@ const shapes = computed(() => {
   return resultShapes;
 });
 
+/** 真实 vee-validate 表单存在时用原生 form 元素，否则退回到 shadcn-ui 的无校验容器。 */
 const formComponent = computed(() => (props.form ? 'form' : Form));
 
+/** 容器组件的提交事件绑定：有 vee-validate 上下文时先由它做校验再向外抛值，否则直接抛值。 */
 const formComponentProps = computed(() => {
   return props.form
     ? {
+        /** 通过 vee-validate 校验后才向外抛出提交值。 */
         onSubmit: props.form.handleSubmit((val) => emits('submit', val)),
       }
     : {
+        /** 无 vee-validate 上下文，原始值直接向外抛出。 */
         onSubmit: (val: GenericObject) => emits('submit', val),
       };
 });
 
+/**
+ * 真正生效的折叠状态：需要页面开启折叠开关且行数已测量完成，否则一律视为展开，
+ * 避免首帧测量未完成时先把后半部分字段藏起来。
+ */
 const formCollapsed = computed(() => {
   return props.collapsed && isCalculated.value;
 });
 
+/**
+ * 逐项下沉公共配置后的表单项列表，同时按折叠状态决定哪些项加 hidden 类名。
+ * 函数形式的 formItemClass 在这里求值，求值抛错只打印错误并退化为空串，不中断整表渲染。
+ */
 const computedSchema = computed(
   /**
    * 把全局表单配置下沉到每个表单项。

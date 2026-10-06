@@ -6,7 +6,9 @@ import { ref } from 'vue';
 
 const openPreferences = ref(false);
 
+/** 提供偏好抽屉的开关引用与打开方法；多次调用共享同一个模块级 ref。 */
 function useOpenPreferences() {
+  /** 把抽屉开关置为打开；已处于打开状态时重复调用无副作用。 */
   function handleOpenPreference() {
     openPreferences.value = true;
   }

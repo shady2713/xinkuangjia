@@ -15,8 +15,12 @@ import java.util.function.Consumer;
  * 1. 拼接条件的方法，增加 xxxIfPresent 方法，用于判断值不存在的时候，不要拼接到条件中。
  * 2. SFunction<S, ?> column + <S> 泛型：支持任意类字段（主表、子表、三表），推荐写法, 让编译器自动推断 S 类型
  *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/query/MPJLambdaWrapperX.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 2 行，上游代码 4 行在本地被移除或改写，例如 Object val1 = ArrayUtil.get(values, 0);；Object val2 = ArrayUtil.get(values, 1);；本地补充注释 369 行。
+ *
  * @param <T> 数据类型
- * @author 李杰
  */
 public class MPJLambdaWrapperX<T> extends MPJLambdaWrapper<T> {
 

@@ -97,6 +97,7 @@ describe('drawerApi', /** 逐项核对弹窗 API 的状态读写、回调转发�
   });
 
   it('should not close the drawer if onBeforeClose returns false', () => {
+    /** 模拟关闭前校验拒绝放行：钩子返回 false 时抽屉必须保持打开且钩子被调用。 */
     const onBeforeClose = vi.fn(() => false);
     const drawerApiWithHook = new DrawerApi({ onBeforeClose });
     drawerApiWithHook.open();

@@ -11,6 +11,7 @@ import Preferences from './preferences.vue';
 
 const emit = defineEmits<{ clearPreferencesAndLogout: [] }>();
 
+/** 把抽屉的退出事件原样抛给上层；本组件不执行偏好清理与登出。 */
 function clearPreferencesAndLogout() {
   emit('clearPreferencesAndLogout');
 }

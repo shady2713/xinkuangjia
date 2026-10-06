@@ -8,7 +8,10 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import { DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 
-/** 列表的搜索表单 */
+/**
+ * 访问令牌列表的检索条件：用户编号与客户端编号模糊匹配，用户类型精确匹配。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -42,7 +45,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 访问令牌列表的列定义：访问令牌、刷新令牌、用户、客户端与过期/创建时间。
+ * @returns 列定义数组；首列为多选列，用户类型用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

@@ -40,6 +40,7 @@ const {
 } = useCrudActions<SystemOAuth2ClientApi.OAuth2Client>({
   batchDeleteApi: deleteOAuth2ClientList,
   deleteApi: deleteOAuth2Client,
+  /** 二次确认与成功提示中展示的客户端名称；取不到名称时退化为不带名称的通用文案。 */
   getDeleteName: (row) => row.name || '',
   modalApi: formModalApi,
   refresh: handleRefresh,
@@ -55,6 +56,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 分页查询 OAuth2 客户端列表：页码与每页条数取自表格分页，检索条件由搜索表单透传。 */
         query: async ({ page }, formValues) => {
           return await getOAuth2ClientPage({
             pageNo: page.currentPage,

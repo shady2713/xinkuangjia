@@ -33,6 +33,7 @@ if __package__ in (None, ""):
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from scripts.code.java.check_staged_java_comments import _mask_java
 from scripts.common.quality_common import (
     DEFAULT_ROOT,
     CheckError,
@@ -250,6 +251,77 @@ def class_annotations(text: str) -> str:
     return text[: match.start()] if match is not None else ""
 
 
+def mask_java_comments(text: str) -> str:
+    """把 Java 注释内容替换为等长空白，保留字符串与字符字面量的原文。
+
+    结构定位交给同时屏蔽字面量的视图；本视图只用于读取注解的字符串实参，
+    因此 ``@PreAuthorize("@ss.hasPermission('system:demo:query')")`` 的表达式必须
+    保持可读。扫描按字面量状态推进：字符串里的 ``//``（例如 URL）不会被误判为行
+    注释，注释里的引号也不会把后续代码当成字面量。
+
+    Args:
+        text: 完整 Java 源码文本。
+    Returns:
+        与输入等长的文本：注释内容被空格替换，换行保留，偏移与行号不变。
+    """
+
+    chars = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        following = text[index + 1] if index + 1 < length else ""
+        if char == "/" and following == "/":
+            end = text.find("\n", index)
+            end = length if end < 0 else end
+            chars[index:end] = [" "] * (end - index)
+            index = end
+            continue
+        if char == "/" and following == "*":
+            found = text.find("*/", index + 2)
+            end = length if found < 0 else found + 2
+            for position in range(index, end):
+                if text[position] != "\n":
+                    chars[position] = " "
+            index = end
+            continue
+        if text.startswith('"""', index):
+            # 文本块不是注释，但其中出现的 // 与 /* 同样不得当作注释起始。
+            found = text.find('"""', index + 3)
+            index = length if found < 0 else found + 3
+            continue
+        if char in {'"', "'"}:
+            index = _literal_end(text, index, char)
+            continue
+        index += 1
+    return "".join(chars)
+
+
+def _literal_end(text: str, start: int, quote: str) -> int:
+    """返回字符串或字符字面量结束引号之后的下标，未闭合时停在行尾。
+
+    Args:
+        text: 完整 Java 源码文本。
+        start: 起始引号的下标。
+        quote: 起始引号字符。
+    Returns:
+        结束引号之后的下标；字面量未闭合时返回行尾下标。
+    """
+
+    index = start + 1
+    while index < len(text):
+        char = text[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char == quote:
+            return index + 1
+        if char == "\n":
+            break
+        index += 1
+    return max(index, start + 1)
+
+
 def collect_endpoints(root: Path) -> list[Endpoint]:
     """解析全部 Controller，提取端点方法的真实契约信息。
 
@@ -260,22 +332,35 @@ def collect_endpoints(root: Path) -> list[Endpoint]:
     Raises:
         CheckError: 方法签名或类声明无法解析。
     """
+
     endpoints: list[Endpoint] = []
     for path in java_sources(root, "Controller.java"):
         text = read_text(path)
-        controller = read_class_name(text)
-        header = class_annotations(text)
-        class_pre = search_pre_authorize(header)
-        class_permit = "@PermitAll" in header
+        # 注释与字面量里引用的示例代码不是真实契约面：来源说明会逐字引用被改写或
+        # 移除的映射注解，若参与解析会多出幽灵端点，并把真实方法的注解窗口挪走。
+        # 两个视图等长，偏移与原文一致，因此行号仍按原文计算。
+        code = _mask_java(text)
+        annotated = mask_java_comments(text)
+        controller = read_class_name(code)
+        header = class_annotations(code)
+        class_pre = search_pre_authorize(annotated[: len(header)])
+        class_permit = "@PermitAll" in code[: len(header)]
         previous_end = 0
-        for mapping in MAPPING_PATTERN.finditer(text):
+        for mapping in MAPPING_PATTERN.finditer(code):
             # 注解可能写在映射注解之前或之后，因此取“上一个方法签名结束”到本方法签名
             # 之间的完整片段；起点必须越过上一个方法的注解，否则会继承它的权限声明。
-            signature = find_signature(text, mapping.end())
+            signature = find_signature(code, mapping.end())
             if signature is None:
                 continue
             return_type, method, parameters, method_start = signature
-            annotations = text[previous_end:method_start]
+            annotations = code[previous_end:method_start]
+            # 表达式是字符串字面量，结构视图里已被屏蔽；窗口里没有该注解（例如只出现
+            # 在注释里）时不得回到原文读取，否则注释里的引用会被当成真实授权声明。
+            expression = (
+                search_pre_authorize(annotated[previous_end:method_start])
+                if "@PreAuthorize" in annotations
+                else None
+            )
             previous_end = method_start
             endpoints.append(
                 Endpoint(
@@ -286,7 +371,7 @@ def collect_endpoints(root: Path) -> list[Endpoint]:
                     http_method=mapping.group(1),
                     return_type=return_type,
                     parameters=parameters,
-                    pre_authorize=search_pre_authorize(annotations) or class_pre,
+                    pre_authorize=expression or class_pre,
                     permit_all=class_permit or "@PermitAll" in annotations,
                 )
             )

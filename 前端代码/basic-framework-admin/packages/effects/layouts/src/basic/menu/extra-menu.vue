@@ -13,6 +13,7 @@ import { Menu } from '@vben-core/menu-ui';
 
 import { useNavigation } from './use-navigation';
 
+/** 次级菜单属性：在菜单组件属性上补充折叠态与菜单树。 */
 interface Props extends MenuProps {
   collapse?: boolean;
   menus?: MenuRecordRaw[];
@@ -20,12 +21,14 @@ interface Props extends MenuProps {
 
 withDefaults(defineProps<Props>(), {
   accordion: true,
+  /** 菜单树的默认值：空数组，未传入时不渲染任何菜单项。 */
   menus: () => [],
 });
 
 const route = useRoute();
 const { navigation } = useNavigation();
 
+/** 菜单选中回调：把选中的菜单键交给导航方法完成跳转。 */
 async function handleSelect(key: string) {
   await navigation(key);
 }

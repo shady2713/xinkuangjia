@@ -15,6 +15,7 @@ import { $t } from '@vben/locales';
 
 import { VbenBreadcrumbView } from '@vben-core/shadcn-ui';
 
+/** 面包屑属性：控制只剩一项时是否隐藏、是否补充首页项、是否显示图标以及分隔样式。 */
 interface Props {
   hideWhenOnlyOne?: boolean;
   showHome?: boolean;
@@ -31,6 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
 const route = useRoute();
 const router = useRouter();
 
+/** 面包屑项：由当前路由匹配链剔除隐藏项后生成，标题按当前语言翻译；可按需在最前面补首页项。 */
 const breadcrumbs = computed((): IBreadcrumb[] => {
   const matched = route.matched;
 
@@ -64,6 +66,7 @@ const breadcrumbs = computed((): IBreadcrumb[] => {
   return resultBreadcrumb;
 });
 
+/** 点击面包屑项时跳转到对应路径。 */
 function handleSelect(path: string) {
   router.push(path);
 }

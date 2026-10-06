@@ -25,12 +25,16 @@ import SliderCaptchaBar from './slider-captcha-bar.vue';
 import SliderCaptchaContent from './slider-captcha-content.vue';
 
 const props = withDefaults(defineProps<SliderCaptchaProps>(), {
+  /** 滑块样式默认值：空对象，未传入时不附加样式。 */
   actionStyle: () => ({}),
+  /** 滑轨样式默认值：空对象，未传入时不附加样式。 */
   barStyle: () => ({}),
+  /** 内容区样式默认值：空对象，未传入时不附加样式。 */
   contentStyle: () => ({}),
   isSlot: false,
   successText: '',
   text: '',
+  /** 外层容器样式默认值：空对象，未传入时不附加样式。 */
   wrapperStyle: () => ({}),
 });
 
@@ -77,6 +81,11 @@ watchEffect(() => {
   state.isPassing = !!modelValue.value;
 });
 
+/**
+ * 取鼠标或触摸事件的页面横坐标。
+ * @param e 鼠标或触摸事件；触摸事件取第一个触点的坐标。
+ * @returns 页面横坐标；事件不携带坐标信息时返回 0。
+ */
 function getEventPageX(e: MouseEvent | TouchEvent): number {
   if ('pageX' in e) {
     return e.pageX;
@@ -86,6 +95,10 @@ function getEventPageX(e: MouseEvent | TouchEvent): number {
   return 0;
 }
 
+/**
+ * 开始拖动：记录按下的起始位置与起始时间并进入拖动状态。
+ * @param e 触发拖动的鼠标或触摸事件，用于换算起始横坐标。
+ */
 function handleDragStart(e: MouseEvent | TouchEvent) {
   if (state.isPassing) {
     return;
@@ -103,6 +116,7 @@ function handleDragStart(e: MouseEvent | TouchEvent) {
   state.isMoving = true;
 }
 
+/** 按外层宽度与滑块宽度算出可拖动的最大位移，并一并返回两者宽度供调用方复用。 */
 function getOffset(actionEl: HTMLDivElement) {
   const wrapperWidth = wrapperRef.value?.offsetWidth ?? 220;
   const actionWidth = actionEl?.offsetWidth ?? 40;
@@ -110,6 +124,10 @@ function getOffset(actionEl: HTMLDivElement) {
   return { actionWidth, offset, wrapperWidth };
 }
 
+/**
+ * 拖动中：按当前位移同步滑块位置与进度条宽度，越过终点时直接判定通过。
+ * @param e 拖动过程中的鼠标或触摸事件，用于计算当前横向位移。
+ */
 function handleDragMoving(e: MouseEvent | TouchEvent) {
   const { isMoving, moveDistance } = state;
   if (isMoving) {
@@ -137,6 +155,10 @@ function handleDragMoving(e: MouseEvent | TouchEvent) {
   }
 }
 
+/**
+ * 结束拖动：按最终位移决定复位还是判定通过；插槽模式下由父级决定结果。
+ * @param e 结束拖动的鼠标或触摸事件（也包含移出容器），用于计算最终位移。
+ */
 function handleDragOver(e: MouseEvent | TouchEvent) {
   const { isMoving, isPassing, moveDistance } = state;
   if (isMoving && !isPassing) {
@@ -170,6 +192,7 @@ function handleDragOver(e: MouseEvent | TouchEvent) {
   }
 }
 
+/** 判定验证通过并记录结束时间；插槽模式下不自行判定，改为复位等待父级结论。 */
 function checkPass() {
   if (props.isSlot) {
     resume();
@@ -180,6 +203,7 @@ function checkPass() {
   state.isMoving = false;
 }
 
+/** 复位到未验证状态：清空耗时与位移，并带动画把滑块与进度条收回起点。 */
 function resume() {
   state.isMoving = false;
   state.isPassing = false;

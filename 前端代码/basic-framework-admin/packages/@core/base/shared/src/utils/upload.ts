@@ -7,6 +7,7 @@
 export function generateAcceptedFileTypes(
   supportedFileTypes: string[],
 ): string {
+  // 后缀统一转小写后再比对，避免同一类型因大小写重复写入 MIME 与后缀。
   const allowedExtensions = supportedFileTypes.map((ext) => ext.toLowerCase());
   const mimeTypes: string[] = [];
 
@@ -141,6 +142,7 @@ export function checkFileType(file: File, accepts: string[]) {
  * 格式化文件大小
  *
  * @param bytes 文件大小（字节）
+ * @param digits - 小数位数，默认 2；传 0 时结果不带小数部分。
  * @returns 格式化后的文件大小字符串
  */
 export function formatFileSize(bytes: number, digits = 2): string {

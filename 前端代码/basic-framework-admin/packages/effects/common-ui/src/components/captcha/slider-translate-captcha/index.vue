@@ -42,6 +42,7 @@ const emit = defineEmits<{
 }>();
 
 const PI: number = Math.PI;
+/** 画布绘制操作：Clip 在底图上抠出缺口，Fill 在切块画布上填充形状。 */
 enum CanvasOpr {
   Clip = 'clip',
 
@@ -67,16 +68,19 @@ const state = reactive({
 
 const left = ref('0');
 
+/** 拼图切块的定位样式：横向位置跟随滑块位移。 */
 const pieceStyle = computed(() => {
   return {
     left: left.value,
   };
 });
 
+/** 设置切块的横向偏移，取值为形如 '12px' 的字符串。 */
 function setLeft(val: string) {
   left.value = val;
 }
 
+/** 验证提示文案：通过时附带按秒保留一位小数的耗时，未通过时提示重试。 */
 const verifyTip = computed(() => {
   return state.isPassing
     ? $t('ui.captcha.sliderTranslateSuccessTip', [
@@ -84,10 +88,12 @@ const verifyTip = computed(() => {
       ])
     : $t('ui.captcha.sliderTranslateFailTip');
 });
+/** 开始拖动时记录起始时间，用于验证成功后回传耗时。 */
 function handleStart() {
   state.startTime = Date.now();
 }
 
+/** 拖动中记录滑块位移，并让拼图切块跟随移动。 */
 function handleDragBarMove(data: SliderRotateVerifyPassingData) {
   state.dragging = true;
   const { moveX } = data;
@@ -95,6 +101,7 @@ function handleDragBarMove(data: SliderRotateVerifyPassingData) {
   setLeft(`${moveX}px`);
 }
 
+/** 拖动结束：位移误差达到容差时把切块与滑块一并归零，否则判定通过。 */
 function handleDragEnd() {
   const { pieceX } = state;
   const { diffDistance } = props;
@@ -109,6 +116,7 @@ function handleDragEnd() {
   state.dragging = false;
 }
 
+/** 判定验证通过并记录结束时间。 */
 function checkPass() {
   state.isPassing = true;
   state.endTime = Date.now();
@@ -126,6 +134,7 @@ watch(
   },
 );
 
+/** 清空底图与切块两张画布；画布未挂载或取不到 2D 上下文时直接返回。 */
 function resetCanvas() {
   const { canvasWidth, canvasHeight } = props;
   const puzzleCanvas = unref(puzzleCanvasRef);
@@ -144,6 +153,7 @@ function resetCanvas() {
   pieceCanvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 }
 
+/** 加载图片并绘制拼图：底图抠出缺口、切块画布截取对应区域，图片未加载完成前不绘制。 */
 function initCanvas() {
   const { canvasWidth, canvasHeight, squareLength, circleRadius, src } = props;
   const puzzleCanvas = unref(puzzleCanvasRef);
@@ -180,6 +190,7 @@ function initCanvas() {
   });
 }
 
+/** 在 [start, end) 上取随机数并四舍五入取整；四舍五入后可能取到 end。 */
 function getRandomNumberByRange(start: number, end: number) {
   return Math.round(Math.random() * (end - start) + start);
 }
@@ -243,6 +254,7 @@ function drawPiece(
   ctx.globalCompositeOperation = 'destination-over';
 }
 
+/** 复位：隐藏提示、清空通过状态与切块坐标，让滑块回起点后重新绘制拼图。 */
 function resume() {
   state.showTip = false;
   const basicEl = unref(slideBarRef);

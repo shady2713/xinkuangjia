@@ -29,6 +29,11 @@ function toCamelCase(key: string, parentKey: string): string {
   return parentKey + key.charAt(0).toUpperCase() + key.slice(1);
 }
 
+/**
+ * 把短横线分隔的命名转成小驼峰，用于把 CSS 变量名还原成对象键名。
+ * @param str - 待转换的短横线命名；连续短横线产生的空段会被丢弃。
+ * @returns 首段原样保留、后续段首字母大写并去掉短横线的字符串；空串仍返回空串。
+ */
 function kebabToCamelCase(str: string): string {
   return str
     .split('-')

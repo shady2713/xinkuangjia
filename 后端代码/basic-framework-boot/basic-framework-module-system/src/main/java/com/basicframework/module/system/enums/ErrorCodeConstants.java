@@ -6,7 +6,10 @@ import com.basicframework.framework.common.exception.ErrorCode;
  * System 错误码枚举类
  *
  * system 系统，使用 1-002-000-000 段
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/enums/ErrorCodeConstants.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 21 行，上游代码 25 行在本地被移除或改写，例如 ErrorCode AUTH_LOGIN_PLATFORM_MISMATCH = new ErrorCode(1_002_000_014, "登录失败，账号密码不正确");；ErrorCode SYSTEM_PLATFORM_ACCESS_DENIED = new ErrorCode(1_002_000_015, "当前账号无权访问该平台数据");；本地补充注释 3 行，上游注释 10 行未保留。
  */
 public interface ErrorCodeConstants {
 

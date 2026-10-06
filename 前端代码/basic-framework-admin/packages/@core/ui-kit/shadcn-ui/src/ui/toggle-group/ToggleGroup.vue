@@ -17,6 +17,7 @@ import { cn } from '@vben-core/shared/utils';
 
 import { ToggleGroupRoot, useForwardPropsEmits } from 'reka-ui';
 
+/** 切换按钮变体轴的取值类型别名，直接复用 toggle/toggle 的 cva 推导结果，让组级 size、variant 与组内选项共用同一套取值范围。 */
 type ToggleGroupVariants = VariantProps<typeof toggleVariants>;
 
 const props = defineProps<
@@ -33,6 +34,7 @@ provide('toggleGroup', {
   variant: props.variant,
 });
 
+/** 去掉 class 后的组属性，连同 emits 转发给 ToggleGroupRoot；size、variant 经 provide 下发，这里仍随属性一并透传。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

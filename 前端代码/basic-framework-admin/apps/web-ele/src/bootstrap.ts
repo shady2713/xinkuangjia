@@ -25,6 +25,16 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
+/**
+ * 按顺序完成应用启动装配：初始化组件与表单适配器、国际化、状态库和路由，
+ * 注册权限指令、加载指令、tippy 与 Motion 插件，最后把根组件挂载到 #app。
+ *
+ * 由 main.ts 读取运行环境变量后调用；每一步都是后续步骤的前置条件，
+ * 任一初始化失败都会中断启动并以 rejected Promise 交给调用方处理，此时根组件尚未挂载。
+ *
+ * @param namespace 状态持久化使用的命名空间前缀，多应用共用浏览器存储时用于隔离数据
+ * @returns 挂载完成后兑现的 Promise，不携带业务数据
+ */
 async function bootstrap(namespace: string) {
   // 初始化组件适配器
   await initComponentAdapter();

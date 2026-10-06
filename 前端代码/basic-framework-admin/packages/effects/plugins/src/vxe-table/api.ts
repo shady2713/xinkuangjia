@@ -65,6 +65,7 @@ export class VxeGridApi<T extends object = Record<string, unknown>> {
     this.store = new Store<VxeGridProps<T>>(
       mergeWithArrayOverride(storeState, defaultState),
       {
+        /** 状态更新回调：把 store 的最新快照同步到实例的 state，供订阅者读取。 */
         onUpdate: () => {
           // this.prevState = this.state;
           this.state = this.store.state;
@@ -77,6 +78,11 @@ export class VxeGridApi<T extends object = Record<string, unknown>> {
     bindMethods(this);
   }
 
+  /**
+   * 组件挂载后绑定表格实例与表单 API，并解除状态就绪等待。
+   * @param instance vxe-grid 实例；为空时保持未挂载状态，不会写入任何引用。
+   * @param formApi 搜索表单 API，与表格实例一并保存，供查询条件读取。
+   */
   mount(instance: null | VxeGridInstance, formApi: ExtendedFormApi) {
     if (!this.isMounted && instance) {
       this.grid = instance;
@@ -132,9 +138,15 @@ export class VxeGridApi<T extends object = Record<string, unknown>> {
     });
   }
 
+  /**
+   * 合并式更新内部状态：新值覆盖同名旧字段，未涉及的字段保持原值。
+   * @param stateOrFn 新的状态片段，或「接收旧状态并返回片段」的函数。
+   */
+  // 保持单行：prettier 会把括号内的 JSDoc 上提到括号外，使函数类型的中文说明脱离节点。
+  // prettier-ignore
   setState(
     stateOrFn:
-      | ((prev: VxeGridProps<T>) => Partial<VxeGridProps<T>>)
+      | ((/** 函数形式：接收旧状态，返回要合并进去的状态片段。 */ (prev: VxeGridProps<T>) => Partial<VxeGridProps<T>>))
       | Partial<VxeGridProps<T>>,
   ) {
     if (isFunction(stateOrFn)) {
@@ -146,6 +158,11 @@ export class VxeGridApi<T extends object = Record<string, unknown>> {
     }
   }
 
+  /**
+   * 切换搜索表单的展开状态。
+   * @param show 显式指定展开（true）或收起（false）；不传时按当前状态取反。
+   * @returns 切换后的展开状态；状态尚未初始化时为 undefined。
+   */
   toggleSearchForm(show?: boolean) {
     this.setState({
       showSearchForm: isBoolean(show) ? show : !this.state?.showSearchForm,
@@ -156,6 +173,7 @@ export class VxeGridApi<T extends object = Record<string, unknown>> {
     return this.state?.showSearchForm;
   }
 
+  /** 组件卸载后标记为未挂载并复位就绪状态，使下一次 mount 能重新绑定实例。 */
   unmount() {
     this.isMounted = false;
     this.stateHandler.reset();

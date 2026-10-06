@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router';
 
 import { preferences } from '@vben/preferences';
 
+/** 注册内容区过渡加载的路由前后置守卫，并在过渡加载偏好开启时对外暴露 spinning 状态。 */
 function useContentSpinner() {
   const spinning = ref(false);
   const startTime = ref(0);

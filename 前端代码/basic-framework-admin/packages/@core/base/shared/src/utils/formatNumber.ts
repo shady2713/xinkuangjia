@@ -7,8 +7,9 @@ import { isEmpty, isString, isUndefined } from './inference';
 
 /**
  * 将一个整数转换为分数保留传入的小数
- * @param num
- * @param digit
+ * @param num - 以「分」为单位的整数或数字字符串。
+ * @param digit - 结果保留的小数位数，默认 2；传 0 时结果不带小数部分。
+ * @returns num 除以 100 后按 digit 位小数四舍五入的字符串；num 未定义时固定返回 '0.00'（不随 digit 变化）。
  */
 export function formatToFractionDigit(
   num: number | string | undefined,
@@ -21,7 +22,8 @@ export function formatToFractionDigit(
 
 /**
  * 将一个整数转换为分数保留两位小数
- * @param num
+ * @param num - 以「分」为单位的整数或数字字符串。
+ * @returns num 除以 100 后保留两位小数的字符串，等价于 formatToFractionDigit(num, 2)。
  */
 export function formatToFraction(num: number | string | undefined): string {
   return formatToFractionDigit(num, 2);
@@ -87,6 +89,8 @@ export function convertToInteger(num: number | string | undefined): number {
 
 /**
  * 元转分
+ * @param amount - 以「元」为单位的金额，支持数字或数字字符串。
+ * @returns 乘以 100 后四舍五入得到的整数分值。
  */
 export function yuanToFen(amount: number | string): number {
   return convertToInteger(amount);
@@ -94,6 +98,8 @@ export function yuanToFen(amount: number | string): number {
 
 /**
  * 分转元
+ * @param price - 以「分」为单位的金额，支持数字或数字字符串。
+ * @returns 保留两位小数的元金额字符串，如 '12.34'。
  */
 export function fenToYuan(price: number | string): string {
   return formatToFraction(price);
@@ -123,6 +129,7 @@ export const fenToYuanFormat = (
  *
  * @param value 当前数值
  * @param reference 对比数值
+ * @returns 环比变化百分比，四舍五入到整数；reference 为 0 或空值时返回 0。
  */
 export function calculateRelativeRate(
   value?: number,
@@ -147,6 +154,7 @@ const ERP_PRICE_DIGIT = 2;
  * 例如说：库存数量
  *
  * @param num 数量
+ * @param digit - 结果保留的小数位数，由数量(3)或价格(2)入口常量传入。
  * @package
  * @return 格式化后的数量
  */
@@ -234,6 +242,7 @@ export function erpPriceMultiply(price: number, count: number) {
  *
  * @param value 当前值
  * @param total 总值
+ * @returns 百分比数值的两位小数字符串（不含 `%`）；total 为 0 时返回数字 0。
  */
 export function erpCalculatePercentage(value: number, total: number) {
   if (total === 0) return 0;

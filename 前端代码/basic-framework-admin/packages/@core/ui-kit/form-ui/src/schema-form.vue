@@ -26,13 +26,16 @@ const props = withDefaults(defineProps<Props>(), {
   actionWrapperClass: '',
   collapsed: false,
   collapsedRows: 1,
+  /** 默认给一个空对象，避免下游读取公共配置时遇到 undefined。 */
   commonConfig: () => ({}),
   handleReset: undefined,
   handleSubmit: undefined,
   layout: 'horizontal',
+  /** 默认给一个空对象，让重置按钮在没有页面配置时也能正常渲染。 */
   resetButtonOptions: () => ({}),
   showCollapseButton: false,
   showDefaultActions: true,
+  /** 默认给一个空对象，让提交按钮在没有页面配置时也能正常渲染。 */
   submitButtonOptions: () => ({}),
   wrapperClass: 'grid-cols-1',
 });
@@ -45,6 +48,10 @@ const { delegatedSlots, form } = useFormInitial(props);
 
 provideFormProps([props, form]);
 
+/**
+ * 折叠开关变化时的写入点：先同步到本地 ref，再通知业务的折叠回调。
+ * 本地 ref 才是模板真正读取的折叠状态，props 的后续变化会经 watchEffect 覆盖它。
+ */
 const handleUpdateCollapsed = (value: boolean) => {
   currentCollapsed.value = value;
   // 同步折叠状态变化回调

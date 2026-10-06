@@ -44,6 +44,10 @@ const emits = defineEmits<
   DialogContentEmits & { close: []; closed: []; opened: [] }
 >();
 
+/**
+ * 剔除 class、modal、open、showClose、animationType 五个由本组件自行消费的字段后，
+ * 把其余属性转交 DialogContent，避免只服务于遮罩、关闭按钮与动效的开关泄漏到底层弹窗。
+ */
 const delegatedProps = computed(() => {
   const {
     class: _,
@@ -57,6 +61,7 @@ const delegatedProps = computed(() => {
   return delegated;
 });
 
+/** 判断面板是否挂到 body：appendTo 为字符串 body、直接传 document.body 或未指定时都算挂到 body。 */
 function isAppendToBody() {
   return (
     props.appendTo === 'body' ||
@@ -65,6 +70,7 @@ function isAppendToBody() {
   );
 }
 
+/** 由挂载位置推出的定位方式，供遮罩与面板共用：挂到 body 用 fixed，挂在其他元素用 absolute 跟随父容器。 */
 const position = computed(() => {
   return isAppendToBody() ? 'fixed' : 'absolute';
 });
@@ -72,6 +78,10 @@ const position = computed(() => {
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
 const contentRef = ref<InstanceType<typeof DialogContent> | null>(null);
+/**
+ * 弹窗面板动画结束后按 open 抛出 opened 或 closed；子元素冒泡上来的动画事件因 target 不匹配被忽略。
+ * @param event 面板节点冒泡的 animationend 事件，用 target 校验它是否来自面板本身。
+ */
 function onAnimationEnd(event: AnimationEvent) {
   // 只有在 contentRef 的动画结束时才触发 opened/closed 事件
   if (event.target === contentRef.value?.$el) {
@@ -83,6 +93,7 @@ function onAnimationEnd(event: AnimationEvent) {
   }
 }
 defineExpose({
+  /** 暴露给上层的内容节点引用，面板未挂载时为 null，供可拖拽面板测量自身尺寸。 */
   getContentRef: () => contentRef.value,
 });
 </script>

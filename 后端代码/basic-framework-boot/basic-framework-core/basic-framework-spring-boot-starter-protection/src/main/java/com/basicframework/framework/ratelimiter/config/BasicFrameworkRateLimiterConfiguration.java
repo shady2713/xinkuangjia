@@ -18,7 +18,10 @@ import java.util.List;
 /**
  * 限流组件自动配置类，注册限流切面、Redis 访问对象和内置 Key 解析器。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-protection/src/main/java/cn/iocoder/yudao/framework/ratelimiter/config/YudaoRateLimiterConfiguration.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 38 行。
  */
 @AutoConfiguration(after = BasicFrameworkRedisAutoConfiguration.class)
 public class BasicFrameworkRateLimiterConfiguration {

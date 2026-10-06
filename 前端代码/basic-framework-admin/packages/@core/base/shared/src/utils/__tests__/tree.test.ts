@@ -19,11 +19,13 @@ function byRank(a: { rank: number }, b: { rank: number }): number {
 }
 
 describe('traverseTreeValues', () => {
+  /** 用例使用的树节点：只有一个名字和可选的同形子节点。 */
   interface Node {
     children?: Node[];
     name: string;
   }
 
+  /** 遍历用例收集到的值类型，这里直接取节点名。 */
   type NodeValue = string;
 
   const sampleTree: Node[] = [
@@ -50,6 +52,7 @@ describe('traverseTreeValues', () => {
   ];
 
   it('traverses tree and returns all node values', () => {
+    // 深度优先展开整棵树，收集到的名字顺序应为 A~I。
     const values = traverseTreeValues<Node, NodeValue>(
       sampleTree,
       (node) => node.name,
@@ -61,12 +64,14 @@ describe('traverseTreeValues', () => {
   });
 
   it('handles empty tree', () => {
+    // 空数组没有任何节点，结果也是空数组。
     const values = traverseTreeValues<Node, NodeValue>([], (node) => node.name);
     expect(values).toEqual([]);
   });
 
   it('handles tree with only root node', () => {
     const rootNode = { name: 'A' };
+    // 只有根节点时，只收集根节点自己的值。
     const values = traverseTreeValues<Node, NodeValue>(
       [rootNode],
       (node) => node.name,
@@ -76,6 +81,7 @@ describe('traverseTreeValues', () => {
 
   it('handles tree with only leaf nodes', () => {
     const leafNodes = [{ name: 'A' }, { name: 'B' }, { name: 'C' }];
+    // 全是叶子节点时按数组顺序逐个收集，不做去重。
     const values = traverseTreeValues<Node, NodeValue>(
       leafNodes,
       (node) => node.name,
@@ -99,21 +105,25 @@ describe('filterTree', () => {
   ];
 
   it('should return all nodes when condition is always true', () => {
+    // 条件恒为真时所有节点都命中，结果与原始树等价。
     const result = filterTree(tree, () => true, { childProps: 'children' });
     expect(result).toEqual(tree);
   });
 
   it('should return only root nodes when condition is always false', () => {
+    // 条件恒为假时没有任何节点命中，结果为空数组。
     const result = filterTree(tree, () => false);
     expect(result).toEqual([]);
   });
 
   it('should return nodes with even id values', () => {
+    // 只保留偶数 id：命中的 8 与 10 以父子结构返回。
     const result = filterTree(tree, (node) => node.id % 2 === 0);
     expect(result).toEqual([{ id: 8, children: [{ id: 10 }] }]);
   });
 
   it('should return nodes with odd id values and their ancestors', () => {
+    // 只保留奇数 id：命中的 1、3、5、7、11 按原层级关系返回。
     const result = filterTree(tree, (node) => node.id % 2 === 1);
     expect(result).toEqual([
       {
@@ -138,6 +148,7 @@ describe('filterTree', () => {
         ],
       },
     ];
+    // 名字含 leaf 或等于 root 的节点保留；branch 自身不命中，其子树也一并被丢弃。
     const result = filterTree(
       tree,
       (node) => node.name.includes('leaf') || node.name === 'root',
@@ -178,6 +189,7 @@ describe('mapTree', () => {
         ],
       },
     ];
+    // 映射只改名字，整棵树的层级结构保持不变。
     const newTree = mapTree(tree, (node) => ({
       ...node,
       name: `${node.name}-new`,

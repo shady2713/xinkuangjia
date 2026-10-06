@@ -8,6 +8,7 @@
 import { VbenLoading } from '@vben-core/shadcn-ui';
 import { cn } from '@vben-core/shared/utils';
 
+/** 加载容器属性：最小停留时长、加载状态、提示文字与附加类名。 */
 interface LoadingProps {
   class?: string;
   /**

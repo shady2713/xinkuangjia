@@ -17,6 +17,7 @@ import { ToggleGroupItem, useForwardProps } from 'reka-ui';
 
 import { toggleVariants } from '../toggle';
 
+/** 切换组选项的变体取值类型，同样取自 toggleVariants，使组容器 inject 到的上下文与本地属性可以归到同一类型上比较。 */
 type ToggleGroupVariants = VariantProps<typeof toggleVariants>;
 
 const props = defineProps<
@@ -29,6 +30,7 @@ const props = defineProps<
 
 const context = inject<ToggleGroupVariants>('toggleGroup');
 
+/** 剔除 class、size、variant 后的选项属性，转交 ToggleGroupItem；样式轴改由组上下文与本地属性在模板里合并计算。 */
 const delegatedProps = computed(() => {
   const { class: _, size: _size, variant: _variant, ...delegated } = props;
   return delegated;

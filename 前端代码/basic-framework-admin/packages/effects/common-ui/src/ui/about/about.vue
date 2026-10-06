@@ -41,11 +41,15 @@ declare global {
   };
 }
 
+/** 渲染一个在新窗口打开的外链节点，文本作为默认插槽内容。 */
 const renderLink = (href: string, text: string) =>
   h(
     'a',
     { href, target: '_blank', class: 'vben-link' },
-    { default: () => text },
+    {
+      /** 链接文本以默认插槽形式提供。 */
+      default: () => text,
+    },
   );
 
 const {
@@ -98,11 +102,13 @@ if (authorName || authorEmail) {
   });
 }
 
+/** 运行时依赖条目：每一项以包名为标题、版本号为内容。 */
 const dependenciesItems = Object.keys(dependencies).map((key) => ({
   content: dependencies[key],
   title: key,
 }));
 
+/** 开发依赖条目：每一项以包名为标题、版本号为内容。 */
 const devDependenciesItems = Object.keys(devDependencies).map((key) => ({
   content: devDependencies[key],
   title: key,

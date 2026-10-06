@@ -1,3 +1,4 @@
+<!-- 认证页默认宣传图：纯静态 SVG 插图，不含脚本与交互，仅在未配置 sloganImage 时使用。 -->
 <template>
   <svg
     enable-background="new 0 0 800 800"

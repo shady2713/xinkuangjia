@@ -65,6 +65,7 @@ describe('dateUtils', /** 日期工具测试：格式化、时区与表格列 fo
 
     it('should return original input if date is invalid', () => {
       const invalid = 'not-a-date';
+      // 屏蔽 console.error 的输出，同时用它断言无效日期确实走了一次错误分支。
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const formatted = formatDate(invalid);
       expect(formatted).toBe(invalid);

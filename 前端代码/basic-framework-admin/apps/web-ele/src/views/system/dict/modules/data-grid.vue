@@ -84,6 +84,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 分页查询字典数据：固定按当前选中的字典类型过滤，页码与检索条件分别取自分页与搜索表单。 */
         query: async ({ page }, formValues) => {
           return await getDictDataPage({
             pageNo: page.currentPage,

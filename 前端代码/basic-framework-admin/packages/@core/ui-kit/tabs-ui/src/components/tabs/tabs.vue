@@ -24,7 +24,9 @@ defineOptions({
 });
 const props = withDefaults(defineProps<Props>(), {
   contentClass: 'vben-tabs-content',
+  /** 右键菜单的缺省实现：返回空数组，即任何标签都不弹菜单；需要菜单的标签由使用方传入同名 prop 提供。 */
   contextMenus: () => [],
+  /** 标签数据缺省为空数组：让 tabsView 的遍历不必判空，组件在没有任何标签时也能正常渲染。 */
   tabs: () => [],
 });
 
@@ -34,6 +36,7 @@ const emit = defineEmits<{
 }>();
 const active = defineModel<string>('active');
 
+/** 按 styleType 取出标签项的类名：brisk、card、plain 各一套；未识别的取值回退为空类名，不会报错。 */
 const typeWithClass = computed(() => {
   const typeClasses: Record<string, { content: string }> = {
     brisk: {
@@ -52,6 +55,7 @@ const typeWithClass = computed(() => {
   return typeClasses[props.styleType || 'plain'] || { content: '' };
 });
 
+/** 把路由标签定义摊平成普通标签项的渲染数据：同样补出关闭与固定标记，供模板按 styleType 换好外观后直接渲染。 */
 const tabsView = computed(() => {
   return props.tabs.map((tab) => {
     const { fullPath, meta, name, path, key } = tab || {};
@@ -70,6 +74,7 @@ const tabsView = computed(() => {
   });
 });
 
+/** 普通标签的中键关闭：判据与 Chrome 风格一致，满足时先 preventDefault 再向上抛出该标签的 key，不满足时连默认行为都不拦。 */
 function onMouseDown(e: MouseEvent, tab: TabConfig) {
   if (
     e.button === 1 &&

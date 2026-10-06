@@ -55,6 +55,11 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 弹窗显隐回调：打开时按是否带 id 决定标题为编辑还是新增；编辑态重新拉取菜单详情并回填表单，
+   * 新增态把列表传入的上级信息写进表单；关闭时清空本地副本。
+   * @param isOpen 弹窗是否打开。
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;

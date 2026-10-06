@@ -31,6 +31,16 @@ export default defineComponent({
       type: Boolean,
     },
   },
+  /**
+   * 返回渲染函数，负责把 content 按形态分派成节点。
+   * content 为空时渲染 null，字符串优先按纯文本输出（renderBr 为真时按换行拆成多个 p 段落），
+   * 组件与渲染函数形态则用 h 挂载，并把 attrs 既透到根 props 上又整体展开，
+   * 让使用方既能整体透传 class、事件，也能按名读取 content、renderBr。
+   * 插槽原样交给内容组件，不做过滤。
+   * @param props 组件已声明的属性，只用到 content 与 renderBr。
+   * @param context setup 上下文，取其中的 attrs 与 slots 用于透传。
+   * @returns 渲染函数，返回值为节点、节点数组或 null。
+   */
   setup(props, { attrs, slots }) {
     return () => {
       if (!props.content) {

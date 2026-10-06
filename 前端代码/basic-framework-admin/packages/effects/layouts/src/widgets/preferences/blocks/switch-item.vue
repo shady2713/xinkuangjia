@@ -22,6 +22,7 @@ const checked = defineModel<boolean>();
 
 const slots = useSlots();
 
+/** 点击整行时翻转开关值；行尾开关自身已阻止冒泡，不会重复触发。 */
 function handleClick() {
   checked.value = !checked.value;
 }

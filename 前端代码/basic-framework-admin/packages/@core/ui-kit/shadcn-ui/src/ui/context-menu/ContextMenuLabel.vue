@@ -14,6 +14,7 @@ const props = defineProps<
   ContextMenuLabelProps & { class?: ClassValue; inset?: boolean }
 >();
 
+/** 去掉 class 后的分组标题属性，直接绑定到 ContextMenuLabel，让标题不进入键盘焦点序列。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

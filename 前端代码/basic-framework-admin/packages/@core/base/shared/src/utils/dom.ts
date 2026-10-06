@@ -14,7 +14,8 @@ export interface VisibleDomRect {
 
 /**
  * 获取元素可见信息
- * @param element
+ * @param element - 待测量的元素；为空时跳过测量，直接返回全零矩形。
+ * @returns 元素与视口相交部分的矩形；元素完全落在视口外时同样返回全零矩形。
  */
 export function getElementVisibleRect(
   element?: HTMLElement | null | undefined,
@@ -68,6 +69,11 @@ export function getElementVisibleRect(
   };
 }
 
+/**
+ * 测量当前浏览器纵向滚动条的像素宽度。
+ * 会临时向 body 末尾插入一个隐藏的滚动容器并立即移除，不在页面上留下节点。
+ * @returns 滚动条占用宽度；使用悬浮滚动条的移动端或系统返回 0。
+ */
 export function getScrollbarWidth() {
   const scrollDiv = document.createElement('div');
 
@@ -87,6 +93,11 @@ export function getScrollbarWidth() {
   return scrollbarWidth;
 }
 
+/**
+ * 判断页面内容是否已超出视口高度、需要纵向滚动条。
+ * 会读取 body 的 overflow-y 计算样式，但 scroll/auto 与其它取值最终都走同一比较判据。
+ * @returns 文档 scrollHeight 大于视口高度时为 true。
+ */
 export function needsScrollbar() {
   const doc = document.documentElement;
   const body = document.body;
@@ -103,6 +114,10 @@ export function needsScrollbar() {
   return doc.scrollHeight > window.innerHeight;
 }
 
+/**
+ * 手动派发一次 window 的 resize 事件，让依赖视口尺寸的组件重新测量。
+ * 只派发事件，不修改任何元素样式，也不等待监听方处理完成。
+ */
 export function triggerWindowResize(): void {
   // 创建一个新的 resize 事件
   const resizeEvent = new Event('resize');

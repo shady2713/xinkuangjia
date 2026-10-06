@@ -19,16 +19,29 @@ const strengthList: string[] = [
   '#55D187',
 ];
 
+/**
+ * 评分后需要点亮的色段数，范围 0~5，与模板里固定的五段色条一一对应。
+ * 密码为空时为 0，此时五段全部显示未填充态。
+ */
 const currentStrength = computed(() => {
   return checkPasswordStrength(props.password);
 });
 
+/**
+ * 按点亮段数取色：0 段对应空字符串，1~5 段依次从红过渡到绿。
+ * 段数越少颜色越偏红，作为唯一的强弱视觉提示，不输出文案。
+ */
 const currentColor = computed(() => {
   return strengthList[currentStrength.value];
 });
 
 /**
  * Check the strength of a password
+ *
+ * 按长度、大小写字母、数字、特殊字符五个维度各加一分，给出 0~5 的强度分。
+ * 各维度互相独立、不做权重，因此同时满足的项越多分越高；空密码得 0 分。
+ * @param password 当前输入的密码原文，仅做正则与长度匹配，不做修改。
+ * @returns 0~5 的整数分值，对应模板中点亮的色段数。
  */
 function checkPasswordStrength(password: string) {
   let strength = 0;

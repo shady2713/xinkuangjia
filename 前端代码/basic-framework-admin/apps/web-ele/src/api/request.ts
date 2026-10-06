@@ -193,6 +193,13 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   return client;
 }
 
+/**
+ * 应用通用业务客户端：自动附加当前身份的访问令牌，访问令牌失效时先刷新再重放，
+ * 业务码非 0 时按响应拦截器抛出解包后的错误。
+ *
+ * data 模式只返回 CommonResult 的 data 节点，因此调用方拿到的是列表、详情或操作结果本身，
+ * 不需要再取响应外壳；公开认证接口与需要显式携带凭据的接口请改用 baseRequestClient。
+ */
 export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });

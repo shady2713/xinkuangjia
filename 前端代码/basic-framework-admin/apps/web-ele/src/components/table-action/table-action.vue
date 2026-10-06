@@ -29,6 +29,10 @@ const props = defineProps({
   /** 主操作区的按钮列表；每项支持 label、type、auth（权限码，无权限时隐藏）、ifShow（显隐条件）等配置 */
   actions: {
     type: Array as PropType<ActionItem[]>,
+    /**
+     * 缺省返回空列表，此时操作区不渲染任何按钮。
+     * @returns 空的按钮列表。
+     */
     default() {
       return [];
     },
@@ -36,6 +40,10 @@ const props = defineProps({
   /** 折叠进"更多"下拉菜单的按钮列表，配置项与 actions 相同 */
   dropDownActions: {
     type: Array as PropType<ActionItem[]>,
+    /**
+     * 缺省返回空列表，此时不渲染"更多"下拉入口。
+     * @returns 空的按钮列表。
+     */
     default() {
       return [];
     },
@@ -49,18 +57,25 @@ const props = defineProps({
 
 const { hasAccessByCodes } = useAccess();
 
+/** 主操作区按钮的解析结果：过滤后补齐了必用的 label 与缺省 type，可直接交给 ElButton。 */
 type ResolvedAction = ActionItem & {
   label: string;
   type: ButtonType;
 };
 
+/** 下拉菜单项的解析结果：text 供下拉文案使用，分隔线只给非末项，避免末项后多出一条线。 */
 type DropdownAction = Omit<ActionItem, 'text'> & {
   divider: boolean;
   label: string;
   text: string;
 };
 
-/** 是否显示 */
+/**
+ * 判断操作按钮是否应显示：先采纳业务给出的 ifShow（布尔直接取值、函数按按钮配置判定），
+ * 再用 auth 权限码兜底，任一不满足即隐藏。
+ * @param action 待判断的操作按钮配置。
+ * @returns 允许渲染该按钮时为 true。
+ */
 function isIfShow(action: ActionItem): boolean {
   const ifShow = action.ifShow;
   let visible = true;
@@ -94,6 +109,7 @@ const getActions = computed<ResolvedAction[]>(() => {
     }));
 });
 
+/** 解析下拉菜单项：过滤无权限或业务隐藏的动作，并为文案与分隔线补齐缺省值 */
 const getDropdownList = computed<DropdownAction[]>(() => {
   return (toRaw(props.dropDownActions) || [])
     .filter((action) => {
@@ -140,6 +156,12 @@ async function handlePopConfirmAction(action: DropdownAction | ResolvedAction) {
   await popConfirm.confirm?.();
 }
 
+/**
+ * 取出可直接透传给 ElButton 的属性：剔除由组件自己消费的 onClick、icon、auth、ifShow、
+ * popConfirm 与 tooltip，避免它们被当成原生属性落到按钮元素上，或让点击回调执行两遍。
+ * @param action 已解析的主操作区按钮配置。
+ * @returns 可安全 v-bind 到 ElButton 的属性对象。
+ */
 function getButtonProps(action: ResolvedAction) {
   const res = {
     ...action,

@@ -5,6 +5,7 @@
  */
 import { Card, CardContent, CardHeader, CardTitle } from '@vben-core/shadcn-ui';
 
+/** 图表卡片属性：卡片标题。 */
 interface Props {
   title: string;
 }

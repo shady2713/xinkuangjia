@@ -85,6 +85,12 @@ export async function ensureFile(filePath: string) {
   }
 }
 
+/**
+ * 读取并解析一个 JSON 文件。
+ * @param filePath - JSON 文件路径，相对进程工作目录解析。
+ * @returns JSON.parse 的结果，结构与类型由文件内容决定，调用方需自行收窄。
+ * @throws 文件不存在、无读取权限或内容不是合法 JSON 时，打印日志后把原始错误继续抛出。
+ */
 export async function readJSON(filePath: string) {
   try {
     const data = await fs.readFile(filePath, 'utf8');

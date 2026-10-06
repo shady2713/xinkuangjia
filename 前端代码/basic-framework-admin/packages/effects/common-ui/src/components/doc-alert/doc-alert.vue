@@ -22,10 +22,12 @@ const props = defineProps<DocAlertProps>();
 /** 控制组件显示状态 */
 const isVisible = ref(true);
 
+/** 在新窗口打开传入的文档地址；地址由调用方保证有效。 */
 function goToUrl() {
   openWindow(props.url);
 }
 
+/** 关闭提示条；只在本次挂载内生效，刷新后按运行时开关重新显示。 */
 function close() {
   isVisible.value = false;
 }

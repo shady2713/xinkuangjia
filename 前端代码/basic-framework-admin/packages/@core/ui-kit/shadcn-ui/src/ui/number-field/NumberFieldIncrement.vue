@@ -16,6 +16,7 @@ import { NumberFieldIncrement, useForwardProps } from 'reka-ui';
 
 const props = defineProps<NumberFieldIncrementProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的加号按钮属性，转交 NumberFieldIncrement；步进与上限钳制不在这层处理。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

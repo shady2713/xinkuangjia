@@ -39,6 +39,7 @@ const {
   handleClose,
 } = useTabbar();
 
+/** 更多菜单项：取当前标签的可用操作，并补齐菜单组件需要的 label 与 value 字段。 */
 const menus = computed(() => {
   const tab = tabbarStore.getTabByKey(currentActive.value);
   const menus = createContextMenus(tab);

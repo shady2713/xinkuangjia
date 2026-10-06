@@ -12,6 +12,7 @@ import { DialogDescription } from 'reka-ui';
 
 const props = defineProps<DialogDescriptionProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的说明节点属性，转交 DialogDescription；抽屉缺描述时仍渲染以维持无障碍结构。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

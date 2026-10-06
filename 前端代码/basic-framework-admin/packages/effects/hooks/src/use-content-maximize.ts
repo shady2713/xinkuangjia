@@ -7,10 +7,12 @@
 import { updatePreferences, usePreferences } from '@vben/preferences';
 /**
  * 主体区域最大化
+ * @returns contentIsMaximize 当前是否处于最大化，以及切换最大化、切换最大化并隐藏标签栏两个方法。
  */
 export function useContentMaximize() {
   const { contentIsMaximize } = usePreferences();
 
+  /** 切换主体区域最大化：最大化时隐藏头部与侧边栏，反之恢复显示；标签栏不受影响。 */
   function toggleMaximize() {
     const isMaximize = contentIsMaximize.value;
 

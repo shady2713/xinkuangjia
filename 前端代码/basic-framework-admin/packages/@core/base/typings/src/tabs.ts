@@ -5,6 +5,10 @@
  */
 import type { RouteLocationNormalized } from 'vue-router';
 
+/**
+ * 标签页数据：直接复用 vue-router 的定位结果，再补一个用于去重与定位的可选 key。
+ * 不含增删、缓存与排序逻辑，这些由标签栏状态模块负责。
+ */
 export interface TabDefinition extends RouteLocationNormalized {
   /**
    * 标签页的key

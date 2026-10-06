@@ -12,9 +12,15 @@ import { cn } from '@vben-core/shared/utils';
 import { VbenTooltip } from '../tooltip';
 import VbenButton from './button.vue';
 
+/**
+ * 纯图标按钮的入参：在基础按钮属性之上补充气泡提示相关的四项。
+ * tooltip 与 tooltip 插槽二选一即可决定提示文案，tooltipSide、tooltipDelayDuration
+ * 只影响提示的方位与延迟；onClick 允许使用方把点击处理作为属性直接传入。
+ */
 interface Props extends VbenButtonProps {
   class?: ClassValue;
   disabled?: boolean;
+  /** 点击回调；不传时由 withDefaults 补一个空函数，模板里可以无条件绑定 */
   onClick?: () => void;
   tooltip?: string;
   tooltipDelayDuration?: number;
@@ -24,6 +30,7 @@ interface Props extends VbenButtonProps {
 
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
+  /** 未传 onClick 时的空实现，只为让 @click 绑定始终有目标，不产生任何效果 */
   onClick: () => {},
   tooltipDelayDuration: 200,
   tooltipSide: 'bottom',
@@ -32,6 +39,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const slots = useSlots();
 
+/**
+ * 是否需要套一层气泡提示：提供了 tooltip 插槽或 tooltip 文案任一即可。
+ * 两者都没有时直接渲染裸按钮，避免为空提示付出浮层组件的代价。
+ */
 const showTooltip = computed(() => !!slots.tooltip || !!props.tooltip);
 </script>
 

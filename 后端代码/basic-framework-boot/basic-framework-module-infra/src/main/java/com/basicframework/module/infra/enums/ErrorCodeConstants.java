@@ -7,7 +7,10 @@ import com.basicframework.framework.common.exception.ErrorCode;
  *
  * infra 系统，使用 1-001-000-000 段
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/enums/ErrorCodeConstants.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 7 行，上游代码 35 行在本地被移除或改写，例如 ErrorCode FILE_TYPE_NOT_ALLOWED = new ErrorCode(1_001_003_003, "不支持的文件类型");；ErrorCode FILE_PATH_INVALID = new ErrorCode(1_001_003_004, "文件路径不正确");；本地补充注释 1 行，上游注释 4 行未保留。
  */
 public interface ErrorCodeConstants {
 

@@ -12,6 +12,12 @@ import {
   SelectValue,
 } from '../../ui';
 
+/**
+ * 选择器的入参。
+ * options 是唯一的数据来源，label 只用于显示、value 作为选中值，两者在模板里一一对应；
+ * allowClear 为真且已有选中值时才渲染清除按钮；placeholder 在无选中值时占位；
+ * class 作用于触发按钮本身，便于按场景调整宽度。
+ */
 interface Props {
   allowClear?: boolean;
   class?: ClassValue;
@@ -25,6 +31,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const modelValue = defineModel<string>();
 
+/**
+ * 清除当前选中值，把 v-model 置为 undefined 让触发按钮回到 placeholder 占位。
+ * 不额外派发事件，调用方通过 v-model 的变更感知清空。
+ */
 function handleClear() {
   modelValue.value = undefined;
 }

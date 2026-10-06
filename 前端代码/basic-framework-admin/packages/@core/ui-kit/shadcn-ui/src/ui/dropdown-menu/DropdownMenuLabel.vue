@@ -17,6 +17,7 @@ const props = defineProps<
   DropdownMenuLabelProps & { class?: ClassValue; inset?: boolean }
 >();
 
+/** 去掉 class 后的分组标题属性，转交 DropdownMenuLabel，使其成为分组的 aria-labelledby 来源且不可聚焦。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

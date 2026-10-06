@@ -47,14 +47,18 @@ const [CropperModal, modalApi] = useVbenModal({
   connectedComponent: cropperModal,
 });
 
+/** 头像展示宽度：剥掉可能存在的 px 后缀再补回，兼容 200 与 '200px' 两种入参。 */
 const getWidth = computed(() => `${`${props.width}`.replace(/px/, '')}px`);
 
+/** 遮罩图标宽度取头像宽度的一半，使编辑提示在圆内居中。 */
 const getIconWidth = computed(
   () => `${Number.parseInt(`${props.width}`.replace(/px/, '')) / 2}px`,
 );
 
+/** 外层容器只约束宽度，让头像与下方按钮在行内保持居中。 */
 const getStyle = computed((): CSSProperties => ({ width: unref(getWidth) }));
 
+/** 图片与遮罩层共用正方形尺寸，保证遮罩完整覆盖圆形头像。 */
 const getImageWrapperStyle = computed(
   (): CSSProperties => ({ height: unref(getWidth), width: unref(getWidth) }),
 );
@@ -70,6 +74,12 @@ watch(
   },
 );
 
+/**
+ * 弹窗上传成功后的回调：先写入本地裁剪结果再通知外部。
+ * 顺序不能颠倒——先 emit 会让外部用空地址覆盖本地值，上传异常时头像将无法回退。
+ * @param data uploadApi 的返回值，原样透传给 change 事件。
+ * @param source 裁剪结果的 base64，作为头像展示地址。
+ */
 function handleUploadSuccess({
   data,
   source,
@@ -82,7 +92,9 @@ function handleUploadSuccess({
   ElMessage.success($t('ui.cropper.uploadSuccess'));
 }
 
+/** 关闭裁剪弹窗，供父组件通过 ref 直接调用。 */
 const closeModal = () => modalApi.close();
+/** 打开裁剪弹窗，头像点击与外部编程式打开都走这里。 */
 const openModal = () => modalApi.open();
 
 /**

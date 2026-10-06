@@ -12,6 +12,7 @@ import { useVbenForm, z } from '@vben-core/form-ui';
 import { useVbenModal } from '@vben-core/popup-ui';
 import { VbenAvatar, VbenButton } from '@vben-core/shadcn-ui';
 
+/** 锁屏弹窗属性：avatar 为头像地址，text 为头像下方的提示文案。 */
 interface Props {
   avatar?: string;
   text?: string;

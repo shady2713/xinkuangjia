@@ -26,6 +26,7 @@ const props = withDefaults(
 );
 const emits = defineEmits<PopoverContentEmits>();
 
+/** 去掉 class 后的浮层属性，连同 emits 转发给 PopoverContent；align 与 sideOffset 缺省值已在 withDefaults 中固定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

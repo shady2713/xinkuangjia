@@ -23,7 +23,10 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.*;
  *
  * 负责参数配置的增删改查、系统内置配置保护和配置键唯一性校验。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/service/config/ConfigServiceImpl.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 5 行，例如 public String getVisibleConfigValueByKey(String key) {；ConfigDO config = getConfigByKey(key);；本地补充注释 63 行。
  */
 @Service
 @Slf4j

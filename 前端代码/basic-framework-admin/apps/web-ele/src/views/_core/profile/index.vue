@@ -26,6 +26,11 @@ const activeName = ref('basicInfo');
 
 /** 加载个人信息 */
 const profile = ref<SystemUserProfileApi.UserProfileRespVO>();
+/**
+ * 向后端请求当前登录用户的完整资料并写入页面共享的 profile。
+ * 挂载时执行一次，子组件保存成功后由 refreshProfile 再次调用；
+ * 接口失败时异常继续向上抛出，profile 保留上一次成功加载的资料，不会被清空。
+ */
 async function loadProfile() {
   profile.value = await getUserProfile();
 }

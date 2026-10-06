@@ -10,8 +10,11 @@ import { preferences } from '@vben/preferences';
 
 import { $t } from '#/locales';
 
+/** 认证页展示的应用名称，跟随偏好设置变化。 */
 const appName = computed(() => preferences.app.name);
+/** 认证页亮色模式下使用的应用 logo。 */
 const logo = computed(() => preferences.logo.source);
+/** 认证页暗色模式下使用的应用 logo。 */
 const logoDark = computed(() => preferences.logo.sourceDark);
 </script>
 

@@ -20,6 +20,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的轨道属性，转交 ScrollAreaScrollbar；orientation 缺省为纵向，滑块外观由内部 ScrollAreaThumb 固定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

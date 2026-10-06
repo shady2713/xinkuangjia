@@ -9,6 +9,12 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成 .vue 单文件组件的规则配置片段。
+ * @returns 依次合并 essential、strongly-recommended、recommended 三层预置，
+ *   再按仓库约定覆写组件名、事件名、属性引号与块顺序的配置数组；
+ *   缩进与换行交给 Prettier，模板内的 TS 语法由 @typescript-eslint/parser 解析。
+ */
 export async function vue(): Promise<Linter.Config[]> {
   const [pluginVue, parserVue, parserTs] = await Promise.all([
     interopDefault(import('eslint-plugin-vue')),

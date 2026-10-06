@@ -16,6 +16,7 @@ import { NumberFieldDecrement, useForwardProps } from 'reka-ui';
 
 const props = defineProps<NumberFieldDecrementProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的减号按钮属性，转交 NumberFieldDecrement；是否触底禁用由根节点上下文判定。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

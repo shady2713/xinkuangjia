@@ -114,6 +114,11 @@ const {
  */
 const isHeaderAutoMode = computed(() => props.headerMode === 'auto');
 
+/**
+ * 顶栏与标签栏合计占位的高度：仅当顶栏可见且未被显式隐藏时才计入顶栏高度，
+ * 标签栏开启时再叠加其高度。两项都不成立时为 0，供内容区上边距与顶栏收起位移复用。
+ * @returns 顶栏与标签栏的合计高度（像素）。
+ */
 const headerWrapperHeight = computed(() => {
   let height = 0;
   if (props.headerVisible && !props.headerHidden) {
@@ -125,6 +130,11 @@ const headerWrapperHeight = computed(() => {
   return height;
 });
 
+/**
+ * 侧栏折叠后的窄栏宽度：折叠后仍需显示标题，或处于侧边混合、头部混合导航时，
+ * 窄栏还要容下一列混合菜单图标，因此取 sidebarMixedWidth；
+ * 其余布局取 sideCollapseWidth，只留图标宽度。
+ */
 const getSideCollapseWidth = computed(() => {
   const { sidebarCollapseShowTitle, sidebarMixedWidth, sideCollapseWidth } =
     props;
@@ -227,6 +237,7 @@ const headerFixed = computed(() => {
   );
 });
 
+/** 侧栏外壳是否需要渲染：仅侧边类布局且侧栏启用时为真，顶部导航布局下不占位。 */
 const showSidebar = computed(() => {
   return isSideMode.value && sidebarEnable.value && !props.sidebarHidden;
 });
@@ -236,6 +247,14 @@ const showSidebar = computed(() => {
  */
 const maskVisible = computed(() => !sidebarCollapse.value && props.isMobile);
 
+/**
+ * 主内容列的宽度与左侧让位宽度。
+ * 仅在顶栏固定、布局不是 header-nav、mixed-nav 与 header-sidebar-nav、侧栏可见且非移动端时才让出侧栏宽度，其余情况占满整行。
+ * 让位时分两种侧栏：混合布局、已开启固定悬停展开且副菜单列当前可见时，同时让出窄栏与副菜单列的合计宽度；
+ * 否则让出侧栏实际宽度，鼠标已悬停但未开启固定悬停展开时按窄栏宽度让位。
+ * @returns sidebarAndExtraWidth 为侧栏与副菜单列的合计像素宽度（未参与计算时为 'unset'），
+ * width 为主内容列宽度（'100%' 或 calc(100% - 侧栏宽度)）。
+ */
 const mainStyle = computed(() => {
   let width = '100%';
   let sidebarAndExtraWidth = 'unset';
@@ -310,6 +329,12 @@ const tabbarStyle = computed((): CSSProperties => {
   };
 });
 
+/**
+ * 内容区的上边距与底部留白：顶栏固定、非全屏内容布局、顶栏未隐藏，
+ * 且（非 auto 模式或页面尚未滚过顶栏与标签栏的合计高度）时，按该合计高度下压内容；
+ * 否则上边距归零交还顶栏。底部仅在页脚开启且固定时按页脚高度预留，避免固定页脚盖住内容。
+ * @returns 内容区的 marginTop 与 paddingBottom 内联样式（单位像素）。
+ */
 const contentStyle = computed((): CSSProperties => {
   const fixed = headerFixed.value;
 
@@ -326,12 +351,19 @@ const contentStyle = computed((): CSSProperties => {
   };
 });
 
+/** 顶栏层级：以基线 zIndex 为起点，仅混合导航再加 1，其余布局直接取基线值；与侧栏层级各自独立计算。 */
 const headerZIndex = computed(() => {
   const { zIndex } = props;
   const offset = isMixedNav.value ? 1 : 0;
   return zIndex + offset;
 });
 
+/**
+ * 顶栏容器的定位样式：全屏内容布局下高度归零，顶栏隐藏或全屏内容布局时 top 取顶栏与标签栏合计高度的负值实现收起；
+ * 混合导航贴左铺满，其余布局按主内容列宽度让出左侧。
+ * 顶栏固定时用 fixed 脱离文档流，否则保持 static 随页面滚动。
+ * @returns 顶栏容器的 height、left、position、top、width 与 z-index 内联样式。
+ */
 const headerWrapperStyle = computed((): CSSProperties => {
   const fixed = headerFixed.value;
   return {
@@ -361,6 +393,7 @@ const sidebarZIndex = computed(() => {
   return zIndex + offset;
 });
 
+/** 页脚宽度：页脚不固定时随父容器占满整行；固定时与主内容列同宽，避免覆盖到侧栏区域。 */
 const footerWidth = computed(() => {
   if (!props.footerFixed) {
     return '100%';
@@ -369,10 +402,12 @@ const footerWidth = computed(() => {
   return mainStyle.value.width;
 });
 
+/** 移动端遮罩的层级：直接采用基线 zIndex，侧栏在移动端会额外加 1 从而仍浮在遮罩之上，遮罩则盖住没有层级的内容列。 */
 const maskStyle = computed((): CSSProperties => {
   return { zIndex: props.zIndex };
 });
 
+/** 顶栏是否渲染侧栏切换按钮：移动端始终显示；桌面端需开启 headerToggleSidebarButton、处于侧边类布局，且不是侧边混合与混合导航。 */
 const showHeaderToggleButton = computed(() => {
   return (
     props.isMobile ||
@@ -384,6 +419,7 @@ const showHeaderToggleButton = computed(() => {
   );
 });
 
+/** logo 槽位是否交由顶栏承载：非侧边类布局、混合导航或移动端下顶栏需要自己显示 logo。 */
 const showHeaderLogo = computed(() => {
   return !isSideMode.value || isMixedNav.value || props.isMobile;
 });
@@ -446,6 +482,14 @@ watch(
 }
 
 {
+  /**
+   * auto-scroll 模式下按滚动方向决定顶栏收起的节流判定，300ms 内最多执行一次。
+   * 尚未滚过顶栏与标签栏的合计高度、或滚动已回到容器顶部时展开顶栏；
+   * 否则只有继续向下滚才收起，向上滚时保持当前状态不变。
+   * @param top 本次滚动方向是否为向上。
+   * @param bottom 本次滚动方向是否为向下。
+   * @param topArrived 滚动容器是否已到达顶部。
+   */
   const checkHeaderIsHidden = useThrottleFn((top, bottom, topArrived) => {
     if (scrollY.value < headerWrapperHeight.value) {
       headerIsHidden.value = false;
@@ -484,10 +528,12 @@ watch(
   );
 }
 
+/** 点击移动端遮罩：直接折叠侧栏让内容区重新可见，不向外派发 toggleSidebar。 */
 function handleClickMask() {
   sidebarCollapse.value = true;
 }
 
+/** 顶栏切换按钮的点击处理：移动端直接展开侧栏；桌面端不自行改状态，改为向外派发 toggleSidebar 由使用方决定。 */
 function handleHeaderToggle() {
   if (props.isMobile) {
     sidebarCollapse.value = false;

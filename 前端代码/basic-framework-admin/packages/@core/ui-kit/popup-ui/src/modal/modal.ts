@@ -11,6 +11,10 @@ import type { MaybePromise } from '@vben-core/typings';
 
 import type { ModalApi } from './modal-api';
 
+/**
+ * 弹窗组件的静态选项契约：动画、遮罩、页眉页脚、按钮文案与层级都在这里。
+ * 字段全部可选，缺省值由 api 建初始 store 时兜底，视图侧再用优先级合并覆盖。
+ */
 export interface ModalProps {
   /**
    * 动画类型
@@ -149,6 +153,10 @@ export interface ModalProps {
   zIndex?: number;
 }
 
+/**
+ * store 里真正持有的状态：在弹窗选项之上补上 isOpen 这个开关字段，
+ * sharedData 则是类型上预留的共享数据位，api 实际把业务负载放在 sharedData.payload。
+ */
 export interface ModalState extends ModalProps {
   /** 弹窗打开状态 */
   isOpen?: boolean;
@@ -158,12 +166,23 @@ export interface ModalState extends ModalProps {
   sharedData?: Record<string, unknown>;
 }
 
+/**
+ * 在 ModalApi 之上补出订阅入口的交叉类型，由 useVbenModal 挂到实例上。
+ * 有了它，视图侧能只订阅需要的几个字段，而不必把整个 api 传进组件。
+ */
 export type ExtendedModalApi = ModalApi & {
+  /**
+   * 订阅 store 的一段状态，返回只读 ref；不传选择器时拿到整份状态。
+   */
   useStore: <T = NoInfer<ModalState>>(
-    selector?: (state: NoInfer<ModalState>) => T,
+    selector?: /** 状态选择器，省略取整份 */ (state: NoInfer<ModalState>) => T,
   ) => Readonly<Ref<T>>;
 };
 
+/**
+ * 创建 api 用的选项：在状态字段之上收拢六个生命周期回调。
+ * 回调不参与状态合并，ModalApi 会把它们从选项里拆出来单独留存再转发。
+ */
 export interface ModalApiOptions extends ModalState {
   /**
    * 独立的弹窗组件

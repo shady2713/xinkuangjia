@@ -31,6 +31,7 @@ const route = useRoute();
 onBeforeMount(() => {
   const menu = findMenuByPath(props.menus || [], route.path);
   if (menu) {
+    /** 当前菜单所属的顶级菜单，供父级定位一级激活项；反查不到时为 undefined。 */
     const rootMenu = (props.menus || []).find(
       (item) => item.path === menu.parents?.[0],
     );

@@ -20,12 +20,14 @@ import type { VxeGridApi } from './api';
 
 import { useVbenForm } from '@vben-core/form-ui';
 
+/** 分页信息：当前页、每页条数与总条数，由表格自身维护，仅供回显与分页控件使用。 */
 export interface VxePaginationInfo {
   currentPage: number;
   pageSize: number;
   total: number;
 }
 
+/** 工具栏配置：在 vxe 原生工具栏配置上增加搜索表单开关按钮。 */
 interface ToolbarConfigOptions extends VxeGridPropTypes.ToolbarConfig {
   /** 是否显示切换搜索表单的按钮 */
   search?: boolean;
@@ -49,6 +51,7 @@ export interface VxeTableGridOptions<
   toolbarConfig?: ToolbarConfigOptions;
 }
 
+/** 搜索表单与表格主体之间分隔条的样式：show 控制显隐，backgroundColor 控制颜色。 */
 export interface SeparatorOptions {
   show?: boolean;
   backgroundColor?: string;
@@ -110,6 +113,7 @@ type VxeStateSelector<T> = (
   state: NoInfer<VxeGridProps<DefaultRowData, BaseFormComponentType>>,
 ) => T;
 
+/** 扩展后的表格 API：在 VxeGridApi 之上增加响应式状态读取方法 useStore。 */
 export type ExtendedVxeGridApi<
   D extends object = DefaultRowData,
   F extends BaseFormComponentType = BaseFormComponentType,
@@ -123,7 +127,9 @@ export type ExtendedVxeGridApi<
   ) => Readonly<Ref<T>>;
 } & VxeGridApi<D>;
 
+/** 初始化回调契约：configVxeTable 注入 vxe 全局配置，useVbenForm 提供搜索表单创建方法。 */
 export interface SetupVxeTable {
+  /** 注入 vxe 全局配置；接收 vxe UI 实例，无返回值。 */
   configVxeTable: (ui: VxeUIExport) => void;
   useVbenForm: typeof useVbenForm;
 }

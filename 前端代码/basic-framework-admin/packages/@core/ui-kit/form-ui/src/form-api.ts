@@ -183,6 +183,10 @@ export class FormApi<
         ...storeState,
       },
       {
+        /**
+         * 状态写入后的同步点：把最新状态搬到实例上，并清理已从 schema 中删除的字段值。
+         * 每次 setState 都会触发，因此这里只做增量同步，不重新读取远端配置。
+         */
         onUpdate: () => {
           this.prevState = this.state;
           this.state = this.store.state;
@@ -248,6 +252,12 @@ export class FormApi<
     return this.latestSubmissionValues ?? this.toValueType({});
   }
 
+  /**
+   * 取当前表单状态对象本身，而不是副本。
+   * 返回值包含 schema、公共配置、折叠开关与提交/重置/值变更等回调；
+   * 状态在每次 setState 后被整体替换，因此这里拿到的是一次性快照，改它不会写回实例。
+   * @returns 实例持有的表单状态对象；构造后即已存在，不依赖挂载。
+   */
   getState() {
     return this.state;
   }
@@ -357,12 +367,13 @@ export class FormApi<
 
   /**
    * 根据字段名移除表单项
-   * @param fields
+   * @param fields 要移除的字段名列表；当前 schema 中不存在的字段名会被静默忽略。
    */
   async removeSchemaByFields(fields: string[]) {
     const fieldSet = new Set(fields);
     const schema = this.state?.schema ?? [];
 
+    /** 剔除被点名字段后的表单项列表，schema 为空时得到空数组。 */
     const filterSchema = schema.filter((item) => !fieldSet.has(item.fieldName));
 
     this.setState({
@@ -629,6 +640,7 @@ export class FormApi<
    */
   updateSchema(schema: Partial<FormSchema<TComp>>[]) {
     const updated: Partial<FormSchema<TComp>>[] = [...schema];
+    /** 每一条更新项都带非空 fieldName 时才允许合并，缺任一项就整体放弃。 */
     const hasField = updated.every(
       (item) => Reflect.has(item, 'fieldName') && item.fieldName,
     );
@@ -833,6 +845,7 @@ export class FormApi<
       return;
     }
 
+    /** 按同一分隔符处理一批字段的数组与字符串互转，分隔符会按正则元字符转义后再拆分。 */
     const processFields = (fields: string[], separator: string = ',') => {
       this.processFields(fields, separator, originValues, (value, sep) => {
         if (Array.isArray(value)) {
@@ -1037,9 +1050,11 @@ export class FormApi<
     const prevSchema = this.prevState?.schema ?? [];
     // 进行了删除schema操作
     if (currentSchema.length < prevSchema.length) {
+      /** 当前 schema 仍然存在的字段名集合，用于定位这一版里已被删掉的表单项。 */
       const currentFields = new Set(
         currentSchema.map((item) => item.fieldName),
       );
+      /** 上一版存在而当前已经不存在的表单项，它们的字段值需要一并清空。 */
       const deletedSchema = prevSchema.filter(
         (item) => !currentFields.has(item.fieldName),
       );

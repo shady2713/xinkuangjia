@@ -4,6 +4,7 @@
  */
 export type Locale = 'en-US' | 'zh-CN';
 
+/** 内置词条表：语言到「键 → 文案」的映射，缺键时由取词方回退为键名。 */
 export const messages: Record<Locale, Record<string, string>> = {
   'en-US': {
     cancel: 'Cancel',
@@ -25,4 +26,9 @@ export const messages: Record<Locale, Record<string, string>> = {
   },
 };
 
+/**
+ * 取指定语言的全部词条。
+ * @param locale - 语言标识，只支持 en-US 与 zh-CN。
+ * @returns 该语言的「键 → 文案」映射，与 messages 中的对应项是同一个对象。
+ */
 export const getMessages = (locale: Locale) => messages[locale];

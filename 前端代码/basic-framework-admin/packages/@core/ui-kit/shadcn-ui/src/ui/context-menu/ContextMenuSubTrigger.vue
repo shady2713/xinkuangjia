@@ -21,6 +21,7 @@ const props = defineProps<
   }
 >();
 
+/** 去掉 class 后的子菜单触发件属性，转交 ContextMenuSubTrigger；展开箭头与缩进由模板固定，不参与属性计算。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

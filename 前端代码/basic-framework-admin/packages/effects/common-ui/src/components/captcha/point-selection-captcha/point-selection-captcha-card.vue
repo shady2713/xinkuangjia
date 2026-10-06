@@ -30,6 +30,11 @@ const emit = defineEmits<{
   click: [MouseEvent];
 }>();
 
+/**
+ * 把尺寸配置解析为像素数值。
+ * @param value 数字或带单位字符串（如 '300px'）。
+ * @returns 解析后的数值；字符串无法解析为数字时返回 0。
+ */
 const parseValue = (value: number | string) => {
   if (typeof value === 'number') {
     return value;
@@ -38,11 +43,13 @@ const parseValue = (value: number | string) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+/** 根卡片样式：由内边距与图片宽度算出卡片总宽度。 */
 const rootStyles = computed(() => ({
   padding: `${parseValue(props.paddingY)}px ${parseValue(props.paddingX)}px`,
   width: `${parseValue(props.width) + parseValue(props.paddingX) * 2}px`,
 }));
 
+/** 图片样式：按配置直接给出宽高像素值。 */
 const captchaStyles = computed(() => {
   return {
     height: `${parseValue(props.height)}px`,
@@ -50,6 +57,7 @@ const captchaStyles = computed(() => {
   };
 });
 
+/** 把图片上的点击事件原样上抛，不做坐标换算。 */
 function handleClick(e: MouseEvent) {
   emit('click', e);
 }

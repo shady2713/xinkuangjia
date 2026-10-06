@@ -27,6 +27,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<ContextMenuCheckboxItemEmits>();
 
+/** 剔除 class 后的复选项属性，连同 emits 一起交给 ContextMenuCheckboxItem；勾选集合仍由菜单根节点持有。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

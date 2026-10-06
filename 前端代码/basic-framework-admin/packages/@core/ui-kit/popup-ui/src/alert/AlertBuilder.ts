@@ -29,11 +29,26 @@ const alerts = ref<
 
 const { $t } = useSimpleLocale();
 
+/**
+ * 只给出完整选项对象的调用形态，`content` 必填，其余字段按 AlertProps 的默认表现渲染。
+ * @param options 弹窗的完整选项；实现内部会先复制一份再改写，不会污染调用方传入的对象。
+ */
 export function vbenAlert(options: AlertProps): Promise<void>;
+/**
+ * 文案加选项的调用形态，选项可以整段省略，此时只展示默认样式的提示弹窗。
+ * @param message 提示正文，等价于选项里的 `content`。
+ * @param options 追加到选项上的部分配置；提供时会合并进基础选项，不传则只用文案。
+ */
 export function vbenAlert(
   message: string,
   options?: Partial<AlertProps>,
 ): Promise<void>;
+/**
+ * 文案、标题、选项三段都显式给出的调用形态，合并顺序与实现内部一致。
+ * @param message 提示正文，作为选项里的 `content`。
+ * @param title 标题文案；省略时实现回退到本地化的 `prompt` 文案。
+ * @param options 最后合并的补充配置，优先级高于前两个参数。
+ */
 export function vbenAlert(
   message: string,
   title?: string,
@@ -170,17 +185,40 @@ export function vbenAlert(
   );
 }
 
+/**
+ * 确认弹窗的完整选项形态：先预置 showCancel 为 true，再由调用方的选项决定其余字段。
+ * @param options 弹窗选项；显式写 `showCancel: false` 仍能关掉取消按钮。
+ */
 export function vbenConfirm(options: AlertProps): Promise<void>;
+/**
+ * 确认弹窗的文案加选项形态，只传文案时取消按钮固定显示。
+ * @param message 提示正文，等价于选项里的 `content`。
+ * @param options 追加配置；按对象传入时它排在默认项之后，因此能覆盖 `showCancel`。
+ */
 export function vbenConfirm(
   message: string,
   options?: Partial<AlertProps>,
 ): Promise<void>;
+/**
+ * 确认弹窗的文案、标题、选项三段形态，参数顺序与 vbenAlert 的对应重载一致。
+ * @param message 提示正文，作为选项里的 `content`。
+ * @param title 标题文案；省略时由实现回退到本地化的 `prompt` 文案。
+ * @param options 最后合并的补充配置。
+ */
 export function vbenConfirm(
   message: string,
   title?: string,
   options?: Partial<AlertProps>,
 ): Promise<void>;
 
+/**
+ * 按参数个数与类型把三种调用形态归一到 vbenAlert，并补上确认弹窗的默认项。
+ * 第二个参数缺省时只合并默认项，第二个参数是对象时按选项处理，第三个参数存在才走标题形态。
+ * @param arg0 完整选项对象，或直接作为提示内容的文案。
+ * @param arg1 标题文案，或需要合并进选项的部分选项。
+ * @param arg2 标题已由 arg1 给出时使用的补充选项。
+ * @returns 委托给 vbenAlert 得到的 Promise，确认时兑现、取消时以 `dialog cancelled` 拒绝。
+ */
 export function vbenConfirm(
   arg0: AlertProps | string,
   arg1?: Partial<AlertProps> | string,
@@ -238,6 +276,9 @@ export async function vbenPrompt<T = unknown>(
     const currentProps = {
       ...componentProps,
       [modelPropName]: modelValue.value,
+      /**
+       * 输入组件的值变化时同步回本地 ref，使内容区与 beforeClose 都能读到最新输入。
+       */
       [`onUpdate:${modelPropName}`]: (val: T) => {
         modelValue.value = val;
       },
@@ -258,12 +299,22 @@ export async function vbenPrompt<T = unknown>(
     return h(
       'div',
       { class: 'flex flex-col gap-2' },
-      { default: () => [...staticContents, inputComponentRef.value] },
+      {
+        /**
+         * 默认插槽把静态正文与输入组件上下排布，输入组件每次渲染都是新建的 vnode。
+         */
+        default: () => [...staticContents, inputComponentRef.value],
+      },
     );
   };
 
   const props: AlertProps & Recordable<unknown> = {
     ...delegated,
+    /**
+     * 把调用方给的关闭拦截接过来，并补上当前输入值；未提供时返回 undefined，关闭照常进行。
+     * @param scope 组件内部给出的关闭上下文，`isConfirm` 区分确认与取消。
+     * @returns 调用方 beforeClose 的返回值；调用方没传该回调时为 undefined。
+     */
     async beforeClose(scope: BeforeCloseScope) {
       if (delegated.beforeClose) {
         return await delegated.beforeClose({
@@ -275,6 +326,10 @@ export async function vbenPrompt<T = unknown>(
     // 使用函数形式，每次渲染都会重新计算内容
     content: contentRenderer,
     contentMasking: true,
+    /**
+     * 打开动画结束后尽力聚焦输入控件：优先用组件暴露的 focus，其次找原生可聚焦元素或其相邻元素。
+     * 都没有可聚焦目标时静默跳过，不影响弹窗其余行为。
+     */
     async onOpened() {
       await nextTick();
       const componentRef: null | VNode = inputComponentRef.value;
@@ -316,6 +371,10 @@ export async function vbenPrompt<T = unknown>(
   return modelValue.value;
 }
 
+/**
+ * 卸载并移除当前登记的所有命令式弹窗容器，用于路由切换后清理残留弹窗。
+ * 逐个先卸载渲染再移除 DOM 节点，最后清空登记簿；不改变任何业务状态，也不会让调用方的 Promise 结算。
+ */
 export function clearAllAlerts() {
   alerts.value.forEach((alert) => {
     // 从DOM中移除容器

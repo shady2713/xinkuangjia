@@ -40,6 +40,12 @@ interface UserDrawerInjectData {
 
 const DEFAULT_DRAWER_PROPS: Partial<DrawerProps> = {};
 
+/**
+ * 登记全局默认的抽屉属性：写入模块级默认配置，之后创建的抽屉都以它作为最底层初始值，
+ * 仍可被父级注入的配置与本次传入的 options 逐层覆盖。
+ * 重复调用只做浅合并，不会清掉此前已登记的字段。
+ * @param props 要设为默认值的抽屉属性片段，只覆盖本次传入的键。
+ */
 export function setDefaultDrawerProps(props: Partial<DrawerProps>) {
   Object.assign(DEFAULT_DRAWER_PROPS, props);
 }
@@ -63,15 +69,28 @@ export function useVbenDrawer<
   if (connectedComponent) {
     const extendedApi = reactive({});
     const isDrawerReady = ref(true);
+    /**
+     * 父级抽屉组件：setup 里 provide 连接信息并校验外部传入的 props，render 只负责把
+     * props 与 attrs 原样透传给真正的抽屉组件；重建期间先渲染空 div，等一次更新后再恢复。
+     */
     const Drawer = defineComponent(
       (props: TParentDrawerProps, { attrs, slots }) => {
         provide(USER_DRAWER_INJECT_KEY, {
+          /**
+           * 内层抽屉就绪后把自身 API 交接给父级：改 reactive 对象的原型而不是直接赋值，
+           * 既保住响应式，又能让 open、close 这些原型方法一并被父级拿到。
+           * @param api 内层抽屉创建出的 API，将成为父级所持 reactive 对象的原型。
+           */
           extendApi(api: ExtendedDrawerApi) {
             // 不能直接给 reactive 赋值，会丢失响应
             // 不能用 Object.assign,会丢失 api 的原型函数
             Object.setPrototypeOf(extendedApi, api);
           },
           options,
+          /**
+           * 强制重建内层抽屉组件：先让渲染结果变成空 div，等一次更新后再挂回抽屉，
+           * 用于 destroyOnClose 关闭后清空抽屉内部状态。
+           */
           async reCreateDrawer() {
             isDrawerReady.value = false;
             await nextTick();
@@ -131,6 +150,10 @@ export function useVbenDrawer<
     return useStore(api.store, selector);
   };
 
+  /**
+   * 抽屉组件：把调用方传入的 props 与 attrs 连同 extendedApi 一起交给 drawer.vue，
+   * 插槽原样转发。组件本身不持有状态，开合与回调都由外部拿到的 api 驱动。
+   */
   const Drawer = defineComponent(
     (props: DrawerProps, { attrs, slots }) => {
       const drawerProps = {

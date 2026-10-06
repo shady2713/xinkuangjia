@@ -18,6 +18,7 @@ const props = defineProps<SwitchRootProps & { class?: ClassValue }>();
 
 const emits = defineEmits<SwitchRootEmits>();
 
+/** 去掉 class 后的开关属性，连同 emits 转发给 SwitchRoot；轨道底色与拇指位移都由 data-state 类名驱动。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

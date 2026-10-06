@@ -22,6 +22,11 @@ import { bundleAnalysis } from './bundle-analysis.mjs';
 import { viteExtraAppConfigPlugin } from './extra-app-config.ts';
 import { viteInjectAppLoadingPlugin } from './inject-app-loading/index.ts';
 
+/**
+ * 展开带开关的插件条目：condition 为真时才调用 plugins，并把结果汇总、扁平化。
+ * @param conditionPlugins - 条件插件列表，条目被跳过时不产生任何插件。
+ * @returns 本次启用的插件数组；所有条目都被跳过时为空数组。
+ */
 async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
   const plugins: PluginOption[] = [];
   for (const conditionPlugin of conditionPlugins) {

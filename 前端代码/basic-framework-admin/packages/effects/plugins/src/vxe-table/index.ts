@@ -21,13 +21,16 @@ export type {
   VxeTableInstance,
 } from 'vxe-table';
 
+/** vxe-table 原生表格组件的异步版本，供绕过封装直接使用原生表格的场景按需加载。 */
 // 异步导出 vxe-table 相关组件提供给需要单独使用 vxe-table 的场景
 export const AsyncVxeTable = defineAsyncComponent(() =>
   import('vxe-table').then((mod) => mod.VxeTable),
 );
+/** vxe-table 原生列组件的异步版本，需与 AsyncVxeTable 搭配使用。 */
 export const AsyncVxeColumn = defineAsyncComponent(() =>
   import('vxe-table').then((mod) => mod.VxeColumn),
 );
+/** vxe-table 原生工具栏组件的异步版本，需与 AsyncVxeTable 搭配使用。 */
 export const AsyncVxeToolbar = defineAsyncComponent(() =>
   import('vxe-table').then((mod) => mod.VxeToolbar),
 );

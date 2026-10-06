@@ -23,6 +23,7 @@ import 'tippy.js/animations/shift-away.css';
 import 'tippy.js/animations/perspective.css';
 
 const { isDark } = usePreferences();
+/** 气泡提示属性：tippy 原生属性，外加动画名与 auto/dark/light 三种主题取值。 */
 export type TippyProps = Partial<
   Props & {
     animation?:

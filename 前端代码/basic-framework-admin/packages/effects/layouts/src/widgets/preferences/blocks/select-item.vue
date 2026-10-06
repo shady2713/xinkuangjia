@@ -32,6 +32,7 @@ withDefaults(
   {
     disabled: false,
     placeholder: '',
+    /** 可选项的默认值：空数组，未传入时下拉列表中没有可选项。 */
     items: () => [],
   },
 );

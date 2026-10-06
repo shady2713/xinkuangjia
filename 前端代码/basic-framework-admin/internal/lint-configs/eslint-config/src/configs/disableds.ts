@@ -4,6 +4,11 @@
  */
 import type { Linter } from 'eslint';
 
+/**
+ * 生成按文件类型豁免规则的配置片段。
+ * @returns 分别针对测试文件（放开 ts 注释与 console）、.d.ts（放开三斜线引用）
+ *   与 js 文件（不强制导出类型）的配置数组；其它文件的严格度不受影响。
+ */
 export async function disableds(): Promise<Linter.Config[]> {
   return [
     {

@@ -25,6 +25,7 @@ const copyrightCompanySiteLink = defineModel<string>(
   'copyrightCompanySiteLink',
 );
 
+/** 版权各输入项是否禁用：父级禁用，或版权总开关已关闭时统一置灰。 */
 const itemDisabled = computed(() => props.disabled || !copyrightEnable.value);
 </script>
 

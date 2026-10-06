@@ -29,6 +29,11 @@ const props = withDefaults(defineProps<VbenButtonGroupProps>(), {
   maxCount: 0,
 });
 const emit = defineEmits(['btnClick']);
+/**
+ * 透传给每个按钮的公共属性：剔除只属于按钮组自身的 options、btnClass、size、disabled，
+ * 其余（如 allowClear、beforeChange、multiple）保留下来，
+ * 再把 btnClass 合进 class，使选项按钮共享同一套外观覆盖。
+ */
 const btnDefaultProps = computed(() => {
   return {
     ...objectOmit(props, ['options', 'btnClass', 'size', 'disabled']),
@@ -55,6 +60,7 @@ watch(
   () => modelValue.value,
   (val) => {
     if (Array.isArray(val)) {
+      /** 过滤掉数组形态 v-model 里可能混入的 undefined，避免它们被当作已选项。 */
       const arrVal = val.filter((v) => v !== undefined);
       if (arrVal.length > 0) {
         innerValue.value = props.multiple
@@ -70,6 +76,14 @@ watch(
   { deep: true, immediate: true },
 );
 
+/**
+ * 点击某个选项按钮后的选中逻辑。
+ * 先在配置了 beforeChange 时把该值标记为加载中并等待拦截结果，返回 false 即中止；
+ * 多选模式下命中已选值就取消选择，达到 maxCount 时先裁掉最早的选择再补入新值；
+ * 单选模式下命中 allowClear 才允许清空，否则直接替换为当前值。
+ * 无论哪条分支，最后都抛出 btnClick 事件，清空时携带 undefined 以便使用方区分。
+ * @param value 被点击选项的取值，调用方保证它来自 options。
+ */
 async function onBtnClick(value: ValueType) {
   if (props.beforeChange && isFunction(props.beforeChange)) {
     try {

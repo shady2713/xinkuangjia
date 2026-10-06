@@ -21,6 +21,7 @@ import {
 
 const props = defineProps<SelectItemProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的选项属性，转交 SelectItem；对勾指示器与文本节点由模板内的 reka-ui 子节点渲染。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

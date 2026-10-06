@@ -40,18 +40,21 @@ const DEFAULT_CONFIG = {
   ignorePatterns: ['dist', 'node_modules', 'public'],
 };
 
+/** depcheck 的检查结果：未使用的依赖、未使用的开发依赖，以及缺失依赖到引用文件的映射。 */
 interface DepcheckResult {
   dependencies: string[];
   devDependencies: string[];
   missing: Record<string, string[]>;
 }
 
+/** depcheck 配置：需要放行的依赖名、需要忽略的包与需要忽略的文件模式。 */
 interface DepcheckConfig {
   ignoreMatches?: string[];
   ignorePackages?: string[];
   ignorePatterns?: string[];
 }
 
+/** 待检查的包：所在目录与 package.json 中的包名。 */
 interface PackageInfo {
   dir: string;
   packageJson: {

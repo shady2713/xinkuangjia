@@ -60,6 +60,10 @@ export function useVbenForm<
     ) => useStore(api.store, selector),
   });
 
+  /**
+   * 由 useVbenForm 在调用期就地创建的表单组件本体：把 props 与透传 attrs 合并进实例状态后交给渲染层。
+   * 组件本身不创建实例，状态读写全部走闭包里的 FormApi。
+   */
   const Form = defineComponent(
     /**
      * 表单组件本体：把 props 与透传 attrs 合并进实例状态后交给渲染层。

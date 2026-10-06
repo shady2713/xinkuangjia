@@ -7,12 +7,21 @@ import type {
 } from '@vben-core/shadcn-ui';
 import type { TabDefinition, TabsStyleType } from '@vben-core/typings';
 
+/**
+ * 标签栏向上层抛出的事件契约：关闭指定 key 的标签、拖拽排序后的新旧下标，
+ * 以及解除固定时回传的标签实体。三个事件的载荷顺序固定，监听方按位置解构。
+ */
 export type TabsEmits = {
   close: [string];
   sortTabs: [number, number];
   unpin: [TabDefinition];
 };
 
+/**
+ * 标签栏的属性契约：标签集合、当前选中项、外观（风格、间隙、宽窄、图标）
+ * 与交互开关（拖拽、中键关闭、滚轮滚动）都在这里声明。
+ * 只在 tabs-chrome 风格下生效的字段已在对应成员上标出。
+ */
 export interface TabsProps {
   active?: string;
   /**
@@ -73,6 +82,10 @@ export interface TabsProps {
   wheelable?: boolean;
 }
 
+/**
+ * 渲染单个标签项所需的字段集：在路由标签定义之上补出模板直接消费的展示字段。
+ * closable 为假时关闭与固定两个标记都不展示；affixTab 为真时把关闭按钮换成固定标记。
+ */
 export interface TabConfig extends TabDefinition {
   affixTab: boolean;
   closable: boolean;

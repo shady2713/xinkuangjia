@@ -9,13 +9,23 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+/** .env 里读到的原始取值：键存在时为字符串，缺失时为 undefined。 */
 type EnvValue = string | undefined;
 
+/** 把 .env 中的字符串按严格等于 'true' 解析为布尔值；其它取值（含 '1'）都算 false。 */
 const getBoolean = (value: EnvValue) => value === 'true';
+/** 把 .env 中的字符串转成数字；无法解析或恰好为 0 时回退到给定的默认值。 */
 const getNumber = (value: EnvValue, fallback: number) =>
   Number(value) || fallback;
+/** 读取字符串取值；键缺失（undefined）时回退默认值，空串会原样保留。 */
 const getString = (value: EnvValue, fallback: string) => value ?? fallback;
 
+/**
+ * 解析单个 .env 文件的文本内容。
+ * 跳过空行与以 # 开头的注释；缺少 = 或键名为空的行走忽略；值两端成对的引号会被去掉。
+ * @param content - .env 文件的原始文本。
+ * @returns 键到值的映射；同一个键重复出现时后写的覆盖先写的。
+ */
 function parseEnvContent(content: string) {
   const parsed: Record<string, string> = {};
   const lines = content.split(/\r?\n/);
@@ -41,6 +51,13 @@ function parseEnvContent(content: string) {
   return parsed;
 }
 
+/**
+ * 依次读取根目录下的 .env 系列文件并合并。
+ * 顺序为 .env、.env.local、.env.<mode>、.env.<mode>.local，文件不存在直接跳过。
+ * @param root - 读取 .env 文件的目录，一般是前端工作区根目录。
+ * @param mode - Vite 运行模式；省略时不读取 .env.<mode> 系列文件。
+ * @returns 合并后的键值表，同名键以最后读取到的文件为准。
+ */
 async function readEnvFiles(root: string, mode?: string) {
   const files = ['.env', '.env.local'];
   if (mode) {

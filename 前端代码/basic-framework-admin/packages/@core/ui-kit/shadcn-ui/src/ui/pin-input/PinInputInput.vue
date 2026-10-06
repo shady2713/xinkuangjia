@@ -15,6 +15,7 @@ import { PinInputInput, useForwardProps } from 'reka-ui';
 
 const props = defineProps<PinInputInputProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的单格输入属性，转交 PinInputInput；格子边框与聚焦层级由模板类名负责。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
   return delegated;

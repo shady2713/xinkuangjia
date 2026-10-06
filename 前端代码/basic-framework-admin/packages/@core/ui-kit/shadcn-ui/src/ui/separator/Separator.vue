@@ -17,6 +17,7 @@ const props = defineProps<
   SeparatorProps & { class?: ClassValue; label?: string }
 >();
 
+/** 去掉 class 后的分隔线属性，转交 Separator；label 与 orientation 只影响模板里的尺寸和居中文字，不下发给底层。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

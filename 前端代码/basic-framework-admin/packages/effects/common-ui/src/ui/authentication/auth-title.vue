@@ -1,3 +1,4 @@
+<!-- 认证页标题区：渲染主标题插槽与右上角描述插槽，供各登录表单复用。 -->
 <template>
   <div class="mb-7 sm:mx-auto sm:w-full sm:max-w-md">
     <h2

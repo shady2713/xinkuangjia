@@ -43,6 +43,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /**
+         * 按当前分页与搜索条件请求任务日志。
+         * 从任务页跳转过来时路由上带任务编号，用它把列表限定在该任务的执行记录内。
+         */
         query: async ({ page }, formValues) => {
           return await getJobLogPage({
             pageNo: page.currentPage,

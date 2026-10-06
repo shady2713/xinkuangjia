@@ -16,6 +16,11 @@ import { defineConfig, mergeConfig } from 'vite';
 import { loadLibraryPlugins } from '../plugins/index.ts';
 import { getCommonConfig } from './common.ts';
 
+/**
+ * 创建库型工程的 Vite 配置：入口固定 src/index.ts，只产出 ESM，包依赖全部外部化。
+ * @param userConfigPromise 库自定义配置工厂，可覆盖插件开关与用户 vite 配置
+ * @returns 可由 Vite 直接加载的异步配置
+ */
 function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
   return defineConfig(async (config: ConfigEnv) => {
     const options = await userConfigPromise?.(config);
@@ -41,6 +46,7 @@ function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
       build: {
         lib: {
           entry: 'src/index.ts',
+          /** 输出文件名固定为 index.mjs，不随入口名变化。 */
           fileName: () => 'index.mjs',
           formats: ['es'],
         },
@@ -60,6 +66,11 @@ function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
   });
 }
 
+/**
+ * 读取指定目录 package.json 里的依赖声明，用于外部化依赖。
+ * @param root - 包含 package.json 的目录。
+ * @returns 只取 dependencies 与 peerDependencies 两个字段；文件缺失或内容不是合法 JSON 时由读取与解析过程抛错。
+ */
 async function readLocalPackageJson(root: string) {
   const content = await readFile(join(root, 'package.json'), 'utf8');
   return JSON.parse(content) as {

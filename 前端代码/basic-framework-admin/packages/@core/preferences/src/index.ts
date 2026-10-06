@@ -7,6 +7,7 @@ import type { Preferences } from './types';
 
 import { preferencesManager } from './preferences';
 
+/** 直接转发管理器上的读取、更新、重置与初始化方法，调用方无需感知管理器实例。 */
 export const {
   getPreferences,
   updatePreferences,
@@ -15,6 +16,7 @@ export const {
   initPreferences,
 } = preferencesManager;
 
+/** 响应式偏好的只读视图，模块加载时抓取一次；后续变更由管理器就地更新同一对象。 */
 export const preferences: Preferences = getPreferences();
 
 export { preferencesManager };

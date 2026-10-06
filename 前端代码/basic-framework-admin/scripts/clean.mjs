@@ -85,6 +85,7 @@ async function cleanTargetsRecursively(currentDir, targets, depth = 0) {
   for (let i = 0; i < dirents.length; i += CONCURRENCY_LIMIT) {
     const batch = dirents.slice(i, i + CONCURRENCY_LIMIT);
 
+    // 单个条目的处理任务：需要继续下钻时返回递归结果，否则返回 null。
     const tasks = batch.map(async (dirent) => {
       const item = dirent.name;
       const shouldRecurse = await processItem(currentDir, item, targets, depth);
@@ -113,7 +114,7 @@ async function cleanTargetsRecursively(currentDir, targets, depth = 0) {
   }
 }
 
-(async function startCleanup() {
+/* 清理入口：按 targets 删除目录与文件，--del-lock 时额外删除 pnpm-lock.yaml。 */ (async function startCleanup() {
   // 要删除的目录及文件名称
   const targets = ['node_modules', 'dist', '.turbo', 'dist.zip'];
   const deleteLockFile = process.argv.includes('--del-lock');

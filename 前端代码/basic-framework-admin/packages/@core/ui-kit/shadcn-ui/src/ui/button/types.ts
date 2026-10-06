@@ -11,6 +11,10 @@ export type ButtonVariantSize =
   | null
   | undefined;
 
+/**
+ * 按钮语义配色的取值联合：与 button.ts 的 variant 轴逐项对应，
+ * null 与 undefined 视为不指定并交给 cva 回落默认值。
+ */
 export type ButtonVariants =
   | 'default'
   | 'destructive'

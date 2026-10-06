@@ -18,6 +18,7 @@ import {
 
 import { useToggle } from '@vueuse/core';
 
+/** 通知弹窗属性：dot 控制铃铛上的红点，notifications 为要展示的消息列表。 */
 interface Props {
   /**
    * 显示圆点
@@ -33,6 +34,7 @@ defineOptions({ name: 'NotificationPopup' });
 
 withDefaults(defineProps<Props>(), {
   dot: false,
+  /** 消息列表的默认值：空数组，未传入时展示空态。 */
   notifications: () => [],
 });
 
@@ -48,23 +50,28 @@ const emit = defineEmits<{
 const router = useRouter();
 const [open, toggle] = useToggle();
 
+/** 关闭弹层；只改本地开关，不向父级抛事件。 */
 function close() {
   open.value = false;
 }
 
+/** 查看全部：先通知父级，再关闭弹层。 */
 function handleViewAll() {
   emit('viewAll');
   close();
 }
 
+/** 全部标记已读：动作交给父级处理，弹层保持打开。 */
 function handleMakeAll() {
   emit('makeAll');
 }
 
+/** 清空消息：动作交给父级处理，本地列表由父级更新。 */
 function handleClear() {
   emit('clear');
 }
 
+/** 点击消息项：仅当该项配置了 link 时才跳转，未配置时不产生任何动作。 */
 function handleClick(item: NotificationItem) {
   // 如果通知项有链接，点击时跳转
   if (item.link) {
@@ -100,6 +107,7 @@ function navigateTo(
   }
 }
 
+/** 切换弹层显隐，并把切换后的状态抛给父级。 */
 function handleOpen() {
   toggle();
   emit('open', open.value);

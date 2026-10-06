@@ -8,6 +8,7 @@ import type { CSSProperties } from 'vue';
 
 import { computed } from 'vue';
 
+/** 标签栏容器的属性契约：height 是容器占位高度（像素），宽度与左偏移由外壳以 style 属性直接传入。 */
 interface Props {
   /**
    * 高度
@@ -17,6 +18,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {});
 
+/** 标签栏容器的内联样式只输出固定高度，不参与宽度与偏移计算，混合导航下的排版由外壳用 style 覆盖。 */
 const style = computed((): CSSProperties => {
   const { height } = props;
   return {

@@ -12,6 +12,9 @@ import { useForwardProps } from '@vben-core/composables';
 import { Menu } from './components';
 import SubMenu from './sub-menu.vue';
 
+/**
+ * 数据驱动菜单属性：在菜单容器字段之上补充待渲染的菜单树数据，其余行为开关由容器自行决定。
+ */
 interface Props extends MenuProps {
   menus: MenuRecordRaw[];
 }
@@ -20,6 +23,7 @@ defineOptions({
   name: 'MenuView',
 });
 
+/** 注册菜单树数据，折叠开关缺省为 false，其余容器字段沿用菜单容器契约。 */
 const props = withDefaults(defineProps<Props>(), {
   collapse: false,
 });

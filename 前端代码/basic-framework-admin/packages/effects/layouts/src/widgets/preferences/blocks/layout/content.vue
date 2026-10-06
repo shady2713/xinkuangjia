@@ -23,6 +23,7 @@ const components: Record<string, Component> = {
   wide: ContentWide,
 };
 
+/** 内容宽度的两个选项：宽屏与紧凑，名称随当前语言变化。 */
 const PRESET = computed(() => [
   {
     name: $t('preferences.wide'),
@@ -34,6 +35,7 @@ const PRESET = computed(() => [
   },
 ]);
 
+/** 选项卡片的高亮样式：与当前内容宽度一致时返回描边类名，否则返回空数组。 */
 function activeClass(theme: string): string[] {
   return theme === modelValue.value ? ['outline-box-active'] : [];
 }

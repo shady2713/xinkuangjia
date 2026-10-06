@@ -12,10 +12,14 @@ import { isValidColor } from '@vben-core/shared/color';
 
 import BadgeDot from './menu-badge-dot.vue';
 
+/**
+ * 菜单徽标属性：在菜单项公共徽标字段之上补充「是否为更多入口」标记，用于区分水平菜单溢出项。
+ */
 interface Props extends MenuRecordBadgeRaw {
   hasChildren?: boolean;
 }
 
+/** 注册菜单徽标属性，全部徽标字段沿用菜单项契约，此处不额外设置默认值。 */
 const props = withDefaults(defineProps<Props>(), {});
 
 const variantsMap: Record<string, string> = {
@@ -26,8 +30,10 @@ const variantsMap: Record<string, string> = {
   warning: 'bg-yellow-500',
 };
 
+/** 徽标类型为 dot 时改渲染扩散圆点，否则渲染带文字的圆角角标。 */
 const isDot = computed(() => props.badgeType === 'dot');
 
+/** 把变体名映射成预置底色类名；变体为空时用默认色，变体不在映射表内时按原样当作自定义类名或色值。 */
 const badgeClass = computed(() => {
   const { badgeVariants } = props;
 
@@ -38,6 +44,7 @@ const badgeClass = computed(() => {
   return variantsMap[badgeVariants] || badgeVariants;
 });
 
+/** 类名不是合法颜色值时返回空对象，让底色继续由 badgeClass 的类名生效。 */
 const badgeStyle = computed(() => {
   if (badgeClass.value && isValidColor(badgeClass.value)) {
     return {

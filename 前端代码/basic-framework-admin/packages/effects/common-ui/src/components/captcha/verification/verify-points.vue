@@ -36,11 +36,13 @@ defineOptions({
 });
 
 const props = withDefaults(defineProps<VerificationProps>(), {
+  /** 提示条尺寸默认值：310×40 像素。 */
   barSize: () => ({
     height: '40px',
     width: '310px',
   }),
   captchaType: 'clickWord',
+  /** 底图区域尺寸默认值：310×155 像素。 */
   imgSize: () => ({
     height: '155px',
     width: '310px',

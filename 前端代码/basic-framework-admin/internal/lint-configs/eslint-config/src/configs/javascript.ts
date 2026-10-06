@@ -8,6 +8,11 @@ import js from '@eslint/js';
 import pluginUnusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 
+/**
+ * 生成 JavaScript 基础规则配置片段。
+ * @returns 先设定 ecmaVersion 与浏览器/ES2021/Node 全局变量并启用 eslint 推荐集，
+ *   再收紧 console（只放行 warn 与 error）等原生规则的配置数组；类型相关规则不在此片段。
+ */
 export async function javascript(): Promise<Linter.Config[]> {
   return [
     {

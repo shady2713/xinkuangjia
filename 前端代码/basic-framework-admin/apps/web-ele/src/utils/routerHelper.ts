@@ -31,6 +31,15 @@ export function registerComponent(componentPath: string) {
   }
 }
 
+/**
+ * 产出可传输的路由副本：去掉归一化路由上无法序列化的部分，只保留匹配记录的标量字段。
+ *
+ * 除 matched 外的属性原样保留；matched 存在时逐条精简为 meta、name、path 三个字段，
+ * 未匹配到任何记录时置为 undefined。
+ *
+ * @param route 当前归一化的路由对象；为空时原样返回
+ * @returns 与入参同类型的新路由对象；入参为空时返回入参本身
+ */
 export const getRawRoute = (
   route: RouteLocationNormalized,
 ): RouteLocationNormalized => {
@@ -38,6 +47,7 @@ export const getRawRoute = (
   const { matched, ...opt } = route;
   return {
     ...opt,
+    /** 精简后的匹配记录；未匹配到任何记录时为 undefined。 */
     matched: (matched
       ? matched.map((item) => ({
           meta: item.meta,

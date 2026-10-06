@@ -12,6 +12,7 @@ import { SelectGroup } from 'reka-ui';
 
 const props = defineProps<SelectGroupProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的分组属性，转交 SelectGroup，为同组选项提供统一的容器语义与内边距。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

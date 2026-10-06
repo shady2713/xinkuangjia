@@ -1,3 +1,4 @@
+<!-- 离线兜底页的插图：纯静态 SVG，无脚本与交互，由 fallback.vue 按状态异步加载。 -->
 <template>
   <svg
     height="458.68642"

@@ -38,21 +38,33 @@ export namespace SystemUserProfileApi {
   }
 }
 
-/** 获取登录用户信息 */
+/**
+ * 获取当前登录用户的个人中心信息。
+ * @returns 本人资料，含角色、所属部门与岗位；后端按登录身份取值，不接受用户编号参数。
+ */
 export function getUserProfile() {
   return requestClient.get<SystemUserProfileApi.UserProfileRespVO>(
     '/system/user/profile/get',
   );
 }
 
-/** 修改用户个人信息 */
+/**
+ * 修改当前登录用户的个人信息。
+ * @param data 只提交需要变更的字段；用户名、角色与部门由后台维护，此处不可修改。
+ * @returns 更新结果标识；手机号或邮箱已被他人占用时后端按业务码拒绝。
+ */
 export function updateUserProfile(
   data: SystemUserProfileApi.UpdateProfileReqVO,
 ) {
   return requestClient.put('/system/user/profile/update', data);
 }
 
-/** 修改用户个人密码 */
+/**
+ * 修改当前登录用户的登录密码。
+ * @param data 原密码与新密码，均为前端生成的 32 位十六进制摘要，服务端不接触原始口令。
+ * @returns 更新结果标识；原密码校验失败时不写入新密码并按业务码拒绝。
+ *             改密成功后后端会一并删除该用户已签发的访问令牌，调用方需据此回到登录界面。
+ */
 export function updateUserPassword(
   data: SystemUserProfileApi.UpdatePasswordReqVO,
 ) {

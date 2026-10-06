@@ -59,6 +59,10 @@ export function useTabsDrag(
       return;
     }
 
+    /**
+     * 复位拖拽期间的样式：光标恢复默认并摘掉标签上的 dragging 类，
+     * 拖拽结束或校验未通过时调用，清掉 sortable 留下的视觉痕迹。
+     */
     const resetElState = async () => {
       el.style.cursor = 'default';
       // el.classList.remove('dragging');
@@ -66,6 +70,10 @@ export function useTabsDrag(
     };
 
     const { initializeSortable } = useSortable(el, {
+      /**
+       * 拖拽过滤：命中的目标不是可拖拽标签，或未开启 draggable 时一律拒绝，
+       * 固定标签与标签栏空白处因此都拖不动。
+       */
       filter: (_evt, target: HTMLElement) => {
         const parent = findParentElement(target);
         const draggable = parent?.classList.contains('draggable');
@@ -111,6 +119,12 @@ export function useTabsDrag(
         }
         resetElState();
       },
+      /**
+       * 拖拽过程中判断能否落到当前位置：固定标签与非固定标签之间不允许互相跨越，
+       * 其余可拖拽场景一律放行。
+       * @param evt sortablejs 的移动事件，dragged 是被拖的标签，related 是当前指向的标签。
+       * @returns 允许落到该位置为 true；指向的不是可拖拽标签或未开启拖拽时为 false。
+       */
       onMove(evt) {
         const parent = findParentElement(evt.related);
         if (parent?.classList.contains('draggable') && props.draggable) {
@@ -122,6 +136,10 @@ export function useTabsDrag(
           return false;
         }
       },
+      /**
+       * 拖拽开始：光标切成抓取态，并给标签加上 dragging 类供样式区分；
+       * 标签尚未渲染时只改容器光标，不做额外处理。
+       */
       onStart: () => {
         el.style.cursor = 'grabbing';
         el.querySelector('.draggable')?.classList.add('dragging');
@@ -132,6 +150,9 @@ export function useTabsDrag(
     sortableInstance.value = await initializeSortable();
   }
 
+  /**
+   * 拖拽初始化入口：移动端不注册拖拽直接返回，其余情况等一次更新后按当前标签栏容器重建排序实例。
+   */
   async function init() {
     const { isMobile } = useIsMobile();
 

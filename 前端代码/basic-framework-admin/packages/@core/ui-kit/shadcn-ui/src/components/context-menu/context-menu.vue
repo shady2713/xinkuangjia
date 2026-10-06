@@ -76,10 +76,21 @@ const delegatedProps = computed(
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
+/**
+ * 调用 menus 回调取得当前实体的菜单项列表。
+ * 结果不做缓存与过滤，hidden、disabled 等渲染判断都交给模板逐项处理；
+ * menus 是必填项，但这里仍用可选链兜住未提供的情况。
+ */
 const menusView = computed(() => {
   return props.menus?.(props.handlerData);
 });
 
+/**
+ * 点击某个菜单项时的分发逻辑。
+ * 禁用项直接返回，item 自身没挂 handler 时也不做任何事，避免弹出空操作；
+ * 正常情况下把 handlerData 原样交给 handler，菜单项内部的业务动作由使用方定义。
+ * @param menu 被点击的菜单项，结构见 IContextMenuItem。
+ */
 function handleClick(menu: IContextMenuItem) {
   if (menu.disabled) {
     return;

@@ -6,10 +6,17 @@
 import type { SortableOptions } from 'sortablejs';
 import type Sortable from 'sortablejs';
 
+/**
+ * 为容器创建拖拽排序实例，sortablejs 完整版在调用时才动态加载，避免进入首屏包。
+ * @param sortableContainer - 需要开启拖拽的容器元素，需已挂载到文档中。
+ * @param options - Sortable 选项，会覆盖默认的 300ms 动画与 400ms 长按延时。
+ * @returns 含 initializeSortable 的对象；调用它才会真正加载依赖并创建实例。
+ */
 function useSortable<T extends HTMLElement>(
   sortableContainer: T,
   options: SortableOptions = {},
 ) {
+  /** 动态加载 sortablejs 并按默认动画、长按参数为容器创建实例。 */
   const initializeSortable = async () => {
     const Sortable = await import(
       // @ts-expect-error - This is a dynamic import

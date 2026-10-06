@@ -95,6 +95,12 @@ setupVbenVxeTable({
 
     // 表格配置项可以用 cellRender: { name: 'CellImage' },
     vxeUI.renderer.add('CellImage', {
+      /**
+       * 把该列的值当作图片地址渲染成 ElImage，预览图集只含当前这一张。
+       * @param renderOpts 渲染器上下文，props.class 追加样式类，props.width/height 以 px 指定图片尺寸。
+       * @param params 当前行列信息，取该列的值作为图片地址。
+       * @returns ElImage 节点；地址为空时由 ElImage 自身展示未加载状态。
+       */
       renderTableDefault(renderOpts, params) {
         const { props } = renderOpts;
         const { column, row } = params;
@@ -114,18 +120,33 @@ setupVbenVxeTable({
 
     // 表格配置项可以用 cellRender: { name: 'CellLink' },
     vxeUI.renderer.add('CellLink', {
+      /**
+       * 把该列渲染成链接样式的按钮，文案取自列上配置的 props.text。
+       * 该渲染器不读取单元格取值，也不透传点击事件，交互需由列配置另行提供。
+       * @param renderOpts 渲染器上下文，props.text 为按钮文案。
+       * @returns ElButton 节点；未配置 text 时渲染为空按钮。
+       */
       renderTableDefault(renderOpts) {
         const { props } = renderOpts;
         return h(
           ElButton,
           { size: 'small', link: true },
-          { default: () => props?.text },
+          {
+            /** 正文取列上配置的文本，不读单元格取值。 */
+            default: () => props?.text,
+          },
         );
       },
     });
 
     // 表格配置项可以用 cellRender: { name: 'CellTag' },
     vxeUI.renderer.add('CellTag', {
+      /**
+       * 把该列的值渲染成一个带配色的标签。
+       * @param renderOpts 渲染器上下文，props.color 为标签配色。
+       * @param params 当前行列信息，取该列的值作为标签正文。
+       * @returns ElTag 节点；取值为空时渲染空标签。
+       */
       renderTableDefault(renderOpts, params) {
         const { props } = renderOpts;
         const { column, row } = params;
@@ -184,6 +205,12 @@ setupVbenVxeTable({
 
     // 表格配置项可以用 cellRender: { name: 'CellDict', props:{dictType: ''} },
     vxeUI.renderer.add('CellDict', {
+      /**
+       * 把该列的字典值交给 DictTag 渲染成带配色的字典标签。
+       * @param renderOpts 渲染器上下文，props.type 指定字典类型。
+       * @param params 当前行列信息，取该列的值转成字符串后按字典类型翻译。
+       * @returns DictTag 节点；未配置 props 时返回空串，该列不渲染内容。
+       */
       renderTableDefault(renderOpts, params) {
         const { props } = renderOpts;
         const { column, row } = params;
@@ -289,6 +316,11 @@ setupVbenVxeTable({
             text: $t('common.edit'),
           },
         };
+        /**
+         * 归一化操作项清单：默认给出编辑与删除两项；字符串项按内置预设或 i18n 文案展开，
+         * 对象项与默认按钮属性合并，函数型属性推迟到拿到当前行后再求值。
+         * @returns 已求值并剔除 show === false 的操作项数组，顺序与配置一致。
+         */
         const operations: Array<Recordable<unknown>> = (
           options || ['edit', 'delete']
         )
@@ -342,6 +374,7 @@ setupVbenVxeTable({
               ...opt,
               link: true,
               icon: undefined,
+              /** 仅在需要监听点击时绑定回调，把操作码与当前行回传给列配置的 onClick。 */
               onClick: listen
                 ? () =>
                     attrs?.onClick?.({
@@ -383,6 +416,7 @@ setupVbenVxeTable({
               title: $t('ui.actionTitle.delete', [attrs?.nameTitle || '']),
               width: 'auto',
               'popper-class': 'popper-top-left',
+              /** 二次确认通过后才把删除操作码与当前行回传给列配置。 */
               onConfirm: () => {
                 attrs?.onClick?.({
                   code: opt.code,
@@ -391,7 +425,9 @@ setupVbenVxeTable({
               },
             },
             {
+              /** 触发二次确认的按钮沿用同一渲染，但关闭点击回调以免确认与点击重复触发。 */
               reference: () => renderBtn({ ...opt }, false),
+              /** 确认文案取当前行的名称字段，字段名由 attrs.nameField 指定，缺省为 name。 */
               default: () =>
                 h(
                   'div',
@@ -404,6 +440,7 @@ setupVbenVxeTable({
           );
         }
 
+        /** 按操作码决定渲染形态：删除项套二次确认，其余项直接渲染按钮。 */
         const btns = operations.map((opt) =>
           opt.code === 'delete' ? renderConfirm(opt) : renderBtn(opt),
         );
@@ -422,6 +459,11 @@ setupVbenVxeTable({
     // vxeUI.formats.add
 
     vxeUI.formats.add('formatPast2', {
+      /**
+       * 时长格式化：把该列的毫秒数换算成「x 天 x 小时 x 分钟」这类相对时长文案。
+       * @param context 格式化上下文，cellValue 为该列的毫秒数；Date 会按其毫秒值参与计算。
+       * @returns 时长文案；不足一分钟按秒展示，取不到有效数值时显示「0 秒」。
+       */
       tableCellFormatMethod({ cellValue }) {
         return formatPast2(cellValue);
       },
@@ -429,6 +471,11 @@ setupVbenVxeTable({
 
     // add by 星语：数量格式化，保留 3 位
     vxeUI.formats.add('formatAmount3', {
+      /**
+       * 数量格式化：固定保留三位小数，用于库存等需要三位精度的数量列。
+       * @param context 格式化上下文，cellValue 为该列的原始数量。
+       * @returns 三位小数的数量文案；cellValue 为 null 或 undefined 时返回空串。
+       */
       tableCellFormatMethod({ cellValue }) {
         if (cellValue === null || cellValue === undefined) {
           return '';
@@ -438,12 +485,24 @@ setupVbenVxeTable({
     });
     // add by 星语：数量格式化，保留 2 位
     vxeUI.formats.add('formatAmount2', {
+      /**
+       * 数量格式化：按指定小数位数输出，用于允许调用方覆盖精度的数量列。
+       * @param context 格式化上下文，cellValue 为该列的原始数量。
+       * @param digits 保留的小数位数，缺省为 2。
+       * @returns 指定小数位数的数量文案；cellValue 为空或非数值时返回空串。
+       */
       tableCellFormatMethod({ cellValue }, digits = 2) {
         return `${erpNumberFormatter(cellValue, digits)}`;
       },
     });
 
     vxeUI.formats.add('formatFenToYuanAmount', {
+      /**
+       * 金额格式化：先把分值换算成元，再按指定小数位数输出，结果不带货币符号。
+       * @param context 格式化上下文，cellValue 为该列以「分」为单位的金额。
+       * @param digits 换算后保留的小数位数，缺省为 2。
+       * @returns 元金额文案；cellValue 为空时按 0 处理，显示为 0.00。
+       */
       tableCellFormatMethod({ cellValue }, digits = 2) {
         return `${erpNumberFormatter(fenToYuan(cellValue), digits)}`;
       },
@@ -451,6 +510,12 @@ setupVbenVxeTable({
 
     // add by 星语：文件大小格式化
     vxeUI.formats.add('formatFileSize', {
+      /**
+       * 文件大小格式化：把该列的字节数换算成 B/KB/MB 等带单位的文案。
+       * @param context 格式化上下文，cellValue 为该列的字节数。
+       * @param digits 换算后保留的小数位数，缺省为 2。
+       * @returns 带单位的文件大小文案，例如 2048 显示为「2 KB」。
+       */
       tableCellFormatMethod({ cellValue }, digits = 2) {
         return formatFileSize(cellValue, digits);
       },
@@ -461,6 +526,7 @@ setupVbenVxeTable({
 
 export { createRequiredValidation, useVbenVxeGrid };
 
+/** 对外暴露异步表格与列组件，业务页面从本模块引入即可，不必直接依赖 vxe-table 包。 */
 export const [VxeTable, VxeColumn] = [AsyncVxeTable, AsyncVxeColumn];
 
 export * from '#/components/table-action';

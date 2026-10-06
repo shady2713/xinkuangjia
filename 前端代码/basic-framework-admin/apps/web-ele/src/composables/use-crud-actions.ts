@@ -12,13 +12,17 @@ import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import { $t } from '#/locales';
 import { showError, showSuccessMessage } from '#/utils/feedback';
 
+/** 行唯一标识允许的类型：后端主键可能是数字 id，也可能是字符串编码。 */
 type RowKey = number | string;
 
+/** 至少带一个主键字段的行数据；主键缺失的行无法定位后端记录，不参与勾选与删除。 */
 type RowWithId<Id extends RowKey = number> = {
   id?: Id;
 };
 
+/** 新增与编辑弹窗对外暴露的最小接口，只保留动作层需要的两个入口。 */
 type ModalApi<Row> = {
+  /** 打开弹窗；本次是新增还是编辑由先前 setData 传入的数据决定。 */
   open: () => unknown;
   /**
    * 设置弹窗当前操作的行；传 null 表示新增，此时不携带既有数据。
@@ -28,11 +32,17 @@ type ModalApi<Row> = {
   setData: (data: null | Row) => ModalApi<Row>;
 };
 
+/** 删除动作的接口与行键配置，单条删除和批量删除共用这一份契约。 */
 type DeleteOptions<Row, Id extends RowKey> = {
+  /** 删除前的额外校验；返回 false（或兑现为 false）时放弃本次删除，不调用删除接口。 */
   beforeDelete?: (row: Row) => boolean | Promise<boolean>;
+  /** 单条删除接口，按行键删除后端记录；失败时由调用方决定提示方式。 */
   deleteApi: (id: Id) => Promise<unknown>;
+  /** 取该行用于提示文案的名称；不提供时退化为不带名称的通用文案。 */
   getDeleteName?: (row: Row) => string;
+  /** 取行唯一标识，删除接口与批量删除接口都用它定位后端记录。 */
   getRowKey: (row: Row) => Id;
+  /** 删除成功后的刷新回调，由调用方接列表查询。 */
   refresh: () => void;
 };
 
@@ -46,13 +56,16 @@ type UseCrudItemActionsOptions<Row, Id extends RowKey> = {
   modalApi: ModalApi<Row>;
 } & DeleteOptions<Row, Id>;
 
+/** 批量删除动作的配置：在删除契约之上补一个批量删除接口。 */
 type UseCrudDeleteActionsOptions<Row, Id extends RowKey> = DeleteOptions<
   Row,
   Id
 > & {
+  /** 批量删除接口，一次接收勾选到的主键列表。 */
   batchDeleteApi: (ids: Id[]) => Promise<unknown>;
 };
 
+/** 完整增删改动作的配置：批量删除配置加上可选的行键兜底。 */
 type UseCrudActionsOptions<
   Row extends RowWithId<Id>,
   Id extends RowKey = number,
@@ -62,10 +75,19 @@ type UseCrudActionsOptions<
    * @returns 交给新增表单的初始值。
    */
   createData?: () => null | Row;
+  /** 取行唯一标识；不提供时直接取行上的 id，因此只适用于主键必定存在的行类型。 */
   getRowKey?: (row: Row) => Id;
   modalApi: ModalApi<Row>;
 } & Omit<UseCrudDeleteActionsOptions<Row, Id>, 'getRowKey'>;
 
+/**
+ * 执行单条删除：先交给 beforeDelete 决定是否继续，通过后打开 Loading 调用删除接口，
+ * 成功则提示并刷新列表，无论成败最后都关闭 Loading。
+ * 删除接口抛出时不吞异常，错误原样传给调用方，由页面决定如何提示。
+ * @param context 删除配置与目标行：deleteApi、getRowKey 决定删哪条，getDeleteName 只影响提示文案，
+ * `beforeDelete` 返回假值即放弃删除，`row` 为本次操作的行数据。
+ * @returns 删除流程结束时兑现的 Promise；被 beforeDelete 拦下时不调用删除接口。
+ */
 async function deleteRow<Row, Id extends RowKey>({
   beforeDelete,
   deleteApi,
@@ -106,10 +128,16 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
   const { batchDeleteApi, getRowKey, refresh } = options;
   const checkedIds = ref<Id[]>([]) as Ref<Id[]>;
 
+  /** 删除指定行：把该行并入删除配置后交给 deleteRow 执行，二次确认由 beforeDelete 负责。 */
   async function handleDelete(row: Row) {
     await deleteRow({ ...options, row });
   }
 
+  /**
+   * 批量删除勾选中的行：先剔除无效主键，未勾选时提示并结束；二次确认通过后调用批量删除接口，
+   * 成功则清空勾选并刷新列表，失败则提示错误且保留勾选，便于用户重试。
+   * 用户在确认框取消时按正常流程结束，不视为失败。
+   */
   async function handleDeleteBatch() {
     checkedIds.value = checkedIds.value.filter(
       (id) => id !== undefined && id !== null && String(id) !== '',
@@ -168,6 +196,7 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
       );
   }
 
+  /** 清空勾选的主键列表；列表重新查询时由表格事件触发，避免残留上一次的勾选。 */
   function clearCheckedIds() {
     checkedIds.value = [];
   }
@@ -196,19 +225,29 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
   };
 }
 
+/**
+ * 提供单条记录的新增、编辑与删除动作，按 modalApi 打开弹窗。
+ * 只做动作编排与弹窗调用，接口实现与弹窗内容由调用方通过 options 提供。
+ * @param options 单条动作配置：createData 提供新增初始值，modalApi 提供弹窗入口，
+ * 其余删除相关字段与批量删除共用同一份契约。
+ * @returns 新增、编辑、删除三个处理函数；本身不持有勾选状态。
+ */
 export function useCrudItemActions<Row, Id extends RowKey = number>(
   options: UseCrudItemActionsOptions<Row, Id>,
 ) {
   const { createData, modalApi } = options;
 
+  /** 删除指定行：把该行并入删除配置后交给 deleteRow 执行，二次确认由 beforeDelete 负责。 */
   async function handleDelete(row: Row) {
     await deleteRow({ ...options, row });
   }
 
+  /** 新增：以 createData 的结果作为初始值打开弹窗；未配置 createData 时按空表单打开。 */
   function handleCreate() {
     modalApi.setData(createData?.() || null).open();
   }
 
+  /** 编辑：以当前行数据打开弹窗，弹窗据此回填表单。 */
   function handleEdit(row: Row) {
     modalApi.setData(row).open();
   }
@@ -265,10 +304,12 @@ export function useCrudActions<
     refresh,
   });
 
+  /** 新增：以 createData 的结果作为初始值打开弹窗；未配置 createData 时按空表单打开。 */
   function handleCreate() {
     modalApi.setData(createData?.() || null).open();
   }
 
+  /** 编辑：以当前行数据打开弹窗，弹窗据此回填表单。 */
   function handleEdit(row: Row) {
     modalApi.setData(row).open();
   }

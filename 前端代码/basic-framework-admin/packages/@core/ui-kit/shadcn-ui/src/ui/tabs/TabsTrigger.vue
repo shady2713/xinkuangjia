@@ -15,6 +15,7 @@ import { TabsTrigger, useForwardProps } from 'reka-ui';
 
 const props = defineProps<TabsTriggerProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的页签触发件属性，转交 TabsTrigger；激活态与禁用态样式靠 data-state 区分。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

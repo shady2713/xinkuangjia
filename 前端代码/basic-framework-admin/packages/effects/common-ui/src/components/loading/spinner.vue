@@ -8,6 +8,7 @@
 import { VbenSpinner } from '@vben-core/shadcn-ui';
 import { cn } from '@vben-core/shared/utils';
 
+/** 转圈指示属性：最小停留时长、加载状态与附加类名。 */
 interface SpinnerProps {
   class?: string;
   /**

@@ -10,7 +10,10 @@ import java.util.List;
 /**
  * OAuth2UserInfoRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 5 行，上游代码 5 行在本地被移除或改写，例如 @Schema(description = "用户账号", requiredMode = Schema.RequiredMode.REQUIRED, example = "管理员")；@Schema(description = "用户昵称", requiredMode = Schema.RequiredMode.REQUIRED, example = "管理员")；本地补充注释 19 行，上游注释 2 行未保留。
  */
 @Schema(description = "管理后台 - OAuth2 获得用户基本信息 Response VO")
 @Data
@@ -72,7 +75,10 @@ public class OAuth2UserInfoRespVO {
     /**
      * Dept 内部数据模型，用于封装 OAuth2UserInfoRespVO 的组成信息。
      *
-     * @author 李杰
+     * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
+     * 来源依据：固定见证版本；历史引入版本未核实。
+     * 本地修改：本地补充注释 6 行。
      */
     @Schema(description = "部门")
     @Data
@@ -95,7 +101,10 @@ public class OAuth2UserInfoRespVO {
     /**
      * Post 内部数据模型，用于封装 OAuth2UserInfoRespVO 的组成信息。
      *
-     * @author 李杰
+     * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+     * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/oauth2/vo/user/OAuth2UserInfoRespVO.java
+     * 来源依据：固定见证版本；历史引入版本未核实。
+     * 本地修改：本地补充注释 6 行。
      */
     @Schema(description = "岗位")
     @Data

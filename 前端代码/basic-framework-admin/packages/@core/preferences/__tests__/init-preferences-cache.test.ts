@@ -22,9 +22,15 @@ function createStorage() {
   const store = new Map<string, string>();
 
   return {
+    /** 清空替身里的全部键值。 */
     clear() {
       store.clear();
     },
+    /**
+     * 读取替身中的值。
+     * @param key - 键名。
+     * @returns 命中的字符串值；键不存在时返回 null，与浏览器的 Storage 一致。
+     */
     getItem(key: string) {
       return store.has(key) ? (store.get(key) as string) : null;
     },
@@ -36,12 +42,25 @@ function createStorage() {
     key(index: number) {
       return [...store.keys()][index] ?? null;
     },
+    /**
+     * 当前键值对数量，模拟 Storage 的 length 成员。
+     * @returns 替身中已写入的键数量。
+     */
     get length() {
       return store.size;
     },
+    /**
+     * 删除单个键，模拟 Storage 的 removeItem 成员。
+     * @param key - 键名；键不存在时静默忽略。
+     */
     removeItem(key: string) {
       store.delete(key);
     },
+    /**
+     * 写入键值对，模拟 Storage 的 setItem 成员。
+     * @param key - 键名，已存在时覆盖。
+     * @param value - 字符串值，替身不做序列化。
+     */
     setItem(key: string, value: string) {
       store.set(key, value);
     },

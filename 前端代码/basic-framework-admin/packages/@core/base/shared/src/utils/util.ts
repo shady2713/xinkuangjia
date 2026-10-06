@@ -74,6 +74,7 @@ export function getNestedValue<T>(obj: T, path: string): unknown {
  * 获取链接的参数值（值类型）
  * @param key 参数键名
  * @param urlStr 链接地址，默认为当前浏览器的地址
+ * @returns 参数值经 Number 转换后的结果；参数缺失时得到 0（空串转数字），非数字文本得到 NaN。
  */
 export function getUrlNumberValue(
   key: string,
@@ -84,8 +85,10 @@ export function getUrlNumberValue(
 
 /**
  * 获取链接的参数值
+ * urlStr 会先做 decodeURIComponent 再交给 URL 解析，非法转义或非法地址由标准库直接抛出，这里不兜底。
  * @param key 参数键名
  * @param urlStr 链接地址，默认为当前浏览器的地址
+ * @returns 参数值；参数不存在、key 为空或 urlStr 为空时都返回空串。
  */
 export function getUrlValue(
   key: string,
@@ -153,7 +156,9 @@ export function groupBy<T extends object>(
 /**
  * 解析 JSON 字符串
  *
- * @param str
+ * @param str - 待解析的 JSON 文本。
+ * @returns 解析成功时的值，类型不限，调用方需按自身口径收窄；
+ * 解析失败时原样返回该字符串，并在控制台 warn 一次。
  */
 export function jsonParse(str: string) {
   try {

@@ -8,14 +8,23 @@ import type { Ora } from 'ora';
 
 import ora from 'ora';
 
+/** 终端加载指示的选项：title 必填，成功与失败文案缺省时用英文兜底。 */
 interface SpinnerOptions {
   failedText?: string;
   successText?: string;
   title: string;
 }
+/**
+ * 用 ora 包裹一段异步任务：开始时显示 title，结束或失败时打印对应文案。
+ * 任务结果原样返回，异常在打印失败文案后继续抛出，不重试也不吞掉。
+ * @param options - 终端提示文案；title 为进行中的标题，successText 与 failedText 为结束文案。
+ * @param callback - 真正要执行并等待的异步任务，其解析结果会被原样透传。
+ * @returns callback 的解析结果。
+ * @throws callback 抛出的任何异常都会在打印失败文案后原样继续抛出。
+ */
 export async function spinner<T>(
   { failedText, successText, title }: SpinnerOptions,
-  callback: () => Promise<T>,
+  callback: /* 真正要执行并等待的异步任务，其解析结果会被原样透传。 */ () => Promise<T>,
 ): Promise<T> {
   const loading: Ora = ora(title).start();
 

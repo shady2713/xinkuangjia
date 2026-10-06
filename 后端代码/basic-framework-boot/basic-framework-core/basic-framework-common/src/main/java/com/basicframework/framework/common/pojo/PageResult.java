@@ -10,8 +10,12 @@ import java.util.List;
 /**
  * 分页查询结果。
  *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-common/src/main/java/cn/iocoder/yudao/framework/common/pojo/PageResult.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地补充注释 28 行。
+ *
  * @param <T> 数据项类型
- * @author 李杰
  */
 @Schema(description = "分页结果")
 @Data

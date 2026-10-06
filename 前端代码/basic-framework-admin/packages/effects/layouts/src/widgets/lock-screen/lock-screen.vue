@@ -16,6 +16,7 @@ import { VbenAvatar, VbenButton } from '@vben-core/shadcn-ui';
 
 import { useDateFormat, useNow } from '@vueuse/core';
 
+/** 锁屏属性：avatar 为遮罩上展示的用户头像地址。 */
 interface Props {
   avatar?: string;
 }
@@ -53,6 +54,7 @@ const [Form, { form, validate, getFieldComponentRef }] = useVbenForm(
       hideLabel: true,
       hideRequiredMark: true,
     },
+    /** 解锁表单结构：只含一个密码输入框，占位与校验提示均按当前语言生成。 */
     schema: computed(() => [
       {
         component: 'VbenInputPassword' as const,
@@ -68,6 +70,7 @@ const [Form, { form, validate, getFieldComponentRef }] = useVbenForm(
   }),
 );
 
+/** 输入的密码是否与访问令牌中保存的锁屏密码一致，用于判断能否解锁。 */
 const validPass = computed(
   () => lockScreenPassword?.value === form?.values?.password,
 );

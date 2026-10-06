@@ -10,6 +10,7 @@ export enum MODE {
   VUE = 'vue',
 }
 
+/** 代码编辑器入参：value 为受控内容，mode 决定语法高亮，readonly 与 bordered 控制交互与外观，autoFormat 决定 JSON 是否自动格式化。 */
 export interface CodeEditorProps {
   mode?: string;
   value?: string;

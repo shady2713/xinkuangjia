@@ -19,6 +19,7 @@ import { DialogContent, useForwardPropsEmits } from 'reka-ui';
 import { sheetVariants } from './sheet';
 import SheetOverlay from './SheetOverlay.vue';
 
+/** 抽屉内容面板的属性契约：在 DialogContentProps 之上补挂载位置、四向滑入、遮罩模糊与层级等抽屉专属配置。 */
 interface SheetContentProps extends DialogContentProps {
   appendTo?: HTMLElement | string;
   class?: ClassValue;
@@ -41,6 +42,10 @@ const emits = defineEmits<
   DialogContentEmits & { close: []; closed: []; opened: [] }
 >();
 
+/**
+ * 剔除 class、modal、open、side 四个由本组件或样式表自行消费的字段后，把其余属性转交 DialogContent，
+ * 避免遮罩开关与滑入方向泄漏到底层弹窗。
+ */
 const delegatedProps = computed(() => {
   const {
     class: _,
@@ -53,6 +58,7 @@ const delegatedProps = computed(() => {
   return delegated;
 });
 
+/** 判断抽屉是否挂到 body：appendTo 为字符串 body、document.body 或未指定时都算挂到 body，否则相对挂载点定位。 */
 function isAppendToBody() {
   return (
     props.appendTo === 'body' ||
@@ -61,12 +67,17 @@ function isAppendToBody() {
   );
 }
 
+/** 由挂载位置推导的定位方式，供遮罩与面板共用：挂到 body 用 fixed，挂在其他元素用 absolute。 */
 const position = computed(() => {
   return isAppendToBody() ? 'fixed' : 'absolute';
 });
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 const contentRef = ref<InstanceType<typeof DialogContent> | null>(null);
+/**
+ * 抽屉面板的滑入滑出动画播完后按 open 抛出 opened 或 closed，供抽屉同步状态；非面板根元素的动画事件一律忽略。
+ * @param event 面板节点冒泡的 animationend 事件，只有 target 命中 contentRef 才继续派发完成事件。
+ */
 function onAnimationEnd(event: AnimationEvent) {
   // 只有在 contentRef 的动画结束时才触发 opened/closed 事件
   if (event.target === contentRef.value?.$el) {

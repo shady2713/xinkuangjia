@@ -15,6 +15,7 @@ import { Primitive } from 'reka-ui';
 
 import { buttonVariants } from './button';
 
+/** 按钮基座的属性契约：在 reka-ui Primitive 的 as、asChild 之上补 class 合并入口与 variant、size 两个样式轴。 */
 interface Props extends PrimitiveProps {
   class?: ClassValue;
   size?: ButtonVariantSize;

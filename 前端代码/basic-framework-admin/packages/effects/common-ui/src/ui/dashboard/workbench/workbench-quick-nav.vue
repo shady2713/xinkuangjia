@@ -13,6 +13,7 @@ import {
   VbenIcon,
 } from '@vben-core/shadcn-ui';
 
+/** 快捷导航属性：卡片标题与导航条目清单。 */
 interface Props {
   items?: WorkbenchQuickNavItem[];
   title: string;
@@ -23,6 +24,7 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
+  /** 导航清单默认值：空数组，未传入时没有快捷入口。 */
   items: () => [],
 });
 

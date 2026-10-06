@@ -44,6 +44,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 分页查询操作日志：页码与每页条数取自表格分页，检索条件由搜索表单透传。 */
         query: async ({ page }, formValues) => {
           return await getOperateLogPage({
             pageNo: page.currentPage,

@@ -6,6 +6,10 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 生成 Prettier 格式检查片段。
+ * @returns 只开启 prettier/prettier 一条规则的配置数组，格式差异以 lint 错误暴露。
+ */
 export async function prettier(): Promise<Linter.Config[]> {
   const [pluginPrettier] = await Promise.all([
     interopDefault(import('eslint-plugin-prettier')),

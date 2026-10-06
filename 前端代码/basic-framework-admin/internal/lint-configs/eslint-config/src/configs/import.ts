@@ -6,6 +6,11 @@ import type { Linter } from 'eslint';
 
 import * as pluginImport from 'eslint-plugin-import-x';
 
+/**
+ * 生成导入导出的规范配置片段。
+ * @returns 注册 eslint-plugin-import-x 并开启重复导入、导入位置与类型导入写法检查的配置数组；
+ *   模块能否解析仍交给 TypeScript，本片段不做路径校验。
+ */
 export async function importPluginConfig(): Promise<Linter.Config[]> {
   return [
     {

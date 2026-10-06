@@ -22,6 +22,7 @@ const transitionLoading = defineModel<boolean>('transitionLoading');
 
 const transitionPreset = ['fade', 'fade-slide', 'fade-up', 'fade-down'];
 
+/** 选中转场预设时把名称写回偏好；取值来自组件内置的四种预设，不做额外校验。 */
 function handleClick(value: string) {
   transitionName.value = value;
 }

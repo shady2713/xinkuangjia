@@ -5,7 +5,12 @@
  */
 import type { MenuRecordRaw } from '@vben-core/typings';
 
-/** 根据路径在菜单列表中递归查找菜单项 */
+/**
+ * 根据路径在菜单列表中递归查找菜单项
+ * @param list - 待检索的菜单数组，按数组顺序深度优先，命中第一个即返回。
+ * @param path - 目标菜单路径；省略时不会命中任何菜单。
+ * @returns 命中的菜单项；整个子树都没有该路径时返回 null。
+ */
 function findMenuByPath(
   list: MenuRecordRaw[],
   path?: string,
@@ -24,12 +29,14 @@ function findMenuByPath(
 
 /**
  * 查找根菜单
- * @param menus
- * @param path
+ * @param menus - 待检索的菜单数组，用层级路径取出对应的根菜单。
+ * @param path - 目标菜单路径。
+ * @param level - 取 parents 中的第几层作为根菜单，默认第 0 层。
  */
 function findRootMenuByPath(menus: MenuRecordRaw[], path?: string, level = 0) {
   const findMenu = findMenuByPath(menus, path);
   const rootMenuPath = findMenu?.parents?.[level];
+  // 根菜单可能不在当前菜单树里，取不到时保持 undefined。
   const rootMenu = rootMenuPath
     ? menus.find((item) => item.path === rootMenuPath)
     : undefined;

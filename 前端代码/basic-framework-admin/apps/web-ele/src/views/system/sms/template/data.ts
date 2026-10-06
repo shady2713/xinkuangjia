@@ -11,7 +11,10 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * 短信模板新增/修改弹窗的表单字段：模板编号、名称、类型、内容与所属渠道。
+ * @returns 表单 schema 列表；id 为隐藏字段，仅用于区分新增与编辑。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -19,6 +22,7 @@ export function useFormSchema(): VbenFormSchema[] {
       fieldName: 'id',
       dependencies: {
         triggerFields: [''],
+        /** id 只随记录带回，不在表单上展示，避免用户手工覆盖主键。 */
         show: () => false,
       },
     },
@@ -97,7 +101,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 短信模板列表的检索条件：模板编号模糊匹配，短信类型与状态精确匹配。
+ * @returns 表单 schema 列表；三项均非必填，清空即表示不按该条件过滤。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -132,7 +139,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 短信模板列表的列定义：编号、模板编号、名称、类型、状态、内容、API 模板编号与渠道。
+ * @returns 列定义数组；首列为多选列，类型与状态用 CellDict 渲染，操作列由父级插槽提供。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

@@ -26,6 +26,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<DropdownMenuCheckboxItemEmits>();
 
+/** 剔除 class 后的复选菜单项属性，连同 emits 转发给 DropdownMenuCheckboxItem；选中值由使用方经 v-model 持有。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<ColPageProps>(), {
   resizable: true,
 });
 
+/** 透传给 Page 的属性：剔除仅用于左侧面板的 leftWidth，其余原样下发。 */
 const delegatedProps = computed(() => {
   const { leftWidth: _, ...delegated } = props;
   return delegated;
@@ -34,6 +35,7 @@ const delegatedProps = computed(() => {
 
 const slots = useSlots();
 
+/** 需要继续透传给 Page 的插槽名：排除由本组件接管的默认插槽与 left 插槽。 */
 const delegatedSlots = computed(() => {
   const resultSlots: string[] = [];
 
@@ -47,10 +49,12 @@ const delegatedSlots = computed(() => {
 
 const leftPanelRef = ref<InstanceType<typeof ResizablePanel>>();
 
+/** 展开左侧面板；面板尚未就绪时静默跳过。 */
 function expandLeft() {
   leftPanelRef.value?.expand();
 }
 
+/** 收起左侧面板；面板尚未就绪时静默跳过。 */
 function collapseLeft() {
   leftPanelRef.value?.collapse();
 }

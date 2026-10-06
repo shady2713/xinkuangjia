@@ -32,7 +32,7 @@ function openWindow(url: string, options: OpenWindowOptions = {}): void {
 
 /**
  * 在新窗口中打开路由。
- * @param path
+ * @param path - 站内路由路径，可不带前导 `/`；hash 模式下会自动补上 `/#` 拼成绝对地址。
  */
 function openRouteInNewWindow(path: string) {
   const { hash, origin } = location;

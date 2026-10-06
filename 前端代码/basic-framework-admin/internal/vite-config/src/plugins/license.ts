@@ -37,6 +37,11 @@ async function viteLicensePlugin(
     apply: 'build',
     enforce: 'post',
     generateBundle: {
+      /**
+       * 遍历产物分块，只在入口 chunk 顶部拼接版权声明。
+       * @param _options - Rollup 传入的输出选项，本插件不使用。
+       * @param bundle - 本次构建的产物集合，入口分块的 code 会被就地改写。
+       */
       handler: (_options: NormalizedOutputOptions, bundle: OutputBundle) => {
         const date = dateUtil().format('YYYY-MM-DD');
         const copyrightText = `/*!

@@ -11,18 +11,31 @@ import {
   jsonParse,
 } from '../util';
 
+/** 验证 bindMethods 的测试类：构造时把原型方法绑定到实例自身。 */
 class TestClass {
   public value: string;
 
+  /**
+   * 记录初始值并立即绑定原型方法。
+   * @param value - 实例的初始值。
+   */
   constructor(value: string) {
     this.value = value;
     bindMethods(this); // 调用通用方法
   }
 
+  /**
+   * 读取当前值。
+   * @returns 实例上的 value 字段。
+   */
   getValue() {
     return this.value;
   }
 
+  /**
+   * 覆盖当前值。
+   * @param newValue - 新的值，直接写入实例字段。
+   */
   setValue(newValue: string) {
     this.value = newValue;
   }
@@ -64,17 +77,27 @@ describe('bindMethods', () => {
   });
 
   it('should not bind getter/setter properties', () => {
+    /** 只带 getter/setter 的测试类，用来确认 bindMethods 不会把访问器改写掉。 */
     class TestWithGetterSetter {
+      /**
+       * 读取内部字段。
+       * @returns 当前的 _value。
+       */
       get value() {
         return this._value;
       }
 
+      /**
+       * 写入内部字段。
+       * @param newValue - 新的字符串值。
+       */
       set value(newValue: string) {
         this._value = newValue;
       }
 
       private _value: string = 'test';
 
+      /** 构造后立即调用 bindMethods，供用例检查访问器是否保持原样。 */
       constructor() {
         bindMethods(this);
       }
@@ -89,15 +112,18 @@ describe('bindMethods', () => {
 });
 
 describe('getNestedValue', /** 按点分路径逐层取值，路径穿过原始值时返回 undefined。 */ () => {
+  /** 用户资料片段：点分路径取值用例的中间层。 */
   interface UserProfile {
     age: number;
     name: string;
   }
 
+  /** 用户设置片段：与 UserProfile 平级，用于验证多分支路径。 */
   interface UserSettings {
     theme: string;
   }
 
+  /** 用例根对象：user 下同时挂 profile 与 settings 两条路径。 */
   interface Data {
     user: {
       profile: UserProfile;

@@ -28,6 +28,7 @@ const shouldAutoHeight = ref(false);
 const headerRef = useTemplateRef<HTMLDivElement>('headerRef');
 const footerRef = useTemplateRef<HTMLDivElement>('footerRef');
 
+/** 正文区样式：开启自动高度时按布局内容高度减去实测页眉页脚与自定义偏移，否则不附加样式。 */
 const contentStyle = computed<StyleValue>(() => {
   if (autoContentHeight) {
     return {
@@ -38,6 +39,7 @@ const contentStyle = computed<StyleValue>(() => {
   return {};
 });
 
+/** 计算正文区可用高度：渲染完成后读取页眉页脚实高；未开启自动高度时直接返回。 */
 async function calcContentHeight() {
   if (!autoContentHeight) {
     return;

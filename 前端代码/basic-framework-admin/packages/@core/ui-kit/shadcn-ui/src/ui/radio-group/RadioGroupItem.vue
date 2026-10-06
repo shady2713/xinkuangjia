@@ -16,6 +16,7 @@ import { RadioGroupIndicator, RadioGroupItem, useForwardProps } from 'reka-ui';
 
 const props = defineProps<RadioGroupItemProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的选项属性，转交 RadioGroupItem；圆点指示器由模板内的 RadioGroupIndicator 渲染。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

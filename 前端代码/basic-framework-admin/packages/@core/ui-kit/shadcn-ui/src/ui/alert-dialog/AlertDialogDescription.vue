@@ -17,6 +17,7 @@ const props = defineProps<
   AlertDialogDescriptionProps & { class?: ClassValue }
 >();
 
+/** 去掉 class 后的描述节点属性，转交 AlertDialogDescription，供 reka-ui 建立 aria-describedby 关联。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -53,6 +53,7 @@ function hasAuthority(route: RouteRecordRaw, access: string[]) {
     )
   )
     return false;
+  // 命中任一角色标识即视为有权限；无权限但声明可见的路由在后面单独放行。
   const canAccess = access.some((value) => authority.includes(value));
 
   return canAccess || (!canAccess && menuHasVisibleWithForbidden(route));

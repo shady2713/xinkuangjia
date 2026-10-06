@@ -23,6 +23,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的下一页跳转属性，转交 PaginationNext；末页禁用由分页根节点上下文提供。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

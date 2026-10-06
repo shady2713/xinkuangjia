@@ -23,6 +23,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的末页跳转属性，转交 PaginationLast；asChild 缺省为 true，跳转语义挂在内部描边按钮上。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -12,6 +12,7 @@ import { $t } from '@vben/locales';
 import { useVbenModal } from '@vben-core/popup-ui';
 import { Slot, VbenAvatar } from '@vben-core/shadcn-ui';
 
+/** 登录过期弹窗属性：认证页公共属性，另加头像地址与自定义层级。 */
 interface Props extends AuthenticationProps {
   avatar?: string;
   zIndex?: number;
@@ -37,6 +38,7 @@ watch(
   },
 );
 
+/** 弹窗层级：优先使用传入的 zIndex，为 0 时按页面现有最大层级加一。 */
 const getZIndex = computed(() => {
   return props.zIndex || calcZIndex();
 });
@@ -45,6 +47,7 @@ const getZIndex = computed(() => {
  * 排除ant-message和loading:9999的z-index
  */
 const zIndexExcludeClass = ['ant-message', 'loading'];
+/** 判断元素是否属于需要排除的消息与加载浮层；这些元素的层级不参与最大值统计。 */
 function isZIndexExcludeClass(element: Element) {
   return zIndexExcludeClass.some((className) =>
     element.classList.contains(className),

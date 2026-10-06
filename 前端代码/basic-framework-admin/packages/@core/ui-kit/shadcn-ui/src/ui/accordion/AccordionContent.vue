@@ -16,6 +16,7 @@ import { AccordionContent } from 'reka-ui';
 
 const props = defineProps<AccordionContentProps & { class?: ClassValue }>();
 
+/** 剔除 class 后的内容面板属性，原样转交 AccordionContent；class 留在模板里与内边距类名合并。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

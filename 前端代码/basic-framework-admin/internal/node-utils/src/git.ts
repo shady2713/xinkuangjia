@@ -11,6 +11,7 @@ export * from '@changesets/git';
 
 /**
  * 获取暂存区文件
+ * @returns 暂存区中新增、复制、修改与重命名文件的绝对路径去重列表；git 执行失败时为空数组。
  */
 async function getStagedFiles(): Promise<string[]> {
   try {

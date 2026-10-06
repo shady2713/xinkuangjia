@@ -65,6 +65,7 @@ async function handleExport() {
 
 /** 选择部门 */
 const searchDeptId = ref<number | undefined>(undefined);
+/** 接收左侧部门树的选择结果：记下部门编号并立即刷新用户列表。 */
 async function handleDeptSelect(dept: SystemDeptApi.Dept) {
   searchDeptId.value = dept.id;
   handleRefresh();
@@ -86,6 +87,7 @@ const {
 } = useCrudActions<SystemUserApi.User>({
   batchDeleteApi: deleteUserList,
   deleteApi: deleteUser,
+  /** 二次确认与成功提示中展示的用户名；取不到用户名时退化为不带名称的通用文案。 */
   getDeleteName: (row) => row.username || '',
   modalApi: formModalApi,
   refresh: handleRefresh,
@@ -164,6 +166,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 分页查询用户列表：固定带上左侧部门树选中的部门编号，页码与检索条件分别取自分页与搜索表单。 */
         query: async ({ page }, formValues) => {
           return await getUserPage({
             pageNo: page.currentPage,

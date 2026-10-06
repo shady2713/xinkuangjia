@@ -4,6 +4,9 @@
  */
 import type { MenuRecordRaw } from '@vben-core/typings';
 
+/**
+ * 普通菜单属性：只描述一级菜单列表的展示入参，选中与悬浮事件由组件外发、路由跳转不在此层。
+ */
 interface NormalMenuProps {
   /**
    * 菜单数据

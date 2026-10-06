@@ -209,6 +209,7 @@ export function endOfDay(param: Date): Date {
  * 计算两个日期间隔天数
  * @param param1 日期1
  * @param param2 日期2
+ * @returns 两个日期相差的整天数（按 24 小时向下取整）；param2 早于 param1 时为负数。
  */
 export function betweenDay(param1: Date, param2: Date): number {
   param1 = convertDate(param1);
@@ -221,6 +222,7 @@ export function betweenDay(param1: Date, param2: Date): number {
  * 日期计算
  * @param param1 日期
  * @param param2 添加的时间
+ * @returns 以 param1 为基准加上 param2 毫秒后的新 Date，入参对象本身不被修改。
  */
 export function addTime(param1: Date, param2: number): Date {
   param1 = convertDate(param1);
@@ -230,6 +232,7 @@ export function addTime(param1: Date, param2: number): Date {
 /**
  * 日期转换
  * @param param 日期
+ * @returns 传入 Date 时返回同一引用；传入字符串时交给 `new Date` 解析，非法字符串会得到 Invalid Date。
  */
 export function convertDate(param: Date | string): Date {
   if (typeof param === 'string') {
@@ -240,8 +243,10 @@ export function convertDate(param: Date | string): Date {
 
 /**
  * 指定的两个日期, 是否为同一天
+ * 实际比的是年、月与 `day()`（星期几）三项，而不是几号。
  * @param a 日期 A
  * @param b 日期 B
+ * @returns 三项都相同为 true；a 或 b 为假值时直接返回 false。
  */
 export function isSameDay(a: dayjs.ConfigType, b: dayjs.ConfigType): boolean {
   if (!a || !b) return false;
@@ -259,6 +264,7 @@ export function isSameDay(a: dayjs.ConfigType, b: dayjs.ConfigType): boolean {
  * 获取一天的开始时间、截止时间
  * @param date 日期
  * @param days 天数
+ * @returns 长度 2 的数组：偏移后那一天的开始与结束时间，格式为 `YYYY-MM-DD HH:mm:ss`。
  */
 export function getDayRange(
   date: dayjs.ConfigType,
@@ -270,6 +276,7 @@ export function getDayRange(
 
 /**
  * 获取最近7天的开始时间、截止时间
+ * @returns 从 7 天前 00:00:00 到昨天 23:59:59 的两个时间字符串，不含今天。
  */
 export function getLast7Days(): [dayjs.ConfigType, dayjs.ConfigType] {
   const lastWeekDay = dayjs().subtract(7, 'd');
@@ -279,6 +286,7 @@ export function getLast7Days(): [dayjs.ConfigType, dayjs.ConfigType] {
 
 /**
  * 获取最近30天的开始时间、截止时间
+ * @returns 从 30 天前 00:00:00 到昨天 23:59:59 的两个时间字符串，不含今天。
  */
 export function getLast30Days(): [dayjs.ConfigType, dayjs.ConfigType] {
   const lastMonthDay = dayjs().subtract(30, 'd');
@@ -288,6 +296,7 @@ export function getLast30Days(): [dayjs.ConfigType, dayjs.ConfigType] {
 
 /**
  * 获取最近1年的开始时间、截止时间
+ * @returns 从一年前同一天 00:00:00 到昨天 23:59:59 的两个时间字符串，不含今天。
  */
 export function getLast1Year(): [dayjs.ConfigType, dayjs.ConfigType] {
   const lastYearDay = dayjs().subtract(1, 'y');
@@ -299,6 +308,7 @@ export function getLast1Year(): [dayjs.ConfigType, dayjs.ConfigType] {
  * 获取指定日期的开始时间、截止时间
  * @param beginDate 开始日期
  * @param endDate 截止日期
+ * @returns 两个 `YYYY-MM-DD HH:mm:ss` 字符串：beginDate 当天 00:00:00 与 endDate 当天 23:59:59。
  */
 export function getDateRange(
   beginDate: dayjs.ConfigType,

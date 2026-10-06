@@ -18,6 +18,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<ContextMenuItemEmits>();
 
+/** 去掉 class 后的普通条目属性，转交 ContextMenuItem；inset 只在模板里改内边距，不下发给底层。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

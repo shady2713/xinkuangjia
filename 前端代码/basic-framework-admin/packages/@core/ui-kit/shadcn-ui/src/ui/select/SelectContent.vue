@@ -33,6 +33,7 @@ const props = withDefaults(
 );
 const emits = defineEmits<SelectContentEmits>();
 
+/** 去掉 class 后的浮层属性，连同 emits 转发给 SelectContent；position 缺省 popper，面板尺寸在模板里按它分支。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

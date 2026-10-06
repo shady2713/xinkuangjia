@@ -56,6 +56,11 @@ export const useDictStore = defineStore('core-dict', {
       }
       return dictOptions;
     },
+    /**
+     * 覆盖整个字典缓存，写入内容会随 persist 一并落到本地存储。
+     * @param dicts - 字典类型到字典项数组的完整映射，直接替换而不合并；
+     *   未出现在入参中的字典类型会被一并清空。
+     */
     setDictCache(dicts: Dict) {
       this.dictCache = dicts;
     },
@@ -118,6 +123,7 @@ export const useDictStore = defineStore('core-dict', {
     // 持久化
     pick: ['dictCache'],
   },
+  /** store 初始状态：空字典缓存，实际内容由 setDictCache 系列方法或持久化恢复填充。 */
   state: (): DictState => ({
     dictCache: {},
   }),

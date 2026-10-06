@@ -9,7 +9,10 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 表单的字段 */
+/**
+ * 表单的字段
+ * @returns 上传表单字段定义：单个文件选择框，上传地址与请求方式由上传组件自身决定。
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -24,7 +27,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的搜索表单 */
+/**
+ * 列表的搜索表单
+ * @returns 搜索字段：文件路径与文件类型按输入内容模糊匹配，创建时间为区间选择。
+ */
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -57,7 +63,10 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 列表的字段
+ * @returns 列定义：文件大小与上传时间统一格式化，文件内容与操作列交由页面插槽渲染。
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },

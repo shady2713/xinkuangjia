@@ -15,6 +15,7 @@ import { AlertDialogTitle, useForwardProps } from 'reka-ui';
 
 const props = defineProps<AlertDialogTitleProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的标题节点属性，转交 AlertDialogTitle；标题排版由模板类名负责，不进属性通道。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

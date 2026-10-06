@@ -35,6 +35,7 @@ function handleAppend(row: SystemMenuApi.Menu) {
 const { handleCreate, handleDelete, handleEdit } =
   useCrudItemActions<SystemMenuApi.Menu>({
     deleteApi: deleteMenu,
+    /** 二次确认与成功提示中展示的菜单名称；取不到名称时退化为不带名称的通用文案。 */
     getDeleteName: (row) => row.name || '',
     // 列表接口未返回 id 的异常行以 NaN 占位；批量勾选路径会按非有限数值过滤掉这类行
     getRowKey: (row) => row.id ?? Number.NaN,
@@ -44,6 +45,7 @@ const { handleCreate, handleDelete, handleEdit } =
 
 /** 切换树形展开/收缩状态 */
 const isExpanded = ref(false);
+/** 切换菜单树的展开状态：翻转标志后同步应用到表格的全部树节点。 */
 function handleExpand() {
   isExpanded.value = !isExpanded.value;
   gridApi.grid.setAllTreeExpand(isExpanded.value);
@@ -59,6 +61,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
     proxyConfig: {
       ajax: {
+        /** 查询全部菜单：该表按树展示且关闭了分页，因此忽略表格传入的分页参数。 */
         query: async (_params) => {
           return await getMenuList();
         },

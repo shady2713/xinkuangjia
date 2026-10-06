@@ -8,6 +8,7 @@ import type { CAC } from 'cac';
 
 import { execaCommand } from '@vben/node-utils';
 
+/** 子命令选项：format 为真时改为自动修复，而不是只做检查。 */
 interface LintCommandOptions {
   /**
    * Format lint problem.
@@ -15,6 +16,11 @@ interface LintCommandOptions {
   format?: boolean;
 }
 
+/**
+ * 执行代码检查：默认并行跑 eslint、prettier --check 与 stylelint，加 --format 时改为依次修复。
+ * 命令的退出码由各工具直接继承，本函数不做二次包装。
+ * @param options - 子命令选项；解构出的 format 决定走修复还是检查分支。
+ */
 async function runLint({ format }: LintCommandOptions) {
   // process.env.FORCE_COLOR = '3';
 
@@ -43,6 +49,7 @@ async function runLint({ format }: LintCommandOptions) {
   ]);
 }
 
+/** 把 lint 子命令注册到 cac 实例上，命令名与选项在这里固定。 */
 function defineLintCommand(cac: CAC) {
   cac
     .command('lint')

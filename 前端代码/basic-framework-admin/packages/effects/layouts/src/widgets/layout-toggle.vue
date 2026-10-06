@@ -24,6 +24,7 @@ defineOptions({
   name: 'AuthenticationLayoutToggle',
 });
 
+/** 布局切换下拉项：左对齐、居中、右对齐三种认证页面板布局，文案随当前语言变化。 */
 const menus = computed((): VbenDropdownMenuItem[] => [
   {
     icon: PanelLeft,
@@ -44,6 +45,7 @@ const menus = computed((): VbenDropdownMenuItem[] => [
 
 const { authPanelCenter, authPanelLeft, authPanelRight } = usePreferences();
 
+/** 选中布局后写入 authPageLayout 偏好；值为空时不做任何处理。 */
 function handleUpdate(value: string | undefined) {
   if (!value) return;
   updatePreferences({

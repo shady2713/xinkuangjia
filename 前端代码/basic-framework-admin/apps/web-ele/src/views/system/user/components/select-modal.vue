@@ -30,6 +30,7 @@ interface DeptTreeNode {
   name: string;
 }
 
+/** 后端返回的部门原始节点：主键与名称都可能是可选字段，转换后才会补齐。 */
 type DeptSourceNode = {
   children?: DeptSourceNode[];
   id?: number;
@@ -49,6 +50,7 @@ withDefaults(
   {
     title: '选择用户',
     multiple: true,
+    /** 未传入已选用户时默认空数组，避免多选组件拿到 undefined。 */
     value: () => [],
     confirmText: '确定',
     cancelText: '取消',
@@ -392,6 +394,11 @@ function handleDeptSearch(value: string) {
 
   // 如果有搜索结果，自动展开所有节点
   if (value) {
+    /**
+     * 递归收集子树全部节点的主键，用于搜索时展开命中节点的祖先链路。
+     * @param nodes 待遍历的部门节点列表。
+     * @returns 该子树所有节点主键的字符串形式。
+     */
     const getAllKeys = (nodes: DeptTreeNode[]): string[] => {
       const keys: string[] = [];
       for (const node of nodes) {
@@ -410,6 +417,10 @@ function handleDeptSearch(value: string) {
 }
 
 // 处理部门选择
+/**
+ * 选择部门：再次点击同一部门表示取消选择，随后重置分页并重新加载左侧用户列表。
+ * @param node 被点击的部门节点，主键为空时按「取消选择」处理。
+ */
 async function handleDeptSelect(node: DeptTreeNode) {
   // 更新选中的部门ID
   const newDeptId = node.id ? Number(node.id) : undefined;
@@ -466,6 +477,7 @@ function processDeptNode(node: DeptSourceNode): DeptTreeNode {
     id: String(node.id ?? ''),
     label: `${node.name ?? ''} (${node.id ?? ''})`,
     name: node.name ?? '',
+    /** 子节点递归转换；没有下级时保持 undefined，树组件据此识别叶子节点。 */
     children: node.children?.map((child) => processDeptNode(child)),
   };
 }

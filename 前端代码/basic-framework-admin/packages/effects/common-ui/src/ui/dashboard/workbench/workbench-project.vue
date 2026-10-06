@@ -13,6 +13,7 @@ import {
   VbenIcon,
 } from '@vben-core/shadcn-ui';
 
+/** 项目卡片属性：卡片标题与项目条目清单。 */
 interface Props {
   items?: WorkbenchProjectItem[];
   title: string;
@@ -23,6 +24,7 @@ defineOptions({
 });
 
 withDefaults(defineProps<Props>(), {
+  /** 项目清单默认值：空数组，未传入时卡片内没有项目。 */
   items: () => [],
 });
 

@@ -21,6 +21,7 @@ const props = withDefaults(
   },
 );
 
+/** 去掉 class 后的浮层属性，转交 HoverCardContent；sideOffset 缺省 4，传送门与开合延迟不在这里处理。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

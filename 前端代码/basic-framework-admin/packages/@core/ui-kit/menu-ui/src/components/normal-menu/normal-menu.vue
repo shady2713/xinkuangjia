@@ -17,9 +17,11 @@ defineOptions({
   name: 'NormalMenu',
 });
 
+/** 注册普通菜单属性，菜单数据缺省为空数组，激活路径与折叠开关缺省为关闭。 */
 const props = withDefaults(defineProps<Props>(), {
   activePath: '',
   collapse: false,
+  /** 缺省渲染空列表，使模板遍历无需额外判空。 */
   menus: () => [],
   theme: 'dark',
 });
@@ -31,6 +33,11 @@ const emit = defineEmits<{
 
 const { b, e, is } = useNamespace('normal-menu');
 
+/**
+ * 取该菜单项应展示的图标：命中当前激活路径时优先用激活图标，未激活时用普通图标。
+ * @param menu 单条一级菜单记录，按 path 与激活路径比对。
+ * @returns 图标组件或图标名；两项图标都未配置时为 undefined，由图标组件渲染占位。
+ */
 function menuIcon(menu: MenuRecordRaw) {
   return props.activePath === menu.path
     ? menu.activeIcon || menu.icon

@@ -44,6 +44,7 @@ import {
 defineOptions({ name: 'ImageUpload', inheritAttrs: false });
 
 const props = withDefaults(defineProps<FileUploadProps>(), {
+  /** 缺省空列表：此时图片列表为空，对外值也为空 */
   value: () => [],
   modelValue: undefined,
   directory: undefined,
@@ -52,6 +53,7 @@ const props = withDefaults(defineProps<FileUploadProps>(), {
   helpText: '',
   maxSize: 2,
   maxNumber: 1,
+  /** 缺省接受框架内置的图片后缀白名单，调用方传入 accept 后以此为准 */
   accept: () => defaultImageAccepts,
   multiple: false,
   api: undefined,
@@ -204,6 +206,10 @@ async function handlePreview(file: UploadFile) {
 /** 处理文件删除 */
 async function handleRemove(file: UploadFile) {
   if (fileList.value) {
+    /**
+     * 按 Element Plus 生成的文件标识定位待删除项；匹配不到时返回 -1，
+     * 调用方据此跳过删除，避免误删列表最后一项。
+     */
     const index = fileList.value.findIndex((item) => item.uid === file.uid);
     index !== -1 && fileList.value.splice(index, 1);
     const value = getValue();
@@ -334,6 +340,10 @@ function handleUploadError(error: unknown) {
  * @returns 文件 URL 列表或字符串
  */
 function getValue() {
+  /**
+   * 只收敛上传成功的图片项：上传中与失败的条目一旦进入对外值，
+   * 调用方就会拿到还不可访问的地址。resultField 决定每项暴露完整响应还是图片 URL。
+   */
   const list = (fileList.value || [])
     .filter((item) => item?.status === UploadResultStatus.SUCCESS)
     .map((item: UploadFile) => {

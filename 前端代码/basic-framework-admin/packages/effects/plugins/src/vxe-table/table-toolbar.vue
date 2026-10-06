@@ -35,6 +35,7 @@ function onHiddenSearchBar() {
 }
 
 defineExpose({
+  /** 供 useTableToolbar 读取工具栏实例；工具栏尚未挂载时为 undefined。 */
   getToolbarRef: () => toolbarRef.value,
 });
 </script>

@@ -12,6 +12,12 @@ import { cn } from '@vben-core/shared/utils';
 
 import { ScrollArea, ScrollBar } from '../../ui';
 
+/**
+ * 滚动容器的入参。
+ * class 给滚动区域，scrollBarClass 给横向滚动条；horizontal 为真时才渲染横向滚动条。
+ * shadow 是阴影的总开关，只有它为真时 shadowTop、shadowBottom、shadowLeft、shadowRight
+ * 四个方向开关才各自生效；shadowBorder 让已显示的阴影额外带一条边框。
+ */
 interface Props {
   class?: ClassType;
   horizontal?: boolean;
@@ -52,11 +58,23 @@ const isAtLeft = ref(true);
  */
 const ARRIVED_STATE_THRESHOLD_PIXELS = 1;
 
+/**
+ * 顶部渐隐遮罩是否渲染，等价于总开关 shadow 与方向开关 shadowTop 同时为真。
+ * 真正决定遮罩出不出现的是 isAtTop：滚到顶部就淡出，因此这里只管"允许不允许"。
+ */
 const showShadowTop = computed(() => props.shadow && props.shadowTop);
+/** 底部渐隐遮罩是否渲染，语义同上，对应方向开关是 shadowBottom。 */
 const showShadowBottom = computed(() => props.shadow && props.shadowBottom);
+/** 左侧渐隐遮罩是否渲染，语义同上，对应方向开关是 shadowLeft。 */
 const showShadowLeft = computed(() => props.shadow && props.shadowLeft);
+/** 右侧渐隐遮罩是否渲染，语义同上，对应方向开关是 shadowRight。 */
 const showShadowRight = computed(() => props.shadow && props.shadowRight);
 
+/**
+ * 横向两端的遮罩类名。
+ * 两端都没到边界且左右阴影都开启时用 both-shadow，让样式对左右同时生效；
+ * 只在单侧需要时给对应方向的类名，两侧都关时返回空集合、不加任何遮罩样式。
+ */
 const computedShadowClasses = computed(() => {
   return {
     'both-shadow':
@@ -69,6 +87,13 @@ const computedShadowClasses = computed(() => {
   };
 });
 
+/**
+ * 每次滚动后重新判断四方向是否已到达边界，并连同结果抛出 scrollAt 事件。
+ * 起点方向直接以偏移为 0 判定；终点方向因为 scrollTop/scrollHeight 与 clientHeight 的精度不一致，
+ * 留了 ARRIVED_STATE_THRESHOLD_PIXELS 的容差，否则滚到底也常差一点判不到。
+ * 事件只做上报，不修改滚动位置，也不拦截默认滚动行为。
+ * @param event 滚动事件，target 即发生滚动的元素。
+ */
 function handleScroll(event: Event) {
   const target = event.target as HTMLElement;
   const scrollTop = target?.scrollTop ?? 0;

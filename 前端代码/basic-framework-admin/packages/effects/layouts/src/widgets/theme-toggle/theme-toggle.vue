@@ -30,6 +30,7 @@ withDefaults(defineProps<{ shouldOnHover?: boolean }>(), {
   shouldOnHover: false,
 });
 
+/** 把按钮翻转后的深浅色结果写入主题模式偏好；值为 undefined 时按浅色处理。 */
 function handleChange(isDark: boolean | undefined) {
   updatePreferences({
     theme: { mode: isDark ? 'dark' : 'light' },

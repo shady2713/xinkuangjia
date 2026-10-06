@@ -41,6 +41,7 @@ export function useAntdDesignTokens() {
     zIndexPopupBase: 2000, // 调整基础弹层层级，避免下拉等组件被弹窗或者最大化状态下的表格遮挡
   });
 
+  /** 读取 CSS 变量值；isColor 为 true 时按 HSL 数值包装成 hsl() 颜色，否则原样返回。 */
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const value = rootStyles.getPropertyValue(variable);
     return isColor ? `hsl(${value})` : value;
@@ -87,6 +88,11 @@ export function useAntdDesignTokens() {
   };
 }
 
+/**
+ * 读取 Naive UI 语义主题变量，主题切换时按 CSS 变量重新解析色板。
+ * 颜色统一转换为 rgb 供 Naive UI 直接使用，尺寸类令牌（如圆角）保持原值。
+ * @returns 含 commonTokens 的对象，commonTokens 为响应式的 Naive UI 通用令牌集合。
+ */
 export function useNaiveDesignTokens() {
   const rootStyles = getComputedStyle(document.documentElement);
 
@@ -120,6 +126,7 @@ export function useNaiveDesignTokens() {
     warningColorSuppl: '',
   });
 
+  /** 读取 CSS 变量值；颜色转为 rgb 供 Naive UI 使用，非颜色值原样返回。 */
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const value = rootStyles.getPropertyValue(variable);
     return isColor ? convertToRgb(`hsl(${value})`) : value;
@@ -173,14 +180,17 @@ export function useNaiveDesignTokens() {
   };
 }
 
+/** 把设计令牌写入 --el-* 全局 CSS 变量，并按明暗模式选择对应的色阶。 */
 export function useElementPlusDesignTokens() {
   const { isDark } = usePreferences();
   const rootStyles = getComputedStyle(document.documentElement);
 
+  /** 读取 CSS 变量的原始字符串值，不做颜色格式转换。 */
   const getCssVariableValueRaw = (variable: string) => {
     return rootStyles.getPropertyValue(variable);
   };
 
+  /** 读取 CSS 变量并转为 rgb；非颜色值（如圆角尺寸）原样返回。 */
   const getCssVariableValue = (variable: string, isColor: boolean = true) => {
     const value = getCssVariableValueRaw(variable);
     return isColor ? convertToRgb(`hsl(${value})`) : value;

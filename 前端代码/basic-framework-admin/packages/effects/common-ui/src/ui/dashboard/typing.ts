@@ -5,6 +5,7 @@
  */
 import type { Component } from 'vue';
 
+/** 分析页指标卡：图标、标题、总计文案与总计值，以及当前统计值。 */
 interface AnalysisOverviewItem {
   icon: Component | string;
   title: string;
@@ -13,6 +14,7 @@ interface AnalysisOverviewItem {
   value: number;
 }
 
+/** 工作台项目条目：分组、标题、描述与日期，可选图标、主题色与跳转地址。 */
 interface WorkbenchProjectItem {
   color?: string;
   content: string;
@@ -23,6 +25,7 @@ interface WorkbenchProjectItem {
   url?: string;
 }
 
+/** 工作台动态条目：头像、标题、正文与日期。 */
 interface WorkbenchTrendItem {
   avatar: string;
   content: string;
@@ -30,6 +33,7 @@ interface WorkbenchTrendItem {
   title: string;
 }
 
+/** 工作台待办条目：标题、正文、日期与是否已完成。 */
 interface WorkbenchTodoItem {
   completed: boolean;
   content: string;
@@ -37,6 +41,7 @@ interface WorkbenchTodoItem {
   title: string;
 }
 
+/** 工作台快捷导航条目：标题与图标，可选主题色与跳转地址。 */
 interface WorkbenchQuickNavItem {
   color?: string;
   icon: Component | string;

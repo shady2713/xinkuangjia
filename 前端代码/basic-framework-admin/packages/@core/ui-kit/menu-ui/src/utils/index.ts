@@ -17,12 +17,18 @@ type VNodeChildAtom = Exclude<VNodeChild, unknown[]>;
 /** 已归一化的插槽内容：排除数组、null 与字符串后的单个可渲染子节点。 */
 type RawSlots = Exclude<VNodeNormalizedChildren, null | string | unknown[]>;
 
+/**
+ * 菜单节点展开后的扁平列表：混入组件根节点与其子树的子节点，供水平菜单按宽度裁剪。
+ * 保留注释节点以对齐原插槽顺序，由调用方按需过滤。
+ */
 type FlattenVNodes = Array<RawSlots | VNodeChildAtom>;
 
 /**
+ * 沿组件树逐级向上查找第一个名称命中 parentNames 的祖先实例，从 instance.parent 开始。
  * @zh_CN Find the parent component upward
- * @param instance
- * @param parentNames
+ * @param instance 查找起点实例，不含自身。
+ * @param parentNames 可接受的祖先组件名称列表。
+ * @returns 命中的祖先实例；一路到根仍未命中时返回 undefined。
  */
 function findComponentUpward(
   instance: ComponentInternalInstance,
@@ -35,6 +41,11 @@ function findComponentUpward(
   return parent;
 }
 
+/**
+ * 递归摊平插槽内容与组件子树：数组就地展开，组件节点先保留自身再展开其 subTree。
+ * @param children 插槽返回的虚拟节点、节点数组或单个虚拟节点。
+ * @returns 摊平后的虚拟节点列表，元素顺序与原插槽渲染顺序一致。
+ */
 const flattedChildren = (
   children: FlattenVNodes | VNode | VNodeNormalizedChildren,
 ): FlattenVNodes => {

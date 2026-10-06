@@ -13,6 +13,11 @@ const props = defineProps<{
 }>();
 
 const emits = defineEmits<{
+  /**
+   * 输入值变更事件：useVModel 处于 passive 模式，每次触发都把新值同步给父组件，父组件未监听时值只留在本地。
+   * @param e 事件名，固定为 update:modelValue。
+   * @param payload 输入框当前的新值，未做数字或字符串归一化，按用户输入原样传出。
+   */
   (e: 'update:modelValue', payload: number | string): void;
 }>();
 

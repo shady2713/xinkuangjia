@@ -188,6 +188,7 @@ const [Drawer] = useVbenDrawer();
 
 const activeTab = ref('appearance');
 
+/** 分组标签页：外观、布局、快捷键与通用四组，文案随当前语言变化。 */
 const tabs = computed((): SegmentedItem[] => {
   return [
     {
@@ -209,6 +210,7 @@ const tabs = computed((): SegmentedItem[] => {
   ];
 });
 
+/** 是否显示面包屑配置：通栏内容、混合导航与顶栏导航下不适用，且头部必须处于启用状态。 */
 const showBreadcrumbConfig = computed(() => {
   return (
     !isFullContent.value &&
@@ -218,6 +220,7 @@ const showBreadcrumbConfig = computed(() => {
   );
 });
 
+/** 把当前与默认值不同的偏好项格式化为 JSON 复制到剪贴板，并提示复制结果。 */
 async function handleCopy() {
   await copy(JSON.stringify(diffPreference.value, null, 2));
 
@@ -227,12 +230,14 @@ async function handleCopy() {
   );
 }
 
+/** 清空缓存：重置偏好、清理本地缓存后请求外层执行退出登录。 */
 async function handleClearCache() {
   resetPreferences();
   clearCache();
   emit('clearPreferencesAndLogout');
 }
 
+/** 恢复默认偏好；当前没有差异项时直接返回，否则重置后重新加载当前语言包。 */
 async function handleReset() {
   if (!diffPreference.value) {
     return;

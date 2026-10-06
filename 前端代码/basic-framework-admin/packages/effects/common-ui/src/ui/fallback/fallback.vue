@@ -29,16 +29,22 @@ const props = withDefaults(defineProps<Props>(), {
   title: '',
 });
 
+/** 403 无权限页的异步图标组件，仅在状态为 403 时加载。 */
 const Icon403 = defineAsyncComponent(() => import('./icons/icon-403.vue'));
+/** 404 未找到页的异步图标组件，仅在状态为 404 时加载。 */
 const Icon404 = defineAsyncComponent(() => import('./icons/icon-404.vue'));
+/** 500 服务异常页的异步图标组件，仅在状态为 500 时加载。 */
 const Icon500 = defineAsyncComponent(() => import('./icons/icon-500.vue'));
+/** 即将上线页的异步图标组件，仅在状态为 coming-soon 时加载。 */
 const IconHello = defineAsyncComponent(
   () => import('./icons/icon-coming-soon.vue'),
 );
+/** 离线页的异步图标组件，仅在状态为 offline 时加载。 */
 const IconOffline = defineAsyncComponent(
   () => import('./icons/icon-offline.vue'),
 );
 
+/** 标题文案：优先用传入的 title，否则按 status 取国际化文案；未知状态返回空串。 */
 const titleText = computed(() => {
   if (props.title) {
     return props.title;
@@ -66,6 +72,7 @@ const titleText = computed(() => {
   }
 });
 
+/** 描述文案：优先用传入的 description，否则按 status 取国际化文案；未知状态返回空串。 */
 const descText = computed(() => {
   if (props.description) {
     return props.description;
@@ -89,6 +96,7 @@ const descText = computed(() => {
   }
 });
 
+/** 图标组件：按 status 选择内置图标；未知状态返回 null，模板据此不渲染图标。 */
 const fallbackIcon = computed(() => {
   switch (props.status) {
     case '403': {
@@ -112,10 +120,12 @@ const fallbackIcon = computed(() => {
   }
 });
 
+/** 是否显示返回首页按钮：仅 403 与 404 两种状态显示。 */
 const showBack = computed(() => {
   return props.status === '403' || props.status === '404';
 });
 
+/** 是否显示刷新按钮：仅 500 与离线两种状态显示。 */
 const showRefresh = computed(() => {
   return props.status === '500' || props.status === 'offline';
 });
@@ -127,6 +137,7 @@ function back() {
   push(props.homePath);
 }
 
+/** 重新加载当前页面；用于服务异常与离线场景下重试。 */
 function refresh() {
   location.reload();
 }

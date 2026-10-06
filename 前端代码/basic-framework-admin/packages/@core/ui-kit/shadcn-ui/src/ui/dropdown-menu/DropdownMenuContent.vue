@@ -28,6 +28,7 @@ const props = withDefaults(
 );
 const emits = defineEmits<DropdownMenuContentEmits>();
 
+/** 去掉 class 后的浮层属性，转交 DropdownMenuContent；sideOffset 缺省 4 已在 withDefaults 中定好。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

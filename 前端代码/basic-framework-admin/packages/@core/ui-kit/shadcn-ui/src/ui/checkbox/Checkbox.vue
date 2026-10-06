@@ -20,6 +20,7 @@ const props = defineProps<
 >();
 const emits = defineEmits<CheckboxRootEmits>();
 
+/** 去掉 class 后的复选框根属性，转交 CheckboxRoot；indeterminate 只决定图标选择，不会作为属性下发。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

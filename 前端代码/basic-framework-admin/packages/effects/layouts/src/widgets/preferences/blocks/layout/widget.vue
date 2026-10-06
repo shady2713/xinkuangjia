@@ -28,6 +28,7 @@ const appPreferencesButtonPosition = defineModel<string>(
 );
 const widgetRefresh = defineModel<boolean>('widgetRefresh');
 
+/** 偏好按钮停靠位置选项：自动、顶栏、固定三种，文案随当前语言变化。 */
 const positionItems = computed((): SelectOption[] => [
   {
     label: $t('preferences.position.auto'),

@@ -1,3 +1,4 @@
+<!-- 偏好设置入口的齿轮图标：纯静态 SVG，无脚本与交互，随 currentColor 着色。 -->
 <template>
   <svg
     height="1em"

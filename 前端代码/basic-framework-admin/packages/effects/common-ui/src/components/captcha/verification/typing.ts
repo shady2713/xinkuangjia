@@ -62,6 +62,7 @@ export interface CaptchaPointCoordinate {
   y: number;
 }
 
+/** 验证码组件属性：验证码类型与弹层模式、底图与提示条尺寸，以及拉取和校验两个后端接口。 */
 interface VerificationProps {
   arith?: number;
   barSize?: CaptchaSize;

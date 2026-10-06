@@ -14,6 +14,7 @@ import { VbenButton } from '@vben-core/shadcn-ui';
 
 import Title from './auth-title.vue';
 
+/** 忘记密码界面属性：表单结构、加载态、登录路径、标题描述与提交按钮文案。 */
 interface Props {
   formSchema: VbenFormSchema[];
   /**
@@ -61,6 +62,7 @@ const [Form, formApi] = useVbenForm(
       hideLabel: true,
       hideRequiredMark: true,
     },
+    /** 表单结构：直接沿用调用方传入的字段定义，随 props 变化重建。 */
     schema: computed(() => props.formSchema),
     showDefaultActions: false,
   }),
@@ -68,6 +70,7 @@ const [Form, formApi] = useVbenForm(
 
 const router = useRouter();
 
+/** 提交：校验并取值，只有校验通过才把表单值抛给上层；不通过时不抛事件。 */
 async function handleSubmit() {
   const { valid } = await formApi.validate();
   const values = await formApi.getValues();
@@ -76,11 +79,13 @@ async function handleSubmit() {
   }
 }
 
+/** 返回登录页；目标路径由 props.loginPath 决定。 */
 function goToLogin() {
   router.push(props.loginPath);
 }
 
 defineExpose({
+  /** 暴露内部表单 API，供上层主动取值、设值或触发表单校验。 */
   getFormApi: () => formApi,
 });
 </script>

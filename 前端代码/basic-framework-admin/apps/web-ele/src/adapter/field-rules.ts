@@ -129,6 +129,7 @@ export function isIdCardValue(value: string) {
   ) {
     return false;
   }
+  /** 按身份证权重逐位加权求和，求和结果与校验码表的对应关系在下方统一比对。 */
   const sum = ID_CARD_WEIGHTS.reduce((total, weight, index) => {
     return total + Number(normalized[index]) * weight;
   }, 0);

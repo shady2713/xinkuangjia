@@ -25,7 +25,10 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * DeptController HTTP 接口，负责请求校验和响应组装。
  *
- * @author 李杰
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/dept/DeptController.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 3 行，上游代码 2 行在本地被移除或改写，例如 DeptListReqVO request = new DeptListReqVO();；request.setStatus(CommonStatusEnum.ENABLE.getStatus());；本地补充注释 49 行。
  */
 @Tag(name = "管理后台 - 部门")
 @RestController

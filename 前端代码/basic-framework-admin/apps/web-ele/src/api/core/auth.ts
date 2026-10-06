@@ -91,7 +91,14 @@ export async function refreshTokenApi(refreshToken: string) {
   return parseLoginResult(parseSuccessData(response.data));
 }
 
-/** 退出登录 */
+/**
+ * 退出登录，让服务端作废当前访问令牌并记录退出日志。
+ *
+ * 走不带自动认证的无凭据客户端，令牌由本函数显式写入 Authorization 头，
+ * 避免退出请求被自动附加的登录态或令牌刷新流程干扰。
+ * @param accessToken 当前身份的访问令牌，按 Bearer 头上行供后端撤销。
+ * @returns 完整 Axios 响应（raw 模式不拆包），业务结果 true 位于 response.data 中。
+ */
 export async function logoutApi(accessToken: string) {
   return baseRequestClient.post(
     '/system/auth/logout',
@@ -138,7 +145,12 @@ export async function checkCaptcha(
   return baseRequestClient.post('/system/captcha/check', data);
 }
 
-/** 获取登录验证码 */
+/**
+ * 发送短信验证码。
+ * @param data 手机号与验证码场景编号；场景决定后端取用的短信模板及后续校验用途，
+ *             同一手机号切换场景也共用同一份发送预算。
+ * @returns 受理结果标识；场景未配置、发送过频或当日超出额度时后端按业务码拒绝，验证码不会下发。
+ */
 export async function sendSmsCode(data: AuthApi.SmsCodeParams) {
   return requestClient.post('/system/auth/send-sms-code', data);
 }
@@ -165,7 +177,12 @@ export async function register(data: AuthApi.RegisterParams) {
   );
 }
 
-/** 通过短信重置密码 */
+/**
+ * 用短信验证码重置密码。
+ * @param data 手机号、找回密码场景的验证码，以及新密码的 32 位十六进制摘要；
+ *             摘要由前端生成，服务端直接按 BCrypt 存储，原始口令不在服务端出现。
+ * @returns 重置结果标识；手机号无对应后台账号、验证码不匹配或已被使用时后端按业务码拒绝。
+ */
 export async function smsResetPassword(data: AuthApi.ResetPasswordParams) {
   return requestClient.post('/system/auth/reset-password', data);
 }

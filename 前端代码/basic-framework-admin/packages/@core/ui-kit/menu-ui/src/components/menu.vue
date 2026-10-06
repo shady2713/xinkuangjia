@@ -73,12 +73,16 @@ const items = ref<MenuProvider['items']>({});
 const subMenus = ref<MenuProvider['subMenus']>({});
 const mouseInChild = ref(false);
 
+/** 水平模式或垂直折叠态下子菜单改用悬浮卡承载内容，此时为 true。 */
 const isMenuPopup = computed<MenuProvider['isMenuPopup']>(() => {
   return (
     props.mode === 'horizontal' || (props.mode === 'vertical' && props.collapse)
   );
 });
 
+/**
+ * 按 sliceIndex 把摊平后的插槽节点切成主区与溢出区：-1 表示全部留在主区且不渲染「更多」入口。
+ */
 const getSlot = computed(() => {
   // 更新插槽内容
   const defaultSlots: VNodeArrayChildren = slots.default?.() ?? [];
@@ -151,6 +155,11 @@ createSubMenuContext({
   removeSubMenu,
 });
 
+/**
+ * 量出单个菜单项的占位宽度，把左右外边距也算进去。
+ * @param menuItem 待测量的菜单项 DOM 元素。
+ * @returns 含左右外边距的总宽度；解析结果非正时按 0 处理。
+ */
 function calcMenuItemWidth(menuItem: HTMLElement) {
   const computedStyle = getComputedStyle(menuItem);
   const marginLeft = Number.parseInt(computedStyle.marginLeft, 10);
@@ -158,10 +167,18 @@ function calcMenuItemWidth(menuItem: HTMLElement) {
   return menuItem.offsetWidth + marginLeft + marginRight || 0;
 }
 
+/**
+ * 逐个累加菜单项宽度，算出水平菜单还能放下多少项，剩余项收进「更多」子菜单。
+ * 判定时预留 46 像素给「更多」入口本身。
+ * @returns 溢出起点下标；-1 表示全部放得下，或菜单元素尚未挂载取不到宽度。
+ */
 function calcSliceIndex() {
   if (!menu.value) {
     return -1;
   }
+  /**
+   * 取出菜单容器下参与测量的元素子节点：注释节点直接丢弃，纯空白文本节点一并过滤。
+   */
   const items = [...(menu.value?.childNodes ?? [])].filter(
     (item) =>
       // remove comment type node #12634
@@ -187,7 +204,13 @@ function calcSliceIndex() {
   return sliceIndex === items.length ? -1 : sliceIndex;
 }
 
-function debounce(fn: () => void, wait = 33.34) {
+/**
+ * 尾沿节流：每次调用重置计时器，只在最后一次调用后 wait 毫秒才真正执行 fn。
+ * @param fn 需要节流执行的动作。
+ * @param wait 静默间隔毫秒数，缺省约两帧半。
+ * @returns 触发节流动作的函数，重复调用只保留最后一次。
+ */
+function debounce(fn: /** 待节流的无参动作 */ () => void, wait = 33.34) {
   let timer: null | ReturnType<typeof setTimeout>;
   return () => {
     timer && clearTimeout(timer);
@@ -198,10 +221,15 @@ function debounce(fn: () => void, wait = 33.34) {
 }
 
 let isFirstTimeRender = true;
+/**
+ * 水平菜单宽度变化时重算溢出起点：结果与当前一致则什么都不做，避免无谓的重排抖动。
+ * 首次触发会同步执行一次重算，之后的连续变化都走节流。
+ */
 function handleResize() {
   if (sliceIndex.value === calcSliceIndex()) {
     return;
   }
+  /** 先复位再在下一帧重算，让插槽有机会按完整宽度重新渲染。 */
   const callback = () => {
     sliceIndex.value = -1;
     nextTick(() => {
@@ -214,6 +242,7 @@ function handleResize() {
   isFirstTimeRender = false;
 }
 
+/** 仅在开启自动滚动、垂直排列且未折叠时启用，避免横向菜单或折叠态去找不存在的滚动容器。 */
 const enableScroll = computed(
   () => props.scrollToActive && props.mode === 'vertical' && !props.collapse,
 );
@@ -240,6 +269,11 @@ function initMenu() {
   });
 }
 
+/**
+ * 解析出实际要激活的 path：优先命中新值，其次保留当前激活项，最后回退到 props 的默认值，
+ * 三者都查不到登记表时按传入值原样写入。
+ * @param val 期望激活的菜单项 path。
+ */
 function updateActiveName(val: string) {
   const itemsInData = items.value;
   const item =
@@ -250,6 +284,10 @@ function updateActiveName(val: string) {
   activePath.value = item ? item.path : val;
 }
 
+/**
+ * 处理叶子菜单项点击：水平模式与折叠态下没有常驻展开区，先清空展开集合再外发选中事件。
+ * @param data 被点击项的 path 与父级链路；两者任一缺失时只收起子菜单、不派发 select。
+ */
 function handleMenuItemClick(data: MenuItemClicked) {
   const { collapse, mode } = props;
   if (mode === 'horizontal' || collapse) {
@@ -263,6 +301,10 @@ function handleMenuItemClick(data: MenuItemClicked) {
   emit('select', path, parentPaths);
 }
 
+/**
+ * 子菜单标题点击的入口：已展开则收起，未展开则展开，展开集合的互斥由 openMenu 处理。
+ * @param subMenu 被点击子菜单的 path、父级链路与自身激活态。
+ */
 function handleSubMenuClick({ parentPaths, path }: MenuItemRegistered) {
   const isOpened = openedMenus.value.includes(path);
 
@@ -273,6 +315,10 @@ function handleSubMenuClick({ parentPaths, path }: MenuItemRegistered) {
   }
 }
 
+/**
+ * 从展开集合中移除指定 path。
+ * @param path 待收起的子菜单 path；本就不在集合中时不做任何修改。
+ */
 function close(path: string) {
   const i = openedMenus.value.indexOf(path);
 
@@ -296,6 +342,9 @@ function closeMenu(path: string, parentPaths: string[]) {
 
 /**
  * 点击展开菜单
+ * @param path 要展开的子菜单 path，已在展开集合中时直接返回，不重复外发 open 事件。
+ * @param parentPaths 该子菜单的父级链路；手风琴模式下若当前激活项就在这条链路上，
+ * 以激活项的父级链路为准，把同级已展开的兄弟节点收敛掉。
  */
 function openMenu(path: string, parentPaths: string[]) {
   if (openedMenus.value.includes(path)) {
@@ -315,22 +364,30 @@ function openMenu(path: string, parentPaths: string[]) {
   emit('open', path, parentPaths);
 }
 
+/** 把一条菜单项登记写入 items 登记表，path 重复时后写入者覆盖前者。 */
 function addMenuItem(item: MenuItemRegistered) {
   items.value[item.path] = item;
 }
 
+/** 把一条子菜单登记写入 subMenus 登记表，供激活态汇总与手风琴互斥查询父级链路。 */
 function addSubMenu(subMenu: MenuItemRegistered) {
   subMenus.value[subMenu.path] = subMenu;
 }
 
+/** 从 subMenus 登记表移除该子菜单，使手风琴互斥不再计入它的父级链路。 */
 function removeSubMenu(subMenu: MenuItemRegistered) {
   Reflect.deleteProperty(subMenus.value, subMenu.path);
 }
 
+/** 从 items 登记表移除该菜单项，避免已卸载的项继续参与激活态回退查找。 */
 function removeMenuItem(item: MenuItemRegistered) {
   Reflect.deleteProperty(items.value, item.path);
 }
 
+/**
+ * 取当前激活项的父级链路，用于初始化时展开沿途子菜单与手风琴互斥。
+ * @returns 父级 path 数组；无激活项、水平模式或折叠态下返回空数组。
+ */
 function getActivePaths() {
   const activeItem = activePath.value && items.value[activePath.value];
 

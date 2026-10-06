@@ -17,6 +17,7 @@ import {
   ThemeToggle,
 } from '../widgets';
 
+/** 认证页工具条属性：toolbarList 指定要显示哪些快捷开关。 */
 interface Props {
   toolbarList?: ToolbarType[];
 }
@@ -26,11 +27,15 @@ defineOptions({
 });
 
 const props = withDefaults(defineProps<Props>(), {
+  /** 默认展示全部三种快捷开关：配色、布局形态与明暗主题。 */
   toolbarList: () => ['color', 'layout', 'theme'],
 });
 
+/** 是否显示配色开关：toolbarList 包含 color 时为 true。 */
 const showColor = computed(() => props.toolbarList.includes('color'));
+/** 是否显示布局形态开关：toolbarList 包含 layout 时为 true。 */
 const showLayout = computed(() => props.toolbarList.includes('layout'));
+/** 是否显示明暗主题开关：toolbarList 包含 theme 时为 true。 */
 const showTheme = computed(() => props.toolbarList.includes('theme'));
 </script>
 

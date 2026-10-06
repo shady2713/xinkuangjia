@@ -16,126 +16,147 @@ import { ElNotification } from 'element-plus';
 
 import { FileUpload, ImageUpload } from '#/components/upload';
 
+/** 按需引入 Element Plus 自动补全组件及其样式，注册为表单的 AutoComplete 控件。 */
 const ElAutoComplete = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/autocomplete/index'),
     import('element-plus/es/components/autocomplete/style/css'),
   ]).then(([res]) => res.ElAutocomplete),
 );
+/** 按需引入 Element Plus 按钮组件及其样式，供默认与主要按钮两种自定义渲染复用。 */
 const ElButton = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/button/index'),
     import('element-plus/es/components/button/style/css'),
   ]).then(([res]) => res.ElButton),
 );
+/** 按需引入 Element Plus 复选框组件及其样式，选项模式下作为复选框组的子项。 */
 const ElCheckbox = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/checkbox/index'),
     import('element-plus/es/components/checkbox/style/css'),
   ]).then(([res]) => res.ElCheckbox),
 );
+/** 按需引入 Element Plus 复选框按钮组件及其样式，isButton 为真时替代普通复选框。 */
 const ElCheckboxButton = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/checkbox/index'),
     import('element-plus/es/components/checkbox-button/style/css'),
   ]).then(([res]) => res.ElCheckboxButton),
 );
+/** 按需引入 Element Plus 复选框组组件及其样式，承载 CheckboxGroup 适配。 */
 const ElCheckboxGroup = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/checkbox/index'),
     import('element-plus/es/components/checkbox-group/style/css'),
   ]).then(([res]) => res.ElCheckboxGroup),
 );
+/** 按需引入 Element Plus 日期选择器及其样式，供 DatePicker 与 RangePicker 适配。 */
 const ElDatePicker = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/date-picker/index'),
     import('element-plus/es/components/date-picker/style/css'),
   ]).then(([res]) => res.ElDatePicker),
 );
+/** 按需引入 Element Plus 分隔线组件及其样式，注册为表单的 Divider 控件。 */
 const ElDivider = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/divider/index'),
     import('element-plus/es/components/divider/style/css'),
   ]).then(([res]) => res.ElDivider),
 );
+/** 按需引入 Element Plus 输入框组件及其样式，同时作为图标选择器的输入控件。 */
 const ElInput = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/input/index'),
     import('element-plus/es/components/input/style/css'),
   ]).then(([res]) => res.ElInput),
 );
+/** 按需引入 Element Plus 数字输入框组件及其样式，作为数字类表单项的底层控件。 */
 const ElInputNumber = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/input-number/index'),
     import('element-plus/es/components/input-number/style/css'),
   ]).then(([res]) => res.ElInputNumber),
 );
+/** 按需引入 Element Plus 标签输入框组件及其样式，用于多值自由录入。 */
 const ElInputTag = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/input-tag/index'),
     import('element-plus/es/components/input-tag/style/css'),
   ]).then(([res]) => res.ElInputTag),
 );
+/** 按需引入 Element Plus 单选框组件及其样式，选项模式下作为单选组的子项。 */
 const ElRadio = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/radio/index'),
     import('element-plus/es/components/radio/style/css'),
   ]).then(([res]) => res.ElRadio),
 );
+/** 按需引入 Element Plus 单选按钮组件及其样式，isButton 为真时替代普通单选框。 */
 const ElRadioButton = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/radio/index'),
     import('element-plus/es/components/radio-button/style/css'),
   ]).then(([res]) => res.ElRadioButton),
 );
+/** 按需引入 Element Plus 单选框组组件及其样式，承载 RadioGroup 适配。 */
 const ElRadioGroup = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/radio/index'),
     import('element-plus/es/components/radio-group/style/css'),
   ]).then(([res]) => res.ElRadioGroup),
 );
+/** 按需引入 Element Plus 虚拟滚动下拉组件及其样式，供 ApiSelect 与 Select 使用。 */
 const ElSelectV2 = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/select-v2/index'),
     import('element-plus/es/components/select-v2/style/css'),
   ]).then(([res]) => res.ElSelectV2),
 );
+/** 按需引入 Element Plus 间距组件及其样式，注册为表单的 Space 控件。 */
 const ElSpace = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/space/index'),
     import('element-plus/es/components/space/style/css'),
   ]).then(([res]) => res.ElSpace),
 );
+/** 按需引入 Element Plus 开关组件及其样式，作为布尔类表单项的底层控件。 */
 const ElSwitch = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/switch/index'),
     import('element-plus/es/components/switch/style/css'),
   ]).then(([res]) => res.ElSwitch),
 );
+/** 按需引入 Element Plus 时间选择器及其样式，供 TimePicker 适配器渲染。 */
 const ElTimePicker = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/time-picker/index'),
     import('element-plus/es/components/time-picker/style/css'),
   ]).then(([res]) => res.ElTimePicker),
 );
+/** 按需引入 Element Plus 树形选择器及其样式，供 ApiTreeSelect 与 TreeSelect 使用。 */
 const ElTreeSelect = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/tree-select/index'),
     import('element-plus/es/components/tree-select/style/css'),
   ]).then(([res]) => res.ElTreeSelect),
 );
+/** 按需引入 Element Plus 上传组件及其样式，注册为表单的 Upload 控件。 */
 const ElUpload = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/upload/index'),
     import('element-plus/es/components/upload/style/css'),
   ]).then(([res]) => res.ElUpload),
 );
+/** 按需引入 Element Plus 级联选择器及其样式，供 ApiCascader 适配器渲染。 */
 const ElCascader = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/cascader/index'),
     import('element-plus/es/components/cascader/style/css'),
   ]).then(([res]) => res.ElCascader),
 );
+/** 按需引入 Element Plus 评分组件及其样式，注册为表单的 Rate 控件。 */
 const ElRate = defineAsyncComponent(() =>
   Promise.all([
     import('element-plus/es/components/rate/index'),
@@ -175,7 +196,9 @@ const withDefaultPlaceholder = <T extends Component>(
         new Proxy(
           {},
           {
+            /** 读取内部组件实例上的同名成员，组件尚未挂载时返回 undefined 而不是抛错。 */
             get: (_target, key) => innerRef.value?.[key],
+            /** 让 `key in 代理对象` 与内部组件实例的实际成员一致，供调用方探测组件能力。 */
             has: (_target, key) => key in (innerRef.value || {}),
           },
         ),
@@ -190,7 +213,10 @@ const withDefaultPlaceholder = <T extends Component>(
   });
 };
 
-// 这里需要自行根据业务组件库进行适配，需要用到的组件都需要在这里类型说明
+/**
+ * 表单可用的组件类型全集：新增业务组件库时，需要同时在这里补类型、
+ * 并在 `initComponentAdapter` 的组件表里补同名实现，两处缺一表单就无法按类型取到控件。
+ */
 export type ComponentType =
   | 'ApiCascader'
   | 'ApiSelect'
@@ -268,6 +294,13 @@ async function initComponentAdapter() {
     ),
     AutoComplete: ElAutoComplete,
     Checkbox: ElCheckbox,
+    /**
+     * 复选框组的表单适配：调用方给出默认插槽时原样使用，否则按 `attrs.options` 逐项生成子项，
+     * `attrs.isButton` 为真时改用复选框按钮样式。
+     * @param props 表单项当前值与事件绑定，原样透传给 ElCheckboxGroup。
+     * @param context 渲染上下文；`attrs` 提供 options 与 isButton，`slots` 决定是否沿用调用方插槽。
+     * @returns 复选框组的渲染结果；未提供插槽且 options 不是数组时默认插槽为空。
+     */
     CheckboxGroup: (props, { attrs, slots }) => {
       let defaultSlot;
       if (Reflect.has(slots, 'default')) {
@@ -305,6 +338,13 @@ async function initComponentAdapter() {
     Input: withDefaultPlaceholder(ElInput, 'input'),
     InputNumber: withDefaultPlaceholder(ElInputNumber, 'input'),
     InputTag: withDefaultPlaceholder(ElInputTag, 'input'),
+    /**
+     * 单选框组的表单适配：调用方给出默认插槽时原样使用，否则按 `attrs.options` 逐项生成子项，
+     * `attrs.isButton` 为真时改用单选按钮样式。
+     * @param props 表单项当前值与事件绑定，原样透传给 ElRadioGroup。
+     * @param context 渲染上下文；`attrs` 提供 options 与 isButton，`slots` 决定是否沿用调用方插槽。
+     * @returns 单选框组的渲染结果；未提供插槽且 options 不是数组时默认插槽为空。
+     */
     RadioGroup: (props, { attrs, slots }) => {
       let defaultSlot;
       if (Reflect.has(slots, 'default')) {
@@ -324,6 +364,7 @@ async function initComponentAdapter() {
         { ...slots, default: defaultSlot },
       );
     },
+    /** 下拉选择的适配：统一用虚拟滚动版 ElSelectV2 渲染，属性与插槽原样透传。 */
     Select: (props, { attrs, slots }) => {
       return h(ElSelectV2, { ...props, attrs }, slots);
     },

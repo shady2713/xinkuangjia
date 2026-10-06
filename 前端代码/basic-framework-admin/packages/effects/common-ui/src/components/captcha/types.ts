@@ -7,6 +7,7 @@ import type { CSSProperties } from 'vue';
 
 import type { ClassType } from '@vben/types';
 
+/** 验证码交互的原始点位：x、y 为坐标，t 为该点的采集时间戳。 */
 export interface CaptchaData {
   /**
    * x
@@ -21,12 +22,14 @@ export interface CaptchaData {
    */
   t: number;
 }
+/** 带序号的点位：在坐标与时间戳之外记录它在点击序列中的下标。 */
 export interface CaptchaPoint extends CaptchaData {
   /**
    * 数据索引
    */
   i: number;
 }
+/** 点选验证码卡片的属性：底图、宽高与内边距、提示标题，默认值见各字段标注。 */
 export interface PointSelectionCaptchaCardProps {
   /**
    * 验证码图片
@@ -59,6 +62,7 @@ export interface PointSelectionCaptchaCardProps {
   width?: number | string;
 }
 
+/** 点选验证码完整属性：在卡片属性之上增加确定按钮与提示图片、提示文本。 */
 export interface PointSelectionCaptchaProps extends PointSelectionCaptchaCardProps {
   /**
    * 是否展示确定按钮
@@ -77,6 +81,7 @@ export interface PointSelectionCaptchaProps extends PointSelectionCaptchaCardPro
   hintText?: string;
 }
 
+/** 滑块验证码属性：滑块、滑轨、内容与外层容器的样式，以及插槽模式与提示文案。 */
 export interface SliderCaptchaProps {
   class?: ClassType;
   /**
@@ -122,6 +127,7 @@ export interface SliderCaptchaProps {
   text?: string;
 }
 
+/** 旋转验证码属性：角度范围、图片尺寸与样式、图片地址与提示文案。 */
 export interface SliderRotateCaptchaProps {
   /**
    * @description 旋转的角度
@@ -163,6 +169,7 @@ export interface SliderRotateCaptchaProps {
   defaultTip?: string;
 }
 
+/** 平移拼图验证码属性：画布与切块尺寸、图片地址、允许误差与提示文案。 */
 export interface SliderTranslateCaptchaProps {
   /**
    * @description 拼图的宽度
@@ -199,15 +206,19 @@ export interface SliderTranslateCaptchaProps {
   defaultTip?: string;
 }
 
+/** 验证码校验结果：是否通过，以及本次校验耗时（滑块验证码按秒保留一位小数的字符串）。 */
 export interface CaptchaVerifyPassingData {
   isPassing: boolean;
   time: number | string;
 }
 
+/** 滑块验证码对外暴露的动作句柄：目前只提供恢复初始状态。 */
 export interface SliderCaptchaActionType {
+  /** 复位到未验证状态：清空耗时与位移，并把滑块与进度条收回起点。 */
   resume: () => void;
 }
 
+/** 旋转验证的进度载荷：原始事件、本次移动距离与当前横向位置。 */
 export interface SliderRotateVerifyPassingData {
   event: MouseEvent | TouchEvent;
   moveDistance: number;

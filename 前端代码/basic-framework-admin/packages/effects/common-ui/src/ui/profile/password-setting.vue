@@ -16,11 +16,13 @@ import { $t } from '@vben/locales';
 import { useVbenForm } from '@vben-core/form-ui';
 import { VbenButton } from '@vben-core/shadcn-ui';
 
+/** 修改密码表单属性：字段结构由调用方传入。 */
 interface Props {
   formSchema?: VbenFormSchema[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  /** 表单结构默认值：空数组，未传入时表单没有字段。 */
   formSchema: () => [],
 });
 
@@ -38,11 +40,13 @@ const [Form, formApi] = useVbenForm(
       },
     },
     layout: 'horizontal',
+    /** 表单结构：直接沿用调用方传入的字段定义，随 props 变化重建。 */
     schema: computed(() => props.formSchema),
     showDefaultActions: false,
   }),
 );
 
+/** 提交：校验并取值，只有校验通过才抛 submit；改密请求由调用页面负责。 */
 async function handleSubmit() {
   const { valid } = await formApi.validate();
   const values = await formApi.getValues();
@@ -52,6 +56,7 @@ async function handleSubmit() {
 }
 
 defineExpose({
+  /** 暴露内部表单 API，供调用页面主动取值、设值或触发表单校验。 */
   getFormApi: () => formApi,
 });
 </script>

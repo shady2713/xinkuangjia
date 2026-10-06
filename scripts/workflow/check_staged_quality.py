@@ -42,6 +42,7 @@ from scripts.common.staged_content import (
     read_index,
 )
 from scripts.common.repository_layout import is_java_source
+from scripts.code.java.check_staged_java_comments import evidence_cli_arguments
 
 RULE_FILE = "scripts/tools/document_rules.py"
 SOURCE_SUFFIXES = {".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"}
@@ -305,9 +306,17 @@ def check_documents(
 
 
 def run_checks(root: Path, folder: Path, env: dict[str, str], changes: list[Change]) -> int:
-    """执行已选核心与文档检查，环境错误优先于规则失败，不把跳过算成功。"""
+    """执行已选核心与文档检查，环境错误优先于规则失败，不把跳过算成功。
+
+    Java 注释检查使用仓库内受控来源索引作为默认证据输入，并报告本次采用的
+    清单路径、SHA-256 与记录数；显式配置仍然优先。
+    """
     codes = []
     for name, script, arguments in core_jobs(changes):
+        if name == "java-comments":
+            evidence_arguments, description = evidence_cli_arguments(root)
+            arguments = [*arguments, *evidence_arguments]
+            print(description, flush=True)
         try:
             command = [sys.executable, "-X", "utf8", "-B", str(DEFAULT_ROOT / "scripts" / script)]
             if name == "web-comments":

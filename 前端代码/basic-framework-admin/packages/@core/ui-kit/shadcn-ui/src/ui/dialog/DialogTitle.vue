@@ -15,6 +15,7 @@ import { DialogTitle, useForwardProps } from 'reka-ui';
 
 const props = defineProps<DialogTitleProps & { class?: ClassValue }>();
 
+/** 去掉 class 后的标题节点属性，转交 DialogTitle，由 reka-ui 登记为面板的 aria-labelledby 目标。 */
 const delegatedProps = computed(() => {
   const { class: _, ...delegated } = props;
 

@@ -30,6 +30,11 @@ import { $t, useI18n } from '@vben/locales';
 import { getTabKey, useAccessStore, useTabbarStore } from '@vben/stores';
 import { filterTree } from '@vben/utils';
 
+/**
+ * 提供标签栏所需的当前标签、标签列表与交互方法，并生成右键菜单项。
+ * 固定标签在权限菜单就绪时初始化，标签数据本身仍由标签库 store 持有。
+ * @returns currentActive 当前标签键、currentTabs 本地化后的标签列表，以及点击、关闭与右键菜单生成方法。
+ */
 export function useTabbar() {
   const router = useRouter();
   const route = useRoute();
@@ -73,6 +78,7 @@ export function useTabbar() {
    * 初始化固定标签页
    */
   const initAffixTabs = () => {
+    /** 从路由表中筛出全部固定标签路由；重复调用会整批覆盖标签库中的固定标签集合。 */
     const affixTabs = filterTree(router.getRoutes(), (route) => {
       return !!route.meta?.affixTab;
     });
@@ -90,6 +96,7 @@ export function useTabbar() {
     await closeTabByKey(key);
   };
 
+  /** 复制标签对象并把标题按当前语言翻译；不修改传入的原始标签对象。 */
   function wrapperTabLocale(tab: RouteLocationNormalizedGeneric) {
     return {
       ...tab,
@@ -120,6 +127,11 @@ export function useTabbar() {
     { immediate: true },
   );
 
+  /**
+   * 生成标签的右键菜单项：按固定状态、最大化状态与各操作的禁用态组装，并按标签栏偏好裁剪。
+   * @param tab 右键点击的标签，决定固定/取消固定文案与各操作是否可用。
+   * @returns 可显示的菜单项列表；未在标签栏偏好中启用的项会被过滤掉。
+   */
   const createContextMenus = (tab: TabDefinition) => {
     const {
       disabledCloseAll,
@@ -135,6 +147,7 @@ export function useTabbar() {
     const menus: IContextMenuItem[] = [
       {
         disabled: disabledCloseCurrent,
+        /** 关闭该标签并跳转到相邻标签。 */
         handler: async () => {
           await closeCurrentTab(tab);
         },
@@ -143,6 +156,7 @@ export function useTabbar() {
         text: $t('preferences.tabbar.contextMenu.close'),
       },
       {
+        /** 在固定与取消固定之间切换该标签。 */
         handler: async () => {
           await toggleTabPin(tab);
         },
@@ -153,6 +167,7 @@ export function useTabbar() {
           : $t('preferences.tabbar.contextMenu.pin'),
       },
       {
+        /** 进入最大化前先跳转到该标签；已在最大化时只切换状态，避免多余跳转。 */
         handler: async () => {
           if (!contentIsMaximize.value) {
             await router.push(tab.fullPath);
@@ -167,12 +182,14 @@ export function useTabbar() {
       },
       {
         disabled: disabledRefresh,
+        /** 刷新当前标签页视图。 */
         handler: () => refreshTab(),
         icon: RotateCw,
         key: 'reload',
         text: $t('preferences.tabbar.contextMenu.reload'),
       },
       {
+        /** 在浏览器新窗口中打开该标签的路由。 */
         handler: async () => {
           await openTabInNewWindow(tab);
         },
@@ -184,6 +201,7 @@ export function useTabbar() {
 
       {
         disabled: disabledCloseLeft,
+        /** 关闭该标签左侧的全部标签。 */
         handler: async () => {
           await closeLeftTabs(tab);
         },
@@ -193,6 +211,7 @@ export function useTabbar() {
       },
       {
         disabled: disabledCloseRight,
+        /** 关闭该标签右侧的全部标签。 */
         handler: async () => {
           await closeRightTabs(tab);
         },
@@ -203,6 +222,7 @@ export function useTabbar() {
       },
       {
         disabled: disabledCloseOther,
+        /** 关闭除该标签以外的其他标签。 */
         handler: async () => {
           await closeOtherTabs(tab);
         },

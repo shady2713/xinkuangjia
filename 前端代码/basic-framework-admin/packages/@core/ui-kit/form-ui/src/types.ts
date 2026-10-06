@@ -24,8 +24,10 @@ export type FormValues = Record<string, unknown>;
  */
 export type FormValuesConstraint = GenericObject;
 
+/** 表单整体排布方式：标签与控件同行、标签在上或全部横向铺开，只影响展示不改校验。 */
 export type FormLayout = 'horizontal' | 'inline' | 'vertical';
 
+/** schema 中 `component` 可填写的控件名：内置控件名，或业务在适配层注册过的自定义名字符串。 */
 export type BaseFormComponentType =
   | 'DefaultButton'
   | 'PrimaryButton'
@@ -36,14 +38,18 @@ export type BaseFormComponentType =
   | 'VbenSelect'
   | (Record<never, never> & string);
 
+/** 栅格类名允许的响应式断点前缀，空串表示不带断点，即始终生效的基础档。 */
 type Breakpoints = '2xl:' | '3xl:' | '' | 'lg:' | 'md:' | 'sm:' | 'xl:';
 
+/** 栅格列数的取值集合，覆盖 Tailwind 默认 1 到 13 列；超出该范围的列数不在类型允许范围内。 */
 type GridCols = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
+/** 表单容器的栅格类名：`断点前缀 + 列数`，也可以直接写任意自定义类名覆盖默认布局。 */
 export type WrapperClassType =
   | `${Breakpoints}grid-cols-${GridCols}`
   | (Record<never, never> & string);
 
+/** 单个表单项的栅格类名：控制起始列、结束列与跨越列数，取值可以是 auto、full 或具体列数。 */
 export type FormItemClassType =
   | `${Breakpoints}cols-end-${'auto' | GridCols}`
   | `${Breakpoints}cols-span-${'auto' | 'full' | GridCols}`
@@ -51,6 +57,10 @@ export type FormItemClassType =
   | (Record<never, never> & string)
   | WrapperClassType;
 
+/**
+ * 交给 vee-validate Field 的渲染参数。
+ * 全部成员可选，并在 FieldOptions 之上补出 blur/change/input/modelUpdate 四个校验触发开关。
+ */
 export type FormFieldOptions = Partial<
   FieldOptions<unknown> & {
     validateOnBlur?: boolean;
@@ -60,6 +70,7 @@ export type FormFieldOptions = Partial<
   }
 >;
 
+/** 通过 shapes 插槽下发给业务的字段描述，只给出字段名、默认值与是否必填，字段值本身不暴露。 */
 export interface FormShape {
   /** 默认值 */
   default?: unknown;
@@ -70,6 +81,7 @@ export interface FormShape {
   rules?: ZodTypeAny;
 }
 
+/** 允许透传到控件的属性键：常用交互属性与原生 HTML 属性，外加任意自定义键以保留透传能力。 */
 export type MaybeComponentPropKey =
   | 'options'
   | 'placeholder'
@@ -100,6 +112,9 @@ type CustomRenderFn = (
  */
 export type CustomRenderType = CustomRenderFn | string;
 
+/**
+ * 表单项的校验规则：内置命名规则、业务自定义规则名，或直接给 zod 规则对象；null 表示不校验。
+ */
 export type FormSchemaRuleType =
   | 'emailRequired'
   | 'mobile'
@@ -153,6 +168,10 @@ type FormItemDependenciesConditionWithProps = (
   actions: FormActions,
 ) => MaybeComponentProps | PromiseLike<MaybeComponentProps>;
 
+/**
+ * 表单项联动声明：`triggerFields` 声明被哪些字段的变化触发，其余成员声明触发后要重算本字段的哪一部分。
+ * `if` 与 `show` 的区别是前者会移除 DOM、后者只用样式隐藏。
+ */
 export interface FormItemDependencies {
   /**
    * 组件参数
@@ -210,6 +229,10 @@ type DynamicComponentPropsFn = (
  */
 export type FormComponentProps = DynamicComponentPropsFn | MaybeComponentProps;
 
+/**
+ * 下发给全部表单项的公共配置：统一标签、栅格与控件参数的默认口径。
+ * 表单项自己声明的同名配置优先级更高，因此这里只作为兜底。
+ */
 export interface FormCommonConfig {
   /**
    * 在Label后显示一个冒号
@@ -249,9 +272,12 @@ export interface FormCommonConfig {
   formFieldProps?: FormFieldOptions;
   /**
    * 所有表单项的栅格布局，支持函数形式
+   * 字符串直接当作类名使用；函数形式在每次渲染时求值，求值抛错只打印错误并退化为空串。
    * @default ""
    */
-  formItemClass?: (() => string) | string;
+  // 保持单行：prettier 会把括号内的 JSDoc 上提到括号外，使函数类型的中文说明脱离节点。
+  // prettier-ignore
+  formItemClass?: (/** 渲染期求值函数，返回本表单项的栅格类名。 */ () => string) | string;
   /**
    * 隐藏所有表单项label
    * @default false
@@ -325,6 +351,10 @@ export type FieldMappingTime = [
   [string, string] | null | RangeTimeFormatter | string,
 ][];
 
+/**
+ * 数组字段的字符串映射声明，三种写法等价：
+ * 单个字段名用默认逗号分隔；字符串数组的末位若是单个字符则作为分隔符；嵌套数组第二项为分隔符。
+ */
 export type ArrayToStringFields = Array<
   | [string[], string?] // 嵌套数组格式，可选分隔符
   | string // 单个字段，使用默认分隔符
@@ -375,6 +405,10 @@ export interface FormFieldProps<
   required?: boolean;
 }
 
+/**
+ * 表单渲染层的输入属性：控件表、schema、公共配置与折叠控制。
+ * 不含表单实例与业务回调，渲染层只按这些属性产出 DOM。
+ */
 export interface FormRenderProps<
   T extends BaseFormComponentType = BaseFormComponentType,
 > {
@@ -445,6 +479,7 @@ export interface FormRenderProps<
   wrapperClass?: WrapperClassType;
 }
 
+/** 操作按钮的透传参数：在通用按钮属性之外补出文案与显隐开关，其余键原样交给按钮组件。 */
 export interface ActionButtonOptions extends VbenButtonProps {
   [key: string]: unknown;
   content?: MaybeComputedRef<string>;
@@ -568,6 +603,10 @@ export type ExtendedFormApi<
   ) => Readonly<Ref<R>>;
 } & FormApi<TValues, T>;
 
+/**
+ * 应用启动时一次性登记的表单适配配置：控件取值属性名、监听开关与业务自定义命名规则。
+ * 这里的配置是全局的，对之后创建的所有表单生效。
+ */
 export interface VbenFormAdapterOptions<
   T extends BaseFormComponentType = BaseFormComponentType,
 > {

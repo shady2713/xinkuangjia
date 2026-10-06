@@ -47,6 +47,11 @@ export function useAppConfig(
   return applicationConfig;
 }
 
+/**
+ * 判断是否启用多租户。
+ * 前端当前固定按单租户展示，不做租户切换与租户选择。
+ * @returns 恒为 false；租户能力由后端配置决定，调用方不应据此分支。
+ */
 export function isTenantEnable(): boolean {
   return false;
 }
@@ -58,12 +63,18 @@ function getRuntimeConfigValue(key: keyof VbenAdminProAppConfigRaw) {
     : window._VBEN_ADMIN_PRO_APP_CONF_?.[key];
 }
 
-/** 判断登录图形验证码是否启用。 */
+/**
+ * 判断登录图形验证码是否启用。
+ * @returns 运行时配置 VITE_APP_CAPTCHA_ENABLE 严格等于字符串 'true' 时为 true；未配置或非浏览器环境为 false。
+ */
 export function isCaptchaEnable(): boolean {
   return getRuntimeConfigValue('VITE_APP_CAPTCHA_ENABLE') === 'true';
 }
 
-/** 判断页面文档提醒是否启用。 */
+/**
+ * 判断页面文档提醒是否启用。
+ * @returns 运行时配置 VITE_APP_DOCALERT_ENABLE 严格等于字符串 'true' 时为 true；未配置或非浏览器环境为 false。
+ */
 export function isDocAlertEnable(): boolean {
   return getRuntimeConfigValue('VITE_APP_DOCALERT_ENABLE') === 'true';
 }

@@ -9,6 +9,7 @@ import { execaCommand, getPackages } from '@vben/node-utils';
 
 import { cancel, isCancel, select } from '@clack/prompts';
 
+/** 执行选项：command 为要运行的 script 名。 */
 interface RunOptions {
   command?: string;
 }
@@ -42,6 +43,7 @@ export async function run(options: RunOptions) {
   if (selectPkgs.length > 1) {
     selectPkg = await select<string>({
       message: `Select the app you need to run [${command}]:`,
+      // 候选项直接取包名，选择结果也按包名回传给 pnpm --filter。
       options: selectPkgs.map((item) => ({
         label: item?.packageJson.name,
         value: item?.packageJson.name,

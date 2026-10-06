@@ -7,6 +7,7 @@ import { computed, nextTick } from 'vue';
 
 import { VbenButton } from '@vben-core/shadcn-ui';
 
+/** 主题按钮属性：type 决定渲染成图标按钮还是普通按钮。 */
 interface Props {
   /**
    * 类型
@@ -24,10 +25,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isDark = defineModel<boolean>();
 
+/** 本次点击要切换到的主题名：当前为深色则切到 light，否则切到 dark。 */
 const theme = computed(() => {
   return isDark.value ? 'light' : 'dark';
 });
 
+/** 按钮外观属性：普通按钮使用 heavy 变体，图标按钮使用圆形图标样式与内边距。 */
 const bindProps = computed(() => {
   const type = props.type;
 

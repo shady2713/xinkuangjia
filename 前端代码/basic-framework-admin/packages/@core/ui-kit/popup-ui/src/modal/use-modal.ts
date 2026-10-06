@@ -38,6 +38,11 @@ interface UserModalInjectData {
 
 const DEFAULT_MODAL_PROPS: Partial<ModalProps> = {};
 
+/**
+ * 改写之后创建的每个弹窗都会套用的默认选项，按调用顺序逐个覆盖。
+ * 只影响之后创建的弹窗，已经建好的 api 状态不会被回写。
+ * @param props 要覆盖的默认字段，通常是标题文案、按钮文案一类全局偏好。
+ */
 export function setDefaultModalProps(props: Partial<ModalProps>) {
   Object.assign(DEFAULT_MODAL_PROPS, props);
 }
@@ -61,9 +66,18 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
   if (connectedComponent) {
     const extendedApi = reactive({});
     const isModalReady = ref(true);
+    /**
+     * connectedComponent 模式的外层壳组件：只负责把连接信息 provide 出去、
+     * 校验外部传入的 props，并渲染真正的弹窗组件；自身不持有弹窗状态。
+     */
     const Modal = defineComponent(
       (props: TParentModalProps, { attrs, slots }) => {
         provide(USER_MODAL_INJECT_KEY, {
+          /**
+           * 内层弹窗创建后把它的 api 原型接到外层响应式对象上，
+           * 用原型而不是赋值或 Object.assign，是为了既保留响应式又不丢掉原型方法。
+           * @param api 内层弹窗刚创建出来的 api。
+           */
           extendApi(api: ExtendedModalApi) {
             // 不能直接给 reactive 赋值，会丢失响应
             // 不能用 Object.assign,会丢失 api 的原型函数
@@ -71,6 +85,10 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
           },
           consumed: false,
           options,
+          /**
+           * 配合 destroyOnClose：把渲染目标切成占位 div 再切回来，
+           * 强制内层弹窗重建，借此清掉上一次残留的内部状态。
+           */
           async reCreateModal() {
             isModalReady.value = false;
             await nextTick();
@@ -141,6 +159,10 @@ export function useVbenModal<TParentModalProps extends ModalProps = ModalProps>(
     return useStore(api.store, selector);
   };
 
+  /**
+   * 直接内嵌模式下的弹窗组件：把 props 与 attrs 透传给 modal.vue，
+   * 并把自己的 api 一起传下去，模板侧只管渲染、状态全部走 api。
+   */
   const Modal = defineComponent(
     (props: ModalProps, { attrs, slots }) => {
       const modalProps = {

@@ -19,6 +19,7 @@ defineOptions({
   name: 'AuthenticationColorToggle',
 });
 
+/** 选中色卡后写入主色与内置主题类型；只更新主题偏好，不触发页面重载。 */
 function handleUpdate(colorPrimary: string, type: BuiltinThemeType) {
   updatePreferences({
     theme: {
