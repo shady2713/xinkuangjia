@@ -191,6 +191,85 @@ EVIDENCE_REQUIRED_FIELDS = (
     "review_date",
     "review_conclusion",
 )
+# D14：D10 §0.5 的 E1 作者排除分支（E1-author-only）与路线 3 内容独立分支
+# （C2-independent-content）是**按记录显式声明**启用的版本化契约：
+# 记录未声明分支时沿用既有“原有充分路线”结构校验，不改判任何已有条目；
+# 记录一旦声明分支，就必须满足该分支的全部必需字段与判据，否则拒绝该来源例外。
+EVIDENCE_BRANCH_FIELD = "evidence_branch"
+EVIDENCE_BRANCH_AUTHOR_ONLY = "E1-author-only"
+EVIDENCE_BRANCH_CONTENT_INDEPENDENT = "C2-independent-content"
+EVIDENCE_BRANCHES = (EVIDENCE_BRANCH_AUTHOR_ONLY, EVIDENCE_BRANCH_CONTENT_INDEPENDENT)
+AUTHOR_ONLY_SCHEMA = "d10-author-only/v1"
+CONTENT_INDEPENDENT_SCHEMA = "d10-content-independent/v1"
+AUTHOR_ONLY_ROUTE = "路线 2"
+# 比较契约只允许 D10 §0.3 原列的 R1–R4，且顺序固定；R5/R6 不得用于本分支。
+AUTHOR_ONLY_NORMALIZATION_ORDER = ("R1 LF 化", "R2 映射", "R3 行首尾空白", "R4 丢空行")
+AUTHOR_ONLY_ATTRIBUTION_CAUSES = (
+    "excluded-author-declaration",
+    "R1-lf",
+    "R2-mapping",
+    "R3-line-trim",
+    "R4-blank-drop",
+)
+AUTHOR_ONLY_EXCLUSION_KINDS = ("author", "author-continuation")
+AUTHOR_ONLY_CONTINUATION_MAX_TOKENS = 8
+# 除作者身份之外的事实标记：出现在 @author 值或紧随行里就拒绝整行排除。
+# 这是保守的“无法安全识别即拒绝”边界（裁决 D14 §52/§83），不扩大可忽略范围。
+AUTHOR_ONLY_FACT_MARKERS = (
+    "职责",
+    "负责",
+    "版权",
+    "许可",
+    "license",
+    "copyright",
+    "参数",
+    "修改",
+    "版本",
+    "日期",
+    "说明",
+    "模块",
+    "接口",
+    "实现",
+    "示例",
+    "用法",
+    "注意",
+    "来源",
+    "上游文件",
+    "本地修改",
+    "来源依据",
+)
+# 纯作者身份 token：姓名、邮箱、主页/URL 或 HTML 作者标记；其余形状一律拒绝。
+AUTHOR_IDENTITY_TOKEN_PATTERN = re.compile(
+    r"^(?:<a\s+href=\"[^\"]+\">[^<]+</a>|<https?://[^>]+>|[A-Za-z0-9_.@/:\-]+|[\u4e00-\u9fff]{1,8})$"
+)
+STRICT_AUTHOR_LINE_PATTERN = re.compile(
+    r"^@author(?:[ \t]|&(?:#x20;|#32;|nbsp;))+\S", re.IGNORECASE
+)
+CONTENT_POINT_REQUIRED_FIELDS = (
+    "fragment",
+    "fragment_sha256",
+    "local_path",
+    "local_sha256",
+    "upstream_path",
+    "upstream_sha256",
+    "local_lines",
+    "upstream_lines",
+    "owner_type",
+    "field_or_behavior",
+    "point_kind",
+    "corpus_binding",
+    "discrimination_reason",
+)
+CONTENT_POINT_KINDS = ("内容点", "注释点")
+# 无区分力的内容形状：同类名/方法名、标准协议串、通用 CRUD、惯用校验、自动生成描述与常见示例值。
+CONTENT_POINT_GENERIC_PATTERNS = (
+    re.compile(r"^(?:校验|验证)?(?:不能为空|必须|长度不能超过|格式不正确|已存在|不存在|不正确)"),
+    re.compile(r"^(?:管理后台 - |获得|获取|创建|修改|删除|导出|导入|新增|更新|查询|分页|列表)"),
+    re.compile(r"^(?:Request|Response) VO$"),
+    re.compile(r"^@(?:Schema|NotNull|NotBlank|Size|Min|Max|Valid|ApiModelProperty|ApiOperation)\b"),
+    re.compile(r"^(?:true|false|null|0|1|示例|example|test|demo)$", re.IGNORECASE),
+    re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$"),
+)
 # 上游文件的等价作者声明；版权与许可证主体不当作作者姓名。
 UPSTREAM_AUTHOR_PATTERN = re.compile(
     r"@author\b"
@@ -930,14 +1009,39 @@ def _provenance_tag_errors(javadoc: str) -> list[str]:
     return errors
 
 
+def _comment_body_line(raw: str) -> str:
+    """剥离单行 JavaDoc 装饰，返回正文行。
+
+    只移除行首缩进、装饰星号及其约定分隔空格；行尾字符属于载荷本身，必须原样保留
+    （裁决 D13 §72、D14 §54）。
+
+    Args:
+        raw: 单行原始文本。
+
+    Returns:
+        去除注释边框后的正文行。
+    """
+
+    line = raw.lstrip()
+    if line.startswith("*"):
+        line = line[1:]
+        if line.startswith(" "):
+            line = line[1:]
+    return line
+
+
 def _javadoc_body_lines(javadoc: str) -> list[str]:
-    """把 JavaDoc 拆成正文行，去掉 ``/**``、``*/`` 与每行前导星号。
+    """把 JavaDoc 拆成正文行，只去掉外框、行首缩进与装饰星号。
+
+    裁决 D13 §72 规定解析仅移除 JavaDoc 外框、行首缩进、装饰星号及其约定分隔空格，
+    **不得**对路径载荷或索引值执行 strip、空白折叠或任何归一化：行尾空白属于载荷
+    本身的字符序列，必须原样保留并由逐字节比较否定，不能先裁剪再比较。
 
     Args:
         javadoc: 完整 JavaDoc 文本。
 
     Returns:
-        与源码行一一对应的正文行列表，行内不含注释边框。
+        与源码行一一对应的正文行列表，行内不含注释边框，载荷尾部字符原样保留。
     """
 
     text = javadoc
@@ -945,15 +1049,7 @@ def _javadoc_body_lines(javadoc: str) -> list[str]:
         text = text[3:]
     if text.endswith("*/"):
         text = text[:-2]
-    lines = []
-    for raw in text.splitlines():
-        line = raw.strip()
-        if line.startswith("*"):
-            line = line[1:]
-            if line.startswith(" "):
-                line = line[1:]
-        lines.append(line.rstrip())
-    return lines
+    return [_comment_body_line(raw) for raw in text.splitlines()]
 
 
 def _parse_source_header(line: str) -> tuple[tuple[str, str] | None, str | None]:
@@ -1565,6 +1661,607 @@ def _verify_upstream_snapshot(
     return _verify_upstream_content(raw, expected_sha256, "上游内容")
 
 
+def _evidence_branch(record: dict[str, object]) -> tuple[str | None, str | None]:
+    """读取记录声明的证据分支。
+
+    Returns:
+        ``(分支名或 None, 错误说明)``；未声明分支时返回 ``(None, None)``，
+        表示沿用既有“原有充分路线”结构校验。声明了未知分支即拒绝。
+    """
+
+    branch = _text(record, EVIDENCE_BRANCH_FIELD)
+    if not branch:
+        return None, None
+    if branch not in EVIDENCE_BRANCHES:
+        return None, f"证据分支不受支持：{branch}"
+    return branch, None
+
+
+def _json_field(record: dict[str, object], key: str) -> tuple[object | None, str | None]:
+    """读取结构化 JSON 字段；缺失、空值或无法解析时返回错误说明。"""
+
+    raw = record.get(key)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None, f"清单缺少 {key}"
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw), None
+        except json.JSONDecodeError:
+            return None, f"清单的 {key} 不是有效 JSON"
+    return raw, None
+
+
+def _exclusion_reason(line: str, kind: str) -> str | None:
+    """判断经装饰剥离后的整行能否作为纯作者声明排除。
+
+    裁决 D14 §52：只可排除独立 ``@author`` 行与同处紧随、只延续作者身份或角色的声明行；
+    职责、参数、业务约束、本地修改、版权、许可证、普通说明与其他块标签都不得排除，
+    混合作者与业务事实的一行也不能整行排除。
+
+    Args:
+        line: 已剥离 JavaDoc 装饰的正文行。
+        kind: ``author`` 或 ``author-continuation``。
+
+    Returns:
+        拒绝原因；可以安全排除时返回 ``None``。
+    """
+
+    if not line:
+        return "空行不能作为作者声明排除"
+    if (
+        line.startswith(SOURCE_HEADER_PREFIX)
+        or line.startswith(SOURCE_PATH_PREFIX)
+        or line.startswith(SOURCE_PATH_CONTINUATION_PREFIX)
+        or line.startswith("来源依据：")
+        or line.startswith("本地修改：")
+    ):
+        return f"来源说明字段不是作者声明，不能整行排除：{line!r}"
+    if re.match(r"^@(?!author\b)\w", line, re.IGNORECASE):
+        return f"{line!r} 是其他块标签，不是作者声明"
+    if kind not in AUTHOR_ONLY_EXCLUSION_KINDS:
+        return f"排除种类不受支持：{kind}"
+    if kind == "author":
+        match = STRICT_AUTHOR_LINE_PATTERN.match(line)
+        if match is None:
+            return f"{line!r} 不是独占整行的独立 @author 声明"
+        value = AUTHOR_PATTERN.match(line)
+        author_value = "" if value is None else value.group("name").strip()
+    else:
+        author_value = line.strip()
+    if not author_value:
+        return f"作者声明行为空，不能作为可排除的作者声明：{line!r}"
+    if AUTHOR_SOURCE_SENTENCE_PATTERN.search(author_value) or (
+        author_value.casefold() in AUTHOR_NEUTRAL_VALUES
+    ):
+        return f"{line!r} 承载来源或中性表达，不是作者声明"
+    for marker in AUTHOR_ONLY_FACT_MARKERS:
+        if marker.casefold() in author_value.casefold():
+            return f"{line!r} 含作者身份之外的事实（{marker}），不能整行排除"
+    if re.search(r"[。；！？，、]", author_value):
+        return f"{line!r} 含陈述性标点，不能整行排除"
+    tokens = author_value.split()
+    if len(tokens) > AUTHOR_ONLY_CONTINUATION_MAX_TOKENS:
+        return f"{line!r} 超出纯作者身份 token 上限，无法安全识别"
+    if kind == "author-continuation" and not all(
+        AUTHOR_IDENTITY_TOKEN_PATTERN.match(token) for token in tokens
+    ):
+        return f"{line!r} 不是纯作者身份/角色续行，无法安全识别"
+    return None
+
+
+def _a1_normalize(lines: list[str], r2_mapping: list[tuple[str, str]]) -> list[str]:
+    """按记录的 R1–R4 顺序规范化行序列（不做 R5/R6，不做相似率容差）。
+
+    Args:
+        lines: 原始行序列（不含行尾换行符）。
+        r2_mapping: 记录在契约中的 R2 精确映射表，按顺序逐条字面替换。
+
+    Returns:
+        R1（LF 化）、R2（映射）、R3（行首尾空白）、R4（丢空行）之后的非空行序列。
+    """
+
+    normalized = []
+    for line in lines:
+        line = line.replace("\r\n", "\n").replace("\r", "\n")
+        for source, target in r2_mapping:
+            line = line.replace(source, target)
+        line = line.strip()
+        if line:
+            normalized.append(line)
+    return normalized
+
+
+def _a1_raw_changed_lines(left: list[str], right: list[str]) -> tuple[int, int]:
+    """统计两侧原始行序列中不相等行的数量。"""
+
+    left_changed = right_changed = 0
+    for block in difflib.SequenceMatcher(None, left, right, autojunk=False).get_opcodes():
+        tag, i1, i2, j1, j2 = block
+        if tag == "equal":
+            continue
+        left_changed += i2 - i1
+        right_changed += j2 - j1
+    return left_changed, right_changed
+
+
+def _a1_compare(
+    local_text: str,
+    upstream_text: str,
+    r2_mapping: list[tuple[str, str]],
+    local_excluded: set[int],
+    upstream_excluded: set[int],
+) -> dict[str, object]:
+    """按 E1-author-only 判据比较双方内容。
+
+    只排除登记的作者声明行，再按 R1–R4 比较全部剩余内容；不使用 R5/R6、去 package/import、
+    去普通注释、裁剪文件或相似率容差（裁决 D14 §54）。
+
+    Args:
+        local_text: 本地比较输入原文。
+        upstream_text: 上游比较输入原文。
+        r2_mapping: 契约登记的 R2 映射表。
+        local_excluded: 本地被排除行的 1 起行号集合。
+        upstream_excluded: 上游被排除行的 1 起行号集合。
+
+    Returns:
+        含 ``remaining_equal``、``remaining_local_lines``、``remaining_upstream_lines``、
+        ``remaining_local_sha256``、``remaining_upstream_sha256``、``raw_changed`` 与
+        ``first_difference`` 的结果字典。
+    """
+
+    local_lines = local_text.split("\n")
+    upstream_lines = upstream_text.split("\n")
+    kept_local = [
+        line for number, line in enumerate(local_lines, 1) if number not in local_excluded
+    ]
+    kept_upstream = [
+        line for number, line in enumerate(upstream_lines, 1) if number not in upstream_excluded
+    ]
+    remaining_local = _a1_normalize(kept_local, r2_mapping)
+    remaining_upstream = _a1_normalize(kept_upstream, r2_mapping)
+    difference = ""
+    for index in range(max(len(remaining_local), len(remaining_upstream))):
+        left = remaining_local[index] if index < len(remaining_local) else "<缺失>"
+        right = remaining_upstream[index] if index < len(remaining_upstream) else "<缺失>"
+        if left != right:
+            difference = f"剩余内容第 {index + 1} 行不同：本地 {left!r}，上游 {right!r}"
+            break
+    raw_local, raw_upstream = _a1_raw_changed_lines(local_lines, upstream_lines)
+    return {
+        "remaining_equal": remaining_local == remaining_upstream,
+        "remaining_local_lines": len(remaining_local),
+        "remaining_upstream_lines": len(remaining_upstream),
+        "remaining_local_sha256": hashlib.sha256(
+            "\n".join(remaining_local).encode("utf-8")
+        ).hexdigest(),
+        "remaining_upstream_sha256": hashlib.sha256(
+            "\n".join(remaining_upstream).encode("utf-8")
+        ).hexdigest(),
+        "raw_changed": (raw_local, raw_upstream),
+        "first_difference": difference,
+    }
+
+
+def _a1_baseline_bytes(contract: dict[str, object], registry: EvidenceRegistry) -> tuple[bytes | None, str | None]:
+    """取回 E1-author-only 的本地比较输入。
+
+    先按契约登记的受控快照相对路径取，再按 ``<提交>:<路径>`` 从 Git 对象库取；
+    两者都没有或指纹不符即拒绝。比较输入必须是整改前输入，不能拿最终文件替代。
+
+    Args:
+        contract: 记录声明的比较契约。
+        registry: 受控证据清单，含快照根目录。
+
+    Returns:
+        ``(字节或 None, 拒绝原因)``。
+    """
+
+    baseline = contract.get("local_baseline")
+    if not isinstance(baseline, dict):
+        return None, "E1-author-only 契约缺少 local_baseline（本地比较输入）"
+    expected = _text(baseline, "sha256").lower()
+    if not SHA256_PATTERN.match(expected):
+        return None, "E1-author-only 契约的 local_baseline.sha256 不是有效 SHA-256"
+    snapshot_path = _text(baseline, "snapshot_path")
+    if snapshot_path and registry.snapshots is not None:
+        candidate = registry.snapshots / snapshot_path
+        try:
+            raw = candidate.read_bytes()
+        except OSError:
+            return None, f"本地比较输入的受控快照不可读：{candidate}"
+        if hashlib.sha256(raw).hexdigest() != expected:
+            return None, f"本地比较输入快照 {candidate} 的指纹与契约不符"
+        return raw, None
+    commit = _text(baseline, "commit")
+    path = _text(baseline, "path")
+    if commit and path and COMMIT_PATTERN.match(commit):
+        try:
+            output = _run_git(["show", f"{commit}:{path}"], text=False)
+        except RuntimeError as error:
+            return None, f"本地比较输入无法从固定提交取回：{error}"
+        assert isinstance(output, bytes)
+        if hashlib.sha256(output).hexdigest() != expected:
+            return None, f"本地比较输入 {commit}:{path} 的指纹与契约不符"
+        return output, None
+    return None, "本地比较输入既没有受控快照相对路径，也没有固定的提交地址"
+
+
+def _author_only_contract_reasons(
+    record: dict[str, object],
+    local_path: str,
+    local_sha256: str,
+    registry: EvidenceRegistry,
+) -> list[str]:
+    """核验 E1-author-only 分支的版本化契约，并重新执行比较。
+
+    记录声明该分支时，比较输入、排除记录与一致结果都必须可复算；本函数不采信
+    “R1–R6 后一致”“高相似率”一类表述，也不允许把来源说明加入排除列表。
+
+    Args:
+        record: 清单记录。
+        local_path: 被检查的本地对象路径。
+        local_sha256: 当前对象原始字节 SHA-256。
+        registry: 受控证据清单。
+
+    Returns:
+        逐项拒绝原因；为空表示该分支的契约与结果成立。
+    """
+
+    reasons: list[str] = []
+    route = _text(record, "evidence_route")
+    if route != AUTHOR_ONLY_ROUTE:
+        reasons.append(f"E1-author-only 分支归属路线 2，当前 evidence_route={route or '空'}")
+    value, error = _json_field(record, "author_only_contract")
+    if value is None:
+        return reasons + [f"E1-author-only 分支缺少比较契约：{error}"]
+    if not isinstance(value, dict):
+        return reasons + ["E1-author-only 比较契约必须是结构化对象"]
+    contract = value
+    if contract.get("schema") != AUTHOR_ONLY_SCHEMA:
+        reasons.append(f"比较契约 schema 不是 {AUTHOR_ONLY_SCHEMA}")
+    if contract.get("branch") != EVIDENCE_BRANCH_AUTHOR_ONLY:
+        reasons.append(f"比较契约 branch 不是 {EVIDENCE_BRANCH_AUTHOR_ONLY}")
+    if contract.get("route") != AUTHOR_ONLY_ROUTE:
+        reasons.append(f"比较契约 route 不是 {AUTHOR_ONLY_ROUTE}")
+    if [str(item) for item in contract.get("normalization_order") or []] != list(
+        AUTHOR_ONLY_NORMALIZATION_ORDER
+    ):
+        reasons.append(
+            "比较契约的 normalization_order 必须恰为 "
+            + "、".join(AUTHOR_ONLY_NORMALIZATION_ORDER)
+            + "（不得使用 R5/R6）"
+        )
+    if not _text(contract, "mapping_basis"):
+        reasons.append("比较契约缺少 R2 映射的批准依据 mapping_basis")
+    mapping_raw = contract.get("r2_mapping")
+    mapping: list[tuple[str, str]] = []
+    if not isinstance(mapping_raw, list) or not mapping_raw:
+        reasons.append("比较契约的 r2_mapping 必须是至少一条字面映射")
+    else:
+        for item in mapping_raw:
+            if (
+                not isinstance(item, list)
+                or len(item) != 2
+                or not all(isinstance(part, str) and part for part in item)
+            ):
+                reasons.append(f"r2_mapping 条目不是“源→目标”字面对：{item!r}")
+                continue
+            mapping.append((str(item[0]), str(item[1])))
+    # 上游比较输入复用既有的固定提交核验（快照优先，其次固定地址取回）。
+    upstream_input = contract.get("upstream_input")
+    if not isinstance(upstream_input, dict):
+        reasons.append("E1-author-only 契约缺少 upstream_input（上游比较输入）")
+    else:
+        for key, record_key in (
+            ("repo_url", "upstream_repo_url"),
+            ("commit", "upstream_commit"),
+            ("path", "upstream_path"),
+            ("sha256", "upstream_sha256"),
+            ("file_url", "upstream_file_url"),
+        ):
+            if _text(upstream_input, key) != _text(record, record_key):
+                reasons.append(
+                    f"E1-author-only 契约的 upstream_input.{key} 与记录登记不一致"
+                )
+    # E1-author-only 的上游允许声明作者（这正是该分支的适用场景），因此只复核固定输入的
+    # 字节指纹与登记一致性，不套用“上游必须无作者”的来源说明门槛。
+    upstream_sha = _text(record, "upstream_sha256").lower()
+    if not SHA256_PATTERN.match(upstream_sha):
+        reasons.append("E1-author-only 分支缺少有效的上游内容 SHA-256")
+    upstream_raw, upstream_error = _upstream_bytes_for_contract(registry, record)
+    if upstream_error:
+        reasons.append(f"E1-author-only 上游比较输入未通过核验：{upstream_error}")
+    elif upstream_raw is not None and hashlib.sha256(upstream_raw).hexdigest() != upstream_sha:
+        reasons.append("E1-author-only 上游比较输入的实测指纹与记录登记不符")
+    local_raw, local_error = _a1_baseline_bytes(contract, registry)
+    if local_error:
+        reasons.append(local_error)
+    if local_raw is None or upstream_raw is None:
+        return reasons
+    local_text = local_raw.decode("utf-8-sig", errors="replace")
+    upstream_text = upstream_raw.decode("utf-8-sig", errors="replace")
+    # 排除记录：逐条绑定文件、输入指纹、行区间、原文与声明种类。
+    exclusions = contract.get("excluded_author_declarations")
+    if not isinstance(exclusions, list) or not exclusions:
+        return reasons + ["E1-author-only 分支必须逐条登记 excluded_author_declarations"]
+    local_excluded: set[int] = set()
+    upstream_excluded: set[int] = set()
+    local_lines = local_text.split("\n")
+    upstream_lines = upstream_text.split("\n")
+    for entry in exclusions:
+        if not isinstance(entry, dict):
+            reasons.append(f"排除记录不是结构化对象：{entry!r}")
+            continue
+        side = _text(entry, "file")
+        kind = _text(entry, "declaration_kind")
+        if side not in {"local", "upstream"}:
+            reasons.append(f"排除记录的 file 必须是 local 或 upstream：{side!r}")
+            continue
+        if kind not in AUTHOR_ONLY_EXCLUSION_KINDS:
+            reasons.append(f"排除记录的 declaration_kind 不受支持：{kind!r}")
+            continue
+        source_lines = local_lines if side == "local" else upstream_lines
+        expected_side = (
+            hashlib.sha256(local_raw).hexdigest()
+            if side == "local"
+            else hashlib.sha256(upstream_raw).hexdigest()
+        )
+        if _text(entry, "sha256").lower() != expected_side:
+            reasons.append(f"排除记录声明的 {side} 输入指纹与比较输入不符")
+            continue
+        start = entry.get("line_start")
+        end = entry.get("line_end")
+        if not isinstance(start, int) or not isinstance(end, int) or not 1 <= start <= end <= len(source_lines):
+            reasons.append(f"排除记录的行区间非法：{start!r}-{end!r}")
+            continue
+        verbatim = "\n".join(_comment_body_line(raw) for raw in source_lines[start - 1 : end])
+        if _text(entry, "verbatim") != verbatim:
+            reasons.append(
+                f"排除记录的 verbatim 与实际原文不符（{side} {start}-{end}）："
+                f"记录 {_text(entry, 'verbatim')!r}，实测 {verbatim!r}"
+            )
+            continue
+        for offset, raw in enumerate(source_lines[start - 1 : end]):
+            line = _comment_body_line(raw)
+            line_reason = _exclusion_reason(line, kind)
+            if line_reason:
+                reasons.append(f"第 {start + offset} 行不能作为纯作者声明排除：{line_reason}")
+        if not _text(entry, "owner"):
+            reasons.append(f"排除记录 {side} {start}-{end} 缺少所属注释/类型 owner")
+        if not _text(entry, "counterpart") and not _text(entry, "counterpart_absent_reason"):
+            reasons.append(f"排除记录 {side} {start}-{end} 缺少对应关系或缺对应行理由")
+        target = local_excluded if side == "local" else upstream_excluded
+        target.update(range(start, end + 1))
+    # 完整性：双方比较输入中的独立 @author 行必须全部登记，不能静默漏排。
+    for side, source_lines, excluded in (
+        ("local", local_lines, local_excluded),
+        ("upstream", upstream_lines, upstream_excluded),
+    ):
+        for number, raw in enumerate(source_lines, 1):
+            if STRICT_AUTHOR_LINE_PATTERN.match(_comment_body_line(raw)) and number not in excluded:
+                reasons.append(
+                    f"{side} 第 {number} 行的独立 @author 声明没有登记在排除记录中"
+                )
+    result = _a1_compare(
+        local_text, upstream_text, mapping, local_excluded, upstream_excluded
+    )
+    remaining = contract.get("remaining")
+    if not isinstance(remaining, dict):
+        reasons.append("E1-author-only 契约缺少 remaining 一致结果")
+    else:
+        if remaining.get("equal") is not True:
+            reasons.append("E1-author-only 契约的 remaining.equal 必须为 true")
+        if remaining.get("diff_lines") != 0:
+            reasons.append("E1-author-only 契约的 remaining.diff_lines 必须为 0")
+        if remaining.get("line_count") != result["remaining_local_lines"]:
+            reasons.append(
+                "E1-author-only 契约的 remaining.line_count 与实测不符："
+                f"记录 {remaining.get('line_count')!r}，实测 {result['remaining_local_lines']}"
+            )
+        for key, field in (
+            ("remaining_local_sha256", "local_sha256"),
+            ("remaining_upstream_sha256", "upstream_sha256"),
+        ):
+            declared = _text(remaining, field).lower()
+            if declared != result[key]:
+                reasons.append(
+                    f"E1-author-only 契约的 remaining.{field} 与实测不符："
+                    f"记录 {declared or '空'}，实测 {result[key]}"
+                )
+    if not result["remaining_equal"]:
+        reasons.append(f"E1-author-only 比较不成立：{result['first_difference']}")
+    if not result["remaining_local_lines"]:
+        reasons.append("E1-author-only 剩余实质内容为空，不能据此判派生")
+    attribution = contract.get("attribution")
+    raw_local, raw_upstream = result["raw_changed"]
+    if not isinstance(attribution, list) or not attribution:
+        reasons.append("E1-author-only 契约必须逐处登记原始差异归因 attribution")
+    else:
+        total_local = total_upstream = 0
+        for entry in attribution:
+            if not isinstance(entry, dict):
+                reasons.append(f"归因记录不是结构化对象：{entry!r}")
+                continue
+            if _text(entry, "cause") not in AUTHOR_ONLY_ATTRIBUTION_CAUSES:
+                reasons.append(f"归因记录的 cause 不受支持：{_text(entry, 'cause')!r}")
+            changed = entry.get("changed_lines")
+            if (
+                not isinstance(changed, dict)
+                or not isinstance(changed.get("local"), int)
+                or not isinstance(changed.get("upstream"), int)
+            ):
+                reasons.append(f"归因记录缺少 changed_lines.local/upstream：{entry!r}")
+                continue
+            total_local += int(changed["local"])
+            total_upstream += int(changed["upstream"])
+        if (total_local, total_upstream) != (raw_local, raw_upstream):
+            reasons.append(
+                "E1-author-only 的归因没有覆盖全部原始差异："
+                f"归因 {total_local}/{total_upstream}，实测 {raw_local}/{raw_upstream}"
+            )
+    tool = contract.get("tool")
+    if not isinstance(tool, dict) or not _text(tool, "name") or not _text(tool, "version"):
+        reasons.append("E1-author-only 契约缺少工具名与规则版本（tool.name/tool.version）")
+    else:
+        if _text(tool, "version") != AUTHOR_ONLY_SCHEMA:
+            reasons.append(f"E1-author-only 契约的 tool.version 不是 {AUTHOR_ONLY_SCHEMA}")
+        checker_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        declared_tool_sha = _text(tool, "sha256").lower()
+        if declared_tool_sha != checker_sha:
+            reasons.append(
+                "E1-author-only 契约的 tool.sha256 与当前规则实现不符："
+                f"记录 {declared_tool_sha or '空'}，实测 {checker_sha}"
+            )
+    review = contract.get("review")
+    if not isinstance(review, dict):
+        reasons.append("E1-author-only 契约缺少复核记录 review")
+    else:
+        for field in ("implementer", "reviewer", "date"):
+            if not _text(review, field):
+                reasons.append(f"E1-author-only 契约缺少 review.{field}")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(review, "date")):
+            reasons.append("E1-author-only 契约的 review.date 必须是 YYYY-MM-DD")
+        if not _text(review, "conclusion"):
+            reasons.append("E1-author-only 契约缺少 review.conclusion")
+    if not _text(contract, "counter_evidence_conclusion"):
+        reasons.append("E1-author-only 契约缺少反证结论 counter_evidence_conclusion")
+    return reasons
+
+
+def _upstream_bytes_for_contract(
+    registry: EvidenceRegistry, record: dict[str, object]
+) -> tuple[bytes | None, str | None]:
+    """取回 E1-author-only 的上游比较输入字节（快照优先，其次固定地址）。"""
+
+    repository = _repository_identifier(_text(record, "upstream_repo_url")) or ""
+    commit = _text(record, "upstream_commit")
+    upstream_path = _raw_text(record, "upstream_path")
+    if registry.snapshots is not None:
+        candidate = _resolve_snapshot(registry.snapshots, repository, commit, upstream_path)
+        if candidate is not None:
+            try:
+                return candidate.read_bytes(), None
+            except OSError as error:
+                return None, f"上游快照不可读：{candidate}（{error.strerror or error}）"
+    content_url, url_error = _fixed_content_url(
+        _text(record, "upstream_file_url"), repository, commit, upstream_path
+    )
+    if url_error:
+        return None, url_error
+    try:
+        return _fetch_upstream_bytes(content_url), None
+    except (OSError, ValueError) as error:
+        detail = getattr(error, "reason", None) or error
+        return None, f"无法从固定地址取回上游内容 {content_url}（{type(error).__name__}: {detail}）"
+
+
+def _content_independent_reasons(record: dict[str, object]) -> list[str]:
+    """核验 C2-independent-content 分支：两个内容点必须独立且有区分力。
+
+    数量、行距与语料频率不能代替语义判断（裁决 D14 §108）：本函数只机械拒绝可判定的
+    不合格形状（重复、包含、同字段复述、同注释/注解复述、通用校验串与常见示例值），
+    合格与否仍以记录中绑定的逐项复核结论为准。
+
+    Args:
+        record: 清单记录。
+
+    Returns:
+        逐项拒绝原因；为空表示结构层面成立。
+    """
+
+    raw, error = _json_field(record, "content_points")
+    if raw is None:
+        return [f"C2-independent-content 分支缺少内容点登记：{error}"]
+    if not isinstance(raw, list):
+        return ["C2-independent-content 的 content_points 必须是结构化数组"]
+    if len(raw) < 2:
+        return ["C2-independent-content 分支必须登记至少两个内容点"]
+    reasons: list[str] = []
+    if not _text(record, "independence_reason"):
+        reasons.append("C2-independent-content 分支缺少独立性说明 independence_reason")
+    if not _text(record, "counter_evidence_conclusion"):
+        reasons.append("C2-independent-content 分支缺少反证结论 counter_evidence_conclusion")
+    local_path = _text(record, "local_path")
+    upstream_path = _raw_text(record, "upstream_path")
+    upstream_sha = _text(record, "upstream_sha256").lower()
+    fragments: list[str] = []
+    owners: list[tuple[str, str]] = []
+    positions: list[tuple[tuple[int, ...], tuple[int, ...]]] = []
+    for index, point in enumerate(raw, 1):
+        if not isinstance(point, dict):
+            reasons.append(f"第 {index} 个内容点不是结构化对象")
+            continue
+        missing = [name for name in CONTENT_POINT_REQUIRED_FIELDS if not point.get(name)]
+        if missing:
+            reasons.append(f"第 {index} 个内容点缺少必需字段：{'、'.join(missing)}")
+            continue
+        fragment = str(point["fragment"])
+        if hashlib.sha256(fragment.encode("utf-8")).hexdigest() != str(
+            point["fragment_sha256"]
+        ).lower():
+            reasons.append(f"第 {index} 个内容点的片段指纹与片段原文不符")
+        if str(point["local_path"]) != local_path:
+            reasons.append(f"第 {index} 个内容点不是同一本地文件：{point['local_path']}")
+        if str(point["upstream_path"]) != upstream_path:
+            reasons.append(f"第 {index} 个内容点不是同一固定上游文件：{point['upstream_path']}")
+        if str(point["upstream_sha256"]).lower() != upstream_sha:
+            reasons.append(f"第 {index} 个内容点的上游输入指纹与记录不一致")
+        if str(point["point_kind"]) not in CONTENT_POINT_KINDS:
+            reasons.append(
+                f"第 {index} 个内容点的 point_kind 必须是 {'、'.join(CONTENT_POINT_KINDS)}；"
+                "结构点不能作为 C2 的内容点"
+            )
+        for field in ("local_lines", "upstream_lines"):
+            value = point[field]
+            if not isinstance(value, list) or not value or not all(
+                isinstance(item, int) and item > 0 for item in value
+            ):
+                reasons.append(f"第 {index} 个内容点的 {field} 必须是至少一个正整数行号")
+        if len(str(point["discrimination_reason"]).strip()) < 8:
+            reasons.append(f"第 {index} 个内容点缺少有区分力理由 discrimination_reason")
+        if len(str(point["corpus_binding"]).strip()) < 4:
+            reasons.append(f"第 {index} 个内容点缺少语料绑定 corpus_binding")
+        if len(str(point["field_or_behavior"]).strip()) < 2:
+            reasons.append(f"第 {index} 个内容点缺少所属字段或行为 field_or_behavior")
+        for pattern in CONTENT_POINT_GENERIC_PATTERNS:
+            if pattern.search(fragment.strip()):
+                reasons.append(
+                    f"第 {index} 个内容点是通用形状、不计为有区分力：{fragment!r}"
+                )
+                break
+        fragments.append(fragment.strip())
+        owners.append((str(point["owner_type"]), str(point["field_or_behavior"])))
+        positions.append(
+            (
+                tuple(int(item) for item in point["local_lines"]),
+                tuple(int(item) for item in point["upstream_lines"]),
+            )
+        )
+    for index, fragment in enumerate(fragments):
+        for other in range(index + 1, len(fragments)):
+            if fragment == fragments[other]:
+                reasons.append(f"第 {index + 1} 与第 {other + 1} 个内容点是同一片段，不独立")
+            elif fragment and (fragment in fragments[other] or fragments[other] in fragment):
+                reasons.append(
+                    f"第 {index + 1} 与第 {other + 1} 个内容点互为包含，不是两个独立事实"
+                )
+    for index in range(len(owners)):
+        for other in range(index + 1, len(owners)):
+            if owners[index] == owners[other]:
+                reasons.append(
+                    f"第 {index + 1} 与第 {other + 1} 个内容点是同一字段/行为的重复描述，不独立"
+                )
+    for index in range(len(positions)):
+        for other in range(index + 1, len(positions)):
+            if positions[index][0] == positions[other][0] or (
+                positions[index][1] == positions[other][1]
+            ):
+                reasons.append(
+                    f"第 {index + 1} 与第 {other + 1} 个内容点的双方行号重合，不能证明独立"
+                )
+    return reasons
+
+
 def _type_evidence_value(
     record: dict[str, object],
 ) -> tuple[dict[str, object] | None, str | None]:
@@ -1689,13 +2386,32 @@ def _route_reasons(record: dict[str, object]) -> list[str]:
     """校验证据路线取值与路线 3 的独立对应点结构。
 
     Note:
-        机器校验只能确认“两个互不相同的对应点各自给出了双方行号”这一结构，
+        记录显式声明的分支优先：``E1-author-only`` 必须归属路线 2（比较契约由
+        ``_author_only_contract_reasons`` 复算），``C2-independent-content`` 必须归属
+        路线 3 并按内容点独立门槛校验。未声明分支的记录沿用既有“原有充分路线”结构校验，
+        本函数不改判任何已有条目。机器校验只能确认结构与可判定的不合格形状，
         有区分力的对应与身份贡献仍需人工判断。
     """
 
     route = _text(record, "evidence_route")
     if route not in EVIDENCE_ROUTES:
         return [f"证据路线不受支持：{route or '空'}"]
+    branch, branch_error = _evidence_branch(record)
+    if branch_error:
+        return [branch_error]
+    if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
+        if route != AUTHOR_ONLY_ROUTE:
+            return [
+                f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支归属路线 2，当前 evidence_route={route}"
+            ]
+        return []
+    if branch == EVIDENCE_BRANCH_CONTENT_INDEPENDENT:
+        if route != "路线 3":
+            return [
+                f"{EVIDENCE_BRANCH_CONTENT_INDEPENDENT} 分支归属路线 3，"
+                f"当前 evidence_route={route}"
+            ]
+        return _content_independent_reasons(record)
     points = _text(record, "evidence_points")
     if not points:
         return ["缺少 evidence_points 比对依据"]
@@ -1876,6 +2592,11 @@ def _verify_single_note(
     )
     reasons.extend(_review_reasons(record, declaration.name))
     reasons.extend(_route_reasons(record))
+    if _text(record, EVIDENCE_BRANCH_FIELD) == EVIDENCE_BRANCH_AUTHOR_ONLY:
+        # 声明了作者排除分支就必须能复算比较：输入、排除记录与一致结果都不得手填。
+        reasons.extend(
+            _author_only_contract_reasons(record, path, local_sha256, registry)
+        )
     reasons.extend(_history_reasons(record, note, registry))
     sources, sources_error = _record_sources(record)
     if sources_error:
@@ -2903,6 +3624,40 @@ def _rules(findings: list[Finding]) -> set[str]:
     return {finding.rule for finding in findings}
 
 
+def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[str]]:
+    """复算清单中所有显式声明证据分支的记录。
+
+    记录的 ``evidence_branch`` 声明是版本化契约的启用开关：声明 ``E1-author-only``
+    必须满足作者排除判据，声明 ``C2-independent-content`` 必须满足内容点独立门槛。
+    未声明分支的记录不在此处判定（沿用既有路线校验），本入口不改判任何已有条目。
+
+    Args:
+        evidence: 已加载的受控证据清单。
+
+    Returns:
+        ``(检查的记录数, 拒绝原因列表)``。
+    """
+
+    checked = 0
+    reasons: list[str] = []
+    for path, record in sorted(evidence.records.items()):
+        branch, branch_error = _evidence_branch(record)
+        if branch is None and branch_error is None:
+            continue
+        checked += 1
+        if branch_error:
+            reasons.append(f"{path}：[{branch_error}]")
+            continue
+        if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
+            local_sha = _text(record, "local_sha256_after").lower()
+            for reason in _author_only_contract_reasons(record, path, local_sha, evidence):
+                reasons.append(f"{path}：[{reason}]")
+        else:
+            for reason in _content_independent_reasons(record):
+                reasons.append(f"{path}：[{reason}]")
+    return checked, reasons
+
+
 def _run_self_test() -> None:
     """使用内置 Java 样本验证放行、拦截和增量边界。"""
 
@@ -3153,6 +3908,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--self-test", action="store_true", help="运行内置规则自检")
     parser.add_argument("--json", action="store_true", help="输出结构化计数与诊断")
     parser.add_argument(
+        "--validate-evidence-branches",
+        action="store_true",
+        help="复算清单中所有显式声明证据分支（E1-author-only / C2-independent-content）的记录",
+    )
+    parser.add_argument(
         "--evidence-registry",
         type=Path,
         default=None,
@@ -3232,6 +3992,30 @@ def main() -> int:
     if args.self_test:
         _run_self_test()
         return 0
+    if args.validate_evidence_branches:
+        try:
+            evidence = _resolve_evidence(
+                args.evidence_registry, args.evidence_snapshots, _repository_root()
+            )
+        except EvidenceError as error:
+            print(f"Java 注释证据分支复核失败：{error}", file=sys.stderr)
+            return 2
+        if evidence is None:
+            print(
+                "Java 注释证据分支复核失败：未配置受控来源清单，无法复算已声明分支",
+                file=sys.stderr,
+            )
+            return 2
+        checked, reasons = _validate_declared_branches(evidence)
+        report = {
+            "check": "Java 注释证据分支",
+            "checked": checked,
+            "findings": reasons,
+            "status": "failed" if reasons else "passed",
+            "evidence": evidence.describe(),
+        }
+        print(json.dumps(report, ensure_ascii=False))
+        return 1 if reasons else 0
     try:
         evidence = _resolve_evidence(
             args.evidence_registry, args.evidence_snapshots, _repository_root()

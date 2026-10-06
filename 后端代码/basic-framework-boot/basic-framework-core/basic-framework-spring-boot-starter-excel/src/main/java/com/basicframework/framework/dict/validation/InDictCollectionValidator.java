@@ -12,7 +12,12 @@ import java.util.List;
 /**
  * 集合字典范围校验器。
  *
- * @author 李杰
+ *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-excel/src/main/java/cn/iocoder/yudao/framework/dict/validation/
+ * 上游文件续：InDictCollectionValidator.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：jakarta 命名空间适配；字典值比较补空值防护；补全类型与方法职责 JavaDoc。
  */
 public class InDictCollectionValidator implements ConstraintValidator<InDict, Collection<?>> {
 

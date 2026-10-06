@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1177,11 +1179,24 @@ def test_repository_source_index_covers_applied_objects() -> None:
     document = json.loads(index.read_text(encoding="utf-8"))
     manifest, records = document["manifest"], document["records"]
     assert document["index_schema"] == "d12-source-index/v1"
+    assert manifest["source_ledger_name"] == "registry-d12b.tsv"
+    # D10close 轮在同一 v3 账本内追加 6 列（evidence_branch、author_only_contract、content_points、
+    # independence_reason、counter_evidence_conclusion、b1_review），账本指纹随之更新。
     assert manifest["source_ledger_sha256"] == (
-        "5b3e12f2853eec00a31dc69f6c01defb182e9a716b5fe74df22e5b598a4c7e67"
+        "48df04e3becc1d6fee6ba074587c5f18fa2955ba58b8f377eda21d43d81a465f"
     )
     assert manifest["source_ledger_records"] == 997
-    assert len(records) == 174 and manifest["selected_records"] == 174
+    assert manifest["source_ledger_columns"] == 73
+    assert len(records) == 186 and manifest["selected_records"] == 186
+    counted = collections.Counter(record["d12_verdict"] for record in records)
+    assert manifest["selected_by_verdict"] == dict(sorted(counted.items()))
+    # D14 §106–§108 逐项重判后的判词分布：49 项中 4 项内容点路线通过、44 项回退阻断。
+    assert dict(sorted(counted.items())) == {
+        "A1（E1-author-only）成立，恢复上游证据支持的作者": 11,
+        "已按 D12 格式写入来源说明（D10b 改判）": 6,
+        "已按 D12 格式写入来源说明并撤回无依据署名": 92,
+        "证据不足，保持原状并登记阻断": 77,
+    }
     canonical = json.dumps(records, ensure_ascii=False, sort_keys=True).encode("utf-8")
     assert hashlib.sha256(canonical).hexdigest() == manifest["records_sha256"]
     assert manifest["duplicate_columns"] == [
@@ -1198,13 +1213,13 @@ def test_repository_source_index_covers_applied_objects() -> None:
         "upstream_author_lines",
     ]
     registry = java.load_evidence_registry(index, None)
-    assert len(registry.records) == 174 and not registry.unparsable
+    assert len(registry.records) == 186 and not registry.unparsable
     applied = [
         record
         for record in records
         if record["d12_verdict"] == "已按 D12 格式写入来源说明并撤回无依据署名"
     ]
-    assert len(applied) == 136
+    assert len(applied) == 92
     for record in records:
         assert set(java.EVIDENCE_REQUIRED_FIELDS) <= set(record), record.get("local_path")
         evidence = json.loads(record["type_evidence"])
@@ -1214,6 +1229,51 @@ def test_repository_source_index_covers_applied_objects() -> None:
     for record in applied:
         source = DEFAULT_ROOT / record["local_path"]
         assert hashlib.sha256(source.read_bytes()).hexdigest() == record["local_sha256_after"]
+    # D14：11 条 A1 记录必须带完整的 E1-author-only 版本化契约，且契约自述的剩余内容一致成立。
+    author_only = [record for record in records if record.get("evidence_branch") == "E1-author-only"]
+    assert len(author_only) == 11
+    for record in author_only:
+        contract = json.loads(record["author_only_contract"])
+        assert contract["schema"] == "d10-author-only/v1"
+        assert contract["branch"] == "E1-author-only" and contract["route"] == "路线 2"
+        assert contract["normalization_order"] == list(java.AUTHOR_ONLY_NORMALIZATION_ORDER)
+        assert contract["remaining"]["equal"] is True and contract["remaining"]["diff_lines"] == 0
+        assert contract["remaining"]["line_count"] > 0
+        assert contract["excluded_author_declarations"], record["local_path"]
+        assert contract["attribution"] and contract["review"]["conclusion"]
+        assert contract["tool"]["sha256"] == hashlib.sha256(
+            (DEFAULT_ROOT / "scripts/code/java/check_staged_java_comments.py").read_bytes()
+        ).hexdigest()
+    # D14：4 条 C2 记录必须登记两个可定位的内容点与独立性/反证结论。
+    content_independent = [
+        record for record in records if record.get("evidence_branch") == "C2-independent-content"
+    ]
+    assert len(content_independent) == 4
+    for record in content_independent:
+        points = json.loads(record["content_points"])
+        assert len(points) == 2
+        assert record["independence_reason"] and record["counter_evidence_conclusion"]
+        for point in points:
+            assert point["point_kind"] in java.CONTENT_POINT_KINDS
+            assert point["local_lines"] and point["upstream_lines"]
+            assert hashlib.sha256(point["fragment"].encode("utf-8")).hexdigest() == point["fragment_sha256"]
+    # 分支入口必须对已声明分支的记录真实复算：11 条 A1 + 4 条 C2。
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(DEFAULT_ROOT / "scripts/code/java/check_staged_java_comments.py"),
+            "--validate-evidence-branches",
+            "--evidence-registry",
+            str(index),
+            "--json",
+        ],
+        cwd=DEFAULT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    branch_report = json.loads(completed.stdout)
+    assert branch_report["checked"] == 15 and branch_report["findings"] == []
 
 
 RECORD_VO_PATH = JAVA_PATH.replace("EvidenceDemo.java", "EvidenceVO.java")
@@ -1499,3 +1559,705 @@ def test_record_component_attached_javadoc_still_passes(tmp_path: Path) -> None:
         sandbox, "scripts/code/java/check_staged_java_comments.py", *arguments
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ---------------------------------------------------------------------------
+# D14：E1-author-only 与 C2-independent-content 分支契约
+# ---------------------------------------------------------------------------
+
+A1_LOCAL_BASELINE = (
+    "package com.basicframework.demo;\n\n"
+    "/**\n"
+    " * 演示来源说明例外。\n"
+    " *\n"
+    " * @author 李杰\n"
+    " */\n"
+    "public class EvidenceDemo {\n"
+    "}\n"
+)
+A1_UPSTREAM = (
+    "package cn.iocoder.yudao.demo;\n\n"
+    "/**\n"
+    " * 演示来源说明例外。\n"
+    " *\n"
+    " * @author 芋道源码\n"
+    " */\n"
+    "public class EvidenceDemo {\n"
+    "}\n"
+)
+A1_LOCAL_FINAL = A1_LOCAL_BASELINE.replace("@author 李杰", "@author 芋道源码")
+A1_MAPPING = [["com.basicframework", "cn.iocoder.yudao"]]
+BRANCH_REGISTRY_COLUMNS = REGISTRY_COLUMNS + (
+    "evidence_branch",
+    "author_only_contract",
+    "content_points",
+    "independence_reason",
+    "counter_evidence_conclusion",
+)
+CHECKER_SHA256 = hashlib.sha256(
+    (DEFAULT_ROOT / "scripts/code/java/check_staged_java_comments.py").read_bytes()
+).hexdigest()
+
+
+def independent_remaining(
+    text: str, excluded: list[int], mapping: list[list[str]] = A1_MAPPING
+) -> list[str]:
+    """测试侧独立实现 R1–R4 与作者行排除，用于构造期望值（不调用被测量实现）。"""
+
+    dropped = set(excluded)
+    lines = []
+    for number, raw in enumerate(text.replace("\r\n", "\n").split("\n"), 1):
+        if number in dropped:
+            continue
+        line = raw
+        for source, target in mapping:
+            line = line.replace(source, target)
+        line = line.strip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def independent_raw_changed(left: str, right: str) -> tuple[int, int]:
+    """测试侧独立统计两侧原始不相等行数。"""
+
+    import difflib
+
+    left_changed = right_changed = 0
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(
+        None, left.split("\n"), right.split("\n"), autojunk=False
+    ).get_opcodes():
+        if tag == "equal":
+            continue
+        left_changed += i2 - i1
+        right_changed += j2 - j1
+    return left_changed, right_changed
+
+
+def exclusion_entry(
+    side: str, text: str, number: int, sha256: str, *, kind: str = "author", counterpart: str = ""
+) -> dict[str, object]:
+    """按实际原文构造一条排除记录。"""
+
+    raw = text.split("\n")[number - 1]
+    verbatim = raw.lstrip()
+    if verbatim.startswith("*"):
+        verbatim = verbatim[1:]
+        if verbatim.startswith(" "):
+            verbatim = verbatim[1:]
+    return {
+        "file": side,
+        "sha256": sha256,
+        "line_start": number,
+        "line_end": number,
+        "verbatim": verbatim,
+        "declaration_kind": kind,
+        "owner": "com.basicframework.demo.EvidenceDemo" if side == "local" else "cn.iocoder.yudao.demo.EvidenceDemo",
+        "counterpart": counterpart,
+        "counterpart_absent_reason": "" if counterpart else "对侧该注释块没有对应的作者声明行",
+    }
+
+
+def a1_contract(
+    *,
+    local_baseline: str = A1_LOCAL_BASELINE,
+    upstream: str = A1_UPSTREAM,
+    local_commit: str,
+    excluded_local: list[int],
+    excluded_upstream: list[int],
+    continued_local: tuple[int, ...] = (),
+    continued_upstream: tuple[int, ...] = (),
+    remaining_equal: bool = True,
+    attribution: list[dict[str, object]] | None = None,
+) -> str:
+    """构造 E1-author-only 比较契约（期望值由测试侧独立计算）。"""
+
+    local_remaining = independent_remaining(local_baseline, excluded_local)
+    upstream_remaining = independent_remaining(upstream, excluded_upstream)
+    raw_local, raw_upstream = independent_raw_changed(local_baseline, upstream)
+    if attribution is None:
+        author_local = len(excluded_local)
+        author_upstream = len(excluded_upstream)
+        attribution = [
+            {
+                "cause": "excluded-author-declaration",
+                "changed_lines": {"local": author_local, "upstream": author_upstream},
+            },
+            {
+                "cause": "R2-mapping",
+                "changed_lines": {
+                    "local": max(0, raw_local - author_local),
+                    "upstream": max(0, raw_upstream - author_upstream),
+                },
+            },
+        ]
+    contract = {
+        "schema": java.AUTHOR_ONLY_SCHEMA,
+        "branch": java.EVIDENCE_BRANCH_AUTHOR_ONLY,
+        "route": java.AUTHOR_ONLY_ROUTE,
+        "local_baseline": {
+            "commit": local_commit,
+            "path": JAVA_PATH,
+            "sha256": digest(local_baseline),
+        },
+        "upstream_input": {
+            "repo_url": f"https://github.com/{UPSTREAM_REPO}.git",
+            "commit": UPSTREAM_COMMIT,
+            "path": UPSTREAM_PATH,
+            "file_url": upstream_file_url(),
+            "sha256": digest(upstream),
+        },
+        "normalization_order": list(java.AUTHOR_ONLY_NORMALIZATION_ORDER),
+        "mapping_basis": "D10 §0.3 原列 R2 命名空间映射",
+        "r2_mapping": A1_MAPPING,
+        "excluded_author_declarations": [
+            exclusion_entry(
+                "local",
+                local_baseline,
+                number,
+                digest(local_baseline),
+                kind="author-continuation" if number in continued_local else "author",
+            )
+            for number in excluded_local
+        ]
+        + [
+            exclusion_entry(
+                "upstream",
+                upstream,
+                number,
+                digest(upstream),
+                kind="author-continuation" if number in continued_upstream else "author",
+            )
+            for number in excluded_upstream
+        ],
+        "remaining": {
+            "local_sha256": hashlib.sha256("\n".join(local_remaining).encode("utf-8")).hexdigest(),
+            "upstream_sha256": hashlib.sha256("\n".join(upstream_remaining).encode("utf-8")).hexdigest(),
+            "line_count": len(local_remaining),
+            "equal": remaining_equal,
+            "diff_lines": 0 if remaining_equal else 1,
+        },
+        "attribution": attribution,
+        "tool": {
+            "name": "scripts/code/java/check_staged_java_comments.py",
+            "version": java.AUTHOR_ONLY_SCHEMA,
+            "sha256": CHECKER_SHA256,
+        },
+        "review": {
+            "implementer": "D14 规则测试",
+            "reviewer": "D14 规则测试复核",
+            "date": "2026-10-06",
+            "conclusion": "逐项复核 EvidenceDemo：只差作者声明及 R2 映射，其余内容逐行一致。",
+        },
+        "counter_evidence_conclusion": "无反证：本地无创建记录、无共同贡献记录，未发现其他来源。",
+    }
+    return json.dumps(contract, ensure_ascii=False)
+
+
+def branch_record(
+    source: str,
+    *,
+    contract: str | None = None,
+    branch: str = java.EVIDENCE_BRANCH_AUTHOR_ONLY,
+    content_points: str = "",
+    independence_reason: str = "",
+    route: str = java.AUTHOR_ONLY_ROUTE,
+) -> dict[str, str]:
+    """构造声明证据分支的清单记录。"""
+
+    record = evidence_record(source, evidence_route=route)
+    record["evidence_branch"] = branch
+    record["local_sha256_after"] = digest(source)
+    if contract is not None:
+        record["author_only_contract"] = contract
+    if content_points:
+        record["content_points"] = content_points
+    if independence_reason:
+        record["independence_reason"] = independence_reason
+    record["counter_evidence_conclusion"] = "无反证：未发现其他来源或共同贡献记录。"
+    return record
+
+
+def prepare_branch_case(
+    tmp_path: Path,
+    *,
+    local_baseline: str = A1_LOCAL_BASELINE,
+    final_source: str = A1_LOCAL_FINAL,
+    upstream: str = A1_UPSTREAM,
+    contract_builder=None,
+    branch: str = java.EVIDENCE_BRANCH_AUTHOR_ONLY,
+    content_points: str = "",
+    independence_reason: str = "两点各自独立提供不同业务事实。",
+    route: str = java.AUTHOR_ONLY_ROUTE,
+):
+    """构造声明分支的隔离夹具，返回沙箱、清单与参数。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    sandbox.stage(JAVA_PATH, local_baseline)
+    sandbox.record_baseline()
+    baseline_commit = sandbox.git("rev-parse", "HEAD").decode().strip()
+    sandbox.stage(JAVA_PATH, final_source)
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    snapshots = evidence / "snapshots"
+    write_snapshot(snapshots, upstream)
+    contract = None if contract_builder is None else contract_builder(baseline_commit)
+    record = branch_record(
+        local_baseline,
+        contract=contract,
+        branch=branch,
+        content_points=content_points,
+        independence_reason=independence_reason,
+        route=route,
+    )
+    record["local_sha256_after"] = digest(final_source)
+    record["upstream_sha256"] = digest(upstream)
+    registry = write_registry(
+        evidence / "registry.tsv", [record], columns=BRANCH_REGISTRY_COLUMNS
+    )
+    return sandbox, registry, snapshots
+
+
+def run_branch_checker(sandbox, registry: Path, snapshots: Path):
+    """以真实 CLI 复算声明的证据分支。"""
+
+    return run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+
+
+def test_author_only_branch_legal_case_passes_the_real_consumer(tmp_path: Path) -> None:
+    """D14 正例：只差作者声明与 R2 映射时，E1-author-only 成立并退出 0。"""
+
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        contract_builder=lambda commit: a1_contract(
+            local_commit=commit, excluded_local=[6], excluded_upstream=[6]
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert '"checked": 1' in result.stdout, result.stdout
+    assert '"status": "passed"' in result.stdout, result.stdout
+
+
+def test_author_only_branch_rejects_remaining_difference(tmp_path: Path) -> None:
+    """D14 负对照①：忽略作者行后仍有差异，不得判派生。"""
+
+    upstream = A1_UPSTREAM.replace(
+        "public class EvidenceDemo {\n}\n",
+        "public class EvidenceDemo {\n    /** 业务常量 */\n    static final String CLIENT_ID = \"default\";\n}\n",
+    )
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        upstream=upstream,
+        contract_builder=lambda commit: a1_contract(
+            upstream=upstream,
+            local_commit=commit,
+            excluded_local=[6],
+            excluded_upstream=[6],
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "E1-author-only 比较不成立" in result.stdout, result.stdout
+
+
+def test_author_only_branch_rejects_non_author_excluded_line(tmp_path: Path) -> None:
+    """D14 负对照②：被忽略的行不只有作者声明时，不得整行排除。"""
+
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        contract_builder=lambda commit: a1_contract(
+            local_commit=commit,
+            excluded_local=[4, 6],
+            excluded_upstream=[6],
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "不能作为纯作者声明排除" in result.stdout, result.stdout
+
+
+def test_author_only_branch_rejects_mixed_author_and_business_line(tmp_path: Path) -> None:
+    """D14 负对照②变体：一行混合作者与业务事实时不得整行排除。"""
+
+    baseline = A1_LOCAL_BASELINE.replace("@author 李杰", "@author 李杰 负责订单模块")
+    final = baseline.replace("@author 李杰 负责订单模块", "@author 芋道源码")
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        local_baseline=baseline,
+        final_source=final,
+        contract_builder=lambda commit: a1_contract(
+            local_baseline=baseline,
+            local_commit=commit,
+            excluded_local=[6],
+            excluded_upstream=[6],
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "不能作为纯作者声明排除" in result.stdout, result.stdout
+
+
+def test_author_only_branch_accepts_pure_author_continuation(tmp_path: Path) -> None:
+    """纯作者身份续行（主页地址）可以排除，且仍要求其余内容逐行一致。"""
+
+    baseline = A1_LOCAL_BASELINE.replace(
+        " * @author 李杰\n", " * @author 李杰\n * <https://github.com/lijie>\n"
+    )
+    upstream = A1_UPSTREAM.replace(
+        " * @author 芋道源码\n", " * @author 芋道源码\n * <https://github.com/YunaiV>\n"
+    )
+    final = baseline.replace("@author 李杰", "@author 芋道源码")
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        local_baseline=baseline,
+        final_source=final,
+        upstream=upstream,
+        contract_builder=lambda commit: a1_contract(
+            local_baseline=baseline,
+            upstream=upstream,
+            local_commit=commit,
+            excluded_local=[6, 7],
+            excluded_upstream=[6, 7],
+            continued_local=(7,),
+            continued_upstream=(7,),
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_author_only_branch_rejects_unregistered_author_line(tmp_path: Path) -> None:
+    """漏登记独立 @author 行时不允许静默排除。"""
+
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        contract_builder=lambda commit: a1_contract(
+            local_commit=commit, excluded_local=[], excluded_upstream=[6]
+        ),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "没有登记在排除记录中" in result.stdout, result.stdout
+
+
+def test_author_only_branch_rejects_tampered_tool_fingerprint(tmp_path: Path) -> None:
+    """工具指纹与当前规则实现不符时拒绝（版本绑定不能被绕过）。"""
+
+    def builder(commit: str) -> str:
+        """构造工具指纹被篡改的 A1 契约，用于验证版本绑定不可绕过。"""
+        contract = json.loads(
+            a1_contract(local_commit=commit, excluded_local=[6], excluded_upstream=[6])
+        )
+        contract["tool"]["sha256"] = "0" * 64
+        return json.dumps(contract, ensure_ascii=False)
+
+    sandbox, registry, snapshots = prepare_branch_case(tmp_path, contract_builder=builder)
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "tool.sha256 与当前规则实现不符" in result.stdout, result.stdout
+
+
+def c2_point(
+    fragment: str,
+    *,
+    field_or_behavior: str,
+    local_lines: list[int],
+    upstream_lines: list[int],
+    point_kind: str = "内容点",
+    discrimination_reason: str = "该片段是本文件独有的业务事实，另一处无法替代。",
+) -> dict[str, object]:
+    """构造一个 C2 内容点。"""
+
+    return {
+        "fragment": fragment,
+        "fragment_sha256": digest(fragment),
+        "local_path": JAVA_PATH,
+        "local_sha256": digest(A1_LOCAL_FINAL),
+        "upstream_path": UPSTREAM_PATH,
+        "upstream_sha256": digest(A1_UPSTREAM),
+        "local_lines": local_lines,
+        "upstream_lines": upstream_lines,
+        "owner_type": QUALIFIED_NAME,
+        "field_or_behavior": field_or_behavior,
+        "point_kind": point_kind,
+        "corpus_binding": "上游语料 7244 个 Java 文件，df=1",
+        "discrimination_reason": discrimination_reason,
+    }
+
+
+def test_content_independent_branch_accepts_two_distinct_points(tmp_path: Path) -> None:
+    """D14 正例：两个不同字段的非通用业务事实可以按 C2 分支通过。"""
+
+    points = [
+        c2_point("订单超时时间默认 30 分钟", field_or_behavior="timeoutMinutes", local_lines=[12], upstream_lines=[10]),
+        c2_point("库存扣减失败必须整体回滚", field_or_behavior="rollbackOnStockFailure", local_lines=[24], upstream_lines=[19]),
+    ]
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        branch=java.EVIDENCE_BRANCH_CONTENT_INDEPENDENT,
+        route="路线 3",
+        content_points=json.dumps(points, ensure_ascii=False),
+        independence_reason="两点分别指超时时间与回滚条件，各自独立提供不同业务事实。",
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert '"checked": 1' in result.stdout, result.stdout
+
+
+def test_content_independent_branch_rejects_generic_and_duplicate_points(tmp_path: Path) -> None:
+    """D14 B1 负对照：通用校验串、同字段复述、同一句拆两点都不能通过。"""
+
+    points = [
+        c2_point("不能为空", field_or_behavior="clientId", local_lines=[12], upstream_lines=[10]),
+        c2_point("不能为空", field_or_behavior="clientId", local_lines=[12], upstream_lines=[10]),
+    ]
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        branch=java.EVIDENCE_BRANCH_CONTENT_INDEPENDENT,
+        route="路线 3",
+        content_points=json.dumps(points, ensure_ascii=False),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "通用形状" in result.stdout, result.stdout
+    assert "同一片段" in result.stderr or "重复描述" in result.stdout, result.stdout
+
+
+def test_content_independent_branch_rejects_structural_points(tmp_path: Path) -> None:
+    """两个结构点不能满足 C2（裁决 D14 §118）。"""
+
+    points = [
+        c2_point("结构块 A 连续 9 行", field_or_behavior="blockA", local_lines=[12, 20], upstream_lines=[10, 18], point_kind="结构点"),
+        c2_point("结构块 B 连续 12 行", field_or_behavior="blockB", local_lines=[30, 44], upstream_lines=[28, 42], point_kind="结构点"),
+    ]
+    sandbox, registry, snapshots = prepare_branch_case(
+        tmp_path,
+        branch=java.EVIDENCE_BRANCH_CONTENT_INDEPENDENT,
+        route="路线 3",
+        content_points=json.dumps(points, ensure_ascii=False),
+    )
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "结构点不能作为 C2 的内容点" in result.stdout, result.stdout
+
+
+def test_branch_validation_ignores_records_without_declared_branch(tmp_path: Path) -> None:
+    """未声明分支的记录不由分支入口判定，本入口不改变既有条目的结论。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    source = demo_source()
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_branch_checker(sandbox, registry, snapshots)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert '"checked": 0' in result.stdout, result.stdout
+
+
+# ---------------------------------------------------------------------------
+# D13 §72/§88：尾部空白不得被裁剪后放行（真实消费者负对照）
+# ---------------------------------------------------------------------------
+
+
+def source_note_with_tail_whitespace_cases() -> list[tuple[str, list[str], str]]:
+    """返回行尾/段内空白负对照：名称、来源说明行、期望诊断子串。"""
+
+    header = f" * 来源：{UPSTREAM_REPO} @ {UPSTREAM_COMMIT}（该版本未声明作者）"
+    first = f" * 上游文件：{UPSTREAM_PATH[:40]}"
+    second = f" * 上游文件续：{UPSTREAM_PATH[40:]}"
+    basis = f" * {java.SOURCE_BASIS_FIXED}"
+    local = " * 本地修改：调整包名与类名。"
+    return [
+        ("首行行尾空格", [header, first + " ", basis, local], "上游文件路径与清单不一致"),
+        ("首行行尾制表符", [header, first + "\t", basis, local], "上游文件路径与清单不一致"),
+        ("首行前缀后空格", [header, f" * 上游文件： {UPSTREAM_PATH[:40]}", second, basis, local], "上游文件路径与清单不一致"),
+        ("续行行尾空格", [header, first, second + " ", basis, local], "上游文件路径与清单不一致"),
+        ("续行行尾制表符", [header, first, second + "\t", basis, local], "上游文件路径与清单不一致"),
+        ("续行前缀后空格", [header, first, f" * 上游文件续： {UPSTREAM_PATH[40:]}", basis, local], "上游文件路径与清单不一致"),
+        (
+            "段中间插入空格",
+            [header, f" * 上游文件：{UPSTREAM_PATH[:20]} {UPSTREAM_PATH[20:40]}", second, basis, local],
+            "上游文件路径与清单不一致",
+        ),
+        ("来源行行尾空格", [header + " ", first, second, basis, local], "来源说明首行不符合固定语法"),
+        ("来源依据行行尾空格", [header, first, second, basis + " ", local], "来源依据行不是固定取值"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "name,notes,expected",
+    source_note_with_tail_whitespace_cases(),
+    ids=[item[0] for item in source_note_with_tail_whitespace_cases()],
+)
+def test_source_note_tail_whitespace_is_rejected(
+    tmp_path: Path, name: str, notes: list[str], expected: str
+) -> None:
+    """行尾空格/制表符、段中间空格、前缀后空格都必须被真实入口拒绝，不能靠 strip 放行。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    source = demo_source(notes=notes)
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert expected in result.stderr, result.stderr
+
+
+def test_javadoc_body_lines_preserve_payload_tail(tmp_path: Path) -> None:
+    """JavaDoc 正文行解析只剥离外框/缩进/装饰星号，行尾字符原样保留。"""
+
+    lines = java._javadoc_body_lines("/**\n * 上游文件：a/b.java \n *\t尾部制表符\t\n */")
+    assert lines[1] == "上游文件：a/b.java "
+    assert lines[2] == "\t尾部制表符\t"
+
+
+def test_source_note_without_tail_whitespace_still_passes(tmp_path: Path) -> None:
+    """正对照：同样的两段路径在没有尾部空白时通过，证明拒绝来自空白本身。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    source = demo_source(
+        notes=continuation_notes([UPSTREAM_PATH[:40], UPSTREAM_PATH[40:]])
+    )
+    registry, snapshots = prepare_case(sandbox, evidence, source)
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ---------------------------------------------------------------------------
+# 复核 A/C 的仓库内回归守卫：索引字段与工作树逐条一致、对应点可在当前文件定位
+# ---------------------------------------------------------------------------
+
+
+def expected_type_fields(source: str) -> dict[tuple[str, bool], dict[str, object]]:
+    """按检查器口径从当前源码独立复算类型行号与 JavaDoc 指纹。"""
+
+    masked = java._mask_java(source)
+    starts = java._line_starts(source)
+    brace_depths = java._depths(masked, "{", "}")
+    brace_pairs = java._matching_delimiters(masked, "{", "}")
+    declarations = java._type_declarations(masked, brace_depths, brace_pairs)
+    package = java._package_name(masked)
+    result: dict[tuple[str, bool], dict[str, object]] = {}
+    for declaration in declarations:
+        enclosing, qualified = java._qualified_type_names(declarations, declaration, package)
+        span = java._attached_javadoc_span(source, declaration.declaration_offset)
+        javadoc = "" if span is None else source[span[0] : span[1]]
+        result[(qualified, enclosing is not None)] = {
+            "declaration_line": java._line_number(starts, declaration.name_offset),
+            "javadoc_start_line": None if span is None else java._line_number(starts, span[0]),
+            "javadoc_end_line": None if span is None else java._line_number(starts, span[1] - 1),
+            "javadoc_sha256": digest(javadoc),
+        }
+    return result
+
+
+def test_repository_source_index_fields_match_worktree_bytes() -> None:
+    """索引内部字段必须随最终字节重绑：六类字段与工作树逐条一致（0 不符）。"""
+
+    index = DEFAULT_ROOT / java.DEFAULT_EVIDENCE_REGISTRY
+    document = json.loads(index.read_text(encoding="utf-8"))
+    mismatches: collections.Counter = collections.Counter()
+    for record in document["records"]:
+        data = (DEFAULT_ROOT / record["local_path"]).read_bytes()
+        expected = hashlib.sha256(data).hexdigest()
+        if record["local_sha256_after"] != expected:
+            mismatches["local_sha256_after"] += 1
+        evidence = json.loads(record["type_evidence"])
+        if evidence["file"]["local_sha256_final"] != expected:
+            mismatches["local_sha256_final"] += 1
+        mapping = expected_type_fields(data.decode("utf-8"))
+        for entry in evidence["types"]:
+            key = (entry["qualified_name"], bool(entry.get("nested")))
+            computed = mapping.get(key)
+            assert computed is not None, (record["local_path"], key)
+            for field in (
+                "declaration_line",
+                "javadoc_start_line",
+                "javadoc_end_line",
+                "javadoc_sha256",
+            ):
+                if entry[field] != computed[field]:
+                    mismatches[field] += 1
+    assert not mismatches, dict(mismatches)
+    rebinding = document["manifest"]["field_rebinding"]
+    assert set(rebinding["after_mismatch"].values()) == {0}
+    assert rebinding["repeatable_step"]
+
+
+def test_repository_correspondence_points_locate_on_current_files() -> None:
+    """路线 3 的对应点必须能在当前文件定位（D12 §112），不可定位项应逐条列出。"""
+
+    index = DEFAULT_ROOT / java.DEFAULT_EVIDENCE_REGISTRY
+    document = json.loads(index.read_text(encoding="utf-8"))
+    checked = unlocated = structural = 0
+    for record in document["records"]:
+        lines = (DEFAULT_ROOT / record["local_path"]).read_text(encoding="utf-8").split("\n")
+        for point in json.loads(record["d12_correspondence_points"]):
+            fragment = point.get("fragment")
+            numbers = list(point.get("local_lines") or [])
+            if not fragment:
+                structural += 1
+                continue
+            checked += 1
+            assert numbers, (record["local_path"], fragment)
+            if "->" in fragment:
+                names = [name.strip() for name in fragment.split("->") if name.strip()]
+                located = bool(
+                    re.search(rf"\b{re.escape(names[0])}\b", lines[numbers[0] - 1])
+                    and re.search(rf"\b{re.escape(names[-1])}\b", lines[numbers[-1] - 1])
+                )
+            else:
+                located = all(fragment in lines[number - 1] for number in numbers)
+            if not located:
+                unlocated += 1
+    assert unlocated == 0
+    relocalization = document["manifest"]["relocalization"]
+    # manifest 声明的计数必须与逐条实测一致，且“每个片段点都能定位”是绝对不变量。
+    assert relocalization["points_total"] == checked + structural
+    assert relocalization["points_with_fragment"] == checked
+    assert relocalization["structural_points_out_of_scope"]["count"] == structural
+    assert relocalization["unlocated"] == 0
+    assert relocalization["relocated"] + relocalization["kept"] == checked
+
+
+def test_repository_manifest_declares_ledger_replay_relation() -> None:
+    """索引必须如实登记与声明账本的差异字段与重放输入，不得假称一致。"""
+
+    index = DEFAULT_ROOT / java.DEFAULT_EVIDENCE_REGISTRY
+    document = json.loads(index.read_text(encoding="utf-8"))
+    manifest = document["manifest"]
+    replay = manifest["ledger_replay"]
+    assert replay["declared_ledger_name"] == manifest["source_ledger_name"]
+    assert replay["declared_ledger_sha256"] == manifest["source_ledger_sha256"]
+    assert replay["declared_ledger_records"] == 997
+    assert replay["ledger_local_sha_compared"] == len(document["records"])
+    # 账本每条指纹要么等于当前工作树字节，要么等于整改前 daf4d23^ 的字节，不允许第三种来源。
+    assert replay["ledger_local_sha_matches_neither"] == 0
+    assert (
+        replay["ledger_local_sha_matches_worktree"]
+        + sum(replay["ledger_local_sha_matches_revision"].values())
+        >= len(document["records"])
+    )
+    # 索引按工作树重绑、账本是混合快照：差异必须如实登记，不得声称逐字节一致。
+    assert replay["differing_records"] > 0
+    assert "local_sha256_after" in replay["differing_fields"]
+    assert replay["replay_inputs"] and replay["replay_command"] and replay["replay_rule"]
+    assert manifest["duplicate_column_mismatches"]
+    assert manifest["producer"].startswith("由 .bf-local/d10fix/")

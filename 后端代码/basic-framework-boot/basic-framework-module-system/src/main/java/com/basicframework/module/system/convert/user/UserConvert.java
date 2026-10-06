@@ -21,7 +21,11 @@ import java.util.Map;
 /**
  * UserConvert 对象转换组件。
  *
- * @author 李杰
+ *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/convert/user/UserConvert.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：basic-framework 命名空间与类名前缀适配；部门名回填替代 MapUtils 写法；补全类型与方法职责 JavaDoc。
  */
 @Mapper
 public interface UserConvert {

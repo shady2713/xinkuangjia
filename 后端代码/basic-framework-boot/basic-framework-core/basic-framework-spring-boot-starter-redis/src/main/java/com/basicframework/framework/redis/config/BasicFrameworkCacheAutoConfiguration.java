@@ -23,7 +23,12 @@ import static com.basicframework.framework.redis.config.BasicFrameworkRedisAutoC
 
 /**
  * Cache 配置类，基于 Redis 实现
- * @author 李杰
+ *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-redis/src/main/java/cn/iocoder/yudao/framework/redis/config/
+ * 上游文件续：YudaoCacheAutoConfiguration.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：命名空间与类名前缀适配，缓存属性改为 BasicFrameworkCacheProperties；补全职责与方法 JavaDoc。
  */
 @AutoConfiguration
 @EnableConfigurationProperties({CacheProperties.class, BasicFrameworkCacheProperties.class})

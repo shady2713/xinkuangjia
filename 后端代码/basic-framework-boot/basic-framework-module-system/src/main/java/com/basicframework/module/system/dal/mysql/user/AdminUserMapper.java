@@ -14,7 +14,11 @@ import java.util.List;
 /**
  * AdminUserMapper 数据访问接口，负责持久化查询与写入。
  *
- * @author 李杰
+ *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/dal/mysql/user/AdminUserMapper.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：命名空间适配；分页查询补平台类型条件；新增按主键行锁查询；补全类型与方法 JavaDoc。
  */
 @Mapper
 public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {

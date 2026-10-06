@@ -16,7 +16,12 @@ import org.springframework.data.redis.serializer.RedisSerializer;
  * <p>该配置创建项目内统一使用的 {@link RedisTemplate}，并统一采用 JSON 序列化规则，
  * 避免不同模块手工配置导致的序列化格式不一致。</p>
  *
- * @author 李杰
+ *
+ * 来源：YunaiV/ruoyi-vue-pro @ ac022b15a094cf9cf82903d429b9729e72309da5（该版本未声明作者）
+ * 上游文件：yudao-framework/yudao-spring-boot-starter-redis/src/main/java/cn/iocoder/yudao/framework/redis/config/
+ * 上游文件续：YudaoRedisAutoConfiguration.java
+ * 来源依据：固定见证版本；历史引入版本未核实。
+ * 本地修改：命名空间与类名前缀适配；buildRedisSerializer 改为显式变量接收；补全职责与方法 JavaDoc。
  */
 @AutoConfiguration(before = RedissonAutoConfigurationV2.class)
 public class BasicFrameworkRedisAutoConfiguration {
