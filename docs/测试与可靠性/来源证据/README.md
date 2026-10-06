@@ -25,16 +25,17 @@ kind: package-reference
 
 | 文件 | 内容 |
 | --- | --- |
-| [d12-source-index.json](d12-source-index.json) | 186 条 D12-174 候选记录（136 条已应用来源说明、6 条 D10b 改判、11 条 A1 恢复署名、33 条证据不足阻断）；顶层 `manifest` 记录派生依据与指纹，`records` 为逐条清单记录 |
+| [d12-source-index.json](d12-source-index.json) | 186 条 D12-174 候选记录；**索引当前判词分布**为 18 条已应用来源说明、11 条 A1 恢复署名、58 条复核回退、22 条需补证、77 条证据不足阻断；顶层 `manifest` 记录派生依据与指纹，`records` 为逐条清单记录 |
 | [README.md](README.md) | 本说明 |
 
 索引中的每条记录对应一个本地对象（`local_path` 唯一），记录上游定位、上游内容指纹、历史依据、比对依据、作者判断、许可关联与逐项复核。规则只对主张来源证据的 public 类型读取这些记录；没有来源说明的类型继续走准确作者路径。
 
 ## 派生规则
 
-- 来源账本：`registry-d12b.tsv`（997 行 × 67 列，schema `d12-registry/v3`），SHA-256 `3660cc02fa2261088ec546c6c3a0d089040c6559a5ef48f9b1ae8e5ccd6e1a90`。索引由 `.bf-local/d10fix/derive_index_from_ledger.py` 从该账本重放，再按当前工作树重绑指纹。
-- 选取口径：`d12_verdict` 属于 D12-174 候选且 `scope=backend-prod`，共 186 条——136 条“已按 D12 格式写入来源说明并撤回无依据署名”、6 条“已按 D12 格式写入来源说明（D10b 改判）”、11 条“A1（E1-author-only）成立，恢复上游证据支持的作者”、33 条“证据不足，保持原状并登记阻断”；其余 811 条“不适用（非 D12-174 候选）”不进入索引，主张来源例外时按“清单没有逐项记录”拒绝。
-- 重复列名：账本表头仍有 11 个重名（D10 列与 D10b 更新列同名）。派生取**末列**（D10b 更新值），并把选定记录上“首列与末列取值不同”的条数登记在 `manifest.duplicate_column_mismatches`（实测：`author_status` 12、`evidence_points`/`evidence_route`/`local_sha256_after`/`open_gap`/`review_by`/`review_conclusion` 各 17）。该差异必须如实登记，不能表述成“两侧一致”。
+- 来源账本：`registry-d12b.tsv`（997 数据行 × 73 列，schema `d12-registry/v3`），SHA-256 `986b40a03f5d8d26c7d1977f5e659e24d22a928a44bbb29f9c18715892afd94e`，与 `manifest.source_ledger_sha256`／`source_ledger_columns`／`source_ledger_records` 一致。索引由 `.bf-local/d10fix/derive_index_from_ledger.py` 从该账本重放，再按当前工作树重绑指纹。
+- 选取口径：`d12_verdict` 属于 D12-174 候选且 `scope=backend-prod`，共 186 条；其余 811 条“不适用（非 D12-174 候选）”不进入索引，主张来源例外时按“清单没有逐项记录”拒绝。
+- **账本判词与索引判词不是同一快照**：账本实测分布为 92 条“已按 D12 格式写入来源说明并撤回无依据署名”、6 条“已按 D12 格式写入来源说明（D10b 改判）”、11 条“A1（E1-author-only）成立，恢复上游证据支持的作者”、77 条“证据不足，保持原状并登记阻断”（合计 186）；索引在 D14 §132 独立逐项复核与 D15 逐项核实后更新为 18／11／58／22／77。两侧在 `d12_verdict` 上相差 81 条、一致 105 条（`manifest.ledger_replay` 的 `differing_fields`／`identical_fields`）。该差异如实登记，索引**不**声称与账本逐字节同快照。
+- 重复列名：账本表头仍有 11 个重名（D10 列与 D10b 更新列同名）。派生取**末列**（D10b 更新值），并把选定记录上“首列与末列取值不同”的条数登记在 `manifest.duplicate_column_mismatches`（实测：`author_status` 12、`evidence_points`／`evidence_route`／`local_sha256_after` 各 17、`open_gap`／`review_by` 各 61、`review_conclusion` 65）。该差异必须如实登记，不能表述成“两侧一致”。
 - 逐类型证据：账本有 12 条记录没有 `type_evidence`（11 条 A1 恢复署名 + 1 条改判），索引沿用 D10b 构建的同路径逐类型证据，登记在 `manifest.synthesized_type_evidence`。
 - 本索引的中立指纹：见 `manifest.records_sha256`（逐条记录规范化 JSON 的 SHA-256）。
 
@@ -57,7 +58,10 @@ kind: package-reference
 
 1. **受控快照优先**：`JAVA_COMMENT_EVIDENCE_SNAPSHOTS` 或 `--evidence-snapshots` 指向的快照目录中，固定提交的对应文件必须先通过 `upstream_sha256` 复算与无作者声明检查。
 2. **固定地址取回**：快照缺失时按 `upstream_file_url` 取回。地址必须固定在登记提交上，且路径与 `upstream_path` 一致；取回内容复算 SHA-256，不符即拒绝。
-3. **取不回即拒绝**：无法取回或指纹不符时给出具体原因并非零退出，不回退到无条件放行。
+3. **取不回与内容不符是两件事**：**取不回**（网络不可达、HTTP 错误、超时）由全量入口记录失败地址，该记录若**全部**原因都来自取不回即进入独立的“证据不可得”集合（`evidence-unavailable`），报告写明固定地址与原因并以退出码 **2** 受控失败；**内容不符**（指纹或内容与登记不一致）仍是硬失败。判据与阈值不因故障而放宽；同一条记录若还有真实内容问题，硬失败与证据不可得并存。
+
+> 当前本机与云端都**没有**配置受控快照（报告里 `acceptance.evidence.snapshots = null`），因此每次都走第 2 步联网取回；
+> 离线复核必须显式提供受控快照目录。是否把受控快照纳入版本控制或 CI 制品属[有权者决定](../待有权者决定事项.md) D7，本轮未 vendored。
 
 `upstream_file_url` 使用 `github.com` 的 `blob` 固定提交地址；规则转换为 `raw.githubusercontent.com` 的同提交内容地址。受控快照与网络取回都不可用时，需要显式配置快照才能离线复核。
 
@@ -72,6 +76,27 @@ kind: package-reference
 | 分支复核 `scripts/code/java/check_staged_java_comments.py --validate-evidence-branches` | 复算清单中所有显式声明证据分支的记录；未声明分支的记录不由该入口判定 |
 
 显式配置优先于默认位置：命令行参数 `--evidence-registry`/`--evidence-snapshots` 高于 `JAVA_COMMENT_EVIDENCE_REGISTRY`/`JAVA_COMMENT_EVIDENCE_SNAPSHOTS`，环境变量高于本目录默认值。显式配置不可读时退出非零，不静默回落到默认位置。
+
+### 三态验收与当前实测分布
+
+按[裁决 D15](../裁决-D15-已登记阻断与发布门禁.md)，全量入口输出 `quality-check/v2` 报告，硬失败、已验收来源
+（含独立 A1 分支）与已登记阻断分列；维护完成态用独立状态 `completed-with-registered-blockers`，**不再写成 `passed`**。
+未显式选择维护模式时保持严格拒绝。本轮实测（命令与退出码见[验收矩阵](../R01-R17-验收矩阵.md)第二十二节）：
+
+| 项 | 严格模式 | 显式维护模式 |
+| --- | --- | --- |
+| 进程退出码 | 1 | 0 |
+| `status` | `failed` | `completed-with-registered-blockers` |
+| 扫描 Java 文件 | 904 | 904 |
+| 已验收（声明） | 31（来源说明 20 + 作者标签 11） | 同左 |
+| 已登记阻断（声明） | 162（来源说明 129 + 作者标签 33） | 同左 |
+| 硬失败 / 未覆盖 / 证据不可得 | 0 / 0 / 0 | 0 / 0 / 0 |
+
+**记录口径与声明口径不同**：186 条记录中已验收 29 条、已登记阻断 157 条；声明口径为 31 与 162。
+「已登记阻断」表示缺口被正确识别与纳管，**不表示来源关系、作者身份或交付义务已通过**。
+
+`run_checks` 与 `ci_gate` 在发布阶段会取回并复核本轮来源验收报告；存在适用阻断时汇总退出 1、
+`status=blocked`、`release_verified=false`。
 
 ## 索引字段重绑与账本重放
 
@@ -102,7 +127,7 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 3. 按当前工作树重绑六类指纹与行号字段、并重算 `manifest.records_sha256`；
 4. 复核六类字段与工作树逐条一致、对应点能在当前文件定位。
 
-`ledger_replay` 记录的实测事实：账本是**混合快照**——`ledger_local_sha_matches_worktree` 62 条已更新到最终态、`ledger_local_sha_matches_revision` 169 条仍是 `daf4d23^`（D13 路径续行前）的字节、两者都不是 0 条；索引一律按工作树重绑，因此与账本在 `local_sha256_after` 上差 124 条、在 `type_evidence` 上差 141 条（其中 12 条账本为空）。索引**不**声称与账本逐字节同一快照；差异字段、重放输入与命令都如实登记。
+`ledger_replay` 记录的实测事实：账本是**混合快照**——`ledger_local_sha_matches_worktree` 12 条已更新到最终态、`ledger_local_sha_matches_revision` 169 条仍是 `daf4d23^`（D13 路径续行前）的字节、两者都不是 0 条，186 条全部与工作树不一致（`ledger_local_sha_compared = 186`、`ledger_local_sha_matches_neither = 0`）；索引一律按工作树重绑，因此与账本在 `d12_verdict` 上差 81 条、在 `local_sha256_after` 上差 174 条、在 `type_evidence` 上差 186 条（其中 12 条账本为空）。索引**不**声称与账本逐字节同一快照；差异字段、重放输入与命令都如实登记。
 
 ## 证据分支契约
 
@@ -138,7 +163,7 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 ## 已知限制与暂缓工作
 
-- 索引只覆盖 D12-174 候选；823 条“不适用”对象与 431 口径未核实对象维持阻断，不由本索引授权。
+- 索引只覆盖 D12-174 候选 186 条；账本中其余 **811** 条“不适用（非 D12-174 候选）”对象不由本索引授权。D12 裁决另有“431 个未核实或冲突项”的口径，与本账本 997 行不是同一范围，二者都不得被本索引当作已验收。
 - 固定地址取回依赖到 `raw.githubusercontent.com` 的网络可达性；离线复核必须显式提供受控快照目录。
 - 上游文件正文与许可结论按裁决留在仓库外，本目录不提供许可验收结论。
 - 规则校验结构、版本、指纹与映射一致性；有区分力的对应与身份贡献仍需人工逐项复核。
