@@ -1,3 +1,8 @@
+/**
+ * Unicorn 规则片段：启用 eslint-plugin-unicorn 推荐集并做项目取舍。
+ * 关闭与现有写法冲突的条目（null、for-each、filename-case 等），
+ * 另对 scripts 与 internal 目录放行 process.exit，业务源码仍受约束。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

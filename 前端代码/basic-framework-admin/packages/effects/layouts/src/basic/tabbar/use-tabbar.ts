@@ -1,3 +1,8 @@
+/**
+ * 标签栏的视图层状态：跟随路由与标签库同步当前标签，并生成右键菜单项。
+ * 固定标签在菜单就绪时初始化，菜单项按偏好裁剪，点击与关闭复用 useTabs；
+ * 标签的存储、持久化与排序由标签库 store 负责，本模块不持有标签数据。
+ */
 import type { RouteLocationNormalizedGeneric } from 'vue-router';
 
 import type { TabDefinition } from '@vben/types';

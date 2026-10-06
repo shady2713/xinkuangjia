@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 标准面包屑：基于 shadcn 面包屑原语渲染层级，
+ * 带子项的节点下拉开菜单，其余可点击项 emit select 路径。
+ * 末级只展示文本，跳转由调用方决定。
+ */
 import type { BreadcrumbProps } from './types';
 
 import { ChevronDown } from '@vben-core/icons';

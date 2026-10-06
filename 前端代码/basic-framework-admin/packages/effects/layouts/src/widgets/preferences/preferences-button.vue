@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 偏好设置触发按钮：以齿轮图标唤起 preferences.vue 抽屉，并转发抽屉的退出事件。
+ * 只做触发与事件透传，偏好项读写、语言包切换均由 preferences.vue 负责。
+ */
 import { Settings } from '@vben/icons';
 
 import { VbenIconButton } from '@vben-core/shadcn-ui';

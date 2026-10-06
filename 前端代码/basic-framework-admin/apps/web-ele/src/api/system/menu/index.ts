@@ -1,3 +1,8 @@
+/**
+ * 菜单管理接口：菜单的增删改查、详情与批量删除。
+ * 精简列表一次取回整棵菜单树，供角色分配菜单等场景使用；
+ * 完整列表供菜单管理页的列表与表单使用。
+ */
 import { requestClient } from '#/api/request';
 
 export namespace SystemMenuApi {

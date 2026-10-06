@@ -20,7 +20,9 @@ import java.util.Map;
  * 如下字段，暂时未使用，暂时不支持：
  * user_name、authentication（用户信息）
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @TableName(value = "system_oauth2_access_token", autoResultMap = true)
 @KeySequence("system_oauth2_access_token_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。

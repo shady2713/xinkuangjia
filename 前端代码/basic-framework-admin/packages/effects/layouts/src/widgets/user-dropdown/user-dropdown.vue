@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 头部用户下拉：展示头像、描述与调用方传入的菜单，并内置锁屏与退出登录两项。
+ * 偏好开启时 Alt+L、Alt+Q 可唤起对应弹窗，快捷键还受 enableShortcutKey 开关控制。
+ * 只对外 emit logout 并打开锁屏弹窗，会话清理与路由跳转由使用方处理，
+ * 锁屏密码校验交给 LockScreenModal，本组件不接触凭据。
+ */
 import type { Component } from 'vue';
 
 import type { AnyFunction } from '@vben/types';

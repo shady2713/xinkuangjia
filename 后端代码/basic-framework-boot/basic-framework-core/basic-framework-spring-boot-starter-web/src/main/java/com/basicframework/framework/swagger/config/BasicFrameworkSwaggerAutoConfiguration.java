@@ -43,7 +43,9 @@ import java.util.Optional;
  * 1. Springdoc 文档地址：<a href="https://example.com/external/springdoc/springdoc-openapi">仓库</a>
  * 2. Swagger 规范，于 2015 更名为 OpenAPI 规范，本质是一个东西
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @AutoConfiguration(before = Knife4jAutoConfiguration.class) // before 原因，保证覆写的 Knife4jOpenApiCustomizer 先生效！相关 https://example.com/basic_framework/issues/954 讨论
 @ConditionalOnClass({OpenAPI.class})

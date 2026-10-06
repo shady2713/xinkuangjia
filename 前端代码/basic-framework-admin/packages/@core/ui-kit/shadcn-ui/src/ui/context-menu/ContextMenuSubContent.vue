@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 二级菜单面板：渲染子菜单内容，面板样式与主面板保持一致。
+ * 属性与事件沿用 reka-ui 的下拉子面板类型，开合仍由父级二级菜单容器控制。
+ */
 import type {
   DropdownMenuSubContentEmits,
   DropdownMenuSubContentProps,

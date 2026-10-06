@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 偏好抽屉的分段选择行原语：左侧标题加右侧单选按钮组。
+ * 与 select-item 的分工是选项少且需平铺展示，选项文案由调用方翻译后传入。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { ToggleGroup, ToggleGroupItem } from '@vben-core/shadcn-ui';

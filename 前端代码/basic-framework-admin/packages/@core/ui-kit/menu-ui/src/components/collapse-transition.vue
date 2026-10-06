@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 菜单折叠过渡：通过过渡钩子改写元素高度与内边距。
+ *
+ * 用于子菜单展开收起，原样式值暂存在 dataset，折叠状态由父组件决定。
+ */
 import type { RendererElement } from 'vue';
 
 defineOptions({

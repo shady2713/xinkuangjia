@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * 声明式 Alert 组件：用 AlertDialog 组合标题、图标、
+ * 内容与确认/取消按钮，供需要自定义插槽或自行
+ * 控制 open 的场景；命令式调用请走 AlertBuilder。
+ * beforeClose 返回 false 会拦截关闭，确认与取消
+ * 经上下文暴露给内容区。
+ */
 import type { Component } from 'vue';
 
 import type { AlertProps } from './alert';

@@ -1,3 +1,8 @@
+/**
+ * 原生表格工具栏绑定：返回工具栏与表格的模板 ref、搜索栏显隐状态，
+ * 并在表格挂载后延迟把 toolbar 连到表格实例，重复触发由 isBound 拦截。
+ * 只做连接，不加载数据，刷新动作由工具栏按钮自身触发。
+ */
 import type { VxeTableInstance, VxeToolbarInstance } from 'vxe-table';
 
 import { ref, watch } from 'vue';

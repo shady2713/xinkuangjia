@@ -1,3 +1,9 @@
+/**
+ * ESLint 配置入口：聚合各语言与工具链片段并导出 defineConfig。
+ * 顺序固定为 vue、javascript、ignores、prettier、typescript 等二十余项，
+ * 项目自定义片段与调用方追加的 config 排在最后，便于就近覆盖默认规则；
+ * 本模块只做组装与扁平化，规则内容仍由各 configs 片段负责。
+ */
 import type { Linter } from 'eslint';
 
 import {

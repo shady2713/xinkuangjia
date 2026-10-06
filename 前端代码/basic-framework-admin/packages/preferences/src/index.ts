@@ -1,3 +1,8 @@
+/**
+ * 应用偏好设置出口：defineOverridesPreferences 供各应用登记自己的默认偏好覆盖，
+ * 其余能力原样再导出 @vben-core/preferences。
+ * 默认值合并与持久化由核心包完成，这里不做校验、转换与存取。
+ */
 import type { Preferences } from '@vben-core/preferences';
 import type { DeepPartial } from '@vben-core/typings';
 

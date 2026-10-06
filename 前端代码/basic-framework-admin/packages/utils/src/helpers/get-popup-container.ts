@@ -1,7 +1,13 @@
 /**
- * If the node is holding inside a form, return the form element,
- * otherwise return the parent node of the given element or
- * the document body if the element is not provided.
+ * 弹层挂载容器解析：getPopupContainer 让弹层优先挂到最近的 form，其次父节点，最后 body；
+ * getVxePopupContainer 让表格内弹层挂到 vxe-table 的滚动区，一个页面有多个表格时必须传表格 id。
+ * 只负责挑选并返回 DOM 容器，弹层创建、定位与销毁由调用方组件完成。
+ */
+/**
+ * 解析弹层的挂载容器：节点在表单内时返回该表单，否则返回其父节点，未传节点时返回 body。
+ *
+ * @param node 触发弹层的元素；省略时直接落到 body
+ * @returns 弹层应当挂载的容器元素，保证始终返回一个真实节点
  */
 export function getPopupContainer(node?: HTMLElement): HTMLElement {
   return (

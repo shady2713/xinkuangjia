@@ -1,3 +1,9 @@
+/**
+ * 工具桶文件：提供 findIndex 兼容实现，并转发时间范围选择器默认属性。
+ *
+ * findIndex 在缺少原生实现时退化为 some 遍历，只查下标不改原数组；
+ * 其余业务格式化与请求工具分散在各业务目录，不在此文件实现。
+ */
 import type { Recordable } from '@vben/types';
 
 export * from './rangePickerProps';

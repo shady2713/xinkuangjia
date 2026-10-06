@@ -1,3 +1,8 @@
+/**
+ * 路由实例入口：按环境变量选择 hash 或 history 模式创建 vue-router，
+ * 装配静态路由与守卫，并导出 resetRoutes 供退出登录时清空动态路由。
+ * 具体路由表由 ./routes 与权限模块提供。
+ */
 import {
   createRouter,
   createWebHashHistory,

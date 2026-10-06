@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 分析页指标概览栅格：把 items 逐项渲染为数值卡片并做数字滚动动画。
+ * 数据由使用方通过 items 传入，本组件不负责取数与跳转。
+ */
 import type { AnalysisOverviewItem } from '../typing';
 
 import {

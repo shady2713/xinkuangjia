@@ -1,3 +1,8 @@
+/**
+ * 部门管理页的表单与列表字段定义：上拉部门树、下拉负责人。
+ * 列表复用模块级预加载的精简用户列表，把负责人编号换成昵称；
+ * 增删改查请求由页面 API 层发起，这里只描述字段与校验。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDeptApi } from '#/api/system/dept';

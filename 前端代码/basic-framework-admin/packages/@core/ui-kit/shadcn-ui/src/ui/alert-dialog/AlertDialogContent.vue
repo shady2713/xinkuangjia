@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 警告对话框内容层：组合遮罩与内容面板，处理居中、层级和出入场动画。
+ *
+ * open 与 modal 决定遮罩是否渲染，overlayBlur、zIndex 调整观感与层级；遮罩点击抛 close，
+ * 动画结束按 open 抛 opened 或 closed。标题、说明与按钮由使用方拼装，本组件不校验顺序，
+ * 并通过 getContentRef 把内容元素暴露给上层。
+ */
 import type { AlertDialogContentEmits, AlertDialogContentProps } from 'reka-ui';
 
 import type { ClassType } from '@vben-core/typings';

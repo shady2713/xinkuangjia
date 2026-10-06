@@ -23,7 +23,9 @@ import java.util.Map;
 /**
  * 验证码的配置类
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Configuration(proxyBeanMethods = false)
 @ImportAutoConfiguration(AjCaptchaAutoConfiguration.class) // 目的：解决 aj-captcha 针对 SpringBoot 3.X 自动配置不生效的问题

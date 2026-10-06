@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * 抽屉视图：按 DrawerApi 的状态渲染 Sheet 的方向、
+ * 遮罩、页头页脚与按钮；确认、取消转发给 api 回调，
+ * 关闭动画缺失时用兜底定时器收口 onClosed。
+ * 供 useVbenDrawer 生成受控抽屉，关闭条件与状态
+ * 判定在 drawer-api.ts。
+ */
 import type { DrawerProps, ExtendedDrawerApi } from './drawer';
 
 import {

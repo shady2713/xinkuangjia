@@ -14,7 +14,9 @@ import java.util.Map;
  * 登录用户信息
  * <p>承载鉴权上下文常见字段，避免在各层重复解析 Token 结果。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Data
 public class LoginUser {

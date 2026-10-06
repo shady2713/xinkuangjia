@@ -1,3 +1,10 @@
+/**
+ * 抽屉的类型契约：DrawerProps 与 DrawerState 描述
+ * 外观与状态字段，DrawerApiOptions 收拢生命周期
+ * 回调，ExtendedDrawerApi 补上 useStore 选择器。
+ * 不含运行时逻辑：状态流转在 drawer-api.ts，
+ * 视图在 drawer.vue。
+ */
 import type { Component, Ref } from 'vue';
 
 import type { ClassType, MaybePromise } from '@vben-core/typings';

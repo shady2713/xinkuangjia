@@ -1,3 +1,9 @@
+/**
+ * 定时任务模块的字段定义：新增编辑表单、搜索条件、列表列与详情项。
+ *
+ * 已有任务的处理器名锁定不可改，重试次数与间隔、超时时间以毫秒为单位；
+ * 只声明字段与渲染函数，启停、执行一次等动作由页面调用接口完成。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';

@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * 滑块拼图校验面板：对接 aj-captcha 的取图与校验接口，
+ * 按拖动位移提交坐标，成功后把加密凭据交给业务方。
+ *
+ * 自行管理全局鼠标、触摸监听与提示条尺寸换算，并向父级暴露
+ * init、refresh 供弹层驱动；弹层开合与类型分发不在本组件。
+ */
 import type { VerificationProps } from './typing';
 
 /**

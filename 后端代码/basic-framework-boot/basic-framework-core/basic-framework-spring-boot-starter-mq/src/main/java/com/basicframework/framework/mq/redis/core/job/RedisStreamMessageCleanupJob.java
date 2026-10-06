@@ -17,7 +17,9 @@ import java.util.List;
  *
  * @see <a href="https://www.cnblogs.com/nanxiang/p/16179519.html">记一次 redis stream 数据类型内存不释放问题</a>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 @AllArgsConstructor

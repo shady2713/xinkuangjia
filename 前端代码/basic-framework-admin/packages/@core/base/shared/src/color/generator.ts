@@ -1,3 +1,7 @@
+/**
+ * 主题色阶变量生成：把主色展开成 50~950 色阶，输出 --名称-色阶 的 HSL 变量。
+ * 供构建期与运行时注入 CSS 变量使用；不写 DOM，也不解析颜色格式。
+ */
 import { getColors } from 'theme-colors';
 
 import { convertToHslCssVar, TinyColor } from './convert';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 全局字号偏好：15 到 22 像素的步进器，越界输入自动夹紧到区间端点。
+ * 只负责取值与夹紧，字号到 CSS 变量的换算由主题层完成。
+ */
 import { watch } from 'vue';
 
 import { $t } from '@vben/locales';

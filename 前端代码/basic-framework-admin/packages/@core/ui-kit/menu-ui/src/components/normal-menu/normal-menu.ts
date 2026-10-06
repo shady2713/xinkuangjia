@@ -1,3 +1,7 @@
+/**
+ * 普通菜单的属性契约：声明菜单数据、当前激活路径、折叠开关与深浅主题。
+ * 只约定调用方传入的字段，渲染与交互实现不在类型层。
+ */
 import type { MenuRecordRaw } from '@vben-core/typings';
 
 interface NormalMenuProps {

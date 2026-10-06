@@ -1,3 +1,7 @@
+/**
+ * v-tippy 指令工厂：把绑定值与修饰符翻译成 tippy 配置，挂载时创建实例、卸载时销毁。
+ * 指令额外承担主题跟随，深色模式切换时刷新气泡主题；内容与触发时机由使用方给出。
+ */
 import type { ComputedRef, Directive } from 'vue';
 
 import { useTippy } from 'vue-tippy';

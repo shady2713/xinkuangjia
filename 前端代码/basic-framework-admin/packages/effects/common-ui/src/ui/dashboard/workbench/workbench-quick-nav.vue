@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 工作台快捷导航卡片：按 items 排列图标入口，点击项经 click 事件上抛。
+ * 只负责入口的展示与索引，目标地址由父级按 url 处理。
+ */
 import type { WorkbenchQuickNavItem } from '../typing';
 
 import {

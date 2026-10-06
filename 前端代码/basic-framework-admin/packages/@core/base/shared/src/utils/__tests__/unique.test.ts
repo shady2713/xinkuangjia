@@ -1,3 +1,7 @@
+/**
+ * 锁定 uniqueByField 的去重契约：按给定字段剔除重复项。
+ * 保留每项首次出现的位置与顺序，空数组与单元素数组原样返回。
+ */
 import { describe, expect, it } from 'vitest';
 
 import { uniqueByField } from '../unique';

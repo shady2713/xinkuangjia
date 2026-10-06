@@ -1,3 +1,8 @@
+/**
+ * 标签页拖拽排序组合式函数：在标签栏容器挂载 sortable。
+ * 只查找容器、过滤固定标签与不可拖拽项，并在样式切换或卸载时销毁实例；
+ * 移动端不注册拖拽，排序结果经 sortTabs 交给上层实际调整标签顺序。
+ */
 import type { Sortable } from '@vben-core/composables';
 import type { EmitType } from '@vben-core/typings';
 

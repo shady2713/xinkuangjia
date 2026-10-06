@@ -1,3 +1,7 @@
+/**
+ * 提交规范配置：按工作区包名生成 scope 白名单与 cz-git 提示项。
+ * 由仓库根配置复用；只管提交信息格式，不检查代码与 git 钩子。
+ */
 import { execSync } from 'node:child_process';
 
 import { getPackagesSync } from '@vben/node-utils';

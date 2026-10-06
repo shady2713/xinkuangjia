@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 下拉面板：接收浮层定位并渲染选项视口与上下滚动按钮。
+ * 进出场动画与菜单语义由 reka-ui 处理，选项由插槽传入。
+ */
 import type { SelectContentEmits, SelectContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

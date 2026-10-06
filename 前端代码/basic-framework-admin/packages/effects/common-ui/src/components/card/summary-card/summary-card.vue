@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 概要卡片：可选图标块 + 标题提示 + 滚动数值 + 可选百分比涨跌标识。
+ * 与统计卡片的分工：这里多一块图标且布局更紧凑，percent 缺省时涨跌整行隐藏。
+ * 纯展示组件，不发起请求，也不处理跳转。
+ */
 import type { SummaryCardProps } from './types';
 
 import {

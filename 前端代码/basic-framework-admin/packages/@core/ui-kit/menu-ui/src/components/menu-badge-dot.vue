@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 菜单徽标圆点：渲染带扩散动画的小圆点，颜色与尺寸由外部传入。
+ *
+ * 自身不判断是否显示，显隐与取值由菜单徽标组件决定。
+ */
 import type { CSSProperties } from 'vue';
 
 interface Props {

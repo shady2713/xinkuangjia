@@ -1,3 +1,8 @@
+/**
+ * 在线图标集：转出 @vben-core/icons 的基础图标能力，并把本项目用到的
+ * mdi、material-symbols、tabler、ant-design 图标注册为具名组件。
+ * 本地 svg 图标不在这里，见 ../svg。
+ */
 import { createIconifyIcon } from '@vben-core/icons';
 
 export * from '@vben-core/icons';

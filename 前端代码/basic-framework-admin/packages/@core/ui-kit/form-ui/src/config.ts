@@ -1,3 +1,8 @@
+/**
+ * 表单适配注册表：维护控件映射、v-model 事件名与全局公共配置。
+ * 由 setupVbenForm 启动时写入，component 名在此解析。
+ * 只提供查找表，不参与渲染与校验。
+ */
 import type { Component } from 'vue';
 
 import type {

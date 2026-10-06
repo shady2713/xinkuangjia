@@ -16,7 +16,9 @@ import java.time.LocalDateTime;
  *
  * 记录接口请求、响应、用户和耗时信息，用于审计和问题排查。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @TableName("infra_api_access_log")
 @KeySequence(value = "infra_api_access_log_seq")

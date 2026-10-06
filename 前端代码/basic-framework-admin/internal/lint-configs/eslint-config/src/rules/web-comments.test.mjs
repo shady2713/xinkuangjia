@@ -168,7 +168,7 @@ describe('声明职责注释', /** 显式声明的函数必须能追溯到中文
     const findings = checkWebFile(
       input(
         '/tmp/DUMMY-inline-callable.ts',
-        'let target;\n/** 旧说明。 */ target = () => 1;\nvoid target;\n',
+        'let target;\n/** 旧说明。 */ target = function namedCallback() {\n  return 1;\n};\nvoid target;\n',
       ),
     );
 
@@ -628,6 +628,185 @@ describe('vue 单文件组件检查', /** SFC 的脚本块必须按原始行号�
     );
 
     expect(findings).toEqual([]);
+  });
+
+  it('脚本块之前的中文 HTML 注释满足模块头说明', /** 有无脚本的两条分支必须承认同一份组件说明，否则正常写法会被误报。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-header.vue',
+        '<!-- 部门选择器 - 树形结构显示 -->\n<script lang="ts" setup>\nexport const value = 1;\n</script>\n',
+        { new: true },
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-module-doc');
+  });
+
+  it('脚本块之前的英文 HTML 注释不算模块头说明', /** 英文注释无法承担中文职责说明，放宽会漏掉真实缺口。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-header-en.vue',
+        '<!-- Department selector -->\n<script lang="ts" setup>\nexport const value = 1;\n</script>\n',
+        { new: true },
+      ),
+    );
+
+    expect(rules(findings)).toContain('web-module-doc');
+  });
+
+  it('脚本块之后的中文 HTML 注释不算模块头说明', /** 注释必须写在脚本块之前，模板内注释不能冒充组件职责说明。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-header-after.vue',
+        '<script lang="ts" setup>\nexport const value = 1;\n</script>\n<template>\n  <!-- 提交按钮 -->\n  <button>提交</button>\n</template>\n',
+        { new: true },
+      ),
+    );
+
+    expect(rules(findings)).toContain('web-module-doc');
+  });
+});
+
+describe('匿名回调的承载归并', /** 实参或表达式位置的匿名回调不是显式方法，要求必须归并到具名承载声明。 */ () => {
+  it('承载声明已注释时不再要求回调自身注释', /** 正常写法（注释写在具名声明上方）必须能消除诊断，否则回调断言无法修复。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-documented.ts',
+        '/** 根据路由生成面包屑列表。 */\nconst breadcrumbs = computed((): string[] => {\n  return [];\n});\nvoid breadcrumbs;\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-doc');
+  });
+
+  it('承载声明缺注释时改判到承载声明行', /** 归并只改落点，不豁免；缺失的职责说明仍必须被要求。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-missing.ts',
+        'const breadcrumbs = computed((): string[] => {\n  return [];\n});\nvoid breadcrumbs;\n',
+      ),
+    );
+
+    expect(findings).toContainEqual({
+      line: 1,
+      message: '函数或声明 缺少中文职责注释',
+      path: '/tmp/DUMMY-merge-missing.ts',
+      rule: 'web-doc',
+    });
+  });
+
+  it('导出变量承载的匿名回调按变量语句裁决', /** 导出常量是公开契约，承载声明缺注释时必须阻断。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-export.ts',
+        'export const total = computed(() => 1);\n',
+      ),
+    );
+
+    expect(rules(findings)).toContain('web-doc');
+  });
+
+  it('已注释方法内部的回调不再单独要求注释', /** 方法已说明职责时，其内部过滤回调不属于显式方法。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-method.ts',
+        '/** 组件定义。 */\nclass Widget {\n  /** 过滤可用项。\n   * @returns 可用项列表。\n   */\n  run(): unknown[] {\n    return this.items.filter((item) => item.enabled);\n  }\n\n  /** 原始项。 */\n  items: { enabled: boolean }[] = [];\n}\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-doc');
+  });
+
+  it('方法内部的回调不再单独要求参数与返回标签', /** 回调自带分支时也不应按它的签名要求契约标签。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-contract.ts',
+        '/** 组件定义。 */\nclass Widget {\n  /** 处理全部项。 */\n  run(): void {\n    this.items.forEach((item) => {\n      if (item.enabled) {\n        void item;\n      } else {\n        void item;\n      }\n    });\n  }\n\n  /** 原始项。 */\n  items: { enabled: boolean }[] = [];\n}\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-param');
+    expect(rules(findings)).not.toContain('web-returns');
+  });
+
+  it('没有具名承载声明的回调不作为独立声明要求', /** 模块级 watch 的回调没有声明可承载说明，文件职责由模块头承担。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-nocarrier.ts',
+        'import { watch } from "vue";\n\n/** 监听来源。 */\nconst source = 1;\nwatch(\n  () => source,\n  () => {\n    void source;\n  },\n);\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-doc');
+  });
+
+  it('回调自带实参内注释时不产生新的承载诊断', /** 归并只能消除无法修复的诊断，不能把已满足的写法改成新缺口。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-inline-doc.ts',
+        '/** 挂载组件。 */\ndeclare function mountComponent(options: object, ready: unknown): void;\n\nconst widget = mountComponent(\n  {},\n  /** 等待输入框渲染完成。 */ (item: string) => item.length > 0,\n);\nvoid widget;\n',
+      ),
+    );
+
+    expect(findings).toEqual([]);
+  });
+
+  it('赋值右侧的匿名回调按最近的具名声明裁决', /** 注释写在赋值语句上方无法消除诊断，属于同一类不可修复的落点错误。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-merge-assign.ts',
+        '/** 打印服务地址。 */\nfunction print(): void {\n  const server: Record<string, unknown> = {};\n  server.printUrls = () => {\n    return 1;\n  };\n}\nvoid print;\n',
+      ),
+    );
+
+    expect(rules(findings)).not.toContain('web-doc');
+  });
+});
+
+describe('诊断去重', /** 同一承载声明被两条路径裁决时不能重复计数。 */ () => {
+  it('导出箭头函数常量只报一条职责诊断', /** 变量语句与箭头函数会指向同一承载节点，重复行会让调用方误判问题数量。 */ () => {
+    const findings = checkWebFile(
+      input('/tmp/DUMMY-dedupe.ts', 'export const read = () => 1;\n'),
+    );
+    const docs = findings.filter(
+      /** 只统计职责说明诊断。 */ (finding) => finding.rule === 'web-doc',
+    );
+
+    expect(docs).toHaveLength(1);
+  });
+
+  it('不同规则的诊断不会被合并', /** 去重键包含规则码，合并会让参数与返回缺口被隐藏。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-dedupe-rules.ts',
+        'export function run(value: string) {\n  return value;\n}\n',
+      ),
+    );
+    const contracts = findings.filter(
+      /** 模块头说明是另一条规则，此处只核对声明级诊断。 */ (finding) =>
+        finding.rule !== 'web-module-doc',
+    );
+
+    expect(rules(findings)).toContain('web-doc');
+    expect(rules(findings)).toContain('web-param');
+    expect(rules(findings)).toContain('web-returns');
+    expect(contracts).toHaveLength(3);
+  });
+
+  it('不同行的同类诊断不会被合并', /** 去重键包含行号，合并会丢掉另一个真实缺口。 */ () => {
+    const findings = checkWebFile(
+      input(
+        '/tmp/DUMMY-dedupe-lines.ts',
+        'export const first = 1;\nexport const second = 2;\n',
+      ),
+    );
+    const lines = findings
+      .filter(
+        /** 只统计职责说明诊断。 */ (finding) => finding.rule === 'web-doc',
+      )
+      .map(/** 提取诊断行号。 */ (finding) => finding.line);
+
+    expect(lines).toEqual([1, 2]);
   });
 });
 

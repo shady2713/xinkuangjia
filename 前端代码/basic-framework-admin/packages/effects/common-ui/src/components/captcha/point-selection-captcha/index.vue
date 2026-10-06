@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 点选验证码：在底图上按点击顺序标号采集坐标，可配提示图或提示文字。
+ * 点击、确认、刷新三类事件把点位与清空回调交给业务方。
+ *
+ * 只做点击坐标换算与越界拦截，图片与校验接口由调用方传入；
+ * 弹层展示、类型分发与凭据提交属于上层 Verification 组件。
+ */
 import type { CaptchaPoint, PointSelectionCaptchaProps } from '../types';
 
 import { RotateCw } from '@vben/icons';

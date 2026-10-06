@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 页面骨架组件：按文档提示、标题描述、内容、页脚四段组织页面，
+ * 标题与描述可由属性或同名插槽填充，extra 插槽放头部操作区。
+ * 开启 autoContentHeight 后，按布局内容高度减去头尾与文档区
+ * 实高撑满剩余空间；只做布局与尺寸计算，不含数据请求与权限。
+ */
 import type { StyleValue } from 'vue';
 
 import type { PageProps } from './types';

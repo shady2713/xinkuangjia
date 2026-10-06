@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 带背景折角样式的一体式面包屑：用内联 ul/li 渲染层级，
+ * 点击非末级项向外 emit select 路径。
+ * 末级仅展示，不负责路由跳转与层级计算。
+ */
 import type { BreadcrumbProps } from './types';
 
 import { VbenIcon } from '../icon';

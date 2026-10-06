@@ -28,7 +28,9 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
  * <p>
  * 负责字典数据维护、按类型查询和字典值有效性校验。
  *
- * @author 李杰
+ * @author ruoyi
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Service
 @Slf4j

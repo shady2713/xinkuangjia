@@ -1,3 +1,9 @@
+/**
+ * 前端路由权限生成的契约用例：锁定无权限节点被过滤、角色为空时只保留无需权限的路由、
+ * 菜单可见但无权限的页面替换成 403 组件、有权限页面保留原组件，
+ * 以及 authority 元信息被配成字符串或对象时必须拒绝访问。
+ * 只覆盖前端静态路由模式，后端下发菜单与菜单树构建不在本用例范围内。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { describe, expect, it } from 'vitest';

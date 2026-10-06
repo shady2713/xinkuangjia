@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置「内容区宽度」分组：在宽屏与紧凑两种主内容宽度间二选一。
+ * 由偏好抽屉的外观区块挂载，选中项经 modelValue 回写布局宽度偏好；
+ * 只负责选项渲染与高亮，不计算实际宽度，也不影响侧边栏形态。
+ */
 import type { Component } from 'vue';
 
 import { computed } from 'vue';

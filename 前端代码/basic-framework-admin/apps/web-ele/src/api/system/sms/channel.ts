@@ -1,3 +1,7 @@
+/**
+ * 短信渠道接口：渠道的分页查询、详情、增删改与测试短信发送。
+ * 渠道密钥只在保存时上行，读取接口不返回；模板与按模板发送在 sms/template。
+ */
 import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';

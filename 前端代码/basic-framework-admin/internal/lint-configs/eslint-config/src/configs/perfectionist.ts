@@ -1,3 +1,7 @@
+/**
+ * 排序规则层：用 perfectionist 推荐集统一导入、导出与命名导出的排列顺序。
+ * 导入按 vue、@vben、内部别名分组；对象键排序关闭，避免误排业务字段。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

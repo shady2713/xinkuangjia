@@ -1,3 +1,8 @@
+/**
+ * 锁定 updateCSSVariables 的 :root 写入契约。
+ * 目标 style 元素不存在时须同步新建并挂进 head，
+ * 推迟到下一个宏任务挂载即视为失败。
+ */
 import { expect, it } from 'vitest';
 
 import { updateCSSVariables } from '../update-css-variables';

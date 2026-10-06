@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 下拉菜单：按 menus 渲染条目，点击非禁用项把整个 props 交给条目的 handler。
+ * 标签页工具栏等触发按钮使用；只做渲染与透传，条目的业务含义由使用方决定。
+ */
 import type {
   DropdownMenuProps,
   VbenDropdownMenuItem as IDropdownMenuItem,

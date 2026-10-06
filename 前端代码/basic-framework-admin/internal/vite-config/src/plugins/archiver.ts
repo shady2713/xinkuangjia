@@ -1,3 +1,10 @@
+/**
+ * 产物归档插件：构建收尾时把 dist 目录压缩成 ZIP，
+ * 落到 outputDir 下的 name.zip，默认是工程根目录的 dist.zip。
+ *
+ * 只在 build 阶段生效，压缩失败只打印错误、不中断构建；
+ * 也不负责上传与部署，需要 ZIP 产物的构建方自行装载。
+ */
 import type { PluginOption } from 'vite';
 
 import type { ArchiverPluginOptions } from '../typing.ts';

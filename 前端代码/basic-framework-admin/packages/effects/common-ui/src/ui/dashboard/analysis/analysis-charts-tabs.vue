@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 分析页图表切换容器：按 tabs 渲染标签头，每个标签内容由同名插槽提供。
+ * 默认选中第一个标签，只做标签切换与面板占位，不关心面板内的图表实现。
+ */
 import type { TabOption } from '@vben/types';
 
 import { computed } from 'vue';

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 密码强度条：按长度、大小写、数字与特殊字符五档打分，渲染五段色条。
+ * 由 VbenInputPassword 在开启强度提示时挂载，只读展示。
+ * 不做密码校验，也不拦截提交，强度分值仅供展示。
+ */
 import { computed } from 'vue';
 
 const props = withDefaults(defineProps<{ password?: string }>(), {

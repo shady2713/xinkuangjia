@@ -1,3 +1,8 @@
+/**
+ * 权限判定组合式函数：按用户角色或权限码判断当前登录者能否访问，
+ * 并可在前后端两种鉴权模式间切换，供 v-access 指令与业务按钮复用。
+ * 只读取用户与权限仓库的既有数据，不负责权限数据的拉取与写入。
+ */
 import { computed } from 'vue';
 
 import { preferences, updatePreferences } from '@vben/preferences';

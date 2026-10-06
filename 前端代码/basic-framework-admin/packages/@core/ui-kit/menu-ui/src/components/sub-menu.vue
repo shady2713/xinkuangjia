@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 子菜单：递归承载菜单树，汇总子级激活态并在弹出模式下用悬浮卡展示下一级。
+ * 通过子菜单上下文向下一层传递层级与鼠标移入标记，管理悬浮展开的延时与收回。
+ * 叶子菜单项由 menu-item 渲染，展开项集合仍由根菜单统一持有。
+ */
 import type { HoverCardContentProps } from '@vben-core/shadcn-ui';
 
 import type { MenuItemRegistered, MenuProvider, SubMenuProps } from '../types';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 语言切换挂件：下拉列出框架支持的语言，选中后写入偏好并加载对应语言包。
+ * 只负责切换动作，语言包的按需下载由 locales 包完成，持久化交给 preferences。
+ */
 import type { SupportedLanguagesType } from '@vben/locales';
 
 import { SUPPORT_LANGUAGES } from '@vben/constants';

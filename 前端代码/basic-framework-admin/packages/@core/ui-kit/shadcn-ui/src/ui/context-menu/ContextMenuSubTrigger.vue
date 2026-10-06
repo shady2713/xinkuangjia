@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 二级菜单触发条目：悬停或点击后展开子菜单，右侧固定右箭头提示可展开。
+ * inset 为真时左侧让出图标位，子菜单本体与开合状态由父级容器负责。
+ */
 import type { ContextMenuSubTriggerProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

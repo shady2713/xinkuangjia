@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 点选验证码卡片外壳：按传入尺寸换算出根内边距与图片大小，
+ * 提供标题、附加操作、图片区与底部提示四个插槽位，
+ * 图片上的原生点击事件原样上抛，不采集点位也不判断越界。
+ */
 import type { PointSelectionCaptchaCardProps } from '../types';
 
 import { computed } from 'vue';

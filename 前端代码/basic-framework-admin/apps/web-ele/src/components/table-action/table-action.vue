@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 表格操作列组件：按权限码与 ifShow 过滤 actions 与 dropDownActions，
+ * 渲染主按钮区与「更多」下拉，带 popConfirm 的动作统一走二次确认。
+ * 只负责按钮展示与动作分派，列表刷新由调用方传入的回调完成。
+ */
 import type { PropType } from 'vue';
 
 import type { ActionItem, ButtonType } from './typing';

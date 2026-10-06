@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 侧边栏偏好分组：显隐、折叠、悬浮展开、折叠标题、底部按钮与宽度。
+ * sidebarButtons 数组与折叠、固定两个布尔开关在此双向同步；
+ * 宽度限定 160 到 320，侧边栏本身由布局容器渲染。
+ */
 import type { LayoutType } from '@vben/types';
 
 import { watch } from 'vue';

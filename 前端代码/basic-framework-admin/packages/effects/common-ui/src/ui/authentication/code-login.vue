@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 验证码登录界面：渲染调用方传入的表单结构，校验通过后把表单值交给上层。
+ * 只负责校验、提交事件与返回登录页的跳转；验证码发送与登录请求由使用方处理。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { VbenFormSchema } from '@vben-core/form-ui';

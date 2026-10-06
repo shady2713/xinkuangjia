@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 下拉菜单内容面板：传送到 body，按触发器方位渲染浮层并做进出场动画，
+ * 与触发器默认间隔 4px。打开状态由根节点持有，菜单项由使用方放入插槽。
+ */
 import type {
   DropdownMenuContentEmits,
   DropdownMenuContentProps,

@@ -8,7 +8,9 @@ import lombok.extern.slf4j.Slf4j;
  * 短信客户端的抽象类，提供模板方法，减少子类的冗余代码
  *
  * @since 2021/2/1 9:28
- * @author 李杰
+ * @author zzf
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 public abstract class AbstractSmsClient implements SmsClient {

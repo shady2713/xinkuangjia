@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 定时任务日志详情弹窗：按弹窗传入的日志编号拉取单条日志并只读展示。
+ * 列表数据由 logger 列表页的表格提供，这里不提供编辑与重跑入口。
+ */
 import type { InfraJobLogApi } from '#/api/infra/job-log';
 
 import { ref } from 'vue';

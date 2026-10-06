@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 内置主题预设选择器：色板网格加取色器，同时决定全局主题色。
+ *
+ * 预设清单取自偏好层的 BUILT_IN_THEME_PRESETS，选中后按当前明暗模式
+ * 回填对应主色，写回主题色时做了 300 毫秒节流；
+ * custom 预设切换明暗时保留用户手选颜色，不覆盖为预设值。
+ */
 import type { BuiltinThemePreset } from '@vben/preferences';
 import type { BuiltinThemeType } from '@vben/types';
 

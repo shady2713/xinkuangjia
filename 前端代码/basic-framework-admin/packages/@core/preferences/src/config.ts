@@ -1,3 +1,8 @@
+/**
+ * 框架默认偏好：给出 app、面包屑、主题、侧边栏、标签页等分组的出厂值。
+ * 应用启动时由偏好管理器与项目覆盖项合并后生效；此处只声明静态默认值，
+ * 不负责持久化、监听系统主题或写入 CSS 变量。
+ */
 import type { Preferences } from './types';
 
 const defaultPreferences: Preferences = {

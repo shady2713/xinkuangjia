@@ -1,3 +1,7 @@
+/**
+ * 表格操作图标表：为操作项的 icon 字段提供按动作语义命名的 lucide 图标名。
+ * 只收敛图标名称，权限过滤、显隐判断与点击行为由 table-action.vue 负责。
+ */
 export const ACTION_ICON = {
   DOWNLOAD: 'lucide:download',
   UPLOAD: 'lucide:upload',

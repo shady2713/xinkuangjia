@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 通用图标渲染：按 icon 的形态选择组件、远程图片或 iconify 名称三条分支。
+ * 标签页、菜单等直接传图标组件或图标名；字符串为 http 地址时按远程图片渲染，
+ * 都无法命中时由 fallback 决定是否显示默认图标。
+ */
 import type { Component } from 'vue';
 
 import { computed } from 'vue';

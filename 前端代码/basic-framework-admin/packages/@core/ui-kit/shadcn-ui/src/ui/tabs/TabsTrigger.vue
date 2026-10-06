@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 页签触发件：单个可点击页签，激活态换底色与阴影，禁用态屏蔽点击。
+ * 用 useForwardProps 透传属性，不负责内容渲染与页签增删。
+ */
 import type { TabsTriggerProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

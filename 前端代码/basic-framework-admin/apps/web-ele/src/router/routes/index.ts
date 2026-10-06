@@ -1,3 +1,9 @@
+/**
+ * 路由聚合入口：汇总动态路由、核心路由与 404 兜底，供守卫与菜单模块取值。
+ *
+ * componentKeys 由 views 目录扫描生成，只供菜单选择组件；
+ * 权限拦截与动态挂载由 router/guard 负责，这里不做判断。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { mergeRouteModules, traverseTreeValues } from '@vben/utils';

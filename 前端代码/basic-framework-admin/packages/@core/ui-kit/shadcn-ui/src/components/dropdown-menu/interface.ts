@@ -1,3 +1,7 @@
+/**
+ * 下拉菜单的对外类型契约：VbenDropdownMenuItem 定义条目的值、标题、图标、
+ * 分割线与点击处理，DropdownMenuProps 只约定 menus 列表，两个菜单组件共用。
+ */
 import type { Component } from 'vue';
 
 interface VbenDropdownMenuItem {

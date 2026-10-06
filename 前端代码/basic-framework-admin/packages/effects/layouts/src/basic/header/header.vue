@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * 布局头部：按插槽序号升序渲染左右两侧入口，内置入口（刷新、搜索、偏好、主题、时区、
+ * 全屏、通知、用户下拉）各自受偏好开关控制，业务方以 header-left-n、header-right-n
+ * 插槽追加。
+ * 只做入口组装与事件透传，clearPreferencesAndLogout 抛给上层，面包屑与横向菜单也由
+ * BasicLayout 注入，各入口自身行为不在这里实现。
+ */
 import { computed, useSlots } from 'vue';
 
 import { useRefresh } from '@vben/hooks';

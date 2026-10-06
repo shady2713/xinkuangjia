@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 圆角偏好：以 0 到 1 的五档按钮选择 themeRadius。
+ * 只提供固定档位，非档位取值不会被选中。
+ */
 import { ToggleGroup, ToggleGroupItem } from '@vben-core/shadcn-ui';
 
 defineOptions({

@@ -1,3 +1,8 @@
+/**
+ * 偏好设置的只读视图：把管理器状态派生为组件常用的 computed 字段。
+ * 覆盖暗黑判断、布局模式、语言、是否移动端、标签页缓存与偏好按钮位置等；
+ * 只读不写，修改偏好仍需调用 preferencesManager 暴露的更新方法。
+ */
 import { computed } from 'vue';
 
 import { diff } from '@vben-core/shared/utils';

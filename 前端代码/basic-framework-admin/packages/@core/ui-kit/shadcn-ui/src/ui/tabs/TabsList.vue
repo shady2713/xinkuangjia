@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 页签列表容器：把一组触发件排成一行，提供灰底圆角内衬的容器外观。
+ * 溢出滚动、可关闭标签等页签条行为由 segmented 与 tabs-ui 另行封装。
+ */
 import type { TabsListProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

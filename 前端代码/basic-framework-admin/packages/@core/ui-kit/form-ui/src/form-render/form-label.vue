@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 表单项标签：渲染必填星号、标签文本、帮助提示与冒号，不参与校验。 */
 import type { CustomRenderType } from '../types';
 
 import {

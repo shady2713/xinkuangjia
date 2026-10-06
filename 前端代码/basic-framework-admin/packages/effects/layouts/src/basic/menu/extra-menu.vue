@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 侧边次级菜单：双列布局的展开列，以 vertical 模式渲染并按路由 activePath 高亮当前项。
+ * 菜单树与折叠态由 BasicLayout 传入，选中后交给 useNavigation 跳转，不自行改写菜单。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import type { MenuProps } from '@vben-core/menu-ui';

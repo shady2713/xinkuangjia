@@ -1,3 +1,9 @@
+/**
+ * 上传前校验工具：按上传类型校验文件 MIME 与大小，并给出中文错误提示。
+ *
+ * 图片 2MB、视频 10MB、语音 2MB，限额由类型决定并覆盖入参。
+ * 只做浏览器端预校验，不发起上传，服务端仍需自行校验文件合法性。
+ */
 import type { UploadRawFile } from 'element-plus';
 
 import { showErrorMessage } from '#/utils/feedback';

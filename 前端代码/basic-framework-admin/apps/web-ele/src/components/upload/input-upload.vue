@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 输入框上传组件：在只读输入框或文本域右侧挂一个上传入口，
+ * 把文件解析出的文本写回 v-model，并同步触发 change 事件。
+ * 不发起业务请求，上传与解析范围由 FileUpload 的 api 配置决定。
+ */
 import type { InputProps } from 'element-plus';
 
 import type { FileUploadProps } from './typing';

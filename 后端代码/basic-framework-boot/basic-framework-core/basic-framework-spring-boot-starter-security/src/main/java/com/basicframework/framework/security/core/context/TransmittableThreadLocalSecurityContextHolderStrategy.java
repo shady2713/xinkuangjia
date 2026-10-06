@@ -10,7 +10,9 @@ import org.springframework.util.Assert;
  * 基于 TransmittableThreadLocal 实现的 Security Context 持有者策略
  * 目的是，避免 @Async 等异步执行时，原生 ThreadLocal 的丢失问题
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  *
  */
 public class TransmittableThreadLocalSecurityContextHolderStrategy implements SecurityContextHolderStrategy {

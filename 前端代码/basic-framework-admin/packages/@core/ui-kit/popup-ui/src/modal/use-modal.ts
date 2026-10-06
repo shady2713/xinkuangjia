@@ -1,3 +1,10 @@
+/**
+ * 声明弹窗组件与命令式 API：返回 [Modal, api]，
+ * 模板挂组件、逻辑改 api；传入 connectedComponent
+ * 时改用 provide/inject 配对内外两层弹窗，
+ * 嵌套弹窗不继承上层配置。默认配置按
+ * setDefaultModalProps、上层与本次 options 覆盖。
+ */
 import type { ExtendedModalApi, ModalApiOptions, ModalProps } from './modal';
 
 import {

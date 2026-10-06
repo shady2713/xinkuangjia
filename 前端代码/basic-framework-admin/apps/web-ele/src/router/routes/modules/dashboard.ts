@@ -1,3 +1,9 @@
+/**
+ * 动态路由模块：声明仪表盘与个人中心路由，并给出菜单元信息。
+ *
+ * 由 routes/index.ts 的 glob 自动汇总，无需手工注册；
+ * 菜单可见性与 order、icon 由 meta 提供，权限过滤不在这里处理。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { $t } from '#/locales';

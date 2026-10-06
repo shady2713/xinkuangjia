@@ -1,3 +1,8 @@
+/**
+ * 数值与金额格式化：分元换算、小数补位、环比与 ERP 数量/价格展示在此统一。
+ * 含 vxe 表格列 formatter 与输入框格式化两类入口；只决定展示形态，
+ * 计算口径与单位约定由调用方决定。
+ */
 import { isEmpty, isString, isUndefined } from './inference';
 
 /**

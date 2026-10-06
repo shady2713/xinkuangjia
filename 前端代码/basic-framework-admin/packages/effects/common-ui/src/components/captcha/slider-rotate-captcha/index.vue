@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 旋转验证码：图片随机旋转一个目标角度，用户拖动滑块把它转回原位，
+ * 松手时按角度差是否小于 diffDegree 判定通过，点图可重新换图。
+ *
+ * 滑块本体复用 slider-captcha 的联动模式，本组件只负责角度换算、
+ * 随机目标角度生成与成功事件回传，不直接请求后端接口。
+ */
 import type {
   CaptchaVerifyPassingData,
   SliderCaptchaActionType,

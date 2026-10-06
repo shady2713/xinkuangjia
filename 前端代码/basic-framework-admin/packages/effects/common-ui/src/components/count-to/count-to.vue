@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 数字滚动组件：endVal 变化时按 duration/delay 与过渡曲线从当前值滚向目标值。
+ * 整数部分按 separator 分千位，decimals 控制小数位，前后缀插槽与样式类名可替换，
+ * 起止分别抛出 started/finished 事件；组件不负责取数与业务侧数值加工。
+ */
 import type { CountToProps } from './types';
 
 import { computed, onMounted, ref, watch } from 'vue';

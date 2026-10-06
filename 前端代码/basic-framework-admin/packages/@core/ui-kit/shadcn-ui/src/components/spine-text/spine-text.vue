@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 流光文字：给默认插槽里的文字叠一层来回扫过的高光，只负责视觉表现。
+ *
+ * 文案与尺寸由使用方通过插槽和 class 传入，animationDuration 决定单次扫描秒数，
+ * animationIterationCount 决定循环次数；不做排版，也不处理任何业务状态。
+ */
 import { computed } from 'vue';
 
 const { animationDuration = 2, animationIterationCount = 'infinite' } =

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 认证页布局切换挂件：下拉在左对齐、居中、右对齐三种面板布局间切换。
+ * 由认证页工具栏挂载，选中值写入 preferences 的 authPageLayout；
+ * 只切换布局偏好，不负责认证页本身的渲染与登录流程。
+ */
 import type { AuthPageLayoutType } from '@vben/types';
 
 import type { VbenDropdownMenuItem } from '@vben-core/shadcn-ui';

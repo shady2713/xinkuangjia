@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 标签原子组件：包装 reka-ui Label，统一字号字重与禁用态透明度。
+ * 只处理样式与 class 合并，不感知具体表单字段；
+ * 需与字段 id 关联的标签请改用 form 目录的 FormLabel。
+ */
 import type { LabelProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

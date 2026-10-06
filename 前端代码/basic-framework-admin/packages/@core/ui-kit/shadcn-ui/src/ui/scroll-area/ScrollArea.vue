@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 滚动容器：包裹内容视口并固定挂载纵向滚动条与角落补块。
+ * onScroll 事件透传给使用方，滚动条外观由 ScrollBar 提供。
+ */
 import type { ScrollAreaRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

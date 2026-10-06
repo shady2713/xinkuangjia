@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 忘记密码页：收集手机号、短信验证码与新密码，提交后重置并跳回首页。
+ *
+ * 短信下发固定带 scene=23，密码在提交前做 MD5，失败只记日志保留表单；
+ * 页面负责表单编排与跳转，鉴权令牌与登录态由认证状态模块处理。
+ */
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 

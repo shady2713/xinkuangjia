@@ -1,3 +1,7 @@
+/**
+ * 全局忽略清单：让 ESLint 跳过依赖、构建产物、锁文件、缓存与生成文件。
+ * 只声明忽略范围，不改变任何规则的严重级别；src 下的业务代码仍全部纳入检查。
+ */
 import type { Linter } from 'eslint';
 
 export async function ignores(): Promise<Linter.Config[]> {

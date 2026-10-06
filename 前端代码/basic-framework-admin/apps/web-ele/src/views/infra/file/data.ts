@@ -1,3 +1,9 @@
+/**
+ * 文件管理模块的字段定义：上传表单、搜索条件与列表列。
+ *
+ * 搜索支持路径、类型与创建时间，文件内容列以插槽交给页面渲染；
+ * 只声明字段定义，上传动作与接口调用由同目录页面负责。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

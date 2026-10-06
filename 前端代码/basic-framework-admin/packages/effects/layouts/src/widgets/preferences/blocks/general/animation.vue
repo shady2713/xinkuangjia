@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置「动画」分组：控制切换进度条、加载动画与页面转场开关。
+ * 由偏好抽屉的通用分组挂载，转场预设只提供 fade 系列四种可选；
+ * 动画样式本身由全局样式表定义，这里只负责选择与回写偏好字段。
+ */
 import { $t } from '@vben/locales';
 
 import SwitchItem from '../switch-item.vue';

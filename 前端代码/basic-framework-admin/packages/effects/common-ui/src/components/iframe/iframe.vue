@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 内嵌页面容器：用原生 iframe 渲染 src，供打开外部系统或独立页面。
+ * 挂载后延迟计算视口剩余高度作为容器高度，以避开顶栏与标签栏，
+ * 期间展示 v-loading 遮罩；不做跨域通信、路由同步与失败提示。
+ */
 import { onMounted, ref } from 'vue';
 
 interface IFrameProps {

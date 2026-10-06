@@ -1,3 +1,9 @@
+/**
+ * 按钮类型契约：VbenButtonProps 描述基础按钮入参，
+ * VbenButtonGroupProps 描述按钮组的选项与多选/单选开关，
+ * 另含 CustomRenderType、ValueType 两个渲染与取值别名。
+ * 只声明类型，不含渲染实现。
+ */
 import type { AsTag } from 'reka-ui';
 
 import type { Component } from 'vue';

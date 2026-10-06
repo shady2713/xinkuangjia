@@ -1,3 +1,8 @@
+/**
+ * 浏览器下载工具：把 URL、Base64、图片地址、Blob 与 BlobPart 统一落盘。
+ * Chrome/Safari 走 a 标签触发，其余浏览器回退到新窗口打开下载地址；
+ * 只负责触发与临时 URL 回收，文件名业务规则与接口鉴权由调用方决定。
+ */
 import { openWindow } from './window';
 
 interface DownloadOptions<T = string> {

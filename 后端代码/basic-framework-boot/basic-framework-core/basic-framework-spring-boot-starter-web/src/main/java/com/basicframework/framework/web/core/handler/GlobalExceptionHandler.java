@@ -52,7 +52,9 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 /**
  * 全局异常处理器，将 Exception 翻译成 CommonResult + 对应的异常编号
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @RestControllerAdvice
 @AllArgsConstructor

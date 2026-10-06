@@ -1,3 +1,7 @@
+/**
+ * 对话框桶文件：对外聚合根节点、触发与关闭按钮、内容面板、滚动内容面板、
+ * 标题、说明、头部与底部共九个导出，遮罩层属内部实现不在此暴露。
+ */
 export { default as Dialog } from './Dialog.vue';
 export { default as DialogClose } from './DialogClose.vue';
 export { default as DialogContent } from './DialogContent.vue';

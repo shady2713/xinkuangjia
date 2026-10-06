@@ -1,3 +1,8 @@
+/**
+ * 偏好设置的静态常量：内置主题预设、选色面板可选集合与时区下拉选项。
+ * COLOR_PRESETS 取内置预设前 7 项供布局层的选色组件使用，
+ * DEFAULT_TIME_ZONE_OPTIONS 供 stores 的时区模块使用；此处没有运行时逻辑。
+ */
 import type { BuiltinThemeType, TimezoneOption } from '@vben-core/typings';
 
 interface BuiltinThemePreset {

@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 全屏切换按钮：点击调用 useFullscreen 切换全屏，并按状态换最大/最小化图标。
+ * 应用顶栏使用；初始化时把 webkit、moz、ms 前缀的全屏元素一并纳入判断，
+ * 不负责进入全屏后的布局适配，那由使用方决定。
+ */
 import { Maximize, Minimize } from '@vben-core/icons';
 
 import { useFullscreen } from '@vueuse/core';

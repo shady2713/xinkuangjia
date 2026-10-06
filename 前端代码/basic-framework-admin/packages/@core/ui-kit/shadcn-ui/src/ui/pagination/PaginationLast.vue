@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 分页末页按钮：内部按钮沿用描边小尺寸，默认渲染双右箭头图标。
+ * 与首页按钮分工对称，跳转和禁用判断都交给 reka-ui 根节点。
+ */
 import type { PaginationLastProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

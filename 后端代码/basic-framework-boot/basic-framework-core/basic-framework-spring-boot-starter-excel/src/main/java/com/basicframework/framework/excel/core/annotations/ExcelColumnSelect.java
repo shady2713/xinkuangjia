@@ -11,7 +11,9 @@ import java.lang.annotation.Target;
  *
  * 其中 {@link #dictType()} 和 {@link #functionName()} 二选一
  *
- * @author 李杰
+ * @author HUIHUI
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)

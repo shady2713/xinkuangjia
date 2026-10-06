@@ -1,3 +1,9 @@
+/**
+ * 参数配置模块的字段定义：新增编辑表单、搜索条件与列表列。
+ *
+ * 键名、键值、分类为必填，是否可见取布尔字典，时间列走统一格式化；
+ * 只声明字段定义，请求与弹窗装配由同目录页面负责。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

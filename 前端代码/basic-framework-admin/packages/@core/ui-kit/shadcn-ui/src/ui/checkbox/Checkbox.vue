@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 复选框组件：在 reka-ui 的 CheckboxRoot 上补齐主题描边、悬停态与勾选图标。
+ * indeterminate 为真时渲染半选横线，其余状态由父级 v-model 决定；
+ * 组件不做分组、校验与错误提示，表单接入与提交由调用方负责。
+ */
 import type { CheckboxRootEmits, CheckboxRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

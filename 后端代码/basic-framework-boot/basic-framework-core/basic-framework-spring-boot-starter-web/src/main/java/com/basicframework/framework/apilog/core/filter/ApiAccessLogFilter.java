@@ -44,7 +44,9 @@ import static com.basicframework.framework.common.util.json.JsonUtils.toJsonStri
  *
  * 目的：记录 API 访问日志到数据库中
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 public class ApiAccessLogFilter extends ApiRequestFilter {

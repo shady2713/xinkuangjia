@@ -1,3 +1,7 @@
+/**
+ * 日期时间工具：统一 dayjs 的 utc/timezone 扩展，提供格式化与时区读写。
+ * 供列表列 formatter、表单回显与导出复用；不含业务时间范围与查询条件拼装。
+ */
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';

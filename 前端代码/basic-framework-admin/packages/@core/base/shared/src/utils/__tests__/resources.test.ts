@@ -1,3 +1,8 @@
+/**
+ * 锁定 loadScript 的加载契约：同一 src 不复插第二个标签。
+ * load 事件 resolve、error 事件以加载失败消息拒绝，
+ * 并发调用只复用一个 script 标签，各自返回 promise。
+ */
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { loadScript } from '../resources';

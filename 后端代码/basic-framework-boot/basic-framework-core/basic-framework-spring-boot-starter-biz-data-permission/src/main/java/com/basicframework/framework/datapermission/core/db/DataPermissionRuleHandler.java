@@ -20,7 +20,9 @@ import static com.basicframework.framework.security.core.util.SecurityFrameworkU
  * <p>底层基于 MyBatis Plus 数据权限插件，在 SQL 执行前根据当前用户的数据权限动态追加过滤条件，
  * 确保查询结果只包含当前用户允许访问的数据。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @RequiredArgsConstructor
 public class DataPermissionRuleHandler implements MultiDataPermissionHandler {

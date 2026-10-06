@@ -1,3 +1,8 @@
+/**
+ * OAuth2 授权开放接口：供 SSO 授权确认页读取客户端信息并提交勾选的范围。
+ * 授权结果由浏览器按重定向地址跳回业务系统，本模块不保存令牌；
+ * 客户端的后台维护接口在 oauth2/client。
+ */
 import { requestClient } from '#/api/request';
 
 /** OAuth2.0 授权信息响应 */

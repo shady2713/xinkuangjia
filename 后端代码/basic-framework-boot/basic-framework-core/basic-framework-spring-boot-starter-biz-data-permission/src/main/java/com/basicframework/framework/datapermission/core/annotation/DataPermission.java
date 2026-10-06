@@ -9,7 +9,9 @@ import java.lang.annotation.*;
  *
  * <p>可声明在类或方法上，用于控制当前调用链使用哪些数据权限规则，也可以临时关闭数据权限过滤。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)

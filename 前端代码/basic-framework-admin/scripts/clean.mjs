@@ -1,3 +1,10 @@
+/**
+ * 仓库清理脚本：从当前工作目录递归删除 node_modules、dist、.turbo 和 dist.zip。
+ *
+ * 跳过 .git、.idea、.vscode 等目录，每批并发 10、递归深度上限 10；
+ * 只有追加 --del-lock 才会连 pnpm-lock.yaml 一起删除。
+ * 只负责删除，不安装依赖也不重建产物。
+ */
 import { promises as fs } from 'node:fs';
 import { join, normalize } from 'node:path';
 

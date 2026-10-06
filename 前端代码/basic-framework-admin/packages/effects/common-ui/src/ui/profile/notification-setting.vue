@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 通知设置表单：按 formSchema 把每项渲染成标签、说明与开关。
+ *
+ * 切换开关只抛出 { fieldName, value }，保存与请求由外层页面负责；
+ * 具体通知渠道与字段由 formSchema 提供方定义，本组件不感知。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { SettingProps } from './types';

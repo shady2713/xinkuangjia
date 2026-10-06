@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置「版权」分组：管理版权开关与公司名、站点、日期、ICP 备案字段。
+ * 开关关闭或父级 disabled 时，下面各输入项统一置灰不可编辑；
+ * 只回写偏好字段，页脚中的实际展示由布局组件按这些偏好渲染。
+ */
 import { computed } from 'vue';
 
 import { $t } from '@vben/locales';

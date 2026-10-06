@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 头像组件：在 reka-ui 头像原语上补尺寸、填充方式
+ * 与右下角状态圆点，图片缺失时用 alt 末两位字母兜底。
+ * 不负责上传、裁剪，也不判断在线状态。
+ */
 import type {
   AvatarFallbackProps,
   AvatarImageProps,

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 标签栏全屏按钮：点击翻转 screen 双向绑定值，图标随之切换。 */
 import { Fullscreen, Minimize2 } from '@vben-core/icons';
 
 const screen = defineModel<boolean>('screen');

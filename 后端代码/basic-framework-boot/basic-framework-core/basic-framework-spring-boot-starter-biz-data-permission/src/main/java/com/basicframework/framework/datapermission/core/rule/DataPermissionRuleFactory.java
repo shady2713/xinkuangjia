@@ -7,7 +7,9 @@ import java.util.List;
  *
  * <p>作为数据权限规则容器，根据当前调用上下文筛选实际需要参与 SQL 重写的规则。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface DataPermissionRuleFactory {
 

@@ -1,5 +1,10 @@
 <!-- add by puhui999：vxe table 工具栏二次封装，提供给 vxe 原生列表使用 -->
 <script setup lang="ts">
+/**
+ * 原生 vxe 表格工具栏：渲染搜索开关、刷新与全屏按钮，并用 toolPrefix 插槽
+ * 承载业务按钮；搜索栏显隐经 update:hiddenSearch 交给父组件保存。
+ * 供 useTableToolbar 挂到原生 VxeTable 上，VbenVxeGrid 内部不使用本组件。
+ */
 import type { VxeToolbarInstance } from 'vxe-table';
 
 import { ref } from 'vue';

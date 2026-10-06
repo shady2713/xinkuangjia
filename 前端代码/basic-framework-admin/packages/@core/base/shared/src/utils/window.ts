@@ -1,3 +1,10 @@
+/**
+ * 新窗口打开工具：菜单与标签页跳出当前窗口打开站内目标时使用。
+ * openWindow 负责 noopener/noreferrer 特性串。
+ * openRouteInNewWindow 拼出站内路由的绝对地址。
+ * 地址取自 location 的 origin 与 hash 模式；
+ * 不做路由跳转、权限判断，也不校验窗口是否真的打开成功。
+ */
 interface OpenWindowOptions {
   noopener?: boolean;
   noreferrer?: boolean;

@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 主题切换按钮：按 isDark 模型值翻转深浅色，尽量播放圆形扩散过渡动画。
+ * type 决定图标按钮或普通按钮外观；不读偏好，主题状态由 theme-toggle 持有。
+ */
 import { computed, nextTick } from 'vue';
 
 import { VbenButton } from '@vben-core/shadcn-ui';

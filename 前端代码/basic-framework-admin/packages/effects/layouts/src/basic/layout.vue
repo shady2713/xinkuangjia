@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 后台主布局：把偏好设置映射成 VbenAdminLayout 的尺寸与显隐参数，并组装 logo、头部、
+ * 侧边栏与混合/双列菜单、标签栏、内容区、页脚和浮层偏好按钮。
+ * 菜单数据在此统一做多语言包装，布局切换、语言与时区变更后的整页刷新、侧边栏折叠
+ * 也在此收口；菜单树与选中态来自 ./menu，页面渲染交给内容区，本组件不含业务页面。
+ */
 import type { SetupContext } from 'vue';
 import type { RouteLocationNormalizedLoaded } from 'vue-router';
 

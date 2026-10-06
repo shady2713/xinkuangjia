@@ -1,3 +1,9 @@
+/**
+ * 应用启动编排：在挂载根组件前按序完成组件适配器、表单、国际化、状态库
+ * 与路由的初始化，并注册权限指令、加载指令、tippy 与 Motion 插件。
+ * 由 main.ts 读取运行环境变量后调用；各能力的实现分散在 adapter、locales、
+ * router 等模块，这里只负责调用顺序与挂载时机。
+ */
 import { createApp, watchEffect } from 'vue';
 import VueDOMPurifyHTML from 'vue-dompurify-html';
 

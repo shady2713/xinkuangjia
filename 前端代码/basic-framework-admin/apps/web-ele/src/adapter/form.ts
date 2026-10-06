@@ -1,3 +1,9 @@
+/**
+ * 表单适配层：登记本应用的 Element Plus 控件映射与命名校验规则，
+ * 并对外提供带值类型的 useVbenForm 与字段规则构造器。
+ * 控件本体的注册在 adapter/component，规则的正则实现留在 field-rules，
+ * 本模块只做注册与包装，不实现具体校验算法。
+ */
 import type {
   VbenFormSchema as FormSchema,
   FormValues,

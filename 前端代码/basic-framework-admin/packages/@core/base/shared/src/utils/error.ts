@@ -1,3 +1,8 @@
+/**
+ * 错误信息提取与日志出口：把任意抛出值收敛成可展示文案与可检索元数据。
+ * 供请求层与业务 catch 分支统一取 message，并按作用域输出到控制台；
+ * 不做上报与弹窗，取不到信息时返回调用方给出的兜底文案。
+ */
 type ErrorLike = {
   code?: number | string;
   message?: string;

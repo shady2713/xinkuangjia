@@ -1,3 +1,8 @@
+/**
+ * 操作日志的检索项、表格列与详情字段定义，列表页和详情弹窗共用。
+ * 详情比列表多出链路追踪、请求地址等字段，按行数据决定是否展示；
+ * 日志由后端切面记录，本模块只读展示。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';

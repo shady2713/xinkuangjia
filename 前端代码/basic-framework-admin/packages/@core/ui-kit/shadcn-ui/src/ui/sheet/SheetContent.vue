@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 抽屉内容面板：按 side 四向滑入，负责挂载位置、遮罩与出入场动画编排。
+ * appendTo 为 body 时用 fixed 定位，否则相对挂载点 absolute，modal、overlayBlur、zIndex 调控遮罩与层级。
+ * 面板动画结束才抛出 opened/closed 给抽屉同步状态；开合状态与页头页脚由 Sheet 根和调用方掌握。
+ */
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

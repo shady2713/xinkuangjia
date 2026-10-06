@@ -1,3 +1,9 @@
+/**
+ * 菜单与路由记录类型：声明服务端权限菜单与前端菜单条目的形状。
+ * MenuRecordRaw 是前端消费的菜单结构，含徽标（角标）字段。
+ * ExRouteRecordRaw 给 vue-router 记录补父级链。
+ * 服务端原始菜单由 AppRouteRecordRaw 承载，转换由使用方完成。
+ */
 import type { Component } from 'vue';
 import type { RouteRecordRaw } from 'vue-router';
 

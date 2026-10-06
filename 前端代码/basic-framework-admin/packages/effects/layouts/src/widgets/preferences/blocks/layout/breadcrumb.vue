@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置「面包屑」分组：控制开关、图标、首页项与样式类型。
+ * 仅在侧边导航类布局下由抽屉启用，父级 disabled 时其余选项整体置灰；
+ * 只回写偏好字段，面包屑的实际渲染由布局组件负责。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { computed } from 'vue';

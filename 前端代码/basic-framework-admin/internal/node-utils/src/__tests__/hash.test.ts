@@ -1,3 +1,9 @@
+/**
+ * 锁定 generatorContentHash 的对外契约：输出小写 md5 十六进制串，
+ * 传入长度时按前缀截断，空内容同样返回真实摘要而不是报错。
+ *
+ * 只与 node:crypto 的计算结果比对，不覆盖调用方如何使用该摘要。
+ */
 import { createHash } from 'node:crypto';
 
 import { describe, expect, it } from 'vitest';

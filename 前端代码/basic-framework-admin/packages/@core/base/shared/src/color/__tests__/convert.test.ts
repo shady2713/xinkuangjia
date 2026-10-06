@@ -1,3 +1,8 @@
+/**
+ * 颜色转换契约测试：锁定 convertToHsl 与 convertToHslCssVar 的输出格式差异。
+ * 另覆盖 convertToRgb 剔除 deg 等单位、isValidColor 对空入参返回 false。
+ * 只验证纯函数结果，不涉及主题变量生成与 DOM 注入。
+ */
 import { describe, expect, it } from 'vitest';
 
 import {

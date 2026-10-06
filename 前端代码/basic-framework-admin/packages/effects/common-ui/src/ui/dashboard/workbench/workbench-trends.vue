@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 工作台最新动态卡片：按 items 渲染头像、标题、摘要与日期的竖向列表。
+ * 纯展示组件，不含分页、筛选与加载状态，数据与时机由父级控制。
+ */
 import type { WorkbenchTrendItem } from '../typing';
 
 import {

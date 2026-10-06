@@ -1,3 +1,7 @@
+/**
+ * 抽屉方向样式表：用 cva 生成面板基础外观，按 side 给出上、下、左、右四向滑入类名，默认 right。
+ * SheetContent 消费它再交给 cn 合并；这里只产出类名，不含面板结构、遮罩与动画事件。
+ */
 import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';

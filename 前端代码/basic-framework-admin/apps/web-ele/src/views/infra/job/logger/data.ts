@@ -1,3 +1,8 @@
+/**
+ * 定时任务执行日志的检索条件、表格列与详情字段定义。
+ * 由日志列表页和日志详情弹窗共用，只描述展示结构；
+ * 日志的采集、重试与落库都在后端调度侧，这里不发起请求。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';

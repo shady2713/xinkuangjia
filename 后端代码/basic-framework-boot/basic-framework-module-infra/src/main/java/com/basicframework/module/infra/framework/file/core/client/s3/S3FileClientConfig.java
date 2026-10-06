@@ -14,7 +14,9 @@ import jakarta.validation.constraints.NotNull;
  *
  * 兼容 MinIO、阿里云 OSS、腾讯云 COS、七牛云、华为云 OBS、火山云等 S3 协议存储。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Data
 public class S3FileClientConfig implements FileClientConfig {

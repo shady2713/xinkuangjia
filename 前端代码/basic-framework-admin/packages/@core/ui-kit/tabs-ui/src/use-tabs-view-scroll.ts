@@ -1,3 +1,10 @@
+/**
+ * 标签页横向滚动组合式函数：维护滚动按钮显隐、左右到达状态与激活项可见性。
+ * 用 ResizeObserver 跟踪尺寸变化，
+ * 用 MutationObserver 跟踪标签数量增减；
+ * 对外暴露 scrollDirection 与 handleWheel 等入口，
+ * 不负责标签数据与路由切换。
+ */
 import type { TabsProps } from './types';
 
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';

@@ -1,3 +1,8 @@
+/**
+ * shadcn-ui 组件总出口：把 accordion、dialog、form、dropdown-menu
+ * 等各子目录的组件原样重新导出，业务侧统一从 @vben-core/shadcn-ui 引入。
+ * 本文件只做汇总，不包装也不改写任何组件实现。
+ */
 export * from './accordion';
 export * from './alert-dialog';
 export * from './avatar';

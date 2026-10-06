@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 布局内容区：承载页面主体，按定宽模式与四边内边距属性生成内联样式。
+ *
+ * 同时渲染 overlay 插槽并把 DOM 引用交给内容区尺寸统计；
+ * 滚动阴影、页脚吸底与隐藏逻辑由外壳负责。
+ */
 import type { CSSProperties } from 'vue';
 
 import type { ContentCompactType } from '@vben-core/typings';

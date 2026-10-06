@@ -1,3 +1,8 @@
+/**
+ * 测试规则片段：为 Vitest 用例文件注册校验规则。
+ * 仅命中 __tests__、*.spec、*.test 等用例路径，放行 console 与 process，
+ * 并借 no-only-tests 拦截误提交的 .only；跑测试本身不在此配置内。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

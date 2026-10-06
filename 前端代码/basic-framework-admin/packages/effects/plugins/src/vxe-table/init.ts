@@ -1,3 +1,8 @@
+/**
+ * 表格初始化：把项目用到的 vxe-table 与 vxe-pc-ui 组件注册进 VxeUI，
+ * 由 setupVbenVxeTable 接入暗色主题、中英文语言包与默认格式化器。
+ * 只做全局注册与配置，不创建表格实例；未注册组件用空组件占位避免报错。
+ */
 import type { SetupVxeTable } from './types';
 
 import { defineComponent, watch } from 'vue';

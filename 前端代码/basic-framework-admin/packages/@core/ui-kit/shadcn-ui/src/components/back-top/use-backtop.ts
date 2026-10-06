@@ -1,3 +1,8 @@
+/**
+ * 回到顶部组合式函数：在 document 或 target 指定元素上
+ * 节流监听滚动，暴露 visible 与 handleClick 平滑回顶。
+ * 目标选择器取不到元素时直接抛错，不做降级兜底。
+ */
 import type { BacktopProps } from './backtop';
 
 import { onMounted, ref, shallowRef } from 'vue';

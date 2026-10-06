@@ -1,3 +1,8 @@
+/**
+ * 锁定 letter 模块四个字符串转换函数的边界：
+ * 首字母大小写只动首字符，toCamelCase 按父键拼接并归一小写，
+ * kebabToCamelCase 忽略多余连字符，保留首词原有大小写。
+ */
 import { describe, expect, it } from 'vitest';
 
 import {

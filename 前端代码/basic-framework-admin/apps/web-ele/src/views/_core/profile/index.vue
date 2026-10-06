@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 个人中心页面容器：左侧资料卡加右侧标签页，聚合基本设置与密码设置。
+ *
+ * 挂载时拉取用户资料，子组件保存成功后刷新资料并同步用户状态；
+ * 表单字段与保存逻辑在 modules 下的子组件中，本页只做编排与状态共享。
+ */
 import type { SystemUserProfileApi } from '#/api/system/user/profile';
 
 import { onMounted, ref } from 'vue';

@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 图片裁剪组件：在容器内展示原图并叠加可拖拽、可缩放的裁剪框，支持固定宽高比。
+ * 通过 ref 暴露 getCropImage，按 format/quality 用 canvas 导出 blob 或 base64，
+ * 可另传目标宽高做二次缩放；图片按容器等比缩小，不放大、不上传。
+ * 拖拽监听挂在 document 上并在卸载时移除，跨域网络图片按匿名方式取图，
+ * 导出前加载原图超时为 10 秒。
+ */
 import { onMounted, onUnmounted, ref, watch } from 'vue';
 
 // 定义组件参数

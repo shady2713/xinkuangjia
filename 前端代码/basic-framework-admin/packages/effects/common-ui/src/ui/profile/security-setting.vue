@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 安全设置表单：按 formSchema 渲染账号安全开关及其标签与说明。
+ *
+ * 与 notification-setting 一样是受控展示组件，
+ * 切换只抛出 { fieldName, value }，是否落库由外层页面决定。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { SettingProps } from './types';

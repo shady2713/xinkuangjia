@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 手风琴内容面板：展开收起时播放下滑动效，并裁掉溢出的内容。
+ *
+ * 只负责动效、内边距与 class 透传，面板里渲染什么、如何校验由使用方决定。
+ */
 import type { AccordionContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

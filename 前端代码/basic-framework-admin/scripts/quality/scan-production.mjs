@@ -1,3 +1,10 @@
+/**
+ * 生产安全门禁：扫描 apps/web-ele/src 与 packages 源码、生产产物及运行时配置，
+ * 阻断 eval/new Function 动态执行、未净化 v-html、开发地址和预填密码。
+ *
+ * 加 --source-only 时跳过 dist 产物校验；发现风险即抛错让 CI 失败，
+ * 只报告问题，不修改任何被扫描文件。
+ */
 import { readFileSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';

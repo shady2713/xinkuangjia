@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 表单渲染容器：按 schema 生成字段列表，并把公共配置下沉到每个字段。
+ * 由 use-form-renderer 与 schema-form 挂载，
+ * 负责折叠行计算与提交事件转发；不创建实例，不发请求。
+ */
 import type { GenericObject } from 'vee-validate';
 import type { ZodTypeAny } from 'zod';
 

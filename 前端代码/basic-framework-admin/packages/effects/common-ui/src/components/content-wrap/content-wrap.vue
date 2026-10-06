@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 内容容器：把标题/描述/额外操作、正文与页脚收进同一张卡片，各区块插槽可替换默认渲染。
+ * 开启 autoContentHeight 后，正文高度按布局内容高度减去实测页眉页脚高度计算，
+ * 并延迟 30ms 再放开滚动以避免首帧抖动；heightOffset 可再扣掉一段额外高度。
+ * 只负责布局与高度，不做数据加载与空状态处理。
+ */
 import type { StyleValue } from 'vue';
 
 import type { ContentWrapProps } from './types';

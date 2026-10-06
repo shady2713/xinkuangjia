@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 偏好设置抽屉：把全部偏好项按外观、布局、快捷键、通用四组渲染成可编辑表单。
+ * 每个配置项用 defineModel 绑定父级摊平后的属性，改值经父级写回全局偏好。
+ * 自身负责重置默认值、清空缓存并退出登录，以及复制当前差异到剪贴板；
+ * 分组间的联动禁用（如面包屑依赖侧边导航）也在此判定。
+ */
 import type { SupportedLanguagesType } from '@vben/locales';
 import type {
   BreadcrumbStyleType,

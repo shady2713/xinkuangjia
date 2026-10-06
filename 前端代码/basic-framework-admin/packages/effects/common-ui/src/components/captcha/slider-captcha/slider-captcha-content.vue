@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 滑块验证码的内容层：按是否通过切换提示文案与成功态样式，
+ * text 插槽可覆盖默认文案，根元素供父级做宽度交接。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed, useTemplateRef } from 'vue';

@@ -33,7 +33,9 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
  *
  * <p>统一处理对象路径、上传类型、稳定访问 URL 与文件元数据写入。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Service
 public class FileServiceImpl implements FileService {

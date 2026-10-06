@@ -1,3 +1,10 @@
+/**
+ * 运行时应用配置读取：从 app.config.js 注入的全局对象取接口地址与钉钉认证，
+ * 开发环境允许 .env 的 VITE_GLOB_API_URL 覆盖接口地址。
+ *
+ * 另提供验证码、文档提醒开关与固定关闭的租户开关；
+ * 本模块只读配置，不含请求实例与登录流程。
+ */
 import type {
   ApplicationConfig,
   VbenAdminProAppConfigRaw,

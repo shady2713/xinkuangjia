@@ -15,7 +15,9 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * 短信客户端工厂接口
  *
- * @author 李杰
+ * @author zzf
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Validated
 @Slf4j

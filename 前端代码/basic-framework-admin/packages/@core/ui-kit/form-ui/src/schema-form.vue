@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 静态表单容器：直接用属性渲染表单，无需 useVbenForm 生成实例。
+ * 折叠状态由自身维护，vee-validate 上下文在组件内部创建；
+ * 不提供实例级读写，需要脚本操作走 use-form-renderer.vue。
+ */
 import type { VbenFormProps } from './types';
 
 import { ref, watchEffect } from 'vue';

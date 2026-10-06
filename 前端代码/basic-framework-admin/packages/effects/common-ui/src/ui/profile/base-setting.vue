@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 个人资料的基础信息表单：按外部传入的 schema 渲染字段并做提交前校验。
+ * 校验通过后经 submit 事件抛出表单值，保存请求由调用页面负责。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { VbenFormSchema } from '@vben-core/form-ui';

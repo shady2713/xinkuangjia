@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 后台整体布局：装配顶栏、标签栏、侧边栏、内容区与页脚。
+ * 负责滚动隐藏顶栏、悬停展开侧边栏与移动端遮罩等交互，
+ * 宽度与排列规则交由 hooks/use-layout 及各子组件计算；
+ * 不提供菜单数据与路由跳转，内容一律由插槽使用方给出。
+ */
 import type { CSSProperties } from 'vue';
 
 import type { VbenLayoutProps } from './admin-layout';

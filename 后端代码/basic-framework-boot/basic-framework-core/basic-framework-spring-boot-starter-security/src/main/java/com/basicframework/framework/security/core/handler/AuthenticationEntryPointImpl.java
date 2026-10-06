@@ -20,7 +20,9 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
  * 补充：Spring Security 的 {@link ExceptionTranslationFilter} 在
  * {@code sendStartAuthentication} 中调用当前类，把未认证翻译成统一错误码。
  *
- * @author 李杰
+ * @author ruoyi
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  *
  */
 @Slf4j

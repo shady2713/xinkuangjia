@@ -1,3 +1,7 @@
+/**
+ * 右键菜单的对外类型契约：IContextMenuItem 约束菜单项结构，
+ * ContextMenuHandlerData 是宿主实体在菜单回调中的透传别名，按 object 暴露。
+ */
 import type { Component } from 'vue';
 
 /**

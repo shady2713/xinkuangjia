@@ -1,5 +1,10 @@
 <!-- 数据字典 Select 选择器 -->
 <script lang="ts" setup>
+/**
+ * 字典选择器：按 dictType 从字典缓存取选项，按 selectType 渲染下拉、单选或复选。
+ * 由 plugins/form-create 按组件名注册给 JSON 表单，valueType 决定布尔或数值口径；
+ * 只消费 @vben/hooks 的字典缓存，不发起字典请求，也不做表单校验。
+ */
 import type { DictSelectProps } from '../typing';
 
 import { computed, useAttrs } from 'vue';

@@ -1,3 +1,7 @@
+/**
+ * OAuth2 访问令牌接口：令牌的分页查询与按令牌值删除。
+ * 只提供后台管理视角的查看与强制失效，令牌签发与刷新由认证接口负责。
+ */
 import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';

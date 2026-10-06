@@ -14,7 +14,9 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * IP 数据源来自 ip2region.xdb 精简版，基于 <a href="https://example.com/external/basicframework/ip2region"/> 项目
  *
- * @author 李杰
+ * @author wanglhup
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 public class IPUtils {

@@ -1,3 +1,8 @@
+/**
+ * 回到顶部按钮的属性契约：声明 bottom、right、target、
+ * visibilityHeight 的默认值与类型，供组件和组合式函数共用。
+ * 只描述入参，不含滚动监听与显隐实现。
+ */
 export const backtopProps = {
   /**
    * @zh_CN bottom distance.

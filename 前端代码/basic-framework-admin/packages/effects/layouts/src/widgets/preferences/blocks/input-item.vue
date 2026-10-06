@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置输入行：左侧标签与提示气泡，右侧窄输入框带一键清空图标。
+ * 供偏好抽屉中文本类配置复用，如水印文案与版权公司名、备案号等；
+ * 只回传输入值，不做格式校验、也不负责保存。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { useSlots } from 'vue';

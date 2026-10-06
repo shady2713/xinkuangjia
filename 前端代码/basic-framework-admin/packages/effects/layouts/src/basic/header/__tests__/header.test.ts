@@ -1,3 +1,8 @@
+/**
+ * 头部入口接线回归：偏好打开时头部必须真实渲染时区入口，且任何情况下不渲染语言切换。
+ * 语言切换只属于认证页工具栏，不在头部白名单内；偏好模块、hooks 与 stores 均以 mock 顶替，
+ * 因此本文件只锁入口有无，不覆盖各入口的交互与样式。
+ */
 import { mount } from '@vue/test-utils';
 
 import { describe, expect, it, vi } from 'vitest';

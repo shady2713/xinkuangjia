@@ -18,7 +18,9 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 /**
  * 字典工具类，提供字典值与字典标签的双向解析能力。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 public class DictFrameworkUtils {

@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 展开箭头：点击切换 collapsed 并旋转图标，默认插槽按展开状态渲染文字。
+ * 表单操作区用它折叠筛选条件；只承载交互与图标，被折叠的区域由使用方渲染。
+ */
 import { ChevronDown } from '@vben-core/icons';
 import { cn } from '@vben-core/shared/utils';
 

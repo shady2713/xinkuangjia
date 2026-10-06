@@ -1,3 +1,7 @@
+/**
+ * 字典管理页左右两栏的字段定义：类型栏与数据栏的表单、检索与列。
+ * 数据栏的颜色选项只服务字典标签着色，两栏弹窗的提交请求不在此模块。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

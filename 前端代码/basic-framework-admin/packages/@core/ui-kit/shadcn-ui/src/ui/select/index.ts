@@ -1,3 +1,7 @@
+/**
+ * 下拉选择出口：聚合 Select 根、SelectTrigger 触发器
+ * 与 SelectContent 面板，以及选项、分组、标签、滚动按钮等部件。
+ */
 export { default as Select } from './Select.vue';
 export { default as SelectContent } from './SelectContent.vue';
 export { default as SelectGroup } from './SelectGroup.vue';

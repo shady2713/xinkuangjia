@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 站点品牌标识：按主题在 src 与 srcDark 间选图，按需隐藏文本。
+ * 供基础布局的侧边栏与顶栏使用，整块可点击跳转 href。
+ * 只负责展示与跳转，不读取站点配置，也不参与登录态与路由权限。
+ */
 import { computed } from 'vue';
 
 import { VbenAvatar } from '../avatar';

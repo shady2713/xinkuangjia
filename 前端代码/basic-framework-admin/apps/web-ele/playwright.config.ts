@@ -1,3 +1,8 @@
+/**
+ * 端到端测试运行配置：约定 e2e 用例目录、预览服务地址与失败留痕策略。
+ * 预览服务由 Playwright 自行拉起，监听 127.0.0.1 的 4173 端口；
+ * 单元与组件测试不在本文件范围内，由 vitest 配置负责。
+ */
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({

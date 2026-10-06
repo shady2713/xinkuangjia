@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 侧边栏固定按钮：点击翻转 expandOnHover 双向值。
+ *
+ * 图标随该值在 Pin 与 PinOff 间切换，悬停展开由侧边栏实现。
+ */
 import { Pin, PinOff } from '@vben-core/icons';
 
 const expandOnHover = defineModel<boolean>('expandOnHover');

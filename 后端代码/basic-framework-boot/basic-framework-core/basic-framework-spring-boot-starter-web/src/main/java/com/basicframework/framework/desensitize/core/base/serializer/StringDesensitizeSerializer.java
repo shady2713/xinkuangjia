@@ -25,7 +25,9 @@ import java.lang.reflect.Field;
  *
  * 实现 JSON 返回数据时，使用 {@link DesensitizationHandler} 对声明脱敏注解的字段，进行脱敏处理。
  *
- * @author 李杰
+ * @author gaibu
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @SuppressWarnings("rawtypes")
 public class StringDesensitizeSerializer extends StdSerializer<String> implements ContextualSerializer {

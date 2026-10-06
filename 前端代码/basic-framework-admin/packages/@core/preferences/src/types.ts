@@ -1,3 +1,8 @@
+/**
+ * 偏好设置的类型契约：按 app、主题、侧边栏、标签页等分组描述全部可配置字段。
+ * 由默认值、管理器状态、设置面板与 stores 共用；只声明结构、取值类型与可选性，
+ * 默认值在 config.ts，运行时合并与副作用由 preferences.ts 负责。
+ */
 import type {
   AccessModeType,
   AuthPageLayoutType,

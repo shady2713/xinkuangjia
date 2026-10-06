@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 标签栏刷新按钮：点击发出 refresh 事件，由父级决定刷新目标。 */
 import { RotateCw } from '@vben-core/icons';
 
 const emit = defineEmits(['refresh']);

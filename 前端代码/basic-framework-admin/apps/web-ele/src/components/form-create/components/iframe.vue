@@ -1,5 +1,10 @@
 <!-- 网页 iframe 组件 (Element Plus 版本) -->
 <script lang="ts" setup>
+/**
+ * 网页 iframe 组件：把配置的地址内嵌展示，仅接受 http/https，其余显示配置提示。
+ * 由 plugins/form-create 按组件名注册给 JSON 表单，尺寸、加载策略与 sandbox 由属性决定；
+ * 只做地址格式校验与渲染，不校验目标站点内容安全，也不处理加载失败与跨域限制。
+ */
 import { computed } from 'vue';
 
 defineOptions({ name: 'IframeComponent' });

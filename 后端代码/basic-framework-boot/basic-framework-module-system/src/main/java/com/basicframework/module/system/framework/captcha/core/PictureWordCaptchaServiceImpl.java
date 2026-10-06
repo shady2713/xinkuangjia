@@ -19,8 +19,10 @@ import java.util.Properties;
 /**
  * 图片文字验证码
  *
- * @author 李杰
+ * @author Tsui
  * @since 2025/7/23 20:44
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class PictureWordCaptchaServiceImpl extends AbstractCaptchaService {
 

@@ -1,3 +1,9 @@
+/**
+ * 表单上下文与初始化：创建 vee-validate 实例、推导字段初始值。
+ * 渲染组件用 injectFormProps 取属性，容器用
+ * provideComponentRefMap 交出字段引用。
+ * 提交由 FormApi 承担，不在此处理。
+ */
 import type { ZodRawShape } from 'zod';
 
 import type { ComputedRef } from 'vue';

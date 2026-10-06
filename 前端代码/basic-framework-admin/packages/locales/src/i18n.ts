@@ -1,3 +1,8 @@
+/**
+ * 国际化运行时：创建 vue-i18n 实例，按语言目录聚合 langs 下的分片语言包，
+ * setupI18n 负责安装，loadLocaleMessages 负责切换语言、写回 html lang
+ * 并合并调用方追加的消息；语言开关由偏好设置与语言切换组件触发。
+ */
 import type { App } from 'vue';
 import type { Locale } from 'vue-i18n';
 

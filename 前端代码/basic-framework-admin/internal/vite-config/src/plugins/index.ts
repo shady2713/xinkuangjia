@@ -1,3 +1,10 @@
+/**
+ * 插件装配层：按应用或库的构建选项，把 vue、jsx、运行时配置等
+ * 基础插件与按条件启用的分析、HTML、首屏 loading 插件汇总成列表。
+ *
+ * 异步构造的插件可能为空，这里负责过滤后再交给 Vite；
+ * 各插件自身的实现与钩子行为不在本文件。
+ */
 import type { PluginOption } from 'vite';
 
 import type {

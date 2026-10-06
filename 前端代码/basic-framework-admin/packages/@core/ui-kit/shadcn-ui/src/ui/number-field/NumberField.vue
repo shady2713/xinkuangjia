@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 数字输入框根容器：为 reka-ui 根节点补网格间距并透传属性与事件。
+ * 数值状态、步进与键盘交互均由 reka-ui 提供，本件只管排版与插槽。
+ */
 import type { NumberFieldRootEmits, NumberFieldRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

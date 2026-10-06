@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * Chrome 风格标签栏：渲染带间隙与圆角背景的标签项，并处理中键关闭。
+ * 选中项由 active 双向绑定交给上层，本组件只发出 close/unpin；
+ * 标签的滚动、拖拽排序与路由跳转分别由 TabsView 及其 hook 负责。
+ */
 import type { TabDefinition } from '@vben-core/typings';
 
 import type { TabConfig, TabsProps } from '../../types';

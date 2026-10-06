@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 操作日志时间线：按 logList 逐条渲染时间、操作人与动作，用户类型颜色取自字典。
+ * 日志列表由调用页面查好后传入，组件只做展示，不发起请求、不分页、不排序。
+ */
 import type { OperateLogProps } from './typing';
 
 import { DICT_TYPE } from '@vben/constants';

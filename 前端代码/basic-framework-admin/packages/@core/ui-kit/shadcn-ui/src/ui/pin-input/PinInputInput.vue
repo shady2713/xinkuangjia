@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 验证码单格输入：带边框与首尾圆角，聚焦时抬升层级显示描边。
+ * 输入值与焦点顺序由 reka-ui 根节点编排，本件只提供格子外观。
+ */
 import type { PinInputInputProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

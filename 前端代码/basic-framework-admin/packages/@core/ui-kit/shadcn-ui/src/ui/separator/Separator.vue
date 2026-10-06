@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 通用分隔线：按 orientation 渲染横向或纵向细线，传入 label 时把文字压在线的中央。
+ * 抽屉页头、个人资料页与表单区块用它切分版面，除自身尺寸外不参与外层布局约束。
+ */
 import type { SeparatorProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

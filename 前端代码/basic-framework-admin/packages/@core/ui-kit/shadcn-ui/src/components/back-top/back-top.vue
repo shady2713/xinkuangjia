@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 回到顶部按钮：滚动超过阈值后浮出，点击平滑回顶。
+ * 位置由 bottom、right 决定，监听与显隐判定在 useBackTop，
+ * 组件自身不解析目标容器。
+ */
 import type { BacktopProps } from './backtop';
 
 import { computed } from 'vue';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 二级子菜单触发器：指针移入或点击时展开子面板，右侧固定显示展开箭头。
+ * 子面板内容与显隐状态由 DropdownMenuSub、DropdownMenuSubContent 负责。
+ */
 import type { DropdownMenuSubTriggerProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

@@ -6,6 +6,12 @@
  3. 支持自定义权限码和角色的判断逻辑
 -->
 <script lang="ts" setup>
+/**
+ * 细粒度权限包裹组件：命中 codes 才渲染默认插槽，否则不输出内容。
+ * type 决定判定方式：role 按用户角色，code 按权限码，
+ * codes 内任一命中即通过；codes 为 undefined 时无条件渲染。
+ * 只做渲染开关，接口侧鉴权仍由后端负责。
+ */
 import { computed } from 'vue';
 
 import { useAccess } from './use-access';

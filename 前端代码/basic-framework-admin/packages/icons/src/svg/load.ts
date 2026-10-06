@@ -1,3 +1,8 @@
+/**
+ * 本地 svg 注册：导入时把 ./icons 下的 svg 原文解析出图形体、根属性与 viewBox，
+ * 以 svg:<文件名> 注册进 iconify 图标集，重复导入由 loaded 标记拦截。
+ * 由 ../svg/index.ts 副作用引入，自身不导出成员。
+ */
 import type { IconifyIconStructure } from '@vben-core/icons';
 
 import { addIcon } from '@vben-core/icons';

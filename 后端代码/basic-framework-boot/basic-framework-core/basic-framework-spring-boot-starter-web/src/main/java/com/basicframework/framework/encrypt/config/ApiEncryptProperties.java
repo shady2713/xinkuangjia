@@ -11,7 +11,9 @@ import org.springframework.validation.annotation.Validated;
  * <p>
  * 用于定义请求/响应加密开关及密钥参数，便于统一接入网关与前端加解密约定。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @ConfigurationProperties(prefix = "basic-framework.api-encrypt")
 @Validated

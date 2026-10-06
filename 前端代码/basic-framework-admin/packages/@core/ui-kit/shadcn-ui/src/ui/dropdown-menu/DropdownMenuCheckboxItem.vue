@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 复选菜单项：选中态由使用方的 modelValue 控制，选中时在左侧渲染勾选图标。
+ * 点击只抛出选中值变更，不维护多选项集合；单选场景请用单选菜单项。
+ */
 import type {
   DropdownMenuCheckboxItemEmits,
   DropdownMenuCheckboxItemProps,

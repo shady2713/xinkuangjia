@@ -1,3 +1,7 @@
+/**
+ * 访问令牌列表的检索项与列定义，供令牌管理页查询、删除与批量清理。
+ * 令牌由后端在登录与授权时签发刷新，前端不提供新增和编辑入口。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

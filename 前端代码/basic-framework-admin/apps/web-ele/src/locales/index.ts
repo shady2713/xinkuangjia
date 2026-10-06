@@ -1,3 +1,7 @@
+/**
+ * 应用国际化装配：合并 langs 目录的业务文案、element-plus 与 dayjs 语言包，
+ * 并导出 elementLocale 供组件库透传；语言包按需动态加载，缺失只告警不阻断。
+ */
 import type { Language } from 'element-plus/es/locale';
 
 import type { App } from 'vue';

@@ -1,3 +1,8 @@
+/**
+ * 验证码组件的公共契约类型：点位坐标、各验证码的 props、
+ * 校验通过载荷与滑块动作句柄，供组件与调用方共用。
+ * 只有类型声明，不含运行时逻辑与默认值实现。
+ */
 import type { CSSProperties } from 'vue';
 
 import type { ClassType } from '@vben/types';

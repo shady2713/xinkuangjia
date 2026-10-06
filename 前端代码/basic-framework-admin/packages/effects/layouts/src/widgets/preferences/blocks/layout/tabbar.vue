@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 标签栏偏好分组：多标签的显隐、持久化、访问历史、拖拽与滚轮行为、
+ * 中键关闭、图标、更多与最大化按钮、样式类型及数量上限。
+ * 标签栏未启用时各项自动置灰，标签页的实际增删由标签栏容器实现。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { computed } from 'vue';

@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 混合布局的次级菜单列：渲染当前顶级菜单下的子菜单，挂在头部导航之下。
+ * 挂载时按当前路由反查菜单并抛 defaultSelect，由父级定位激活项；
+ * 菜单数据与激活路径全部来自父级，本组件自身不做跳转。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import type { NormalMenuProps } from '@vben-core/menu-ui';

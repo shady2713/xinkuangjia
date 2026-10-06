@@ -1,3 +1,10 @@
+/**
+ * 声明抽屉组件与命令式 API：返回 [Drawer, api]，
+ * 模板挂组件、逻辑改 api；传入 connectedComponent
+ * 时改用 provide/inject 连接内外两层抽屉，
+ * 并校验 props 是否撞上状态键。默认配置按
+ * setDefaultDrawerProps、上层与本次 options 覆盖。
+ */
 import type {
   DrawerApiOptions,
   DrawerProps,

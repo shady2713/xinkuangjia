@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 内嵌页面宿主：为 iframeSrc 路由渲染 iframe，按标签保留实例。
+ * 由内容区挂载，渲染与否跟随标签库的 keepAlive 开关；
+ * 首次加载用遮罩提示，不代理请求也不改写路由。
+ */
 import type { RouteLocationNormalized } from 'vue-router';
 
 import { computed, ref } from 'vue';

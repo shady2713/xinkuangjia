@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 分页省略号：占位被折叠的页码区间，默认渲染横向省略图标。
+ * 只做展示不参与跳转，页码与禁用态仍由 reka-ui 分页根节点驱动。
+ */
 import type { PaginationEllipsisProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

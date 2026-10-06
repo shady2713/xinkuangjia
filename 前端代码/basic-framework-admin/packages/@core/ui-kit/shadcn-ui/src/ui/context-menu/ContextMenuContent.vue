@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 右键菜单内容面板：包一层传送门后渲染 reka-ui 内容容器与进出场动画。
+ * 只负责层级、圆角与位移动画，菜单项排布和点击行为由子项各自承担。
+ */
 import type { ContextMenuContentEmits, ContextMenuContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

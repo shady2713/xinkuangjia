@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 右键菜单普通条目：承载单个可点击动作，inset 为真时左侧让出图标位。
+ * 只负责条目样式与事件透传，勾选、单选与二级菜单由对应条目组件承担。
+ */
 import type { ContextMenuItemEmits, ContextMenuItemProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

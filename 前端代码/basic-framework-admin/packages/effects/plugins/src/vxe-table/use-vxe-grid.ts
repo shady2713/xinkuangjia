@@ -1,3 +1,8 @@
+/**
+ * 表格组件工厂：按配置创建 VxeGridApi 并派生带 useStore 选择器的 extendedApi，
+ * 再包出 VbenVxeGrid 组件，同步属性与插槽并在卸载时通知 api。
+ * 返回 [组件, api] 元组，界面渲染仍由 use-vxe-grid.vue 承担。
+ */
 import type { VxeGridSlots, VxeGridSlotTypes } from 'vxe-table';
 
 import type { SlotsType } from 'vue';

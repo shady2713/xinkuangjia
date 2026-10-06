@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 滚动条部件：按 orientation 渲染纵向或横向轨道与滑块。
+ * 由 ScrollArea 内部挂载，使用方通常无需单独引用。
+ */
 import type { ScrollAreaScrollbarProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

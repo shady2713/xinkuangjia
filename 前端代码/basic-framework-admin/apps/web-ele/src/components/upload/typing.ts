@@ -1,3 +1,7 @@
+/**
+ * 上传组件的类型契约：定义上传状态枚举、列表展示类型与接口返回结构，
+ * 以及 FileUpload 的全部属性，供上传组件与调用页共用。
+ */
 import type { AxiosResponse } from '@vben/request';
 
 import type { AxiosProgressEvent } from '#/api/core/file';

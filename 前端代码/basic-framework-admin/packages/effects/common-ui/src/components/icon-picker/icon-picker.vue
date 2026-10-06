@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 图标选择器：以 Popover 分页展示图标集，支持关键字筛选与点击选中，
+ * 选中值通过 v-model 回填并额外抛出 change 事件。
+ * 图标来源分两路：容器已注册的 svg 图标取自 @vben/icons，
+ * 远程图标集由同目录 icons.ts 拉取；图标上传与新增不在此组件。
+ */
 import type { VNode } from 'vue';
 
 import { computed, ref, useAttrs, watch, watchEffect } from 'vue';

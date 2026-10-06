@@ -21,7 +21,9 @@ import static cn.hutool.core.exceptions.ExceptionUtil.getRootCauseMessage;
 /**
  * 基础 Job 调用者，负责调用 {@link JobHandler#execute(String)} 执行任务
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @DisallowConcurrentExecution
 @PersistJobDataAfterExecution

@@ -14,7 +14,9 @@ import static java.util.Collections.singleton;
  * <p>
  * 提供用户-角色、角色-菜单、角色-部门数据权限的能力。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface PermissionService {
 

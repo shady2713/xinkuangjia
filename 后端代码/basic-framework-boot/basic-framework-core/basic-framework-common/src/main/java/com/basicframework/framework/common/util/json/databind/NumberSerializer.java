@@ -11,7 +11,9 @@ import java.io.IOException;
  *
  * 会将超长 long 值转换为 string，解决前端 JavaScript 最大安全整数是 2^53-1 的问题
  *
- * @author 李杰
+ * @author 星语
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @JacksonStdImpl
 public class NumberSerializer extends com.fasterxml.jackson.databind.ser.std.NumberSerializer {

@@ -1,3 +1,7 @@
+/**
+ * pnpm 依赖规范：校验 package.json 的 catalog 引用与工作区目录项。
+ * 只管依赖声明是否合规，安装与版本升级仍由 pnpm 命令完成。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

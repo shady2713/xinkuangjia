@@ -1,3 +1,8 @@
+/**
+ * 菜单树读取：useMenu 给出当前项的父级链路与最近的菜单容器，
+ * useMenuStyle 生成菜单层级变量，供菜单项缩进与子菜单缩进对齐使用。
+ * 只读取组件树与入参，不修改展开项、激活项等任何状态。
+ */
 import type { SubMenuProvider } from '../types';
 
 import { computed, getCurrentInstance } from 'vue';

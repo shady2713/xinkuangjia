@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 数字输入框加号按钮：绝对定位在输入框右侧，默认渲染加号图标。
+ * 与减号按钮对称，步进和边界钳制交给 reka-ui 根节点处理。
+ */
 import type { NumberFieldIncrementProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

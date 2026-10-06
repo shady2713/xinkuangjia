@@ -1,3 +1,13 @@
+/**
+ * 通用杂项工具：收纳尚未独立成模块的小函数，供各业务包按需引用。
+ * 含实例方法绑定、按路径取值、地址栏参数读取、字段拷贝、分组与 JSON 解析。
+ * 函数间不共享状态，失败策略各自独立，如 jsonParse 回退原串。
+ */
+/**
+ * 把原型链上的方法绑定到实例自身，使方法脱离原调用者后仍能访问实例状态。
+ *
+ * @param instance 待绑定的实例；只读取原型链上的方法，不修改原型本身
+ */
 export function bindMethods<T extends object>(instance: T): void {
   const prototype = Object.getPrototypeOf(instance);
   const propertyNames = Object.getOwnPropertyNames(prototype);

@@ -1,3 +1,8 @@
+/**
+ * 锁定 Stack 的契约：LIFO 取放、去重、容量上限与批量移除。
+ * 覆盖空栈返回 undefined、toArray 浅拷贝、容量与去重叠加，
+ * 以及 createStack 与构造函数行为一致。
+ */
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createStack, Stack } from '../stack';

@@ -1,3 +1,8 @@
+/**
+ * 权限路由生成：把后端菜单转换成路由与菜单树，并挂上页面组件映射表。
+ * 生成过程携带身份校验回调，登录、退出或失效后旧身份的加载结果不再安装。
+ * 只做菜单到路由的转换，登录态判断与守卫流程见 ./guard。
+ */
 import type {
   ComponentRecordType,
   GenerateMenuAndRoutesOptions,

@@ -1,3 +1,8 @@
+/**
+ * 许可证头插件：仅在 build 阶段给入口 chunk 顶部拼接版权声明。
+ * 名称、版本、作者取自应用 package.json，缺失字段回落到内置默认值。
+ * 只改写入口分块，静态资源与非入口分包保持原样。
+ */
 import type {
   NormalizedOutputOptions,
   OutputBundle,

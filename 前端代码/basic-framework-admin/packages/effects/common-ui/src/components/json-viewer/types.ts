@@ -1,3 +1,9 @@
+/**
+ * JSON 查看器的对外类型契约：定义入参 JsonViewerProps，
+ * 以及点击、复制、展开等事件的负载类型：JsonViewerAction、
+ * JsonViewerValue 与 JsonViewerToggle。
+ * 只声明字段与可选性，默认值和运行时解析都在 index.vue。
+ */
 export interface JsonViewerProps {
   /**
    * 要展示的结构数据

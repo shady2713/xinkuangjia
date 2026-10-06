@@ -1,3 +1,8 @@
+/**
+ * 描述列表的渲染契约：DescriptionItemSchema 描述字段标签、取值路径与渲染方式，
+ * DescriptionProps 在 ElDescriptions 属性上追加 schema 与 data，
+ * DescInstance 是外部改属性的句柄；取值与样式实现不在本文件。
+ */
 import type { DescriptionProps as ElDescriptionProps } from 'element-plus';
 import type { JSX } from 'vue/jsx-runtime';
 

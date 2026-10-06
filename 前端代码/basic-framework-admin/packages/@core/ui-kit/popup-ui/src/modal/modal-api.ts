@@ -1,3 +1,9 @@
+/**
+ * 弹窗状态机：Store 承载 isOpen、fullscreen、
+ * submitting 等状态，open、close、lock、unlock
+ * 改状态并转发 onOpenChange、onBeforeClose 等回调。
+ * 不接触 DOM，全屏与拖拽等交互由 modal.vue 实现。
+ */
 import type { ModalApiOptions, ModalState } from './modal';
 
 import { Store } from '@vben-core/shared/store';

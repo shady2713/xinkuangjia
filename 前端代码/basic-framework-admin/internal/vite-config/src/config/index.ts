@@ -1,3 +1,9 @@
+/**
+ * 配置装配入口：再导出应用与库两个工厂，并按工程类型分流——
+ * auto 时用根目录是否存在 index.html 判定，无法识别则直接抛错。
+ *
+ * 这里只做选择与转发，具体构建内容由两个工厂各自决定。
+ */
 import type { DefineConfig, VbenViteConfig } from '../typing.ts';
 
 import { existsSync } from 'node:fs';

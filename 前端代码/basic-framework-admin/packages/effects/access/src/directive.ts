@@ -1,4 +1,10 @@
 /**
+ * 权限指令注册入口：把 v-access 挂到 Vue 应用，
+ * 在元素挂载时按角色或权限码决定是否移除。
+ * 判定依据来自 use-access：前端模式且参数为 role 时按角色，
+ * 其余情况按权限码判定；无权限直接移除元素，不做响应式重算。
+ */
+/**
  * Global authority directive
  * Used for fine-grained control of component permissions
  * @Example v-access:role="[ROLE_NAME]" or v-access:role="ROLE_NAME"

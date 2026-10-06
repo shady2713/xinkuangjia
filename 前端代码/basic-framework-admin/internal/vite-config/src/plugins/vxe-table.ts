@@ -1,3 +1,8 @@
+/**
+ * 表格库按需引入插件：为 vxe-table 与 vxe-pc-ui 注册组件级解析器，
+ * 构建时只打包模板中真正用到的组件及其样式。
+ * 只做导入改写，表格的全局配置与主题变量仍由应用侧提供。
+ */
 import type { PluginOption } from 'vite';
 
 import { lazyImport, VxeResolver } from 'vite-plugin-lazy-import';

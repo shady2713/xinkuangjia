@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 可调整面板组：按 direction 决定面板横向或纵向排列。
+ * 只负责布局与朝向类名，拖拽条需由使用方显式作为子节点放入。
+ */
 import type { SplitterGroupEmits, SplitterGroupProps } from 'reka-ui';
 
 import type { HTMLAttributes } from 'vue';

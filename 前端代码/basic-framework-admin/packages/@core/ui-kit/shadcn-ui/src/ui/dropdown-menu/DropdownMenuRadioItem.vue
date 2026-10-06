@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 单选菜单项：点击后请求把所在组的选中值切换为自己，选中时显示圆点图标。
+ * 选中值由 DropdownMenuRadioGroup 统一持有，本组件只渲染与抛事件。
+ */
 import type {
   DropdownMenuRadioItemEmits,
   DropdownMenuRadioItemProps,

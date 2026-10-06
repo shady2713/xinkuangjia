@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 文本省略组件：按行数截断超长文本，悬浮时用 Tooltip 展示完整内容。
+ * 供表格列、描述项等窄容器使用；tooltipWhenEllipsis
+ * 为真时先探测是否截断再决定是否提示，expand 开启后
+ * 点击文本切换展开并抛出 expandChange。
+ * 只负责截断展示与提示，文本复制、编辑等操作不在此组件。
+ */
 import type { CSSProperties } from 'vue';
 
 import {

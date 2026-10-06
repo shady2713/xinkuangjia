@@ -15,7 +15,9 @@ import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
  * <p>用于匹配类或方法上的 {@link DataPermission} 注解，并委托
  * {@link DataPermissionAnnotationInterceptor} 维护数据权限上下文。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Getter
 @EqualsAndHashCode(callSuper = true)

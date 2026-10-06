@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 头像裁剪上传控件：展示圆形头像，点击后打开裁剪弹窗，上传成功回写头像地址。
+ * 由个人中心等资料页使用，v-model:value 同步地址，change 抛出上传结果；
+ * 裁剪交互与体积校验在 cropper-modal.vue，真实上传由调用方注入的 uploadApi 完成。
+ */
 import type { CSSProperties } from 'vue';
 
 import type { CropperAvatarProps } from './typing';

@@ -10,7 +10,9 @@ import com.basicframework.framework.common.exception.ErrorCode;
  * 虽然说，HTTP 响应状态码作为业务使用表达能力偏弱，但是使用在系统层面还是非常不错的
  * 比较特殊的是，因为之前一直使用 0 作为成功，就不使用 200 啦。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface GlobalErrorCodeConstants {
 

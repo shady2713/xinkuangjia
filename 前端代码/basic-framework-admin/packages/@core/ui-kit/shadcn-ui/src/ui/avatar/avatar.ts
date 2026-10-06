@@ -1,3 +1,7 @@
+/**
+ * 头像样式变体：定义 circle、square 两种形状与 sm、base、lg 三档尺寸。
+ * 仅产出类名，文字降级与状态圆点由上层头像组件另行补充。
+ */
 import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';

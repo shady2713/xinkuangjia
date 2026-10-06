@@ -1,3 +1,10 @@
+/**
+ * 管理端共享的 Tailwind 预设：把设计令牌映射成语义色板，
+ * 颜色统一写成 hsl(var(--*))，换肤由 CSS 变量在运行时决定。
+ *
+ * content 覆盖 apps/packages/internal 源码，darkMode 用类名选择器；
+ * 预设不定义变量取值，plugins 保持为空，不带官方或自研插件。
+ */
 import type { Config } from 'tailwindcss';
 
 const colors = {

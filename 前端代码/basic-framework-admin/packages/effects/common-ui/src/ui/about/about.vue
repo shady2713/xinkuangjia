@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 关于页界面：读取构建期注入的 __VBEN_ADMIN_METADATA__，展示版本、许可证、
+ * 构建时间、维护者与依赖清单等分组信息。
+ * 只做展示与主页、邮箱链接跳转，不发起接口请求；字段缺失时以占位符呈现。
+ */
 import type { AboutProps, DescriptionItem } from './about';
 
 import { h } from 'vue';

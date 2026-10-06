@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 文档提示条：展示文档标题与可点击地址，点击后在新窗口打开该 URL 并可关闭。
+ * 显隐同时受运行时开关 isDocAlertEnable() 与本地关闭状态控制，关闭只在本次挂载内有效。
+ * 标题与地址均由 props 传入，组件不拼装地址，也不校验链接可达性。
+ */
 import type { DocAlertProps } from './types';
 
 import { ref } from 'vue';

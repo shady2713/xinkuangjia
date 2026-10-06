@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 全局搜索结果面板：按关键词把菜单名转成正则匹配，并支持方向键与回车选择。
+ * 无关键词时回落到本地存储的搜索历史，回车跳站内路径、外链则新窗口打开；
+ * 关键词与菜单由父级传入，关闭动作经 close 事件回抛。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import { nextTick, onMounted, ref, shallowRef, watch } from 'vue';

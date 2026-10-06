@@ -19,7 +19,9 @@ import java.util.List;
  * <p>负责注册数据权限规则工厂、MyBatis Plus 数据权限拦截器和 {@link DataPermissionAnnotationAdvisor}，
  * 让业务代码可以通过 {@code @DataPermission} 控制 SQL 查询范围。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @AutoConfiguration
 public class BasicFrameworkDataPermissionAutoConfiguration {

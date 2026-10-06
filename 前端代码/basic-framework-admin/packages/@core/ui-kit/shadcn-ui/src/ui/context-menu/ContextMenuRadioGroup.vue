@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 右键菜单单选组：集中维护组内唯一选中值，具体条目由单选条目组件渲染。 */
 import type {
   ContextMenuRadioGroupEmits,
   ContextMenuRadioGroupProps,

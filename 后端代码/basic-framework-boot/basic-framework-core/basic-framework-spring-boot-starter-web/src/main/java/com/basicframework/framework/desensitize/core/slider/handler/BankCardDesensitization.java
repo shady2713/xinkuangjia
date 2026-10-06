@@ -5,7 +5,9 @@ import com.basicframework.framework.desensitize.core.slider.annotation.BankCardD
 /**
  * {@link BankCardDesensitize} 的脱敏处理器
  *
- * @author 李杰
+ * @author gaibu
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class BankCardDesensitization extends AbstractSliderDesensitizationHandler<BankCardDesensitize> {
 

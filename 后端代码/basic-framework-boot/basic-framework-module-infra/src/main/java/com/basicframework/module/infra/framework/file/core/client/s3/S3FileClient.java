@@ -40,7 +40,9 @@ import java.util.List;
  *
  * <p>客户端初始化和刷新会替换 SDK 连接资源，应用关闭时必须调用 {@link #close()}。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 

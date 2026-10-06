@@ -1,3 +1,11 @@
+/**
+ * vsh 子命令：用 publint 校验各包发布字段与产物是否对齐。
+ *
+ * 由 monorepo 维护者在 lint 阶段调用；跳过私有包，
+ * 剔除依赖字段后按内容哈希复用本地缓存，只统计
+ * 错误、警告与建议数量，--check 时报告但不退出进程。
+ * 不负责修改 package.json，修复由包作者自行完成。
+ */
 import type { CAC } from 'cac';
 import type { Result } from 'publint';
 

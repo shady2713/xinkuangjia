@@ -1,3 +1,7 @@
+/**
+ * 本地 svg 图标出口：先副作用引入 load.ts 把 ./icons 下的 svg 注册为
+ * svg: 前缀图标，再用这些图标名生成 SvgBellIcon、SvgAvatar1Icon 等具名组件。
+ */
 import { createIconifyIcon } from '@vben-core/icons';
 
 import './load.js';

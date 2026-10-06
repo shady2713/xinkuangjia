@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 个人中心页面外壳：左侧资料卡与竖向页签，右侧渲染 content 插槽。
+ *
+ * 头像与昵称取 userInfo，缺失时回退偏好设置的默认头像；
+ * 选中页签通过 modelValue 双向绑定，资料请求与区块内容均由外层提供。
+ */
 import type { Props } from './types';
 
 import { preferences } from '@vben-core/preferences';

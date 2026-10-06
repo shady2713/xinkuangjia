@@ -1,3 +1,9 @@
+/**
+ * 锁定 window 模块：window.open 的实参组合与站内地址拼接。
+ * 覆盖默认 noopener/noreferrer 特性串与关闭时的空串，
+ * 以及 hash 模式下站内路由的 origin 拼接。
+ * 全部通过替身观察，不校验真实弹窗行为。
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openRouteInNewWindow, openWindow } from '../window';

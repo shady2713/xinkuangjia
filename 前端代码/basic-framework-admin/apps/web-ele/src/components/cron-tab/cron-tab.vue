@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * Cron 表达式编辑器：输入框直接双向绑定表达式，也可打开生成器按秒、分、
+ * 时、日、月、周、年逐项配置，确认后回写拼装好的表达式。
+ * 由 infra/job 的定时任务表单以 CronTab 引入；只负责表达式编辑与拼装，
+ * 表达式是否合法由后端判定，任务调度语义不在本组件。
+ */
 import type { PropType } from 'vue';
 
 import type { CronData, CronValue, ShortcutsType } from './types';

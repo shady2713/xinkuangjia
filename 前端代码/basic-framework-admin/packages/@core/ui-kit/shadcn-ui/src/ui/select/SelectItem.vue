@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 选项行：渲染可选中条目，并在选中时于右侧显示对勾。
+ * 键盘导航与禁用判定交由 reka-ui，选项引用需带唯一 value。
+ */
 import type { SelectItemProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 操作日志详情弹窗：展示列表传入的整行日志，不再补发详情请求。
+ * 链路追踪、请求地址等字段的显隐由 ../data 的详情 schema 决定。
+ */
 import type { SystemOperateLogApi } from '#/api/system/operate-log';
 
 import { ref } from 'vue';

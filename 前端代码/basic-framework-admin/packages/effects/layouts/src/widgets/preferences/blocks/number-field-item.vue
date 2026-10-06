@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 偏好抽屉的数字行原语：左侧标题加右侧步进器，标题后可挂提示气泡。
+ *
+ * 与 select-item、switch-item 同级，供 sidebar、tabbar、font-size 等分组复用；
+ * 取值范围与步长不在此声明，由调用方经透传属性交给底层 NumberField。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { useSlots } from 'vue';

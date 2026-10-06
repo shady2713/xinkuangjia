@@ -1,3 +1,8 @@
+/**
+ * 切换按钮的样式变体：用 cva 声明 default、outline 两种外观
+ * 与 sm、default、lg 三种尺寸，并导出推导出的 ToggleVariants 类型。
+ * 只产出 class 字符串，交互状态由 Toggle.vue 与切换组选项消费。
+ */
 import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';

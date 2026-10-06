@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 认证页布局：把偏好里的应用名与明暗 logo 注入 @vben/layouts 的认证外壳。
+ * 登录、注册等页面作为子路由渲染在其内部，认证流程本身不在这里处理。
+ */
 import { computed } from 'vue';
 
 import { AuthPageLayout } from '@vben/layouts';

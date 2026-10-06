@@ -1,3 +1,8 @@
+/**
+ * DOM 度量工具：读取元素在视口内的可见矩形、滚动条宽度与滚动条有无。
+ * 供布局容器与浮层定位使用，并可在尺寸变化后手动派发 resize 事件；
+ * 只做一次性同步测量，不监听尺寸变化，也不修改元素样式。
+ */
 export interface VisibleDomRect {
   bottom: number;
   height: number;

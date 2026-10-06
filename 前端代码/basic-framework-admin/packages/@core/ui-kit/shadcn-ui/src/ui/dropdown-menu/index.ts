@@ -1,3 +1,8 @@
+/**
+ * 下拉菜单出口：聚合根组件、触发器、内容面板、菜单项、复选与单选条目、
+ * 分组、分隔线、快捷键提示以及子菜单系列组件，
+ * 并从 reka-ui 透出 DropdownMenuPortal，应用统一从这里引入。
+ */
 export { default as DropdownMenu } from './DropdownMenu.vue';
 
 export { default as DropdownMenuCheckboxItem } from './DropdownMenuCheckboxItem.vue';

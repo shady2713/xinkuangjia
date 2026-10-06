@@ -1,4 +1,12 @@
 <script lang="ts" setup>
+/**
+ * 接口选项包装组件：包裹任意表单组件，把接口返回的数据归一化成
+ * 选项字段后注入，并透传双向绑定与原来的插槽、属性。
+ *
+ * 负责请求时序（重复请求补发、visibleEvent 重载、自动选中）、
+ * 字段名映射与 beforeFetch/afterFetch 钩子；
+ * 渲染、取值与界面样式仍由被包裹的表单组件决定。
+ */
 import type { Component } from 'vue';
 
 import type { AnyPromiseFunction } from '@vben/types';

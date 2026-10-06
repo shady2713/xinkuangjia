@@ -1,3 +1,8 @@
+/**
+ * 应用入口：读取 app.config.js 与偏好覆盖项完成偏好初始化，
+ * 再把命名空间交给 bootstrap 启动 Vue 应用，最后移除首屏全局 loading。
+ * 应用装配细节在 bootstrap，本文件只管启动顺序与遮罩收尾。
+ */
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 

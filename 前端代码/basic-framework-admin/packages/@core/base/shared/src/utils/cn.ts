@@ -1,3 +1,7 @@
+/**
+ * 类名合并工具：clsx 组装后交给 tailwind-merge 去重，消解 Tailwind 冲突类。
+ * 供组件 class 属性使用；不处理样式作用域，也不感知组件库前缀。
+ */
 import type { ClassValue } from 'clsx';
 
 import { clsx } from 'clsx';

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 对话框内容面板：把面板传送到 appendTo，并按需叠加遮罩、关闭按钮与缩放或
+ * 滑入动画；appendTo 不是 body 时改用绝对定位，跟随父容器定位。
+ * 动画结束后才抛 opened/closed，弹窗据此回调打开、关闭完成钩子；
+ * defineExpose 暴露内容引用。开关状态与请求流程不在本组件内。
+ */
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
 
 import type { ClassType } from '@vben-core/typings';

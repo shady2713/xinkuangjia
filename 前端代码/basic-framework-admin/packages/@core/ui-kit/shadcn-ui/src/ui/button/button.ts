@@ -1,3 +1,7 @@
+/**
+ * 按钮样式变体：定义八种语义变体与五档尺寸的类名组合。
+ * 只产出类名，默认取 default 变体与 default 尺寸，交互属性由组件声明。
+ */
 import { cva } from 'class-variance-authority';
 
 export const buttonVariants = cva(

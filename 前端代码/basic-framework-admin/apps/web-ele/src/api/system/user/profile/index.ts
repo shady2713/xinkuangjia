@@ -1,3 +1,7 @@
+/**
+ * 个人中心接口：读取当前登录用户的资料，并修改本人资料与登录密码。
+ * 只操作登录者自身的数据，后台维护他人账号的接口在 api/system/user。
+ */
 import { requestClient } from '#/api/request';
 
 export namespace SystemUserProfileApi {

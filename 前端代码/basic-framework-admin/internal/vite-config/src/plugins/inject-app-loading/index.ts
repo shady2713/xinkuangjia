@@ -1,3 +1,10 @@
+/**
+ * 首屏加载插件：把加载动画模板与深色主题判定脚本插到 body 开头，
+ * 让打包资源就绪前先渲染占位画面，避免白屏。
+ *
+ * 主题只读运行时配置 window._VBEN_ADMIN_PRO_APP_CONF_，
+ * 模板缺失时回退到包内 default-loading.html。
+ */
 import type { PluginOption } from 'vite';
 
 import fs from 'node:fs';

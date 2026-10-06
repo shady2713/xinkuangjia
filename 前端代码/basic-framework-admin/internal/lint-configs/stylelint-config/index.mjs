@@ -1,3 +1,10 @@
+/**
+ * 共享 Stylelint 配置：约束大仓的 CSS、SCSS 与 Vue 内联样式。
+ * 以 stylelint-config-standard 与 recess-order 为基线：
+ * vue/html 走 postcss-html 并放行 :deep、:global 等伪类，
+ * scss 走 postcss-scss 并叠加 scss 推荐集；类名受命名模式约束，
+ * 属性顺序由 order/order 固定，排版差异交给 stylelint-prettier。
+ */
 export default {
   extends: ['stylelint-config-standard', 'stylelint-config-recess-order'],
   ignoreFiles: [

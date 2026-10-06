@@ -1,3 +1,7 @@
+/**
+ * 系统用户页表单与列表定义：新增/修改、重置密码、分配角色、导入与搜索表单。
+ * 供用户列表页及其弹窗复用；只描述字段与校验，增删改查请求由页面发起。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemPostApi } from '#/api/system/post';

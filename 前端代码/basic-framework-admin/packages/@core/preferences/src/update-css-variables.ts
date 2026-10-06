@@ -1,3 +1,8 @@
+/**
+ * 偏好落地到 CSS 变量：把主题模式、内置主题、主色、圆角与字号写到根节点。
+ * auto 模式按系统偏好解析明暗，内置主题自带主色时优先于自定义色；
+ * 不持有状态也不决定调用时机，由偏好管理器在相关字段变化时触发。
+ */
 import type { Preferences } from './types';
 
 import { generatorColorVariables } from '@vben-core/shared/color';

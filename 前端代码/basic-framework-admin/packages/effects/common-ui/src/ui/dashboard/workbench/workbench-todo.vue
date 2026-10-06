@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 工作台待办卡片：列出 items 的标题、摘要与日期，已完成项显示勾选并置灰。
+ * 勾选状态双向写回传入数组元素，落库请求由使用方监听后自行提交。
+ */
 import type { WorkbenchTodoItem } from '../typing';
 
 import {

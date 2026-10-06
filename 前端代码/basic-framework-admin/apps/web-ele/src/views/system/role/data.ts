@@ -1,3 +1,8 @@
+/**
+ * 角色管理的三套表单与列表字段：角色编辑、数据权限分配、菜单分配。
+ * 数据权限表单只在选中自定义范围时才显示部门范围字段；
+ * 菜单树的勾选结果由分配弹窗填充，这里只声明字段与显隐条件。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

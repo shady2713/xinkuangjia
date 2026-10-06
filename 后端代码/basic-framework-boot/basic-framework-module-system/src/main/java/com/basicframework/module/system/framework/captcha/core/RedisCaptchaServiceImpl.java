@@ -9,7 +9,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * 基于 Redis 实现验证码的存储
  *
- * @author 李杰
+ * @author 星语
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Setter
 public class RedisCaptchaServiceImpl implements CaptchaCacheService {

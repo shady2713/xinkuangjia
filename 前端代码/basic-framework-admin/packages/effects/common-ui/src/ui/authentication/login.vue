@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 账号密码登录界面：渲染调用方传入的表单结构，并管理“记住用户名”开关。
+ * 校验通过后抛出 submit 事件；用户名按当前域名存入 localStorage 供下次回填。
+ * 登录请求、错误提示与登录成功后的跳转均由使用方处理。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { BaseFormComponentType, VbenFormSchema } from '@vben-core/form-ui';

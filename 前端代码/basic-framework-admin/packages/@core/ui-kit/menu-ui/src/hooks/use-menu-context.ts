@@ -1,3 +1,8 @@
+/**
+ * 菜单上下文管道：根菜单广播自身状态，子菜单按组件实例 uid 广播自身上下文。
+ * useMenuContext 与 useSubMenuContext 供菜单树内部的组件取最近一层上下文。
+ * 仅可在组件 setup 中调用，取不到实例时直接抛错，不返回兜底对象。
+ */
 import type { MenuProvider, SubMenuProvider } from '../types';
 
 import { getCurrentInstance, inject, provide } from 'vue';

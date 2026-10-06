@@ -1,3 +1,8 @@
+/**
+ * 混合导航布局的菜单拆分：按 needSplit 把完整菜单拆成头部与侧边两份，
+ * 并算出两侧的激活路径、侧边可见性以及菜单选中、展开的处理逻辑。
+ * 侧边扩展列的二级菜单由 use-extra-menu 单独维护，不在此模块内。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import { computed, onBeforeMount, ref, watch } from 'vue';

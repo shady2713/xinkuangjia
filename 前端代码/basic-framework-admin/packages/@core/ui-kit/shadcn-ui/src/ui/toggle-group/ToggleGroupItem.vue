@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 切换组选项：组内单个可切换按钮，未显式传 size、variant 时
+ * 回退到组容器通过 inject 下发的上下文，保证组内外观一致。
+ * 选中态样式由 reka-ui 输出，本组件只决定变体来源与属性转发。
+ */
 import type { VariantProps } from 'class-variance-authority';
 import type { ToggleGroupItemProps } from 'reka-ui';
 

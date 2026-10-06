@@ -10,7 +10,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 /**
  * HTTP API 签名自动配置类，注册签名切面和签名 Redis 访问对象。
  *
- * @author 李杰
+ * @author Zhougang
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @AutoConfiguration(after = BasicFrameworkRedisAutoConfiguration.class)
 public class BasicFrameworkApiSignatureAutoConfiguration {

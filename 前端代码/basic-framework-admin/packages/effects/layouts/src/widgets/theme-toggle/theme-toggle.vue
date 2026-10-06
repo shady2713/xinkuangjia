@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 主题切换组件：悬停展开浅色、深色、跟随系统三选一，点击按钮直接翻转深浅色。
+ * 选择结果经 updatePreferences 写入 preferences.theme.mode，当前模式从全局偏好读取。
+ * shouldOnHover 为 false 时不展开选项，只保留按钮的即时切换行为。
+ */
 import type { ThemeModeType } from '@vben/types';
 
 import { MoonStar, Sun, SunMoon } from '@vben/icons';

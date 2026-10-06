@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 表单操作栏：渲染重置与提交按钮、折叠开关，并触发对应回调。
+ * 提交先经实例校验，通过后才把值交给 handleSubmit；
+ * 业务未提供 handleReset 时退回表单自身重置。不渲染任何字段。
+ */
 import { computed, toRaw, unref, watch } from 'vue';
 
 import { useSimpleLocale } from '@vben-core/composables';

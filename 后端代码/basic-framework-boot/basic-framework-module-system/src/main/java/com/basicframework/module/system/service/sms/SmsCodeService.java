@@ -12,7 +12,9 @@ import jakarta.validation.Valid;
  * <p>
  * 提供验证码发送、校验和使用标记能力。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface SmsCodeService {
 

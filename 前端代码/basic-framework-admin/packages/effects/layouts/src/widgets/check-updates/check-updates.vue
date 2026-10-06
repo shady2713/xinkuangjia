@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 版本更新提醒：定时向部署入口发 HEAD 请求，比对版本标记判断更新。
+ * 发现变化即弹窗引导刷新，页面隐藏时停表、恢复可见时补查一次；
+ * 仅在非 localhost 生效，不解析版本号，也不接管资源缓存与刷新策略。
+ */
 import { onMounted, onUnmounted, ref } from 'vue';
 
 import { $t } from '@vben/locales';

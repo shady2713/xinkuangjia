@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 子菜单标题行：渲染图标、标题插槽与展开箭头，并按状态决定箭头的朝向。
+ * 折叠与水平模式下依据层级隐藏标题或旋转箭头，占位宽度由调用方样式约束。
+ * 不处理点击与展开状态，事件绑定和展开项集合由 sub-menu 与根菜单负责。
+ */
 import type { MenuItemProps } from '../types';
 
 import { computed } from 'vue';

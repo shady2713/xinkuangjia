@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 浮层内容：经传送门渲染面板，默认居中对齐并偏移 4 像素。
+ * 继承属性直接落到面板，宽度与动画内置；显隐与定位由根节点和触发器控制。
+ */
 import type { PopoverContentEmits, PopoverContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

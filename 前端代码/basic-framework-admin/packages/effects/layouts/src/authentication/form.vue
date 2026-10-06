@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 认证表单容器：为登录视图提供统一内边距、进入动画与登录页缓存。
+ *
+ * 通过 RouterView 渲染子路由，KeepAlive 只缓存 name 为 Login 的组件；
+ * dataSide 仅用于样式定位，校验与提交由各登录视图自己负责。
+ */
 defineOptions({
   name: 'AuthenticationFormView',
 });

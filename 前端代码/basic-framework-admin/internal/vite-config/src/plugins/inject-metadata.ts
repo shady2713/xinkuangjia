@@ -1,3 +1,10 @@
+/**
+ * 构建元数据注入插件：读取应用 package.json 与工作区清单，
+ * 把版本、作者、构建时间和依赖版本写进 __VBEN_ADMIN_METADATA__，
+ * 并单独暴露 import.meta.env.VITE_APP_VERSION。
+ * catalog: 与 workspace: 协议在此展开为实际版本号；只产出编译期常量，
+ * 不读取运行期环境变量，也不改写产物文件。
+ */
 import type { PluginOption } from 'vite';
 
 import {

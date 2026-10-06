@@ -1,3 +1,8 @@
+/**
+ * 岗位管理页的表单、检索与列表字段定义，新增与修改共用一套表单。
+ * 主键字段对表单隐藏，页面只提交名称、编码、顺序、状态与备注；
+ * 增删改查请求由列表页和表单弹窗发起。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

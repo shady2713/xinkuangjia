@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 菜单分隔线：在菜单项之间画一条浅色横线，只做视觉分组，不参与交互。 */
 import type { DropdownMenuSeparatorProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

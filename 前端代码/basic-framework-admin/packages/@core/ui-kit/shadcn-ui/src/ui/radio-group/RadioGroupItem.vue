@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 单选选项：渲染圆形指示器并透传选中、禁用与焦点样式。
+ * 需置于 RadioGroup 内才有互斥选中，选项文案由使用方提供。
+ */
 import type { RadioGroupItemProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

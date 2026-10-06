@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 导航菜单偏好分组：菜单风格、上下分栏和手风琴折叠。
+ * 风格选项在此以平铺按钮呈现，取值由偏好抽屉持有；
+ * 分栏开关可由 disabledNavigationSplit 单独禁用。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { $t } from '@vben/locales';

@@ -1,3 +1,7 @@
+/**
+ * 短信模板接口：模板的分页查询、详情、增删改与按模板发送短信。
+ * 模板所属渠道由 sms/channel 维护，本模块只携带渠道编号与编码。
+ */
 import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';

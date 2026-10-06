@@ -1,3 +1,8 @@
+/**
+ * 气泡提示模块入口：注册 v-tippy 指令并写入全局默认属性（延迟、HTML、主题）。
+ * 同时导出 Tippy 组件包装，把 auto 主题按当前明暗模式归一成 tippy 可识别的取值。
+ * 只负责配置与主题转换，气泡内容与触发时机仍由使用方决定。
+ */
 import type { DefaultProps, Props } from 'tippy.js';
 
 import type { App, SetupContext } from 'vue';

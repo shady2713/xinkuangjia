@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 开关控件：以 v-model 绑定布尔值，点击抛出取反结果，勾选与未勾选映射到不同背景色。
+ * 偏好设置面板借 switch-item 用它切换即时生效的配置，说明文案与禁用提示由调用方补齐；
+ * 自身不写回配置也不做校验，只呈现勾选与禁用两种状态。
+ */
 import type { SwitchRootEmits, SwitchRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

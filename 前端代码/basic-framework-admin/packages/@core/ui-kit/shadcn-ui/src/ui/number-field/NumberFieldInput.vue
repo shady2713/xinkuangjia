@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 数字输入框文本域：套用居中、边框与聚焦环等基础样式。
+ * 不接受 class 覆盖；data-slot 标记供内容容器定位增减按钮。
+ */
 import { cn } from '@vben-core/shared/utils';
 
 import { NumberFieldInput } from 'reka-ui';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 选择触发按钮：渲染可聚焦的下拉触发器与箭头图标，点击后请求根节点开合面板。
+ * 面板内容与开合状态都不在这里；上层通用选择器、偏好设置的语言与布局下拉用它显示当前值。
+ */
 import type { SelectTriggerProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

@@ -1,3 +1,8 @@
+/**
+ * 描述列表工厂：把一份响应式属性状态包成组件，并返回改属性的句柄。
+ * 详情页用 useDescription(options) 生成局部描述列表，之后可 setDescProps 覆盖；
+ * 只做属性合并与包装渲染，字段取值、插槽与布局仍由 description.vue 决定。
+ */
 import type { Component } from 'vue';
 
 import type { DescInstance, DescriptionProps } from './typing';

@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * CodeMirror 编辑器内核：挂载后在容器上创建实例，并同步内容、模式、只读与主题。
+ * 窗口尺寸变化时防抖 refresh，深浅色切换在 idea 与 material-palenight 之间换肤。
+ * 只把编辑器 change 事件抛给父级；JSON 格式化与 update:value 由 code-editor.vue 负责。
+ */
 import type { Nullable } from '@vben/types';
 
 import type { CodeEditorProps } from './types';

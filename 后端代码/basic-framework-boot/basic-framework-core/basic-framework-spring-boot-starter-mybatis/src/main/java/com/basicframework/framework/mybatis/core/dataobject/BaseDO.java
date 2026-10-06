@@ -17,7 +17,9 @@ import java.time.LocalDateTime;
  * <p>实现 {@link TransPojo} 是为了支持 Easy-Trans 的 TransType.SIMPLE 模式，
  * 使 MyBatis Plus 查询结果可以参与 VO 数据翻译。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Data
 @JsonIgnoreProperties(value = "transMap") // 由于 Easy-Trans 会添加 transMap 属性，避免 Jackson 在 Spring Cache 反序列化报错

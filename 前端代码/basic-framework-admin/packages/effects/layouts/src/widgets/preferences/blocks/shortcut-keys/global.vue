@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 全局快捷键偏好分组：总开关及搜索、退出登录、锁屏三项的启停。
+ * 按平台显示 Ctrl 或 ⌘、Alt 或 ⌥ 的按键提示，总开关关闭时各项置灰；
+ * 按键的实际监听与触发不在这里。
+ */
 import { computed } from 'vue';
 
 import { $t } from '@vben/locales';

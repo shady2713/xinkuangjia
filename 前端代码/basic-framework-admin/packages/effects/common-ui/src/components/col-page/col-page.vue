@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 左右分栏页面：外层套用 Page 承载页头，内部用可拖拽面板切出左窄右宽两栏。
+ * 左栏插槽额外获得 expand/collapse，leftWidth 被拦截后不再向下透传，
+ * 其余 Page 属性与其他插槽原样转发，页头与操作区仍由 Page 渲染。
+ */
 import type { ColPageProps } from './types';
 
 import { computed, ref, useSlots } from 'vue';

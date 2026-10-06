@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 通用兜底页组件：按 status 选配内置图标与国际化文案，支持自定义插槽。
+ * 403/404 显示返回首页按钮，500/离线显示刷新按钮；不改动路由与权限判定。
+ */
 import type { FallbackProps } from './fallback';
 
 import { computed, defineAsyncComponent } from 'vue';

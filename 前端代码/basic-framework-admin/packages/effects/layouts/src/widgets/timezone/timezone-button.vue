@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 时区设置按钮：点击打开弹窗，向时区 store 取候选列表并单选目标时区。
+ * 确认后把所选时区写回 store 再关闭弹窗；列表在弹窗打开时才拉取，组件内不持久化。
+ */
 import { ref, unref } from 'vue';
 
 import { createIconifyIcon } from '@vben/icons';

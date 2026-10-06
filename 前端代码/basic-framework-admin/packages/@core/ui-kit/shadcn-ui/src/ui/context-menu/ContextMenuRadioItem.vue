@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 单选菜单条目：同组内互斥，选中时左侧显示实心圆点，文字由插槽提供。 */
 import type {
   ContextMenuRadioItemEmits,
   ContextMenuRadioItemProps,

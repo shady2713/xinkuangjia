@@ -1,3 +1,9 @@
+/**
+ * 字典读取工具：从字典 store 的本地缓存取标签、字典项与下拉选项。
+ *
+ * 只读缓存并做值类型转换，不发起字典请求；
+ * 缓存由路由守卫在权限校验后写入，字典的增删改查接口在 system/dict 模块。
+ */
 import { useDictStore } from '@vben/stores';
 import { isObject } from '@vben/utils';
 

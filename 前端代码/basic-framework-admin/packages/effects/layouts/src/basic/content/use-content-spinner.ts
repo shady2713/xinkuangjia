@@ -1,3 +1,8 @@
+/**
+ * 内容区加载态：注册路由前后置守卫，在过渡加载偏好开启时驱动 spinning，
+ * 并用 500ms 最短停留时间避免快速切换时动画一闪而过。
+ * 已加载过的路由与 iframe 路由不参与；只暴露 spinning，渲染交给内容外壳组件。
+ */
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 

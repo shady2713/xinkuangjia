@@ -1,3 +1,10 @@
+/**
+ * vsh code-workspace 子命令：收集 monorepo 内各包目录，写入仓库根的
+ * vben-admin.code-workspace，并用 prettier 统一该文件格式。
+ *
+ * --spaces 控制缩进宽度，--auto-commit 额外把生成结果加入 git 暂存；
+ * 不生成 settings、extensions 等其它工作区字段。
+ */
 import type { CAC } from 'cac';
 
 import { join, relative } from 'node:path';

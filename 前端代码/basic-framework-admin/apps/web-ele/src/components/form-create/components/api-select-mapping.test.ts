@@ -1,3 +1,8 @@
+/**
+ * parseApiSelectMapping 正向契约回归：锁定 JSON 字段路径映射能解析并取出列表选项，
+ * 以及历史 data.list.map 写法被识别为迁移（migrated 为 true）的行为。
+ * 拒绝路径（空值、超长、原型链、任意脚本）由 api-select-mapping-rejection.test.ts 覆盖。
+ */
 import { describe, expect, it } from 'vitest';
 
 import {

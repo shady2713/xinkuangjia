@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 顶栏外观偏好分组：编辑顶栏显隐、固定模式和菜单对齐方式。
+ * 三个偏好项均由偏好抽屉持有，本组件只编辑不落盘；
+ * 顶栏关闭时模式与对齐两项自动置灰。
+ */
 import type {
   LayoutHeaderMenuAlignType,
   LayoutHeaderModeType,

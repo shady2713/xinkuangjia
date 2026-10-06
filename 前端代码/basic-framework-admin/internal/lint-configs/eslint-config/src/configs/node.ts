@@ -1,3 +1,7 @@
+/**
+ * Node 规则层：接入 eslint-plugin-n，按 Node 20.12 约束脚本与工具代码。
+ * 只对 scripts 与 internal 放宽 process 引用，构建依赖走白名单。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

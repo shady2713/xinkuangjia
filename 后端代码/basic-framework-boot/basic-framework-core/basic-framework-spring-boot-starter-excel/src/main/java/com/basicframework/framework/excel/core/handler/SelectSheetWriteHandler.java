@@ -32,7 +32,9 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 /**
  * 基于隐藏字典 Sheet 实现 Excel 单元格下拉框。
  *
- * @author 李杰
+ * @author HUIHUI
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Slf4j
 public class SelectSheetWriteHandler implements SheetWriteHandler {

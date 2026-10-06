@@ -1,3 +1,8 @@
+/**
+ * 混合布局侧边扩展列的状态与交互：维护扩展列子菜单、激活项与可见性，
+ * 并处理鼠标移入移出和选中，供 layout.vue 驱动扩展列菜单。
+ * 头部与侧边主菜单的拆分归 use-mixed-menu，此处只管扩展列。
+ */
 import type { ComputedRef } from 'vue';
 
 import type { MenuRecordRaw } from '@vben/types';

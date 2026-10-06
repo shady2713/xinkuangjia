@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 统计卡片：展示单指标数值、提示气泡与环比涨跌，数值用滚动动画从旧值过渡。
+ * 涨跌只按 percent 正负决定颜色与箭头方向，取值与文案由使用方经 props 传入。
+ * 纯展示组件，不含请求、下钻与点击交互。
+ */
 import type { StatisticCardProps } from './types';
 
 import {

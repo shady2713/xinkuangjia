@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 菜单树节点：按单条菜单数据递归渲染，无子节点时输出叶子菜单项，
+ * 有子节点时输出可展开的子菜单并把徽标放进内容插槽。
+ * 展开、悬浮等交互沿用底层菜单组件，本层只负责数据到组件的映射。
+ */
 import type { MenuRecordRaw } from '@vben-core/typings';
 
 import { computed } from 'vue';

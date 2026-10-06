@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 数字滚动动画：用 useTransition 把 startVal 到 endVal 的过渡渲染成文本。
+ * 供统计卡、对比卡与仪表盘概览展示数值变化；duration、分隔符、前后缀与
+ * 缓动由 props 控制，reset 通过 ref 暴露，开始与结束抛出 started、finished。
+ * 不负责取数，数据来源与单位换算由使用方决定。
+ */
 import { computed, onMounted, ref, unref, watch, watchEffect } from 'vue';
 
 import { isNumber } from '@vben-core/shared/utils';

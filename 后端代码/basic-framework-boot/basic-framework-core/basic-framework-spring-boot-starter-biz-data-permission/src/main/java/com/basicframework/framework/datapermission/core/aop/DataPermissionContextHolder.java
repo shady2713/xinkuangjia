@@ -11,7 +11,9 @@ import java.util.List;
  *
  * <p>上下文使用栈结构保存数据权限配置，支持方法嵌套调用时正确恢复外层规则。</p>
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class DataPermissionContextHolder {
 

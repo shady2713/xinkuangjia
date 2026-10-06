@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 二级子菜单面板：相对子菜单触发器侧向弹出，浮层样式与一级面板保持一致。
+ * 显隐和键盘导航由 DropdownMenuSub 的上下文接管，本组件只透传属性与插槽。
+ */
 import type {
   DropdownMenuSubContentEmits,
   DropdownMenuSubContentProps,

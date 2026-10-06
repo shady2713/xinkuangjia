@@ -1,3 +1,8 @@
+/**
+ * 锁定 diff 的差异口径：完全一致时返回 undefined。
+ * 数组按内容集合比较，顺序无关但重复次数参与判定；
+ * 只在对比对象上存在的键才进入结果，键被删除不算差异。
+ */
 import { describe, expect, it } from 'vitest';
 
 import { diff } from '../diff';

@@ -1,3 +1,8 @@
+/**
+ * 类型判定工具：以类型谓词收窄 unknown，覆盖空值、URL 与运行环境等判定。
+ * isFunction/isObject/isString 直接透传 @vue/shared，其余为本地实现。
+ * 只做判定，不转换类型也不补默认值。
+ */
 // eslint-disable-next-line vue/prefer-import-from-vue
 import { isFunction, isObject, isString } from '@vue/shared';
 

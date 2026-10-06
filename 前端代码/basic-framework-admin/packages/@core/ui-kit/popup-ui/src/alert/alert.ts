@@ -1,3 +1,10 @@
+/**
+ * Alert 的类型与上下文契约：AlertProps 与 PromptProps
+ * 描述弹窗和输入框的选项，useAlertContext 供内容区
+ * 的自定义元素触发确认或取消。只定义类型与注入；
+ * 渲染与关闭拦截在 alert.vue，
+ * 命令式实现在 AlertBuilder.ts。
+ */
 import type { Component, VNode, VNodeArrayChildren } from 'vue';
 
 import type { Recordable } from '@vben-core/typings';

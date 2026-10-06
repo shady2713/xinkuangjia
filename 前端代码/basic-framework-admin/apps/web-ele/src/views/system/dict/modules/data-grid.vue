@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 字典数据表格：左侧类型栏选中后按 dictType 重查，支持增删改与导出。
+ * 当前的字典类型由父页面透传，类型自身的维护在 type-grid.vue。
+ */
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDictDataApi } from '#/api/system/dict/data';
 

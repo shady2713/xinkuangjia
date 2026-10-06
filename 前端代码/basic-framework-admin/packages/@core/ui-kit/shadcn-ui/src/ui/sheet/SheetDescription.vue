@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 抽屉说明文本：为对话框补充可读描述，抽屉缺描述时会渲染空说明占位以保全无障碍语义。 */
 import type { DialogDescriptionProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

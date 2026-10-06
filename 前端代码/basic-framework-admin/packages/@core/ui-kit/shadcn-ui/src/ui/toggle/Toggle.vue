@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 单个切换按钮：按下态由 reka-ui 的 Toggle 维护，
+ * 外观取自 toggleVariants，size、variant 默认值在此补齐。
+ * 组内互斥与整组样式下发不属于本组件，交给 toggle-group。
+ */
 import type { ToggleEmits, ToggleProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

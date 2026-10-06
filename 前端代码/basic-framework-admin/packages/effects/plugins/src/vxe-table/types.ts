@@ -1,3 +1,8 @@
+/**
+ * 表格类型契约：描述 VbenVxeGrid 的属性、扩展后的表格 API、vxe-grid 配置项
+ * 与初始化回调 SetupVxeTable，并约定未声明行类型时的兜底行数据。
+ * 只声明形状，不含运行时逻辑。
+ */
 import type {
   VxeGridListeners,
   VxeGridPropTypes,

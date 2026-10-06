@@ -1,3 +1,9 @@
+/**
+ * vsh lint 子命令：默认并行执行 eslint、prettier --check 和 stylelint 检查；
+ * 加 --format 时改为依次运行对应工具的 --fix 自动修复。
+ *
+ * 只转发命令并继承各工具的退出码，规则配置由 internal/lint-configs 下的包维护。
+ */
 import type { CAC } from 'cac';
 
 import { execaCommand } from '@vben/node-utils';

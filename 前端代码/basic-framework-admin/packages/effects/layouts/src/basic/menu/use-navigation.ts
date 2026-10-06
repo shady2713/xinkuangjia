@@ -1,3 +1,8 @@
+/**
+ * 布局菜单的统一跳转入口：按路由 meta 判定外链、新窗口或站内跳转并执行。
+ * 维护路由表快照供判定复用，菜单、标签栏等布局组件共用此入口；
+ * 不含权限校验与菜单数据装配，取数仍由各调用方自行完成。
+ */
 import type { RouteRecordNormalized } from 'vue-router';
 
 import { useRouter } from 'vue-router';

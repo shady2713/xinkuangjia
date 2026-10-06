@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 滚动容器组件：包裹底层滚动区域，接近边缘时按需显示方向阴影。
+ * horizontal 控制横向滚动条，shadow 系列属性决定各方向阴影。
+ * 通过 scrollAt 上报四方向是否到达边界，不接管滚动位置。
+ */
 import type { ClassType } from '@vben-core/typings';
 
 import { computed, ref } from 'vue';

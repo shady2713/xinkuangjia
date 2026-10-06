@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 布局侧边栏：承载纵向菜单，支持折叠、悬停展开与侧边混合模式的副菜单列。
+ *
+ * 宽度由 props 与各双向绑定状态算出，折叠/固定按钮取自 widgets；
+ * 菜单数据、路由高亮与权限过滤由插槽注入的菜单组件负责。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed, shallowRef, useSlots, watchEffect } from 'vue';

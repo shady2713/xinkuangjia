@@ -1,3 +1,10 @@
+/**
+ * vsh check-circular 子命令：用 circular-dependency-scanner 扫描工程内的循环依赖，
+ * 默认忽略 dist、.turbo、internal 等目录。
+ *
+ * --staged 只保留暂存文件涉及的环，结果按 cwd 与忽略模式缓存复用；
+ * 只打印警告，不改变退出码，也不自动修复依赖环。
+ */
 import type { CAC } from 'cac';
 
 import { extname } from 'node:path';

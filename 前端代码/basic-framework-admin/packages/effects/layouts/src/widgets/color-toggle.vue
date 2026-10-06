@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 主题色切换：鼠标悬停展开预设色卡，点击后写入偏好中的主色与内置主题类型。
+ * 色卡取自 COLOR_PRESETS，选中态回读偏好，供登录页工具栏使用。
+ * 只改主题偏好，不涉及暗色模式、字号与布局切换。
+ */
 import type { BuiltinThemeType } from '@vben/types';
 
 import { Palette } from '@vben/icons';

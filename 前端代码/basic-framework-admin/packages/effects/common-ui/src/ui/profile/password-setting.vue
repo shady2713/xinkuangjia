@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 密码设置表单：用 useVbenForm 渲染外层传入的密码字段。
+ *
+ * 校验通过后抛出全部字段值，并暴露 getFormApi 供外层重置或再校验；
+ * 字段规则与提交请求分别由 formSchema 和页面持有。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { VbenFormSchema } from '@vben-core/form-ui';

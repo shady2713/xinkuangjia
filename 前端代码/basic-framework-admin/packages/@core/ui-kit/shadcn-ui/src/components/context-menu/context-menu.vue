@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 右键菜单容器：把 menus 回调产出的菜单项渲染成浮层，点击后把数据透传给宿主。
+ * 标签页等使用方按自己的实体决定菜单项，组件不解释 handlerData 的结构，
+ * 也不判定菜单项该不该出现；权限与业务语义由使用方的 menus 回调负责。
+ */
 import type {
   ContextMenuContentProps,
   ContextMenuRootEmits,

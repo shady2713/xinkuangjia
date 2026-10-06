@@ -1,3 +1,8 @@
+/**
+ * 菜单内部工具：findComponentUpward 沿组件树向上查找指定名称的祖先实例，
+ * flattedChildren 递归展开插槽与组件子树，得到扁平的虚拟节点列表。
+ * 两者都只读组件树，供上下文查找与水平菜单的溢出裁剪使用。
+ */
 import type {
   ComponentInternalInstance,
   VNode,

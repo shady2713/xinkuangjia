@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 右键菜单复选条目：在 reka-ui 复选菜单项上固定左侧指示位与勾选对勾。
+ * 勾选状态由菜单根节点维护，本组件只负责条目外观；
+ * 多选联动、互斥与菜单收起时机均由外层菜单决定。
+ */
 import type {
   ContextMenuCheckboxItemEmits,
   ContextMenuCheckboxItemProps,

@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 多选/单选按钮组：在 VbenButtonGroup 上叠加选中态图标
+ * 与受控值，支持 maxCount 限选、allowClear 清除，
+ * 以及 beforeChange 异步拦截。选项只读 label 与 value，
+ * 选中结果与 btnClick 事件交给调用方。
+ */
 import type { Arrayable } from '@vueuse/core';
 
 import type { ValueType, VbenButtonGroupProps } from './button';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 工作台项目卡片：按 items 以栅格列出项目，点击项通过 click 事件抛出。
+ * 组件自身不跳转、不取数，打开详情或路由跳转由父级决定。
+ */
 import type { WorkbenchProjectItem } from '../typing';
 
 import {

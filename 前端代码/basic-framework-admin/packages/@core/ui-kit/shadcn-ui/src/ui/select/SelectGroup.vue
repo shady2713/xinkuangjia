@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 选项分组容器：为同组选项提供统一内边距与分组语义，不参与选中。 */
 import type { SelectGroupProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

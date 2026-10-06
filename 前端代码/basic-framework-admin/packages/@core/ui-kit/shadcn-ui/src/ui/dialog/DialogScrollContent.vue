@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 滚动内容弹窗面板：遮罩自身可滚动，内容超出视口时随页面滚动，适合长表单。
+ * 指针按下点越过内容边界时阻止外部关闭，避免拖动滚动条误关弹窗；
+ * 默认 zIndex 为 1000，与可拖拽的 DialogContent 面板是两条独立实现。
+ */
 import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

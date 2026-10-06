@@ -1,3 +1,8 @@
+/**
+ * 前端静态路由的权限生成：generateRoutesByFrontend 按角色过滤路由表，
+ * 并在需要时把菜单可见但无权限的页面替换为传入的 403 组件，hasAuthority 是它的单节点判定。
+ * 后端下发菜单的模式由 generate-routes-backend 承担，路由注册与跳转不在这里。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { filterTree, mapTree } from '@vben-core/shared/utils';

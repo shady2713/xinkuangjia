@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 用户页左侧部门树：加载精简部门列表，支持按名称过滤后点选单个节点。
+ * 选中结果经 select 事件交给父组件触发用户查询，自身不请求用户数据。
+ */
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { onMounted, ref } from 'vue';

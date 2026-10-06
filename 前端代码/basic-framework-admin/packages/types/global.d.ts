@@ -15,7 +15,8 @@ declare module 'vue-router' {
 /**
  * 管理平台运行时配置，只声明代码从 `_app.config.js` 实际读取的字段。
  *
- * @author 李杰
+ * 来源 vue-vben-admin@50f4ede309d4450c7dd417399cb8d5c02346d2d2 的 packages/types/global.d.ts（该版本未声明作者）；
+ * 本地修改：扩充本项目的 VITE_APP_* 运行时配置字段与项目命名空间类型。
  */
 export interface VbenAdminProAppConfigRaw {
   /** API 加密算法名称。 */

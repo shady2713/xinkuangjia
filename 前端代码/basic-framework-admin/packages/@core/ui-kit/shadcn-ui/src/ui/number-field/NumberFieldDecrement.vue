@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 数字输入框减号按钮：绝对定位在输入框左侧，默认渲染减号图标。
+ * 步进与禁用态由 reka-ui 根节点上下文决定，本件不读写数值。
+ */
 import type { NumberFieldDecrementProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

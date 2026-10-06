@@ -1,3 +1,9 @@
+/**
+ * 单文件格式化入口：按目标文件就近的 Prettier 配置重排文本，
+ * 内容没有变化时不回写磁盘，避免无谓的文件时间戳变动。
+ *
+ * 供 code-workspace 等生成类脚本整理产物；不遍历目录，也不负责提交。
+ */
 import fs from 'node:fs/promises';
 
 import { format, getFileInfo, resolveConfig } from 'prettier';

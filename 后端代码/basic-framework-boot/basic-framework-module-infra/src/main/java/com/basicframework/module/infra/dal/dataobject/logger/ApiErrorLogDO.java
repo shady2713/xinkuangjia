@@ -15,7 +15,9 @@ import java.time.LocalDateTime;
  *
  * 记录接口异常发生时的请求、用户、异常栈和后续处理状态。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @TableName("infra_api_error_log")
 @Data

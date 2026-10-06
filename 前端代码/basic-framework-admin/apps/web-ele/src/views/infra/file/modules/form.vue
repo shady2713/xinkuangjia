@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 文件上传弹窗：选择单个图片后统一提交，成功后关闭并通知父级刷新。
+ *
+ * 关闭自动上传，由 onConfirm 提交以避免选中即传的重复请求；
+ * 上传地址与请求头由 upload 组件的 useUpload 提供。
+ */
 import type { UploadFile, UploadRawFile } from 'element-plus';
 
 /**

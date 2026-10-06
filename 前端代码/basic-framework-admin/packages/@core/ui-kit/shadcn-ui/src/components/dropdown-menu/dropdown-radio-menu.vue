@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 单选下拉菜单：以 v-model 记录当前值，点击条目写回该值并高亮选中项。
+ * 语言、布局切换等触发按钮复用；选项仍由 menus 提供，组件不解释其含义。
+ */
 import type { DropdownMenuProps } from './interface';
 
 import {

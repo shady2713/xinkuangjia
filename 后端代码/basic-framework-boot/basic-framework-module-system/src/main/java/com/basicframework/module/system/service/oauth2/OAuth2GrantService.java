@@ -9,7 +9,9 @@ import java.util.List;
  * <p>
  * 提供隐式授权、密码授权、刷新令牌、客户端凭据和令牌撤销能力。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface OAuth2GrantService {
 

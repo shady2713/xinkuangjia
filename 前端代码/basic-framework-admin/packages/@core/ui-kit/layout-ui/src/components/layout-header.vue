@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 布局页头：按 height 定高，并让 logo 区按侧边栏宽度或移动端收窄。
+ *
+ * 隐藏时用负 marginTop 收起头部，导航与切换按钮由插槽注入。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed, useSlots } from 'vue';

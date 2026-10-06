@@ -1,3 +1,7 @@
+/**
+ * 顶部进度条控制：首次调用时动态引入 NProgress 并配置，之后复用同一实例。
+ * 对外只暴露 startProgress 与 stopProgress，何时启停由路由与请求层决定。
+ */
 import type NProgress from 'nprogress';
 
 // 创建一个NProgress实例的变量，初始值为null

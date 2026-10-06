@@ -1,3 +1,8 @@
+/**
+ * 登录日志的检索项、表格列与详情字段定义，列表页和详情弹窗共用。
+ * 登录时间与登录结果在此转成文本和字典标签；
+ * 日志由后端登录流程写入，本模块只读展示。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';

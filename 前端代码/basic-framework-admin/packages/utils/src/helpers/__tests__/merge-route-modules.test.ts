@@ -1,3 +1,9 @@
+/**
+ * mergeRouteModules 的单元测试：锁定动态导入模块的 default 路由数组按声明顺序拼接。
+ *
+ * 覆盖多模块合并、空模块表和 default 为空数组三种输入；不涉及后端菜单转路由的
+ * 排序与权限过滤，那些由 generate-routes-* 系列测试负责。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import type { RouteModuleType } from '../merge-route-modules';

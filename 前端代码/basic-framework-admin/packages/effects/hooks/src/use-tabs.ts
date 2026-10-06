@@ -1,3 +1,9 @@
+/**
+ * 标签页操作封装：把关闭左/右/其他、固定、刷新、新窗口打开
+ * 等动作转发给标签栏 store，未传标签时默认作用于当前路由。
+ *
+ * 只做参数兜底与转发，标签数据与路由跳转仍由 store 维护。
+ */
 import type { ComputedRef } from 'vue';
 import type { RouteLocationNormalized } from 'vue-router';
 

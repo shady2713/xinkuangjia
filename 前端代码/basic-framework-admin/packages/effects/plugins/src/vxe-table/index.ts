@@ -1,3 +1,9 @@
+/**
+ * 表格插件出口：聚合 setupVbenVxeTable 初始化、VbenVxeGrid 与
+ * VbenVxeTableToolbar 组件、useVbenVxeGrid/useTableToolbar、必填校验
+ * 类名生成器与 vxe 类型定义。
+ * 另导出 AsyncVxeTable、AsyncVxeColumn、AsyncVxeToolbar 供绕过封装直接用原生表格。
+ */
 import { defineAsyncComponent } from 'vue';
 
 export { setupVbenVxeTable } from './init';

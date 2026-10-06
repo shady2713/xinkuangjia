@@ -124,6 +124,63 @@ function ownerOf(node) {
 }
 
 /**
+ * 判断匿名函数是否处在调用实参或表达式位置。
+ * 这类回调不是显式方法声明，写注释的位置也不在声明之前，单独要求会让正常文档写法失效。
+ * @param node - 箭头函数或函数表达式。
+ * @returns 父节点是否为实参、数组元素、返回表达式等表达式位置。
+ */
+function expressionPosition(node) {
+  const parent = node.parent;
+  if (!parent) return false;
+  if (ts.isCallExpression(parent) || ts.isNewExpression(parent))
+    return (parent.arguments ?? []).includes(node);
+  return (
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isReturnStatement(parent) ||
+    ts.isConditionalExpression(parent) ||
+    ts.isBinaryExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    ts.isSpreadElement(parent) ||
+    ts.isAwaitExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isNonNullExpression(parent) ||
+    ts.isTemplateSpan(parent) ||
+    ts.isBindingElement(parent) ||
+    ts.isArrowFunction(parent) ||
+    ts.isFunctionExpression(parent)
+  );
+}
+
+/**
+ * 向上寻找最近的具名承载声明；注释写在它的上方即可消除要求。
+ * @param node - 实参或表达式位置的匿名函数。
+ * @returns 变量语句、属性、方法等具名声明节点，没有时返回 undefined。
+ */
+function namedCarrier(node) {
+  for (let parent = node.parent; parent; parent = parent.parent) {
+    if (
+      ts.isVariableStatement(parent) ||
+      ts.isPropertyAssignment(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isGetAccessor(parent) ||
+      ts.isSetAccessor(parent) ||
+      ts.isConstructorDeclaration(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isTypeAliasDeclaration(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isInterfaceDeclaration(parent) ||
+      ts.isEnumDeclaration(parent)
+    )
+      return parent;
+  }
+  return undefined;
+}
+
+/**
  * 判断声明是否公开，接口成员和非私有类方法需要完整调用契约。
  * @param node - 待检查声明。
  * @param owner - 注释承载节点。
@@ -243,14 +300,47 @@ function parameterTags(text) {
 }
 
 /**
+ * 按完整诊断键去重：同一承载声明会被变量语句与函数表达式两条路径各裁决一次，
+ * 参数标签也会按每个参数各报一次，重复行会让调用方误以为存在多个问题。
+ * 只有路径、行号、规则码与文案完全一致时才合并，不同规则或不同行的诊断均保留。
+ * @param findings - 检查产出的诊断列表。
+ * @returns 按出现顺序保留首条的诊断列表。
+ */
+function dedupe(findings) {
+  const seen = new Set();
+  return findings.filter(
+    /** 完整诊断键重复时丢弃后出现的一条。 */ (finding) => {
+      const key = `${finding.path}\n${finding.line}\n${finding.rule}\n${finding.message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    },
+  );
+}
+
+/**
+ * 提取脚本块之前的中文 HTML 注释，作为 Vue 组件模块头的说明来源。
+ * @param source - Vue 单文件组件原文。
+ * @param scriptStart - 第一个脚本块在原文中的起始字符位置。
+ * @returns 拼接后的 HTML 注释原文；没有脚本块时返回空串。
+ */
+function htmlHeader(source, scriptStart) {
+  if (scriptStart === null) return '';
+  return [...source.slice(0, scriptStart).matchAll(/<!--[\s\S]*?-->/gu)]
+    .map(/** 保留注释原文交给统一的中文说明判据。 */ (match) => match[0])
+    .join('\n');
+}
+
+/**
  * 解析一个脚本块并检查受改动影响的显式声明。
  * @param file - Python 提供的文件及改动行。
  * @param source - JS 或 TS 脚本块原文。
  * @param offset - 脚本块之前的文件行数。
  * @param language - ts、tsx、js 或 jsx。
+ * @param header - 脚本块之前的 HTML 注释，Vue 组件用它承载模块头说明。
  * @returns 可直接交给 Python 输出的诊断列表。
  */
-function checkScript(file, source, offset, language) {
+function checkScript(file, source, offset, language, header = '') {
   const kind =
     {
       ts: ts.ScriptKind.TS,
@@ -295,7 +385,8 @@ function checkScript(file, source, offset, language) {
       ))
   ) {
     const doc = documentation(first, tree, first.getStart(tree));
-    if (!meaningful(doc.text))
+    // 脚本块之前的 HTML 注释与无脚本组件的判据保持一致：都是同一份中文组件说明。
+    if (!meaningful(doc.text) && !meaningful(header))
       fail(0, 'web-module-doc', '模块或组件顶部缺少中文职责说明');
   }
   /**
@@ -325,102 +416,124 @@ function checkScript(file, source, offset, language) {
       ts.isVariableStatement(node) &&
       (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
     if (callable || structure || publicVariable) {
-      const owner = ownerOf(node);
-      const doc = documentation(owner, tree, owner.getStart(tree));
-      const start =
-        tree.getLineAndCharacterOfPosition(doc.start).line + offset + 1;
-      // 类或接口只检查头部，内部方法的改动由方法自身承担，避免把旧类注释一并阻断。
-      const endPosition = structure
-        ? (node.members?.pos ?? node.getStart(tree))
-        : node.end;
-      const end =
-        tree.getLineAndCharacterOfPosition(endPosition).line + offset + 1;
-      if (involved(file, start, end)) {
-        const label =
-          node.name?.getText(tree) ??
-          (ts.isConstructorDeclaration(node) ? 'constructor' : '函数或声明');
-        const isPublic = publicDeclaration(node, owner);
-        if (!meaningful(doc.text)) {
-          fail(node.getStart(tree), 'web-doc', `${label} 缺少中文职责注释`);
-        } else if (isPublic && !doc.jsdoc) {
-          fail(
-            node.getStart(tree),
-            'web-jsdoc',
-            `${label} 公开声明需要 JSDoc 块注释`,
-          );
+      let owner = ownerOf(node);
+      // 实参或表达式位置的匿名回调不是显式方法：要求归并到最近的具名承载声明，
+      // 由承载声明承担职责说明；没有具名承载声明时它不作为独立声明被要求。
+      let merged = false;
+      let unnamedCallback = false;
+      if (
+        callable &&
+        owner === node &&
+        (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+        !node.name &&
+        expressionPosition(node)
+      ) {
+        unnamedCallback = true;
+        // 回调自带紧邻的中文说明时要求已经满足，既不归并也不追加契约标签。
+        if (!meaningful(documentation(node, tree, node.getStart(tree)).text)) {
+          const carrier = namedCarrier(node);
+          if (carrier) {
+            owner = carrier;
+            merged = true;
+          }
         }
-        if (callable) {
-          const facts = bodyFacts(node);
-          const contract = isPublic || facts.branches >= 2;
-          if (contract) {
-            const tags = parameterTags(doc.text);
-            const parameters = (node.parameters ?? []).filter(
-              /** this 类型参数不是调用方传入的参数。 */ (parameter) =>
-                parameter.name.getText(tree) !== 'this',
-            );
-            for (const parameter of parameters) {
-              if (ts.isIdentifier(parameter.name)) {
-                if (!meaningful(tags.get(parameter.name.text) ?? '')) {
-                  fail(
-                    parameter.getStart(tree),
-                    'web-param',
-                    `${label} 缺少参数 ${parameter.name.text} 的中文说明`,
-                  );
-                }
-              } else {
-                // 解构参数允许一个具名对象标签；字段语义是否完整仍需人工复核。
-                if (
-                  ![...tags.values()].some(
-                    /** 解构参数至少要有实际对象说明。 */ (value) =>
-                      meaningful(value),
+      }
+      if (!unnamedCallback || merged) {
+        const doc = documentation(owner, tree, owner.getStart(tree));
+        const start =
+          tree.getLineAndCharacterOfPosition(doc.start).line + offset + 1;
+        // 类或接口只检查头部，内部方法的改动由方法自身承担，避免把旧类注释一并阻断。
+        const endPosition = structure
+          ? (node.members?.pos ?? node.getStart(tree))
+          : owner.end;
+        const end =
+          tree.getLineAndCharacterOfPosition(endPosition).line + offset + 1;
+        if (involved(file, start, end)) {
+          const named = merged ? owner : node;
+          const label =
+            named.name?.getText(tree) ??
+            (ts.isConstructorDeclaration(named) ? 'constructor' : '函数或声明');
+          const position = merged ? owner.getStart(tree) : node.getStart(tree);
+          const isPublic = publicDeclaration(node, owner);
+          if (!meaningful(doc.text)) {
+            fail(position, 'web-doc', `${label} 缺少中文职责注释`);
+          } else if (isPublic && !doc.jsdoc) {
+            fail(position, 'web-jsdoc', `${label} 公开声明需要 JSDoc 块注释`);
+          }
+          // 归并到承载声明后，参数与返回标签属于该回调自身，不再按它的签名裁决。
+          if (callable && !merged) {
+            const facts = bodyFacts(node);
+            const contract = isPublic || facts.branches >= 2;
+            if (contract) {
+              const tags = parameterTags(doc.text);
+              const parameters = (node.parameters ?? []).filter(
+                /** this 类型参数不是调用方传入的参数。 */ (parameter) =>
+                  parameter.name.getText(tree) !== 'this',
+              );
+              for (const parameter of parameters) {
+                if (ts.isIdentifier(parameter.name)) {
+                  if (!meaningful(tags.get(parameter.name.text) ?? '')) {
+                    fail(
+                      parameter.getStart(tree),
+                      'web-param',
+                      `${label} 缺少参数 ${parameter.name.text} 的中文说明`,
+                    );
+                  }
+                } else {
+                  // 解构参数允许一个具名对象标签；字段语义是否完整仍需人工复核。
+                  if (
+                    ![...tags.values()].some(
+                      /** 解构参数至少要有实际对象说明。 */ (value) =>
+                        meaningful(value),
+                    )
                   )
-                )
-                  fail(
-                    parameter.getStart(tree),
-                    'web-param',
-                    `${label} 解构参数缺少中文说明`,
-                  );
+                    fail(
+                      parameter.getStart(tree),
+                      'web-param',
+                      `${label} 解构参数缺少中文说明`,
+                    );
+                }
               }
-            }
-            const simpleNames = new Set(
-              parameters
-                .filter(
-                  /** 仅具名参数可以精确匹配标签名。 */ (p) =>
+              const simpleNames = new Set(
+                parameters
+                  .filter(
+                    /** 仅具名参数可以精确匹配标签名。 */ (p) =>
+                      ts.isIdentifier(p.name),
+                  )
+                  .map(/** 提取实际参数标识符。 */ (p) => p.name.text),
+              );
+              if (
+                parameters.every(
+                  /** 解构签名不能按直接参数名检查过期标签。 */ (p) =>
                     ts.isIdentifier(p.name),
                 )
-                .map(/** 提取实际参数标识符。 */ (p) => p.name.text),
-            );
-            if (
-              parameters.every(
-                /** 解构签名不能按直接参数名检查过期标签。 */ (p) =>
-                  ts.isIdentifier(p.name),
-              )
-            ) {
-              for (const key of tags.keys()) {
-                if (!simpleNames.has(key.split('.')[0]))
-                  fail(
-                    node.getStart(tree),
-                    'web-param-stale',
-                    `${label} 包含签名中不存在的参数标签：${key}`,
-                  );
+              ) {
+                for (const key of tags.keys()) {
+                  if (!simpleNames.has(key.split('.')[0]))
+                    fail(
+                      node.getStart(tree),
+                      'web-param-stale',
+                      `${label} 包含签名中不存在的参数标签：${key}`,
+                    );
+                }
               }
-            }
-            const returns = /@returns?\s+([^@]*)/u.exec(doc.text)?.[1] ?? '';
-            if (hasReturn(node, facts, tree) && !meaningful(returns)) {
-              fail(
-                node.getStart(tree),
-                'web-returns',
-                `${label} 缺少返回结果的中文说明`,
-              );
-            }
-            const throws =
-              /@(?:throws|exception)\s+([^@]*)/u.exec(doc.text)?.[1] ?? '';
-            if (facts.throws && !meaningful(throws)) {
-              fail(
-                node.getStart(tree),
-                'web-throws',
-                `${label} 存在直接抛出异常，需要中文失败条件说明`,
-              );
+              const returns = /@returns?\s+([^@]*)/u.exec(doc.text)?.[1] ?? '';
+              if (hasReturn(node, facts, tree) && !meaningful(returns)) {
+                fail(
+                  node.getStart(tree),
+                  'web-returns',
+                  `${label} 缺少返回结果的中文说明`,
+                );
+              }
+              const throws =
+                /@(?:throws|exception)\s+([^@]*)/u.exec(doc.text)?.[1] ?? '';
+              if (facts.throws && !meaningful(throws)) {
+                fail(
+                  node.getStart(tree),
+                  'web-throws',
+                  `${label} 存在直接抛出异常，需要中文失败条件说明`,
+                );
+              }
             }
           }
         }
@@ -440,11 +553,13 @@ function checkScript(file, source, offset, language) {
 export function checkWebFile(file) {
   if (!file.path.endsWith('.vue')) {
     const extension = file.path.split('.').at(-1);
-    return checkScript(
-      file,
-      file.source,
-      0,
-      ['js', 'jsx', 'tsx'].includes(extension) ? extension : 'ts',
+    return dedupe(
+      checkScript(
+        file,
+        file.source,
+        0,
+        ['js', 'jsx', 'tsx'].includes(extension) ? extension : 'ts',
+      ),
     );
   }
   const result = parseSfc(file.source, {
@@ -464,14 +579,29 @@ export function checkWebFile(file) {
     result.descriptor.script,
     result.descriptor.scriptSetup,
   ].filter(Boolean);
-  for (const block of blocks) {
-    if (block.src) continue; // 外置脚本由对应文件检查；不尝试加载组件声明的路径。
+  const scripts = blocks.filter(
+    /** 外置脚本由对应文件检查，不参与正文行号与模块头判据。 */ (block) =>
+      !block.src,
+  );
+  /** 脚本块之前的中文 HTML 注释是组件的模块头说明来源。 */
+  const header = htmlHeader(
+    file.source,
+    scripts.length > 0
+      ? Math.min(
+          /** 取第一个内联脚本块起点，HTML 注释必须写在它之前。 */ ...scripts.map(
+            (block) => block.loc.start.offset,
+          ),
+        )
+      : null,
+  );
+  for (const block of scripts) {
     findings.push(
       ...checkScript(
         file,
         block.content,
         block.loc.start.line - 1,
         block.lang ?? 'js',
+        header,
       ),
     );
   }
@@ -490,5 +620,5 @@ export function checkWebFile(file) {
       message: '无脚本组件缺少中文职责说明',
     });
   }
-  return findings;
+  return dedupe(findings);
 }

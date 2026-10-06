@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 单选组容器：以网格排列选项并统一转发 v-model 与朝向等根属性。
+ * 只负责分组语义，单个选项的圆点外观由 RadioGroupItem 提供。
+ */
 import type { RadioGroupRootEmits, RadioGroupRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

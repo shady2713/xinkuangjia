@@ -1,3 +1,9 @@
+/**
+ * pinia 装配入口：initStores 创建实例并挂载持久化插件，
+ * 生产环境经 secure-ls 加密后写入、开发环境直接用 localStorage 便于调试，
+ * resetAllStores 借 pinia 内部注册表批量重置，供退出登录等场景清空状态。
+ * 各 store 的状态定义不在这里，持久化字段也由 store 自行声明。
+ */
 import type { Pinia } from 'pinia';
 
 import type { App } from 'vue';

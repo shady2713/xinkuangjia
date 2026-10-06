@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置按钮组行：左侧标签与悬浮提示，右侧一排可点选的按钮。
+ * 供偏好抽屉中在少量枚举值之间单选或多选（multiple）的配置项复用；
+ * 选中结果通过 v-model 回传数组，组件自身不校验取值也不写入 preferences。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { useSlots } from 'vue';

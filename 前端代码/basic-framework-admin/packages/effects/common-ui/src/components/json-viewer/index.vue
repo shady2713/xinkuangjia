@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * JSON 查看器：包装 vue-json-viewer 渲染 JSON 结构，
+ * 支持展开层级、复制与预览模式，并抛出节点点击、
+ * 键名点击与复制完成事件；字符串入参先用 json-bigint
+ * 解析以保住大整数，再还原成带原型的普通对象，避免
+ * 查看器读到无原型节点时空白。不解释字段的业务含义。
+ */
 import type { SetupContext } from 'vue';
 
 import type { Recordable } from '@vben/types';

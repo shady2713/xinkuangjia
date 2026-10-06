@@ -1,3 +1,7 @@
+/**
+ * JSDoc 校验层：接入 eslint-plugin-jsdoc，核对标签与签名是否自洽。
+ * 规则全部为 warn 级，不阻断构建；中文职责说明由仓库自定义规则检查。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

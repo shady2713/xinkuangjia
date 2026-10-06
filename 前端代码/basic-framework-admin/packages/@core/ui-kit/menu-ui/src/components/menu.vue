@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 菜单容器：持有激活项、展开项与菜单项登记表，并向下提供菜单上下文。
+ * 负责手风琴互斥、水平模式溢出裁剪成「更多」子菜单，以及滚动到激活项。
+ * 菜单数据、路由跳转与选中落点由调用方决定，本组件只派发 open/select。
+ */
 import type { UseResizeObserverReturn } from '@vueuse/core';
 
 import type { SetupContext, VNodeArrayChildren } from 'vue';

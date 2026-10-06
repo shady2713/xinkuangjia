@@ -1,3 +1,8 @@
+/**
+ * 请求加解密工具：提供 AES-CBC、AES-ECB 验证码、MD5 与 RSA 实现。
+ * 由 ApiEncrypt 按 ApiEncryptConfig 编排请求加密与响应解密；
+ * 密钥、算法与开关由调用方注入，本模块不读取环境变量。
+ */
 import CryptoJS from 'crypto-js';
 import { JSEncrypt } from 'jsencrypt';
 

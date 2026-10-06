@@ -1,3 +1,8 @@
+/**
+ * vite-config 的公共类型声明：约定应用与库两类构建预设可开关的插件选项，
+ * 以及 defineConfig 回调与返回值的形状。
+ * 只描述配置结构，不含运行时实现；插件装配在 plugins/index.ts。
+ */
 import type {
   ConfigEnv,
   PluginOption,

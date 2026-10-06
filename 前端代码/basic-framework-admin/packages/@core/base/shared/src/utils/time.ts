@@ -1,3 +1,8 @@
+/**
+ * 时间处理工具集：面向业务展示提供相对时间文案与常用统计区间。
+ * 含占位符格式化、周次与起止时刻、日期差、问候语，以及近 7 天等区间。
+ * 底层 dayjs 格式化与系统时区读写由相邻 date 模块提供。
+ */
 import dayjs from 'dayjs';
 
 import { formatDate } from './date';

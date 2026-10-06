@@ -1,3 +1,9 @@
+/**
+ * 表格适配层：集中登记 vxe-table 的全局默认配置、单元格渲染器与格式化器，
+ * 业务列表页通过 cellRender、formatter 名称直接引用这些注册项。
+ * 页面级列定义、数据请求与工具栏动作仍由各业务页面提供；
+ * 全局配置收敛在一处，避免多处注册互相覆盖。
+ */
 import type { VxeTableGridOptions } from '@vben/plugins/vxe-table';
 import type { Recordable } from '@vben/types';
 

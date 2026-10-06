@@ -12,7 +12,9 @@ import java.util.*;
  * <p>
  * 提供部门管理的增删改查、树形查询和基础校验能力。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface DeptService {
 

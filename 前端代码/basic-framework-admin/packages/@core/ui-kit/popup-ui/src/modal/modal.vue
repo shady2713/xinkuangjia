@@ -1,4 +1,11 @@
 <script lang="ts" setup>
+/**
+ * 弹窗视图：按 ModalApi 的状态渲染 Dialog 的标题、
+ * 内容、页脚与遮罩。移动端自动全屏，全屏时关闭
+ * 居中与拖拽；拖拽逻辑来自 use-modal-draggable。
+ * 确认与取消转发给 api 回调；供 useVbenModal
+ * 生成受控弹窗，状态流转与关闭拦截在 modal-api.ts。
+ */
 import type { ExtendedModalApi, ModalProps } from './modal';
 
 import {

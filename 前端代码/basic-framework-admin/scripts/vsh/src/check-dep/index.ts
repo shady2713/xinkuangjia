@@ -1,3 +1,10 @@
+/**
+ * vsh check-dep 子命令：对每个 workspace 包运行 depcheck，列出缺失依赖以及未被引用的
+ * dependencies、devDependencies。
+ *
+ * 默认忽略 @vben/* 内部包和构建工具链依赖；只输出报告，不自动改写 package.json，
+ * 出错时打印信息但不设置失败退出码。
+ */
 import type { CAC } from 'cac';
 
 import { getPackages } from '@vben/node-utils';

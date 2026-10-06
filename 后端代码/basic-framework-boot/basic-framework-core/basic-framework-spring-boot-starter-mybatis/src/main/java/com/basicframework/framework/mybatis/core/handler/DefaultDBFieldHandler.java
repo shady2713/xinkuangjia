@@ -13,7 +13,9 @@ import java.util.Objects;
  *
  * 如果没有显式的对通用参数进行赋值，这里会对通用参数进行填充、赋值
  *
- * @author 李杰
+ * @author hexiaowu
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class DefaultDBFieldHandler implements MetaObjectHandler {
 

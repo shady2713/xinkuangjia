@@ -1,3 +1,9 @@
+/**
+ * 布局尺寸样式：把内容区与顶栏、底栏的像素尺寸同步到全局 CSS 变量。
+ *
+ * useLayoutContentStyle 用 ResizeObserver 跟踪内容区可见区域并给出遮罩定位；
+ * 三个组合式函数只读写 CSS 变量，不渲染 DOM，也不参与主题与路由计算。
+ */
 import type { CSSProperties } from 'vue';
 
 import type { VisibleDomRect } from '@vben-core/shared/utils';

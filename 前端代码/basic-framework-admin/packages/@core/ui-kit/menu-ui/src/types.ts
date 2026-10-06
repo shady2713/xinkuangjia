@@ -1,3 +1,8 @@
+/**
+ * 菜单组件的类型契约：MenuProps 描述菜单容器入参，SubMenuProps 与 MenuItemProps
+ * 描述子级节点入参，MenuProvider 与 SubMenuProvider 约定上下文的注入成员。
+ * 登记与点击载荷由 Registered、Clicked 描述；此处只声明类型，不含运行时逻辑。
+ */
 import type { Component, Ref } from 'vue';
 
 import type { MenuRecordBadgeRaw, ThemeModeType } from '@vben-core/typings';

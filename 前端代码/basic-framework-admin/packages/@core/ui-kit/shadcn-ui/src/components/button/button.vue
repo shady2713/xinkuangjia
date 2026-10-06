@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 基础按钮：用 reka-ui Primitive 渲染，
+ * 按 variant 与 size 套用样式类，
+ * loading 时禁止点击并显示旋转图标。
+ * 不做权限判断与异步提交，提交逻辑归调用方。
+ */
 import type { VbenButtonProps } from './button';
 
 import { computed } from 'vue';

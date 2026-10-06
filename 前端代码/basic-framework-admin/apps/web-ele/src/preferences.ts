@@ -1,3 +1,8 @@
+/**
+ * 运行时偏好覆盖：把 _app.config.js 的标题、主题与开关映射为框架偏好，
+ * 并固定后端菜单模式、登录失效整页退出等管理端约定。
+ * 用户本地可改的偏好项由框架偏好存储管理，不在此声明。
+ */
 import { defineOverridesPreferences } from '@vben/preferences';
 
 const appConfig = window._VBEN_ADMIN_PRO_APP_CONF_;

@@ -28,7 +28,9 @@ import java.util.stream.Collectors;
  * Enhances OpenAPI extension support.
  *
  * @since 4.1.0
- * @author 李杰
+ * @author <a href="xiaoymin@foxmail.com">xiaoymin@foxmail.com</a>
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Primary
 @Configuration

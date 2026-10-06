@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 全屏锁屏遮罩：以时钟为主视觉，点击解锁入口后展开密码表单。
+ * 密码与访问令牌中保存的锁屏密码比对，通过后调用状态层解锁；
+ * 不做路由跳转与登出，返回登录页只上抛 toLogin 事件交给外层布局处理。
+ */
 import { computed, reactive, ref } from 'vue';
 
 import { LockKeyhole } from '@vben/icons';

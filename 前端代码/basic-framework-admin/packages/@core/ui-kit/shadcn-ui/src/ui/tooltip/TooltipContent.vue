@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 提示浮层内容：经 TooltipPortal 挂到浮层容器，
+ * 默认出现在触发件右侧 5px 处，带边框、阴影与进出场动画。
+ * 显示时机由根节点状态与 Provider 的延迟决定，此处只管外观。
+ */
 import type { TooltipContentEmits, TooltipContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

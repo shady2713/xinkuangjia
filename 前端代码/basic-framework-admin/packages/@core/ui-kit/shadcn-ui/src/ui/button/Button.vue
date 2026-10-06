@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 按钮基座：默认渲染原生 button，保留键盘操作与表单提交语义。
+ * 可通过 as、asChild 换用其他标签，加载态与图标由上层按钮组件补齐。
+ */
 import type { PrimitiveProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

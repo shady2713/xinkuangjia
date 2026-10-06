@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 个人资料卡：只读展示账号、角色、部门等信息，并提供头像裁剪上传。
+ *
+ * 头像上传成功后发 success 事件让页面刷新资料；昵称、手机等可改字段
+ * 由同级 base-info 组件负责，本组件不直接修改用户状态。
+ */
 import type { SystemUserProfileApi } from '#/api/system/user/profile';
 
 import { computed } from 'vue';

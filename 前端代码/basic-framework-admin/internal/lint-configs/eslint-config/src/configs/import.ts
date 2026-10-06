@@ -1,3 +1,7 @@
+/**
+ * 导入规范：接入 eslint-plugin-import-x，约束重复导入与类型导入写法。
+ * 只管导入导出的形式，模块能否解析交给 TypeScript，本层不做路径校验。
+ */
 import type { Linter } from 'eslint';
 
 import * as pluginImport from 'eslint-plugin-import-x';

@@ -1,3 +1,9 @@
+/**
+ * 滚动锁定：锁住 body 滚动并补偿滚动条宽度，卸载时还原，避免打开浮层时抖动。
+ *
+ * 同时把宽度补到带 SCROLL_FIXED_CLASS 标记的固定定位元素，该标记由布局层使用；
+ * 这里只处理滚动条占位，不管浮层的显隐、层级与焦点管理。
+ */
 import { getScrollbarWidth, needsScrollbar } from '@vben-core/shared/utils';
 
 import {

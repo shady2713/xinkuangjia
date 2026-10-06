@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 管理端内容区：按标签页缓存清单渲染 RouterView，并解析切换动画名与视图组件名，
+ * 让 keep-alive 能按路由名命中缓存；iframe 页面交给同级的 IFrameRouterView。
+ * 只做内容编排，菜单、头部、页脚与加载遮罩分别由 basic 下其它目录提供。
+ */
 import type { VNode } from 'vue';
 import type {
   RouteLocationNormalizedLoaded,

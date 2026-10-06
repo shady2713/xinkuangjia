@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 树形展示组件：把属性原样交给 shadcn-ui 的 VbenTree，并把全部插槽透传下去。
+ * treeData 为空时改渲染空状态，即图标加 common.noData 文案。
+ * 不负责节点增删改与懒加载请求，这些仍由使用方通过属性与插槽接管。
+ */
 import type { TreeProps } from '@vben-core/shadcn-ui';
 
 import { Inbox } from '@vben/icons';

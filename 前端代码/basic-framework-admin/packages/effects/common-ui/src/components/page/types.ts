@@ -1,3 +1,7 @@
+/**
+ * 通用页面容器的属性契约：标题、描述、页头页脚类名与内容区高度自适应开关。
+ * 只声明对外可配置项，高度测量与滚动布局由同目录 page.vue 实现。
+ */
 export interface PageProps {
   title?: string;
   description?: string;

@@ -1,3 +1,7 @@
+/**
+ * 徽章样式变体：提供 default、destructive、outline、secondary 四种配色。
+ * 只产出类名且默认取 default，文案与图标由 Badge.vue 或使用方决定。
+ */
 import type { VariantProps } from 'class-variance-authority';
 
 import { cva } from 'class-variance-authority';

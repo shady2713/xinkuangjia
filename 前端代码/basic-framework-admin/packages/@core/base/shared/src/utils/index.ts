@@ -1,3 +1,8 @@
+/**
+ * 通用工具出口：聚合 cn、date、dom、download、encrypt、error、formatNumber 等能力，
+ * 并透传 es-toolkit 的 get/isEqual/set 与 lodash.clonedeep 的 cloneDeep。
+ * 各包从这里统一取工具，不直接依赖具体实现文件。
+ */
 export * from './cn';
 export * from './date';
 export * from './diff';

@@ -1,3 +1,9 @@
+/**
+ * 时区状态模块：core-timezone store 持有当前时区并同步给 dayjs，
+ * 通过 setTimezoneHandler 允许应用覆盖读时区、列选项、写时区的实现，
+ * 未覆盖时回退到 @vben-core/preferences 的默认时区选项，当前时区会持久化。
+ * 这里只管时区值的读写与下发，时间格式化与界面展示由使用方负责。
+ */
 import { ref, unref } from 'vue';
 
 import { DEFAULT_TIME_ZONE_OPTIONS } from '@vben-core/preferences';

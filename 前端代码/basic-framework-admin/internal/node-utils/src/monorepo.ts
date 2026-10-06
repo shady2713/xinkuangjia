@@ -1,3 +1,9 @@
+/**
+ * 大仓信息工具：定位 pnpm 工作区根目录并列举其中的包。
+ * findMonorepoRoot 依据 pnpm-lock.yaml 向上查找，getPackages(Sync)、
+ * getPackage 返回 @manypkg/get-packages 的解析结果，供脚本按包名
+ * 或目录批量处理；只读取结构，不安装依赖也不改写各包配置。
+ */
 import { dirname } from 'node:path';
 
 import {

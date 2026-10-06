@@ -1,3 +1,8 @@
+/**
+ * 表格 API 层：持有 vxe-grid 实例与表单 API，维护表格状态，对外提供
+ * query、reload、加载态、搜索栏开合与状态订阅。
+ * 不渲染界面也不取数，挂载与卸载由 VbenVxeGrid 组件驱动。
+ */
 import type { VxeGridInstance } from 'vxe-table';
 
 import type { ExtendedFormApi } from '@vben-core/form-ui';

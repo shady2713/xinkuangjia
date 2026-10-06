@@ -31,7 +31,9 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.*;
  *
  * 负责定时任务配置持久化，并同步维护 Quartz 调度器中的任务状态。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Service
 @Validated

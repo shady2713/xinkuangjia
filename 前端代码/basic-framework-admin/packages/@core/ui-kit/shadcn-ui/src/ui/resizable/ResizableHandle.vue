@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 面板拖拽条：按面板组朝向渲染横竖分隔线，可选手柄图标。
+ * 尺寸计算与拖拽事件由面板组处理，本组件不保存面板大小。
+ */
 import type {
   SplitterResizeHandleEmits,
   SplitterResizeHandleProps,

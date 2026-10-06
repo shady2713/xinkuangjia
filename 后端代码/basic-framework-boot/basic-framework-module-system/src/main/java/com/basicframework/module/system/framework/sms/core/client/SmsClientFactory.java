@@ -6,7 +6,9 @@ import com.basicframework.module.system.framework.sms.core.property.SmsChannelPr
  * 短信客户端的工厂接口
  *
  * @since 2021/1/28 14:01
- * @author 李杰
+ * @author zzf
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public interface SmsClientFactory {
 

@@ -1,3 +1,7 @@
+/**
+ * JavaScript 基础规则层：设定语言版本、全局变量并启用 eslint 推荐集。
+ * 在此之上收紧 console 与未使用变量；类型规则交给 typescript.ts。
+ */
 import type { Linter } from 'eslint';
 
 import js from '@eslint/js';

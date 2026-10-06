@@ -20,7 +20,9 @@ import java.util.Map;
  * 相比 {@link LongestMatchColumnWidthStyleStrategy} 来说，额外处理了 DATE 类型！
  *
  * @see 添加自适应列宽处理器，并替换默认列宽策略
- * @author 李杰
+ * @author hmb
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class ColumnWidthMatchStyleStrategy extends AbstractColumnWidthStyleStrategy {
 

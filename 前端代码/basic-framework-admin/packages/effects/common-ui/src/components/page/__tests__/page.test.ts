@@ -1,3 +1,10 @@
+/**
+ * Page 容器的渲染契约测试：锁定 title 与 description
+ * 属性写入文本，默认插槽与页脚插槽内容进入 DOM，
+ * contentClass 落到内容区。
+ * 同时锁定插槽优先于同名属性：传了标题或描述插槽后，
+ * 对应属性文本不再渲染。不覆盖 autoContentHeight 的高度计算。
+ */
 import { mount } from '@vue/test-utils';
 
 import { describe, expect, it } from 'vitest';

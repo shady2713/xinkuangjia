@@ -1,3 +1,8 @@
+/**
+ * useSortable 的契约测试：mock 掉 sortablejs，验证 initializeSortable 会把
+ * 默认的 animation 300、delay 400 与调用方 options 合并后交给 Sortable.create。
+ * 不覆盖真实拖拽、DOM 排序结果与实例销毁，那些依赖浏览器环境的集成测试。
+ */
 import type { SortableOptions } from 'sortablejs';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';

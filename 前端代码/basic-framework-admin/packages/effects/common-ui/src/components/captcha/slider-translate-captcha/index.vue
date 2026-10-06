@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 平移拼图验证码：用 Canvas 在底图与切块画布上随机绘制缺口拼图，
+ * 拖动滑块把切块移到缺口处，误差小于 diffDistance 即判定通过。
+ *
+ * 负责绘制、随机缺口位置与位移比对，滑块交互复用 slider-captcha；
+ * 图片由 src 传入，校验结果只通过 success 事件交给业务方。
+ */
 import type {
   CaptchaVerifyPassingData,
   SliderCaptchaActionType,

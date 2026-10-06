@@ -1,3 +1,8 @@
+/**
+ * 偏好设置管理器：合并项目覆盖项与默认值，维护唯一的响应式偏好状态。
+ * 主题字段变化时写入 CSS 变量，灰阶与色弱开关变化时切换根节点类名，
+ * 另监听系统主题与断点；只保留内存状态，启动时清理历史遗留的本地缓存键。
+ */
 import type { DeepPartial } from '@vben-core/typings';
 
 import type { InitialOptions, Preferences } from './types';

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 明暗模式偏好：浅色、深色、跟随系统三选，并附带侧栏与顶栏的半深色开关。
+ * 深色模式下两个半深色开关强制置灰；内置主题与主题色由 builtin 组件负责。
+ */
 import type { Component } from 'vue';
 
 import type { ThemeModeType } from '@vben/types';

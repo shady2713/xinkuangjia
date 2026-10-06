@@ -1,3 +1,7 @@
+/**
+ * 树组件的数据与属性类型契约：声明节点键空间、可配置字段名及缺省值工厂。
+ * 取值、子级、禁用等字段名由调用方给出，本文件不校验节点数据也不渲染树。
+ */
 import type { Arrayable } from '@vueuse/core';
 import type { FlattenedItem } from 'reka-ui';
 

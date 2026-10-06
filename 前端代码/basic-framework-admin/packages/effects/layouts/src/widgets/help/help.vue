@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 帮助弹窗：展示快捷键说明、项目支持与版本说明三类静态文案。
+ * 经 @vben/layouts 导出供上层布局挂载，由全局 Alt+H 快捷键打开；
+ * 不请求接口，也不再提供外部文档或演示站入口，内容需按项目自行补充。
+ */
 import { $t } from '@vben/locales';
 
 import { useVbenModal } from '@vben-core/popup-ui';

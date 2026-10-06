@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 右键菜单分组标题：纯展示文字并按 inset 缩进，不响应点击也不承载动作。 */
 import type { ContextMenuLabelProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

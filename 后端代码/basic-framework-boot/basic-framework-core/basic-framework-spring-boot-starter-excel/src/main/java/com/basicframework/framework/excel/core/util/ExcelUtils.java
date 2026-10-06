@@ -16,7 +16,9 @@ import java.util.List;
 /**
  * Excel 导入导出工具类，统一封装 FastExcel 的响应写出和文件读取逻辑。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class ExcelUtils {
 

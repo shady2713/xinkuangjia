@@ -1,3 +1,9 @@
+/**
+ * DrawerApi 的契约测试：用最小 Store 替身锁定开合、
+ * 状态写入与回调转发。覆盖 onBeforeClose 拦截、
+ * onCancel 默认关闭、lock/unlock 提交锁定等边界；
+ * 不涉及 drawer.vue 的渲染、动画与遮罩交互。
+ */
 import type { DrawerState } from '../drawer';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';

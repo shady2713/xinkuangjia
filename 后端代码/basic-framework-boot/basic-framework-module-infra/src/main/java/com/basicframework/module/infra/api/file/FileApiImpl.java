@@ -10,7 +10,9 @@ import org.springframework.validation.annotation.Validated;
  *
  * 对接文件服务，供其他模块通过 API 方式创建文件和生成读取签名。
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Service
 @Validated

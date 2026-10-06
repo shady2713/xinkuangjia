@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 页签内容面板：承载某个触发件对应的内容，默认带顶部间距与焦点环。
+ * 显隐与切换由 TabsRoot 控制，本组件只转发属性并合并调用方 class。
+ */
 import type { TabsContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

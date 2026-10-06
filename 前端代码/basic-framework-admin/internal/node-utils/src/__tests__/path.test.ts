@@ -1,3 +1,9 @@
+/**
+ * 锁定 toPosixPath 的转换边界：只把反斜杠替换为正斜杠，
+ * 空串、纯分隔符、混合分隔符与含非法字符的路径都按原样返回。
+ *
+ * 纯字符串映射，不访问文件系统，也不做路径合法化或规范化。
+ */
 // pathUtils.test.ts
 
 import { describe, expect, it } from 'vitest';

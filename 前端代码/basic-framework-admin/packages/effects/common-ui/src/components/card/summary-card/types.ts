@@ -1,3 +1,7 @@
+/**
+ * 概要卡片的 props 契约：title 必填，图标、配色、数值与百分比均可选。
+ * iconColor/iconBgColor 会原样拼进图标容器的类名，使用方需传有效样式类。
+ */
 import type { Component } from 'vue';
 
 export interface SummaryCardProps {

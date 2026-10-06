@@ -1,5 +1,10 @@
 <!-- 部门选择器 - 树形结构显示 -->
 <script lang="ts" setup>
+/**
+ * 部门选择器：以树形下拉加载 /system/dept/simple-list 简表，支持多选与搜索过滤。
+ * 由 plugins/form-create 按组件名注册给 JSON 表单，returnType 决定回写 id 还是名称；
+ * 只读部门简表，不负责部门增删改与数据权限，部门维护仍在 system/dept 页面。
+ */
 import { onMounted, ref, watch } from 'vue';
 
 import { useUserStore } from '@vben/stores';

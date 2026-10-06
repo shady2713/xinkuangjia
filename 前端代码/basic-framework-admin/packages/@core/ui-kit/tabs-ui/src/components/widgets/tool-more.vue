@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 标签栏「更多」按钮：网格图标触发 VbenDropdownMenu。
+ * 菜单项由 menus 传入，组件不实现任何菜单项动作；
+ * 属性沿用 DropdownMenuProps，只做展示与菜单渲染。
+ */
 import type { DropdownMenuProps } from '@vben-core/shadcn-ui';
 
 import { LayoutGrid } from '@vben-core/icons';

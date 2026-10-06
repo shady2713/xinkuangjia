@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 普通菜单：以图标在上、名称在下的纵向列表渲染一级菜单，用于混合布局的图标导航。
+ * 只上报 enter 与 select 的菜单记录，选中落点与路由跳转由调用方处理。
+ */
 import type { MenuRecordRaw } from '@vben-core/typings';
 
 import type { NormalMenuProps } from './normal-menu';

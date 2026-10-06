@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 界面控件偏好分组：开关顶栏的搜索、主题、全屏、通知、锁屏、
+ * 侧边栏折叠与刷新等图标，并选择偏好按钮的停靠位置。
+ * 只声明图标是否出现，各控件的实际行为由对应组件实现。
+ */
 import type { SelectOption } from '@vben/types';
 
 import { computed } from 'vue';

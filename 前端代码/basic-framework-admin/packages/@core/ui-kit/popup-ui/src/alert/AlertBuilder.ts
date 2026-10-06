@@ -1,3 +1,10 @@
+/**
+ * 命令式弹窗入口：在调用处即时创建容器并渲染 alert.vue，
+ * 用 Promise 把确认或取消的结果交回调用方。
+ * vbenPrompt 默认用框架 Input 接收输入并自动聚焦；
+ * clearAllAlerts 在路由切换后卸载残留弹窗。
+ * 只负责创建与销毁编排，不做权限与业务校验。
+ */
 import type { Component, VNode } from 'vue';
 
 import type { Recordable } from '@vben-core/typings';

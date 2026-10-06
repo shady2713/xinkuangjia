@@ -1,3 +1,9 @@
+/**
+ * 文件读写工具：JSON 落盘、占位文件建立与 JSON 读取。
+ * outputJSON 递归创建父目录，ensureFile 对已存在的非普通文件抛 EISDIR，
+ * readJSON 只读取并解析；三者失败时先打印日志再原样抛出底层 fs 错误，
+ * 不重试也不吞异常，重试与提示由调用方决定。
+ */
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';
 

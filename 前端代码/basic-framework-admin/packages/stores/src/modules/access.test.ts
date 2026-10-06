@@ -1,3 +1,8 @@
+/**
+ * access store 的状态契约用例：锁定 accessMenus、accessRoutes、accessToken 的初始值，
+ * 并确认三个 setter 写入后能原样读回、写入空列表不会残留旧值。
+ * 只覆盖状态存取；权限计算、路由生成与令牌有效性判定不在本用例范围内。
+ */
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 

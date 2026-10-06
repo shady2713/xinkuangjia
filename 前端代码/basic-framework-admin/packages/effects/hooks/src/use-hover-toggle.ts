@@ -1,3 +1,9 @@
+/**
+ * 悬浮状态管理：判断鼠标是否停留在给定元素内，并支持进入/离开延迟。
+ *
+ * 支持单个元素、元素数组与响应式引用，命中任一元素即视为内部；
+ * 返回值附带 enable/disable 控制器，卸载时清理定时器与监听。
+ */
 import type { Arrayable, MaybeElementRef } from '@vueuse/core';
 
 import type { Ref } from 'vue';

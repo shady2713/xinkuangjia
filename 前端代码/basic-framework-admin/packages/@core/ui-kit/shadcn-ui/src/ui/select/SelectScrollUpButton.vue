@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 选择面板向上翻页按钮：列表上方仍有内容时出现，点击把可滚动区域上移一屏，默认画向上箭头。
+ * 与 SelectScrollDownButton 对称，只提供按钮本体，是否显示由 reka-ui 依滚动位置判断。
+ */
 import type { SelectScrollUpButtonProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

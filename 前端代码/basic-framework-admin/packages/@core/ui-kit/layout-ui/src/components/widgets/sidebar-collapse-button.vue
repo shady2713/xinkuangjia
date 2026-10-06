@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 侧边栏折叠按钮：点击翻转 collapsed 双向值，图标随折叠状态换向。
+ *
+ * 只发出状态变化，宽度与动画由侧边栏自行计算。
+ */
 import { ChevronsLeft, ChevronsRight } from '@vben-core/icons';
 
 const collapsed = defineModel<boolean>('collapsed');

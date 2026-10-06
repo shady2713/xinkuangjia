@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 定时任务详情弹窗：展示任务定义，并额外拉取后端推算的下次执行时间。
+ * 下次执行时间回填到表单数据供描述项读取；任务编辑由同级 form.vue 负责。
+ */
 import type { InfraJobApi } from '#/api/infra/job';
 
 import { ref } from 'vue';

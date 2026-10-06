@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 偏好设置「通用」分组：管理语言、动态标题、水印与更新检查开关。
+ * 水印内容输入框只在启用水印时出现，关闭水印会同步清空已填内容；
+ * 各项经 v-model 回写偏好，持久化与生效时机由 preferences 包处理。
+ */
 import { SUPPORT_LANGUAGES } from '@vben/constants';
 import { $t } from '@vben/locales';
 

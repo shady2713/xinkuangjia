@@ -28,7 +28,9 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 /**
  * 拦截声明了 {@link ApiSignature} 注解的方法，实现签名
  *
- * @author 李杰
+ * @author Zhougang
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Aspect
 @Slf4j

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 滑块验证码的进度条：按父级推入的宽度渲染填充，
+ * 复位时用过渡类平滑回零，并向父级暴露根元素。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed, ref, useTemplateRef } from 'vue';

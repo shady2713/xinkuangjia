@@ -1,5 +1,11 @@
 <script lang="ts" setup>
 /**
+ * 绝对定位内容容器：在父元素范围内整体拖动，并通过八向控制点缩放。
+ * 位置与尺寸既能由 props（x/y/w/h/z）驱动，也能由鼠标或触摸直接拖动，
+ * 两条链路共用同一套边界限制、网格吸附与宽高比收敛逻辑。
+ * 只做几何计算并上报 dragging、resizing 等事件，不负责数据持久化与业务含义。
+ */
+/**
  * Resize behavior adapted from an earlier implementation.
  */
 

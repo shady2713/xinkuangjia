@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 全局搜索入口：负责弹窗开关、系统搜索快捷键绑定与输入框聚焦。
+ * 关闭时清空关键词，菜单数据原样下传；命中快捷键且开关打开才弹窗。
+ * 菜单匹配与结果渲染全部交给 SearchPanel，本组件不查菜单。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';

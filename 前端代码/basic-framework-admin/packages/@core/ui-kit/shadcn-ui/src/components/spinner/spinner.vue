@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 加载遮罩组件：铺满父容器，用延迟出现与最短停留时长避免加载闪烁。
+ *
+ * 由 spinning 控制显隐，最短停留由 minLoadingTime 决定；不负责请求发起与错误处理，
+ * 业务侧只需在异步过程前后切换 spinning。
+ */
 import { ref, watch } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';

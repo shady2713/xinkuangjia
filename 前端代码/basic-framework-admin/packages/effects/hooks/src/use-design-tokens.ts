@@ -1,3 +1,10 @@
+/**
+ * 设计令牌适配：把主题 CSS 变量换算成 Ant Design、Naive UI
+ * 与 Element Plus 三套设计系统的色板与圆角。
+ *
+ * 前两者返回响应式令牌对象，Element Plus 直接写入 --el-* 变量；
+ * 随 preferences.theme 重新读取，主题本身仍由偏好设置定义。
+ */
 import { reactive, watch } from 'vue';
 
 import { preferences, usePreferences } from '@vben/preferences';

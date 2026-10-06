@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 布局菜单容器：把菜单数据、模式和折叠等偏好透传给菜单内核渲染。
+ * 只把内核抛出的选中、展开事件转成 select/open 交给父级，
+ * 菜单取数、鉴权与路由跳转由布局和 use-navigation 承担。
+ */
 import type { MenuRecordRaw } from '@vben/types';
 
 import type { MenuProps } from '@vben-core/menu-ui';

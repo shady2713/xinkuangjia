@@ -1,3 +1,8 @@
+/**
+ * Git 辅助工具：读取暂存区文件，并转发 @changesets/git 的能力。
+ * getStagedFiles 只取新增、复制、修改、重命名四类路径，转绝对路径后去重；
+ * 出错时打印日志并返回空数组。提交、推送等写操作不在本模块内。
+ */
 import path from 'node:path';
 
 import { execa } from 'execa';

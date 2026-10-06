@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 悬停卡片：鼠标移入触发区后弹出内容浮层，trigger 与默认插槽分别承载两端。
+ * 菜单折叠态的子菜单浮层用它展示下一级；组件只透传 reka-ui 的属性与事件，
+ * 浮层内容、显隐时机与层级样式由使用方决定。
+ */
 import type {
   HoverCardContentProps,
   HoverCardRootEmits,

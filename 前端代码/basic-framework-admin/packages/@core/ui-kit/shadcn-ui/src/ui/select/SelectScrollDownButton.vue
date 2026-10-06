@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 下滚按钮：列表溢出时驱动面板向下滚动，默认使用下箭头图标。 */
 import type { SelectScrollDownButtonProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

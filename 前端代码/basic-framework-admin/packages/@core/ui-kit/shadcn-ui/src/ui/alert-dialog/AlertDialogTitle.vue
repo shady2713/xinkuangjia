@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 警告对话框标题：渲染 reka-ui 标题语义节点并统一加粗排版。
+ * 只输出标题文本，说明文字与操作按钮由同级件各自承担。
+ */
 import type { AlertDialogTitleProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

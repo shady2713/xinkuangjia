@@ -1,3 +1,9 @@
+/**
+ * 配置工具：解包动态 import 的 CommonJS 互操作包装。
+ * 各 configs 片段加载 ESLint 插件时统一走 interopDefault，
+ * 只在能确认对象带 default 字段时取该字段，否则原样返回；
+ * 不校验插件形态，也不缓存加载结果。
+ */
 export type Awaitable<T> = Promise<T> | T;
 
 /**

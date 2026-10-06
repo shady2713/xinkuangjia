@@ -1,3 +1,10 @@
+/**
+ * 抽屉状态机：Store 承载 isOpen、loading、
+ * submitting 等状态，open、close、lock、unlock
+ * 改状态并转发 onOpenChange、onBeforeClose 等回调。
+ * close 会先询问 onBeforeClose，返回 false 时保持打开。
+ * 不接触 DOM，界面由 drawer.vue 订阅同一 store 呈现。
+ */
 import type { DrawerApiOptions, DrawerState } from './drawer';
 
 import { Store } from '@vben-core/shared/store';

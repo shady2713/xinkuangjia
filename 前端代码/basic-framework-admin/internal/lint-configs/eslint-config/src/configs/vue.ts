@@ -1,3 +1,10 @@
+/**
+ * Vue 规则片段：为 .vue 单文件组件接入 vue-eslint-parser 与官方推荐集。
+ * 在 essential、strongly-recommended、recommended 三层预置之上，
+ * 按大仓约定覆写模板风格（PascalCase 组件名、camelCase 事件、属性双引号、
+ * 块顺序 script→template→style）；缩进与换行交由 Prettier，
+ * 模板内 TS 语法由 @typescript-eslint/parser 解析，本片段不做格式化。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

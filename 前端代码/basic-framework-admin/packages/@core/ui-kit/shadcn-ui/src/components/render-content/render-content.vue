@@ -1,4 +1,9 @@
 <script lang="ts">
+/**
+ * 动态内容渲染组件：把字符串、组件或渲染函数统一渲染成节点。
+ * 字符串默认按纯文本输出，renderBr 为真时按换行拆成多个段落。
+ * 组件形态会透传 attrs 与插槽；不解析富文本、不注入 HTML。
+ */
 import type { Component, PropType } from 'vue';
 
 import { defineComponent, h } from 'vue';

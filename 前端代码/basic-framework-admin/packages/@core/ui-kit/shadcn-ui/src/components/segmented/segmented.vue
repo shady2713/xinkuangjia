@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 分段控件：按 tabs 生成等宽选项，选中项加粗并显示滑动指示器。
+ * 用 v-model 双向绑定当前值，defaultValue 缺省时取首项。
+ * 内容区由与选项同名的具名插槽承载，指示器滑动动画单独封装。
+ */
 import type { SegmentedItem } from './types';
 
 import { computed } from 'vue';

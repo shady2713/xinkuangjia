@@ -30,7 +30,9 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
  *
  * 参见 <a href="https://cloud.tencent.com/document/product/382/52077">文档</a>
  *
- * @author 李杰
+ * @author shiwp
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class TencentSmsClient extends AbstractSmsClient {
 

@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 加载遮罩：铺满宿主容器，等 minLoadingTime 毫秒后才淡入，避免快请求闪一下。
+ *
+ * 由 spinning 切换显隐，text 在动画下方显示提示语，icon 插槽可替换默认四点动画；
+ * 不发起请求也不处理失败，宿主需自己提供定位上下文。
+ */
 import { ref, watch } from 'vue';
 
 import { cn } from '@vben-core/shared/utils';

@@ -1,3 +1,8 @@
+/**
+ * 短信模板的表单、检索与列表字段定义。
+ * 模板归属渠道、模板内容与 API 模板编号在此声明；
+ * 模板的发送与渠道校验由后端完成，页面不做内容解析。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

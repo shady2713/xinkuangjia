@@ -1,3 +1,10 @@
+/**
+ * 运行时配置插件：构建时产出一份独立于 bundle 的 _app.config.js，
+ * 并把带版本与内容 hash 的 script 标签注入 index.html。
+ *
+ * 应用提供 docker/app.config.js 时原样搬运，否则按环境变量生成
+ * 冻结的 window 配置对象；非构建阶段直接返回 undefined。
+ */
 import type { PluginOption } from 'vite';
 
 import { existsSync } from 'node:fs';

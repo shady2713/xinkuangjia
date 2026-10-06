@@ -1,3 +1,10 @@
+/**
+ * 标签页状态中枢：core-tabbar store 维护打开的标签、组件缓存集合与访问历史，
+ * 对外提供 addTab、closeTab 及批量关闭、固定、刷新、排序等操作，
+ * 以及 getTabs、getCachedTabs 等派生结果，供标签栏与路由缓存消费。
+ * 只管理标签自身状态：跳转依赖调用方传入的 router，右键菜单项由菜单列表配置决定，
+ * 路由权限与页面渲染不在此模块。
+ */
 import type { ComputedRef } from 'vue';
 import type {
   RouteLocationNormalized,

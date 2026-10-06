@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 菜单徽标：按 badgeType 渲染圆点或文字角标，并把变体映射成具体颜色。
+ *
+ * 颜色来自 variantsMap 或调用方色值，徽标内容由菜单项数据提供。
+ */
 import type { MenuRecordBadgeRaw } from '@vben-core/typings';
 
 import { computed } from 'vue';

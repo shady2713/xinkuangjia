@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 验证码输入组件：分格输入固定长度验证码，按钮触发发送并倒计时。
+ * 发送逻辑由外部 handleSendCode 注入，本组件不发起请求。
+ * 发送失败以 sendError 抛出原始异常，验证码正确性由调用方校验。
+ */
 import type { PinInputProps } from './types';
 
 import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';

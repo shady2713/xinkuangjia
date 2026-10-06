@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/** 抽屉标题：为对话框提供无障碍标题语义，抽屉没有标题时会渲染空标题占位。 */
 import type { DialogTitleProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

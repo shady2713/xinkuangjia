@@ -1,3 +1,8 @@
+/**
+ * OAuth2 客户端管理接口：客户端的增删改查与批量删除。
+ * 授权确认与令牌查询分别由 oauth2/open、oauth2/token 提供，
+ * 本模块只覆盖后台维护客户端的场景。
+ */
 import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';

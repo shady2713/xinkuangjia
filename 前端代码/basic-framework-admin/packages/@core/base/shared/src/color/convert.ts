@@ -1,3 +1,7 @@
+/**
+ * 颜色格式转换：把十六进制、rgb 等颜色转成 HSL、HSL 变量或 RGB 串。
+ * 供主题变量生成与颜色合法性校验使用；色阶派生由 generator 负责。
+ */
 import { TinyColor } from '@ctrl/tinycolor';
 
 /**

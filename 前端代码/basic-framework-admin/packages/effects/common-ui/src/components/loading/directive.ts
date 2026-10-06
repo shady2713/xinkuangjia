@@ -1,3 +1,10 @@
+/**
+ * 加载指令：注册 v-loading 与 v-spinning，在绑定元素内挂载
+ * 对应加载组件，并在指令值变化时同步组件属性。
+ * 指令会给宿主加上相对定位类，卸载时销毁实例并移除该类；
+ * 传入布尔值控制显隐，传对象则作为组件属性透传。
+ * 只管理遮罩的挂载与更新，请求发起与失败提示由调用方负责。
+ */
 import type { App, Directive, DirectiveBinding } from 'vue';
 
 import { h, render } from 'vue';

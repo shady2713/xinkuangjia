@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 字典类型表格：维护字典类型列表，并把选中行的类型标识发给父页面。
+ * 右侧字典数据由父页面转交 data-grid.vue 加载，这里不查询数据项。
+ */
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDictTypeApi } from '#/api/system/dict/type';
 

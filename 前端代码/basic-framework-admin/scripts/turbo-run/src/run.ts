@@ -1,3 +1,10 @@
+/**
+ * turbo-run 的执行实现：按命令名筛选出声明了该 script 的 workspace 包，再用
+ * `pnpm --filter=<包名> run <command>` 执行。
+ *
+ * 命中多个包时用 @clack/prompts 让用户选择，取消则退出 0；没有可用包时以状态码 1
+ * 退出。不负责命令行解析（见 ./index）。
+ */
 import { execaCommand, getPackages } from '@vben/node-utils';
 
 import { cancel, isCancel, select } from '@clack/prompts';

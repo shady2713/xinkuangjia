@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 带实例的表单渲染器：useVbenForm 生成的内部组件，把实例挂到真实表单上。
+ * 向 FormApi 交出 vee-validate 上下文与字段引用，
+ * 并实现回车提交、值变更防抖提交与折叠同步；
+ * 不创建实例，属性以 formApi 状态优先。
+ */
 import type { Recordable } from '@vben-core/typings';
 
 import type { ExtendedFormApi, VbenFormProps } from './types';

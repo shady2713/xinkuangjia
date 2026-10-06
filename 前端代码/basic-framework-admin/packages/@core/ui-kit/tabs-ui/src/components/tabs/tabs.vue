@@ -1,4 +1,10 @@
 <script lang="ts" setup>
+/**
+ * 普通标签栏：按 styleType 切换标签项外观。
+ * 样式可选 plain、card、brisk，与 Chrome 风格共用属性契约；
+ * active 双向绑定选中项，只渲染并抛出 close/unpin 事件，
+ * 滚动、拖拽与路由跳转不在本组件内实现。
+ */
 import type { TabDefinition } from '@vben-core/typings';
 
 import type { TabConfig, TabsProps } from '../../types';

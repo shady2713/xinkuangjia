@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 悬浮卡片内容层：经 Portal 挂到 body，默认与触发元素相距 4px，
+ * 统一弹层层级、边框阴影以及按 data-state 方向的进出场动画，
+ * class 可覆盖默认样式；开合时机与延迟由 HoverCard 根组件控制。
+ */
 import type { HoverCardContentProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

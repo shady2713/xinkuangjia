@@ -1,3 +1,9 @@
+/**
+ * vsh 的命令行入口：注册 lint、publint、code-workspace、check-circular、check-dep
+ * 五个子命令，并统一处理未知命令提示、帮助与版本输出。
+ *
+ * 只负责命令装配与顶层错误兜底，各子命令的实现分散在同级目录。
+ */
 import { colors, consola } from '@vben/node-utils';
 
 import { cac } from 'cac';

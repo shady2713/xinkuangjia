@@ -1,3 +1,7 @@
+/**
+ * 动态路由模块合并：把 import.meta.glob 得到的模块对象按各自的 default 导出展开成一维路由数组。
+ * 未声明 default 的模块按空数组跳过；权限过滤、排序与去重不在这里。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 // 定义模块类型

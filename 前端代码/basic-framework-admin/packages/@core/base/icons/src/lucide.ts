@@ -1,3 +1,8 @@
+/**
+ * 精选图标清单：从 lucide-vue-next 转发框架界面实际使用的图标组件。
+ * 用白名单控制体积，Menu、ArrowLeftFromLine 等按框架语义改名后导出，
+ * 原名不再暴露；模板里新增图标必须在此登记。
+ */
 export {
   ArrowDown,
   ArrowLeft,

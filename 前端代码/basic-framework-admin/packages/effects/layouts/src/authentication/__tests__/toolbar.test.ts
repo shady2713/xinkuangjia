@@ -1,3 +1,8 @@
+/**
+ * 认证页工具栏的渲染契约回归：默认入口集只有配色、布局、主题三个开关，
+ * 语言切换即使被偏好和 widgets 导出，也不得出现在认证工具栏上。
+ * 偏好模块与 ../widgets 全部以 mock 顶替，各开关自身交互不在覆盖范围内。
+ */
 import { mount } from '@vue/test-utils';
 
 import { describe, expect, it, vi } from 'vitest';

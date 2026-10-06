@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 手风琴标题按钮：整行可点，展开时右侧箭头旋转 180 度标示当前分组。
+ *
+ * 默认箭头可用 icon 插槽替换，标题文字走默认插槽；展开状态与键盘交互
+ * 由根节点和 reka-ui 维护，本组件自身不保存状态。
+ */
 import type { AccordionTriggerProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

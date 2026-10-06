@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 按钮组容器：按 size 与 gap 排列子按钮，
+ * 无间隔时合并相邻边框与圆角使其连成一体。
+ * 只管外观与布局，选中状态和点击行为由子按钮负责。
+ */
 import { cn } from '@vben-core/shared/utils';
 
 defineOptions({ name: 'VbenButtonGroup' });

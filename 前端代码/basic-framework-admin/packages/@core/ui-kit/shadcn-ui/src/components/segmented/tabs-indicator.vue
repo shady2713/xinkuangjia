@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 分段控件指示器：跟随选中项位置平移，形成滑块切换效果。
+ * 由 segmented.vue 挂载，尺寸与圆角可被外部 class 覆盖。
+ * 只做视觉指示，选中状态与切换仍由 Tabs 根组件掌握。
+ */
 import type { TabsIndicatorProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

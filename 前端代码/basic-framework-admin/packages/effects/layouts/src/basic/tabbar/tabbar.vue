@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 布局标签栏：把标签数据与右键菜单接到标签内核，并组装刷新、更多、最大化工具。
+ * 标签增删、固定与禁用态由 useTabbar 计算，偏好开关决定工具是否渲染；
+ * 本组件不缓存页面，keepAlive 与内容渲染由内容区组件负责。
+ */
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 

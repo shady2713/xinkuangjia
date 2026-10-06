@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 偏好抽屉的开关行原语：整行可点击切换，行尾开关用 click.stop 避免重复触发。
+ * 标题后可挂提示气泡，行尾可挂快捷键说明；被切换偏好的含义与本组件无关。
+ */
 import { useSlots } from 'vue';
 
 import { CircleHelp } from '@vben/icons';

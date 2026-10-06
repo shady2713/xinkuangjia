@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 整体布局预设选择器：用七张导航缩略图切换应用布局。
+ *
+ * 预设清单与缩略图的对应关系在此维护，选中值经 v-model 交给偏好抽屉；
+ * 缩略图仅作示意，真正的布局渲染由布局容器完成。
+ */
 import type { Component } from 'vue';
 
 import type { LayoutType } from '@vben/types';

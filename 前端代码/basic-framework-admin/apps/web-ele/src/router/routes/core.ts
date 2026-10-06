@@ -1,3 +1,8 @@
+/**
+ * 静态核心路由：根路由用基础布局承载后台页面，/auth 下挂登录、验证码登录、
+ * 忘记密码、注册与 SSO 页面，另含兜底 404 路由。
+ * 这些路由不参与权限生成，后端菜单路由由权限模块另行追加。
+ */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';

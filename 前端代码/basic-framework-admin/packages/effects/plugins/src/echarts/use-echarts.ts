@@ -1,3 +1,8 @@
+/**
+ * ECharts 运行时 composable：绑定 EchartsUI 组件引用，负责实例创建、重绘、
+ * 尺寸自适应、暗色主题切换与卸载销毁。
+ * 只消费调用方给出的 option，不取数、不组装业务图表配置。
+ */
 import type { EChartsOption } from 'echarts';
 
 import type { Ref } from 'vue';

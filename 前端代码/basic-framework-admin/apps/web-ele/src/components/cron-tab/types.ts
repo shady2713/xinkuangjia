@@ -1,3 +1,9 @@
+/**
+ * CRON 面板的数据契约与初始值：描述秒到年各时间单位的结构与候选项。
+ * 时间单位用 range、loop、appoint 三种互斥模式表达，CronValueDefault 给出
+ * 面板初始值，CronDataDefault 给出候选项列表；cron 字符串的解析与拼装由
+ * cron-tab.vue 负责，本文件只声明结构与默认值。
+ */
 export interface ShortcutsType {
   text: string;
   value: string;

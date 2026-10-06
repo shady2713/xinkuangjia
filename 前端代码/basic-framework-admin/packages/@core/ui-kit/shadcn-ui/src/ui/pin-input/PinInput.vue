@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 验证码输入根节点：横向排布各格并透传属性与完成事件。
+ * 校验、倒计时与提交由使用方处理，本件只同步 reka-ui 的输入状态。
+ */
 import type { PinInputRootEmits, PinInputRootProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

@@ -1,3 +1,9 @@
+/**
+ * 后台布局的属性契约：声明侧边栏、顶栏、标签栏与内容区的宽度、固定与主题开关。
+ * 由 admin-layout.vue 经 defineProps 接收，
+ * 排布计算在 hooks/use-layout；这里只给类型，
+ * 默认值由组件侧提供。
+ */
 import type {
   ContentCompactType,
   LayoutHeaderModeType,

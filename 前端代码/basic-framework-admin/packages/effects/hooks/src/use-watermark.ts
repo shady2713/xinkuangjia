@@ -1,3 +1,9 @@
+/**
+ * 页面水印控制：动态加载 watermark-js-plus，创建、更新与销毁水印。
+ *
+ * 配置在模块级缓存，更新时与缓存合并，未创建时更新退化为创建；
+ * 首次调用注册一次卸载钩子，避免路由切换误销毁水印。
+ */
 import type { Watermark, WatermarkOptions } from 'watermark-js-plus';
 
 import { nextTick, onUnmounted, readonly, ref } from 'vue';

@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 菜单叶子项：渲染图标与标题，折叠态下改用悬浮卡承载标题。
+ * 挂载时把自身登记到所属菜单与子菜单，点击后交由根菜单派发选中事件。
+ * 展开与手风琴状态由 sub-menu、menu 持有，本组件只读取上下文。
+ */
 import type { MenuItemProps, MenuItemRegistered } from '../types';
 
 import { computed, onBeforeUnmount, onMounted, reactive, useSlots } from 'vue';

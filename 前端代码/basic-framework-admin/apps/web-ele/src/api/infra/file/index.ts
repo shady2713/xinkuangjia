@@ -1,3 +1,8 @@
+/**
+ * 文件管理接口：文件列表分页查询、单条删除与批量删除。
+ * 预签名、创建文件记录与上传复用 api/core/file 的统一上传协议，
+ * 本模块不再保留不带预约大小的旧上传请求。
+ */
 import type { AxiosRequestConfig, PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';

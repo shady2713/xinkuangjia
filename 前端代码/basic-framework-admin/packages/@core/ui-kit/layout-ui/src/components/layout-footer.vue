@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 布局页脚：按 height 撑高，靠负外边距在 show 为假时让出自身高度。
+ *
+ * 只负责尺寸、定位与过渡，内容由默认插槽提供；是否启用由外壳决定。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed } from 'vue';

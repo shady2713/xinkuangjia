@@ -1,3 +1,7 @@
+/**
+ * JSON/JSONC 扁平配置工厂：解析 .json/.json5/.jsonc 并统一键与数组排序。
+ * 覆盖 tsconfig、package.json 与 cspell 词表；catalog 约束归 pnpm.ts。
+ */
 import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';

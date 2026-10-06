@@ -13,7 +13,9 @@ import java.util.function.Consumer;
  * 1. 默认使用 {@link cn.hutool.core.bean.BeanUtil} 作为实现类，虽然不同 bean 工具的性能有差别，但是对绝大多数同学的项目，不用在意这点性能
  * 2. 针对复杂的对象转换，优先按业务边界拆分专用转换方法，避免通用工具类承载过多规则
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 public class BeanUtils {
 

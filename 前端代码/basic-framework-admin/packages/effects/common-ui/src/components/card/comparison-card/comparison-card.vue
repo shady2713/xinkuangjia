@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 统计对比卡片：展示指标名、滚动数值、图标与今日新增数量，
+ * 图标名按内置映射渲染，未知名称回退到默认图标。
+ * 不负责取数与刷新，数值为 -1 时显示占位符，数据由调用方传入。
+ */
 import type { ComparisonCardProps } from './types';
 
 import { computed } from 'vue';

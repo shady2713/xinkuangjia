@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 二维码登录界面：把组件内置的固定链接编码成二维码图片展示，并提供返回登录的入口。
+ * 组件不轮询扫码状态、也不发起登录请求，扫码后的流程需由使用方接入。
+ */
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 

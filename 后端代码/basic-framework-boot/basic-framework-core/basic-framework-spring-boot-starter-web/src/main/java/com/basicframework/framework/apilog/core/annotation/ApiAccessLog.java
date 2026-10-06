@@ -10,7 +10,9 @@ import java.lang.annotation.Target;
 /**
  * 访问日志注解
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)

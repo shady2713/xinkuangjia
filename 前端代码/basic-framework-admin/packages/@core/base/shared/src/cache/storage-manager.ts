@@ -1,3 +1,9 @@
+/**
+ * 本地存储封装：给 localStorage 与 sessionStorage 统一加前缀并做 JSON 序列化，
+ * 支持毫秒级过期时间，读到过期项或解析失败时删除该项并返回默认值。
+ * 供偏好设置等模块保存小体积非敏感数据，不做加密与跨标签页同步；
+ * 需要与服务端一致或数据量大的场景应改用状态层或后端接口。
+ */
 type StorageType = 'localStorage' | 'sessionStorage';
 
 interface StorageManagerOptions {

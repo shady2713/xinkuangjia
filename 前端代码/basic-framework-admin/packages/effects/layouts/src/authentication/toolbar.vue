@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 认证页浮层工具栏：贴在认证外壳右上角，提供配色、布局形态与明暗主题三个快捷开关。
+ * 入口由 toolbarList 指定（默认三项全开），主题开关另受主题偏好开关约束。
+ * 只决定摆哪些入口，切换动作由 ../widgets 下各开关组件自理；
+ * 认证外壳 authentication.vue 目前未接入它，只有组件测试直接挂载。
+ */
 import type { ToolbarType } from './types';
 
 import { computed } from 'vue';

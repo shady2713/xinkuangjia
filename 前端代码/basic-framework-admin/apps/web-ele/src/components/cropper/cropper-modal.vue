@@ -1,4 +1,9 @@
 <script lang="ts" setup>
+/**
+ * 图片裁剪弹窗：选图后在弹窗内旋转、缩放、裁剪，确认时把结果交给 uploadApi。
+ * 作为 CropperAvatar 的内部弹窗使用，也可由 vben Modal 的 register 机制单独挂载；
+ * 只做裁剪与上传编排，头像展示与地址回写由调用方负责。
+ */
 import type { CropendResult, CropperModalProps, CropperType } from './typing';
 
 import { ref } from 'vue';

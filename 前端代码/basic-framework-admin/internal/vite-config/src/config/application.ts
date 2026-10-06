@@ -1,3 +1,10 @@
+/**
+ * 应用型工程的 Vite 配置工厂：装配通用构建选项、环境变量与按需插件，
+ * 最后叠加使用方在 vite 字段里给出的自定义配置。
+ *
+ * base、server.port 与首屏 loading 开关来自 .env 解析结果；
+ * 全局 SCSS 变量只注入 apps 下的源码，库构建不走这条路径。
+ */
 import type { CSSOptions, UserConfig } from 'vite';
 
 import type { DefineApplicationOptions } from '../typing.ts';

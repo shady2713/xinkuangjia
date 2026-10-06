@@ -1,3 +1,8 @@
+/**
+ * 路由守卫装配：通用守卫记录页面加载状态并驱动顶部进度条；
+ * 访问守卫校验登录态，按会话代次加载用户信息与字典后再生成权限路由。
+ * 旧身份的在途加载一律丢弃，守卫只返回导航结果，不渲染界面。
+ */
 import type { Router } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';

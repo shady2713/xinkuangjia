@@ -1,3 +1,9 @@
+/**
+ * 前端分页：对响应式列表按页码与每页条数切片并暴露翻页状态。
+ *
+ * 只处理已在内存中的数组，不请求服务端分页数据；
+ * 总数变化默认回到第一页，非法页码或条数直接抛出错误。
+ */
 import type { Ref } from 'vue';
 
 import { computed, ref, unref, watch } from 'vue';

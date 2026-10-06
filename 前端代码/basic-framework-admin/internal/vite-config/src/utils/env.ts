@@ -1,3 +1,10 @@
+/**
+ * 构建期环境变量工具：按 .env 系列文件读取并合并键值。
+ * 加载顺序为 .env、.env.local、.env.<mode>、.env.<mode>.local，
+ * 靠后的文件覆盖同名键，文件缺失直接跳过而不报错。
+ * loadAndConvertEnv 另把 base、port 等转成构建参数；
+ * 本模块不校验必填项，也不负责注入 import.meta.env。
+ */
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';

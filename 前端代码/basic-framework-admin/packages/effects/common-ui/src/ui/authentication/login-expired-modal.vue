@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 登录过期弹窗：由 open 模型控制显隐，提示用户重新登录，正文以默认插槽交给上层。
+ * z-index 默认取页面现有最大值加一以盖住其它浮层；不负责刷新令牌或跳转登录页。
+ */
 import type { AuthenticationProps } from './types';
 
 import { computed, watch } from 'vue';

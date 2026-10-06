@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 滑块验证码的拖动手柄：渲染滑块与右箭头、对勾图标，
+ * 按父级推入的位移移动，并对外暴露根元素与样式查询。
+ * 位移计算与通过判定在基座组件，本组件只管展示与拖动外观。
+ */
 import type { CSSProperties } from 'vue';
 
 import { computed, ref, useTemplateRef } from 'vue';

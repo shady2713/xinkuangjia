@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 标签页视图容器：把标签栏放进横向滚动区，并组合左右滚动按钮与滚轮滚动。
+ * styleType 决定渲染 TabsChrome 还是 Tabs；
+ * 滚动状态与拖拽排序分别由两个 hook 提供，
+ * 选中项与关闭动作仍交回上层处理。
+ */
 import type { TabsEmits, TabsProps } from './types';
 
 import { useForwardPropsEmits } from '@vben-core/composables';

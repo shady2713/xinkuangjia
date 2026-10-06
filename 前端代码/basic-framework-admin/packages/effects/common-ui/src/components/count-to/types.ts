@@ -1,3 +1,7 @@
+/**
+ * 数字滚动的类型契约：把 @vueuse 的过渡曲线表摊成可枚举的曲线名与取值类型。
+ * CountToProps 覆盖起止值、时长、分隔符、小数位、前后缀及四段样式类名。
+ */
 import type { CubicBezierPoints, EasingFunction } from '@vueuse/core';
 
 import type { StyleValue } from 'vue';

@@ -1,3 +1,8 @@
+/**
+ * 布局模式换算：把布局属性折算成 currentLayout 与五个模式标志。
+ *
+ * 供 admin-layout 取舍各布局区域，不产出样式，也不读取路由。
+ */
 import type { LayoutType } from '@vben-core/typings';
 
 import type { VbenLayoutProps } from '../admin-layout';

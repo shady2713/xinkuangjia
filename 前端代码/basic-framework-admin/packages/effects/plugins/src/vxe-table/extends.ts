@@ -1,3 +1,8 @@
+/**
+ * 表格扩展层：包装 vxe-grid 的 query 与 queryAll 代理回调，在请求前注入
+ * 当前搜索表单值，避免点刷新时退回旧条件；并注册日期单元格格式化器。
+ * 表单值由调用方通过回调传入，这里不持有表单状态、不发起请求。
+ */
 import type { VxeGridProps, VxeUIExport } from 'vxe-table';
 
 import type { Recordable } from '@vben/types';

@@ -1,3 +1,8 @@
+/**
+ * form-create 插件装配：注册字典、部门、用户等设计器自定义组件
+ * 与一批 element-plus 组件，使 JSON 表单能按组件名解析控件。
+ * 只在应用启动时执行一次，表单取值与提交由业务页面负责。
+ */
 import type { App, Component } from 'vue';
 
 import formCreate from '@form-create/element-ui';

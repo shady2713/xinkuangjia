@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * 注册界面：渲染调用方传入的表单结构，校验通过后把账号密码交给上层，并提供返回登录入口。
+ * 组件不调用注册接口，也不校验用户名是否重复，这些由使用方在 submit 事件中完成。
+ */
 import type { Recordable } from '@vben/types';
 
 import type { VbenFormSchema } from '@vben-core/form-ui';

@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 版权信息条：拼装 ICP 备案号、年份与公司名（可带站点链接），认证页与后台页脚共用。
+ * 内容全部由偏好经 Props 传入，某项为空时对应片段不渲染，不自行读取偏好。
+ */
 interface Props {
   companyName?: string;
   companySiteLink?: string;

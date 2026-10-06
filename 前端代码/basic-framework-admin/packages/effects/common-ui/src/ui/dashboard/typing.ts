@@ -1,3 +1,8 @@
+/**
+ * 仪表盘展示数据的结构定义：为分析页指标与工作台各列表提供条目形状。
+ *
+ * 只声明字段约定，不含取数、排序等运行时逻辑。
+ */
 import type { Component } from 'vue';
 
 interface AnalysisOverviewItem {

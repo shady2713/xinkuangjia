@@ -1,3 +1,10 @@
+/**
+ * 弹窗的类型契约：ModalProps 与 ModalState 描述
+ * 外观与状态字段，ModalApiOptions 收拢生命周期回调，
+ * ExtendedModalApi 补上 useStore 选择器。
+ * 不含运行时逻辑：状态流转在 modal-api.ts，
+ * 视图在 modal.vue。
+ */
 import type { Component, Ref } from 'vue';
 
 import type { MaybePromise } from '@vben-core/typings';

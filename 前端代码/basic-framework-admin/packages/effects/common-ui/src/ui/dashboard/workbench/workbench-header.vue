@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+/**
+ * 工作台顶部问候区：展示用户头像，并提供标题、描述插槽。
+ * 右侧待办、项目、团队三项统计为占位示例数据，接入真实数据由使用方替换。
+ */
 import { VbenAvatar } from '@vben-core/shadcn-ui';
 
 interface Props {

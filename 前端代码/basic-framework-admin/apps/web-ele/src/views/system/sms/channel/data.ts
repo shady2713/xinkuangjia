@@ -1,3 +1,8 @@
+/**
+ * 短信渠道的表单、检索与列表字段定义。
+ * 渠道编码取字典值，API Secret 留空表示沿用原密钥；
+ * 密钥的加密存储与渠道调用由后端负责。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 

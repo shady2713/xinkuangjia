@@ -1,3 +1,9 @@
+/**
+ * 列表进出场动画工具类的唯一来源：为四个方向各生成 1~5 级
+ * nth-child 延迟工具类，并补齐配套关键帧，交由 Tailwind 注入样式。
+ *
+ * 当前未注册进共享预设，需要该动效的构建方自行装载。
+ */
 import plugin from 'tailwindcss/plugin.js';
 
 /**

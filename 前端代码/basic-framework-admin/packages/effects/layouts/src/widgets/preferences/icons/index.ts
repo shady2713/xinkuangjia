@@ -1,3 +1,9 @@
+/**
+ * 布局缩略图出口：聚合七种导航布局的预览小图，供布局预设选择器渲染缩略图。
+ *
+ * 这些组件只是示意图，不承担布局渲染；ContentWide 复用 HeaderNav，
+ * 与 ContentCompact 一起供内容宽度选择使用。
+ */
 import HeaderNav from './header-nav.vue';
 
 export { default as ContentCompact } from './content-compact.vue';

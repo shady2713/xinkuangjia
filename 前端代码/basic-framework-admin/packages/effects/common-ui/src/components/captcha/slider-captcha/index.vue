@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 滑块验证码基座：按住滑块拖到右端即判定通过，回传耗时并双向绑定结果；
+ * isSlot 打开时把判定权交给父级，只做位移与宽度的交接。
+ *
+ * 负责位移换算、边界夹紧与复位，图片、提示与后端校验由调用方
+ * 或旋转、平移验证码等上层组件负责，resume 用于重置到初始状态。
+ */
 import type {
   CaptchaVerifyPassingData,
   SliderCaptchaProps,

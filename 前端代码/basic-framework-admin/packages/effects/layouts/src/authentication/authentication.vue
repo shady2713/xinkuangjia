@@ -1,4 +1,10 @@
 <script setup lang="ts">
+/**
+ * 认证页外壳：按偏好把登录表单排在左侧、右侧或中间，
+ * 其余区域渲染 logo、slogan 图、页标题与版权信息。
+ *
+ * 登录表单与路由视图由 form.vue 提供，本组件不处理登录流程与凭据校验。
+ */
 import { computed } from 'vue';
 
 import { preferences, usePreferences } from '@vben/preferences';

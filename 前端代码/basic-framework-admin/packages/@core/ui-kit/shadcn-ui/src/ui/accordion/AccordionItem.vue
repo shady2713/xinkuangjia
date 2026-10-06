@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * 手风琴分组项：给一个分组套上下边框，并转发 reka-ui 的项级 props。
+ *
+ * 只提供容器与分隔线，展开状态由根节点统一管理，标题和内容作为子节点传入。
+ */
 import type { AccordionItemProps } from 'reka-ui';
 
 import type { ClassValue } from '@vben-core/shared/utils';

@@ -16,7 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1. 在执行方法前，将 @DataPermission 注解入栈
  * 2. 在执行方法后，将 @DataPermission 注解出栈
  *
- * @author 李杰
+ * @author 芋道源码
+ *
+ * 来源 YunaiV/ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5；本地修改：basic-framework 命名空间与模块名适配及本地改动
  */
 @DataPermission // 该注解，用于 {@link DATA_PERMISSION_NULL} 的空对象
 public class DataPermissionAnnotationInterceptor implements MethodInterceptor {
