@@ -606,6 +606,19 @@ def test_stored_materials_match_a_fresh_rebuild(package: dict, stored: dict) -> 
     )
 
 
+def _drop_head(raw: bytes) -> bytes:
+    """剔除材料中记录生成时提交的 head 字段，其余字节原样保留。
+
+    `repository.head` 是"何时生成"的元数据：把它写死会让本用例在任何后续提交上都失败
+    （提交即改值）。逐条证据、读数、归因与判定列仍逐字节一致。
+    """
+
+    head = json.loads(raw.decode("utf-8")).get("repository", {}).get("head")
+    if head is None:
+        return raw
+    return raw.replace(head.encode("utf-8"), b"<normalized-head>")
+
+
 def test_generator_cli_rebuilds_identical_materials() -> None:
     """真实 CLI：--build 重新生成的 JSON 必须与仓内版本逐字节一致。"""
 
@@ -620,7 +633,7 @@ def test_generator_cli_rebuilds_identical_materials() -> None:
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report["status"] == "written"
-    assert REVIEW_JSON.read_bytes() == before
+    assert _drop_head(REVIEW_JSON.read_bytes()) == _drop_head(before)
     assert b"generated_at_utc" not in before
 
 
