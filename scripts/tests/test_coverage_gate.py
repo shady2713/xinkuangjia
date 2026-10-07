@@ -551,6 +551,66 @@ def test_final_consumer_requires_preparation(tmp_path: Path) -> None:
     assert result["problems"][0]["rule"] == "missing-coverage-preparation"
 
 
+def surefire_report(module: Path, name: str, text: str = "<testsuite tests='1'/>") -> Path:
+    """在模块 target 下写一份 Surefire XML 报告，返回其真实路径。
+
+    Args:
+        module: 拥有 target 产物的 Maven 模块目录。
+        name: 报告文件名，用于区分同一模块内的不同测试类。
+        text: 报告正文，缺省为最小套件形状。
+    Returns:
+        写出的报告路径，调用方可用 os.utime 伪造其时间戳。
+    """
+    path = module / "target" / "surefire-reports" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_prepare_removes_reports_of_earlier_run(tmp_path: Path) -> None:
+    """准备必须整目录清除上一轮测试报告，surefire 只覆盖本轮执行过的测试类。"""
+    module = tmp_path / gate.BACKEND / "module"
+    (module / "target").mkdir(parents=True)
+    (module / "pom.xml").write_text("<project/>", encoding="utf-8")
+    stale = surefire_report(module, "TEST-NotSelectedThisRun.xml")
+    java_source(tmp_path)
+    gate.prepare_backend(tmp_path, module)
+    assert not stale.exists()
+    assert not (module / "target" / "surefire-reports").exists()
+
+
+def test_final_consumer_rejects_report_of_earlier_run(tmp_path: Path) -> None:
+    """上一轮遗留的测试报告属于无效证据：拒绝签发，而不是继续用它凑读数。"""
+    module = tmp_path / gate.BACKEND / "module"
+    (module / "target").mkdir(parents=True)
+    (module / "pom.xml").write_text("<project/>", encoding="utf-8")
+    java_source(tmp_path)
+    gate.prepare_backend(tmp_path, module)
+    java_report(tmp_path, {"Value.java": (0, 1, 0, 1)})
+    inherited = surefire_report(module, "TEST-com.demo.NotSelectedThisRun.xml")
+    os.utime(inherited, ns=(1, 1))
+    result = gate.backend_report(tmp_path, module, True)
+    assert gate.conclude(result, "full") == 2
+    assert [item["rule"] for item in result["problems"]] == ["test-report-outside-run"]
+
+
+def test_run_identity_is_required_for_final_consumer(tmp_path: Path) -> None:
+    """没有可核验的运行标识就无法证明产物属于本次运行，最终消费方必须拒绝。"""
+    module = tmp_path / gate.BACKEND / "module"
+    (module / "target").mkdir(parents=True)
+    (module / "pom.xml").write_text("<project/>", encoding="utf-8")
+    java_source(tmp_path)
+    gate.prepare_backend(tmp_path, module)
+    java_report(tmp_path, {"Value.java": (0, 1, 0, 1)})
+    baseline = module / "target" / "coverage-inputs.json"
+    prepared = json.loads(baseline.read_text(encoding="utf-8"))
+    prepared["run"] = {"id": "不是本次运行的标识"}
+    baseline.write_text(json.dumps(prepared, ensure_ascii=False), encoding="utf-8")
+    result = gate.backend_report(tmp_path, module, True)
+    assert gate.conclude(result, "full") == 2
+    assert any(item["rule"] == "coverage-inputs-changed-or-stale" for item in result["problems"])
+
+
 def test_prepare_does_not_allow_arbitrary_directory(tmp_path: Path) -> None:
     """重置操作必须限定到后端且具备 POM，不能把用户给的任意目录当构建输出。"""
     with pytest.raises(ValueError):

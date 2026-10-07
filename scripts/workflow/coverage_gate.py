@@ -3,7 +3,8 @@
 本工具只裁决已有覆盖率数据，不把读取报告视为测试执行成功。最终阶段（full/release）
 还要求同范围的静态检查已经有真实执行证据：后端重新核验各模块 PMD 报告，前端复核
 static_gate.py 写出的 lint 证据；缺失、旧报告、跳过或违规都会让裁决以 2 退出，
-调用方拿不到可用的发布证据。
+调用方拿不到可用的发布证据。后端裁决还要求报告属于同一次测试运行：--prepare 在
+surefire 之前清掉上一轮报告并写下运行标识，读数时发现早于该起点的报告即判为无效证据。
 @author OpenAI Codex
 """
 
@@ -16,7 +17,10 @@ import os
 import re
 import shutil
 import sys
+import time
+import uuid
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from pathlib import Path
 
 if __package__ in (None, ""):
@@ -28,6 +32,12 @@ from scripts.workflow import static_gate
 
 # 只有最终阶段才要求静态检查证据；audit 只报告缺口，不产生发布结论。
 FINAL_STAGES = frozenset({"full", "release"})
+
+# 后端覆盖率输入指纹：除源码树外还必须绑定"本次运行的起点"。Maven 在 process-test-classes
+# （surefire 之前）逐模块调用 --prepare，由它重置执行数据、清除上一轮测试报告并写下运行标识；
+# 门禁只认带有该标识且产物不早于起点的报告，否则拒绝签发，而不是继续拿旧数据凑读数。
+BACKEND_INPUTS_SCHEMA = "coverage-inputs/v2"
+BACKEND_RUN_ID = re.compile(r"[0-9a-f]{32}")
 
 BACKEND = Path("后端代码/basic-framework-boot")
 FRONTEND = Path("前端代码/basic-framework-admin")
@@ -89,16 +99,21 @@ def backend_inputs(root: Path) -> dict[str, str]:
 
 
 def prepare_backend(root: Path, module: Path) -> None:
-    """为本次质量测试重置模块执行数据并保存输入摘要，禁止复用历史探针命中。
+    """为本次质量测试清空上一轮产物并记录本次运行起点，禁止复用历史探针命中与历史测试报告。
+
+    Surefire 只覆盖本次真正执行过的测试类：上一轮执行过、这一轮选择器没有覆盖的报告会被原样
+    留在 target/surefire-reports，读取方（ci_gate.py reports 直接消费该目录）据此得到的用例数与
+    结论就不再属于本次运行。因此整目录清除，而不是只清 jacoco.exec。
 
     Args:
         root: 拥有后端源码的仓库根目录。
         module: 后端内存在 POM 的单个 Maven 模块。
     Raises:
-        ValueError: 模块或 target 链接越过所属后端/模块。
+        ValueError: 模块或 target 链接越过所属后端/模块，或覆盖率产物被替换为链接。
         OSError: 输入无法读取或本次覆盖率产物无法创建。
     Side effects:
-        只替换该模块 target/jacoco.exec 与 target/coverage-inputs.json。
+        删除该模块 target/surefire-reports 与 target/site/jacoco/jacoco.xml，并覆盖写出
+        target/jacoco.exec（空）与 target/coverage-inputs.json（含本次运行标识）。
         空 exec 可由 JaCoCo 读取，使没有测试的模块仍报告全部类为未覆盖。
     """
     if not module.is_relative_to(root / BACKEND) or not (module / "pom.xml").is_file():
@@ -108,12 +123,23 @@ def prepare_backend(root: Path, module: Path) -> None:
         raise ValueError("target 不得重定向到模块外部")
     baseline = backend_inputs(root)
     target.mkdir(exist_ok=True)
-    for filename in ("jacoco.exec", "coverage-inputs.json"):
-        if (target / filename).is_symlink():
+    reports = target / "surefire-reports"
+    report = target / "site" / "jacoco" / "jacoco.xml"
+    for path in (reports, report, target / "jacoco.exec", target / "coverage-inputs.json"):
+        if path.is_symlink():
             raise ValueError("覆盖率产物不得为链接")
+    # 起点记在清除动作之前：--prepare 本身就是本次运行的第一件事，两者都早于 surefire。
+    # 读数侧实际比较的是 coverage-inputs.json 写完后的自身 mtime（见 outside_run），
+    # 它必然晚于本行的起点，因此任何在 --prepare 之后写出的报告都不会被误判为遗留。
+    started = time.time_ns()
+    shutil.rmtree(reports, ignore_errors=True)
+    report.unlink(missing_ok=True)
     (target / "jacoco.exec").write_bytes(b"")
     (target / "coverage-inputs.json").write_text(
-        json.dumps({"schema": "coverage-inputs/v1", "inputs": baseline}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps({"schema": BACKEND_INPUTS_SCHEMA,
+                    "run": {"id": uuid.uuid4().hex,
+                            "startedAt": datetime.fromtimestamp(started / 1e9, timezone.utc).isoformat()},
+                    "inputs": baseline}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8", newline="\n",
     )
 
@@ -280,8 +306,39 @@ def row(path: Path, root: Path, lines: dict[str, object], methods: dict[str, obj
             "reason": "声明没有可执行体" if status == "not-applicable" else ""}
 
 
+def outside_run(module: Path, root: Path, baseline: Path) -> list[dict[str, str]]:
+    """列出不属于本次运行的测试报告与覆盖率产物，宁可判无效也不继承上一轮数据。
+
+    以 --prepare 写下的 coverage-inputs.json 自身修改时间作为本次运行起点：surefire 之后
+    写出的报告必然不早于它，而上一轮遗留的报告必然早于它。没有产物早于起点，只能证明
+    目录里没有被继承的旧文件，不能证明产品来自本次运行，因此还要校验报告与探针数据的先后。
+
+    Args:
+        module: 已写入本次运行标识的 Maven 模块。
+        root: 仓库根目录，用于给出可核对的相对路径。
+        baseline: 该模块的 target/coverage-inputs.json。
+    Returns:
+        每条含相对路径与规则名的完整性问题；全部产物都属于本次运行时返回空列表。
+    """
+    started = baseline.stat().st_mtime_ns
+    execution = module / "target/jacoco.exec"
+    report = module / "target/site/jacoco/jacoco.xml"
+    found: list[dict[str, str]] = []
+    for path in sorted((module / "target/surefire-reports").glob("TEST-*.xml")):
+        if path.stat().st_mtime_ns < started:
+            found.append({"path": path.relative_to(root).as_posix(), "rule": "test-report-outside-run"})
+    if not execution.is_file() or report.stat().st_mtime_ns < execution.stat().st_mtime_ns:
+        found.append({"path": execution.relative_to(root).as_posix(), "rule": "execution-outside-run"})
+    elif report.stat().st_mtime_ns < started:
+        found.append({"path": report.relative_to(root).as_posix(), "rule": "report-outside-run"})
+    return found
+
+
 def backend_report(root: Path, module: Path | None = None, require_prepared: bool = False) -> dict[str, object]:
     """枚举全部生产 Java 源码并逐模块核对 JaCoCo，生成代码保留独立来源和计数。
+
+    读数只接受同一次测试运行的产物：测试报告、执行数据或 JaCoCo 报告只要早于 --prepare
+    写下的运行起点，就记为完整性问题（退出码 2），而不是继续用上一轮的数据凑出读数。
 
     Args:
         root: 仓库根目录。
@@ -316,16 +373,18 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
             continue
         reports.append(source_record(report, root))
         baseline = current / "target/coverage-inputs.json"
-        execution = current / "target/jacoco.exec"
         if baseline.exists():
             try:
                 prepared = json.loads(baseline.read_text(encoding="utf-8"))
-                if prepared.get("schema") != "coverage-inputs/v1" or prepared.get("inputs") != current_inputs:
+                if prepared.get("schema") != BACKEND_INPUTS_SCHEMA or prepared.get("inputs") != current_inputs:
                     raise ValueError("测试期间输入发生变化")
-                if not execution.is_file() or report.stat().st_mtime_ns < execution.stat().st_mtime_ns:
-                    raise ValueError("报告早于本次执行数据")
-            except (ValueError, AttributeError):
+                identity = prepared.get("run")
+                if not isinstance(identity, dict) or not BACKEND_RUN_ID.fullmatch(identity.get("id") or ""):
+                    raise ValueError("缺少可核验的本次运行标识")
+            except (ValueError, AttributeError, TypeError):
                 problems.append({"path": baseline.relative_to(root).as_posix(), "rule": "coverage-inputs-changed-or-stale"})
+            else:
+                problems.extend(outside_run(current, root, baseline))
         elif require_prepared:
             problems.append({"path": baseline.relative_to(root).as_posix(), "rule": "missing-coverage-preparation"})
         try:
