@@ -40,6 +40,55 @@ def java_report(root: Path, entries: dict[str, tuple[int, int, int, int]]) -> Pa
     return path
 
 
+def java_method_report(root: Path, methods: list[tuple[str, str, int, int, int]],
+                       counters: tuple[int, int, int, int] = (0, 1, 0, 2)) -> Path:
+    """写带逐方法读数的 JaCoCo 样本，条目为 (方法名, 描述符, 行号, missed, covered)。
+
+    Args:
+        root: 测试拥有的仓库根，前端范围固定为门禁的 FRONTEND。
+        methods: 源文件 Value.java 下的方法读数。
+        counters: 源文件级计数，顺序为行未覆盖/覆盖、方法未覆盖/覆盖。
+    Returns:
+        报告路径。
+    """
+    path = root / gate.BACKEND / "module/target/site/jacoco/jacoco.xml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    report = ET.Element("report")
+    package = ET.SubElement(report, "package", name="demo")
+    entry = ET.SubElement(package, "class", name="demo/Value", sourcefilename="Value.java")
+    for name, descriptor, line, missed, covered in methods:
+        node = ET.SubElement(entry, "method", name=name, desc=descriptor, line=str(line))
+        ET.SubElement(node, "counter", type="METHOD", missed=str(missed), covered=str(covered))
+    ET.SubElement(entry, "counter", type="LINE", missed="0", covered="1")
+    ET.SubElement(entry, "counter", type="METHOD", missed=str(counters[2]), covered=str(counters[3]))
+    sourcefile = ET.SubElement(package, "sourcefile", name="Value.java")
+    for kind, values in (("LINE", counters[:2]), ("METHOD", counters[2:])):
+        ET.SubElement(sourcefile, "counter", type=kind, missed=str(values[0]), covered=str(values[1]))
+    path.write_bytes(ET.tostring(report))
+    return path
+
+
+def exit_type_class(root: Path, method_line: int = 10,
+                    descriptor: str = "(Ljava/lang/Long;)Ljava/lang/Object;") -> None:
+    """在被检查模块的 target/classes 下写出只有异常出口的直线方法字节码。
+
+    方法体是 `aload_0; aload_1; invokevirtual; areturn`：无分支、无异常表、无 athrow，
+    唯一出口是末尾 areturn，JaCoCo 的探针只挂在该出口之前。
+
+    Args:
+        root: 测试拥有的仓库根。
+        method_line: 方法的源码行号。
+        descriptor: 方法描述符。
+    """
+    from scripts.tests.test_scan_exit_type_methods import class_bytes  # noqa: PLC0415
+
+    body = bytes([0x2A, 0x2B, 0xB6, 0x00, 0x12, 0xB0])  # aload_0; aload_1; invokevirtual; areturn
+    classes = root / gate.BACKEND / "module/target/classes/demo"
+    classes.mkdir(parents=True, exist_ok=True)
+    (classes / "Value.class").write_bytes(
+        class_bytes("demo/Value", [(0x0001, "sample", descriptor, body, 0, (method_line,))]))
+
+
 def java_pmd(root: Path) -> Path:
     """写一份真实形状的 PMD 报告与绑定配置，满足最终阶段的静态检查证据要求。"""
     ruleset = root / gate.BACKEND / "config/pmd/basic-framework-ruleset.xml"
@@ -616,3 +665,55 @@ def test_prepare_does_not_allow_arbitrary_directory(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         gate.prepare_backend(tmp_path, tmp_path)
     assert not (tmp_path / "target").exists()
+
+
+def test_exit_type_gap_is_annotated_without_changing_verdict(tmp_path: Path) -> None:
+    """出口型未覆盖要写明成因，但状态、阈值与退出码必须与不标注时逐字相同。"""
+    java_source(tmp_path)
+    java_method_report(tmp_path, [
+        ("sample", "(Ljava/lang/Long;)Ljava/lang/Object;", 10, 1, 0),
+        ("other", "(Ljava/lang/String;)Ljava/lang/String;", 20, 0, 1),
+    ], counters=(1, 10, 1, 2))
+    exit_type_class(tmp_path, method_line=10)
+
+    annotated = gate.backend_report(tmp_path)
+    assert gate.conclude(annotated, "full") == 1
+    assert annotated["files"][0]["status"] == "failed"
+    assert annotated["files"][0]["reason"].startswith(gate.EXIT_TYPE_LABEL)
+    assert "sample(Ljava/lang/Long;)Ljava/lang/Object;（第 10 行）" in annotated["files"][0]["reason"]
+    assert annotated["exit_type_scans"][0]["candidates"] == 1
+    assert annotated["exit_type_scans"][0]["annotated_files"] == 1
+
+    # 同一个失败文件在有/无出口型标注两种情况下的裁决结果必须完全一致。
+    without = {key: value for key, value in annotated.items() if key != "exit_type_scans"}
+    without["files"] = [{key: value for key, value in item.items() if key != "reason"}
+                        for item in annotated["files"]]
+    assert gate.conclude(without, "full") == 1
+    assert without["thresholds"] == {"per_file": True, "lines": 100, "methods_or_functions": 100}
+
+
+def test_zero_coverage_file_is_not_blamed_on_probe_semantics(tmp_path: Path) -> None:
+    """整文件零覆盖说明代码根本没被驱动，不得标成出口型探针问题误导排查。"""
+    java_source(tmp_path)
+    java_method_report(tmp_path, [("sample", "(Ljava/lang/Long;)Ljava/lang/Object;", 10, 1, 0)],
+                       counters=(0, 10, 1, 0))
+    exit_type_class(tmp_path, method_line=10)
+
+    result = gate.backend_report(tmp_path)
+
+    assert result["files"][0]["status"] == "failed"
+    assert result["files"][0]["reason"] == ""
+    assert result["exit_type_scans"][0]["annotated_files"] == 0
+
+
+def test_covered_gap_file_keeps_reason_empty(tmp_path: Path) -> None:
+    """出口型方法已被覆盖时不得标注；标注只针对真正的未覆盖出口。"""
+    java_source(tmp_path)
+    java_method_report(tmp_path, [("sample", "(Ljava/lang/Long;)Ljava/lang/Object;", 10, 0, 1)],
+                       counters=(1, 10, 1, 1))
+    exit_type_class(tmp_path, method_line=10)
+
+    result = gate.backend_report(tmp_path)
+
+    assert result["files"][0]["status"] == "failed"
+    assert result["files"][0]["reason"] == ""

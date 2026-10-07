@@ -5,6 +5,11 @@
 static_gate.py 写出的 lint 证据；缺失、旧报告、跳过或违规都会让裁决以 2 退出，
 调用方拿不到可用的发布证据。后端裁决还要求报告属于同一次测试运行：--prepare 在
 surefire 之前清掉上一轮报告并写下运行标识，读数时发现早于该起点的报告即判为无效证据。
+
+对失败文件还会额外标注缺口成因：把"方法体无分支、唯一出口是方法末尾 xreturn"的
+出口型方法标成"出口型未覆盖：JaCoCo 探针语义"——这类方法的覆盖率只取决于正常返回
+路径是否被驱动过，只补异常出口的用例不会改变读数。该标注只写入 reason，不改变任何
+阈值、状态与退出码，也不豁免任何文件。
 @author OpenAI Codex
 """
 
@@ -26,12 +31,21 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from scripts.code.java import scan_exit_type_methods
 from scripts.code.java.check_staged_java_comments import _mask_java, _matching_delimiters
 from scripts.common.quality_common import DEFAULT_ROOT, CheckError, run_process
 from scripts.workflow import static_gate
 
 # 只有最终阶段才要求静态检查证据；audit 只报告缺口，不产生发布结论。
 FINAL_STAGES = frozenset({"full", "release"})
+
+# 出口型未覆盖的可观测标注：JaCoCo 0.8.x 把方法探针插在基本块出口，直线单出口方法的探针只
+# 出现在方法末尾的 xreturn 之前；出口被被调方抛出的异常截断时探针永不置位，于是真实执行过
+# 的代码被记为未覆盖。该标注只说明缺口的成因，帮助判断"补异常出口用例无用"，不改变任何阈值、
+# 状态与退出码，也不豁免任何文件。
+EXIT_TYPE_LABEL = "出口型未覆盖：JaCoCo 探针语义"
+EXIT_TYPE_DETAIL = ("唯一出口是方法末尾的 xreturn，探针只在正常返回路径上置位；"
+                    "只补异常出口的用例不会改变读数，需要补一次走通正常返回的用例（上游 jacoco/jacoco#1360）")
 
 # 后端覆盖率输入指纹：除源码树外还必须绑定"本次运行的起点"。Maven 在 process-test-classes
 # （surefire 之前）逐模块调用 --prepare，由它重置执行数据、清除上一轮测试报告并写下运行标识；
@@ -306,6 +320,90 @@ def row(path: Path, root: Path, lines: dict[str, object], methods: dict[str, obj
             "reason": "声明没有可执行体" if status == "not-applicable" else ""}
 
 
+def method_coverage(classes: list[ET.Element]) -> tuple[int, list[tuple[str, str, int]]]:
+    """统计这些类里已覆盖的方法数，并列出"一个都没覆盖"的方法。
+
+    Args:
+        classes: 同一源文件下的 class 元素。
+    Returns:
+        (已覆盖方法数, (方法名, 描述符, 源码行号) 列表)。列表只含 covered=0 且 missed>0 的方法。
+    """
+    covered = 0
+    missed: list[tuple[str, str, int]] = []
+    for entry in classes:
+        for method in entry.findall("method"):
+            counter = next((item for item in method.findall("counter")
+                            if item.attrib.get("type") == "METHOD"), None)
+            if counter is None:
+                continue
+            if int(counter.attrib.get("covered", "0")) > 0:
+                covered += 1
+            elif int(counter.attrib.get("missed", "0")) > 0:
+                missed.append((method.attrib.get("name", ""), method.attrib.get("desc", ""),
+                               int(method.attrib.get("line", "0") or 0)))
+    return covered, missed
+
+
+def exit_type_shapes(module: Path) -> tuple[dict[tuple[str, str, str], dict[str, object]], dict[str, object]]:
+    """扫描模块编译产物，返回出口型方法索引与扫描统计，供缺口标注成因使用。
+
+    Args:
+        module: 后端 Maven 模块。
+    Returns:
+        (以 (包名, 源文件名, 方法名+描述符) 为键的出口型方法, 扫描统计)。
+        模块还没有编译产物时返回空索引，并在统计里如实记录。
+    """
+    classes = module / "target/classes"
+    summary: dict[str, object] = {"module": module.name, "compiled": classes.is_dir()}
+    if not classes.is_dir():
+        summary.update(class_files=0, methods=0, candidates=0, unreadable=[])
+        return {}, summary
+    candidates, unreadable, class_files, methods = scan_exit_type_methods.scan_classes(classes)
+    index = {(str(record["class"]).rpartition("/")[0], Path(str(record["file"])).stem + ".java",
+              f"{record['method']}{record['descriptor']}"): record for record in candidates}
+    summary.update(class_files=class_files, methods=methods,
+                   candidates=len(candidates), unreadable=unreadable)
+    return index, summary
+
+
+def annotate_exit_type(rows: list[dict[str, object]], source_key: dict[str, str],
+                       gaps: dict[str, tuple[int, list[tuple[str, str, int]]]],
+                       shapes: dict[tuple[str, str, str], dict[str, object]]) -> int:
+    """给失败行补上缺口成因说明；只写 reason，不改状态、阈值与退出码。
+
+    只标注"该源文件确实有方法被执行过、且缺口方法是出口型普通方法"的情况：
+    整文件零覆盖说明这段代码根本没被驱动，补再多用例都不同，属于普通覆盖缺口；
+    构造器与静态初始化块只在实例化/类加载时运行，未覆盖同样不代表探针语义问题。
+
+    Args:
+        rows: 当前模块的逐文件结果，函数就地补写 reason。
+        source_key: 行路径到源文件相对键的映射。
+        gaps: 源文件相对键到 (已覆盖方法数, 未覆盖方法列表) 的映射。
+        shapes: 出口型方法索引。
+    Returns:
+        被标注成因的行数。
+    """
+    annotated = 0
+    for item in rows:
+        if item["status"] != "failed":
+            continue
+        key = source_key.get(str(item["path"]))
+        if key is None:
+            continue
+        covered, missed = gaps.get(key, (0, []))
+        if covered <= 0:
+            continue
+        package_name, _, file_name = key.rpartition("/")
+        hits = [f"{name}{descriptor}（第 {line} 行）" for name, descriptor, line in missed
+                if name not in {"<init>", "<clinit>"}
+                and (package_name, file_name, f"{name}{descriptor}") in shapes]
+        if not hits:
+            continue
+        item["reason"] = f"{EXIT_TYPE_LABEL}：{'、'.join(hits)}；{EXIT_TYPE_DETAIL}"
+        annotated += 1
+    return annotated
+
+
 def outside_run(module: Path, root: Path, baseline: Path) -> list[dict[str, str]]:
     """列出不属于本次运行的测试报告与覆盖率产物，宁可判无效也不继承上一轮数据。
 
@@ -360,6 +458,7 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
     problems: list[dict[str, str]] = []
     reports: list[dict[str, object]] = []
     inventory: list[dict[str, object]] = []
+    exit_type_scans: list[dict[str, object]] = []
     current_inputs = backend_inputs(root)
     for current in modules:
         sources = sorted((current / "src/main/java").rglob("*.java"))
@@ -392,17 +491,26 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
             if document.tag != "report":
                 raise ValueError("不是 JaCoCo 报告")
             entries: dict[str, ET.Element] = {}
+            classes_by_source: dict[str, list[ET.Element]] = {}
             for package in document.findall("package"):
+                package_name = package.attrib["name"]
+                for entry in package.findall("class"):
+                    classes_by_source.setdefault(package_name + "/" + entry.attrib.get("sourcefilename", ""),
+                                                 []).append(entry)
                 for entry in package.findall("sourcefile"):
-                    key = package.attrib["name"] + "/" + entry.attrib["name"]
+                    key = package_name + "/" + entry.attrib["name"]
                     key = key.lstrip("/")
                     if key in entries:
                         raise ValueError("JaCoCo 源文件重复")
                     entries[key] = entry
             expected: set[str] = set()
+            source_key: dict[str, str] = {}
+            module_rows: list[dict[str, object]] = []
+            module_start = len(rows)
             for path in sources:
                 key = path.relative_to(current / "src/main/java").as_posix()
                 expected.add(key)
+                source_key[path.relative_to(root).as_posix()] = key
                 content = _mask_java(path.read_text(encoding="utf-8-sig"))
                 markers = lombok_markers(content)
                 if markers:
@@ -418,6 +526,7 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
                 if path.stat().st_mtime_ns > report.stat().st_mtime_ns:
                     problems.append({"path": path.relative_to(root).as_posix(), "rule": "source-newer-than-report"})
                 rows.append(row(path, root, xml_metric(entry, "LINE"), xml_metric(entry, "METHOD"), java_declaration_only(path)))
+            module_rows = rows[module_start:]
             for path in generated_sources:
                 key = path.relative_to(current / "target/generated-sources/annotations").as_posix()
                 if key in expected:
@@ -434,10 +543,16 @@ def backend_report(root: Path, module: Path | None = None, require_prepared: boo
                     problems.append({"path": path.relative_to(root).as_posix(), "rule": "unverified-generated-origin"})
             for key in sorted(set(entries) - expected):
                 problems.append({"path": current.relative_to(root).as_posix() + "/" + key, "rule": "report-source-unmanaged"})
+            # 缺口成因标注：只给失败行补 reason，不改状态、阈值与退出码。
+            if any(item["status"] == "failed" for item in module_rows):
+                shapes, summary = exit_type_shapes(current)
+                gaps = {key: method_coverage(classes_by_source.get(key, [])) for key in expected}
+                summary["annotated_files"] = annotate_exit_type(module_rows, source_key, gaps, shapes)
+                exit_type_scans.append(summary)
         except (ET.ParseError, ValueError, KeyError):
             problems.append({"path": report.relative_to(root).as_posix(), "rule": "invalid-report"})
     return {"files": rows, "inventory": inventory, "generated": generated, "generated_members": generated_members,
-            "problems": problems, "reports": reports}
+            "problems": problems, "reports": reports, "exit_type_scans": exit_type_scans}
 
 
 def web_coverage_inputs(root: Path) -> dict[str, str]:
@@ -730,9 +845,14 @@ def main() -> int:
             print(f"覆盖率 {args.kind}/{args.stage}: {result['status']}；实测文件 {result['measured_files']}，未达最终门槛 {result['failed_files']}，完整性问题 {len(result['problems'])}")
             for issue in result["problems"]:
                 print(f"{issue['path']}: [{issue['rule']}]")
+            for scan in result.get("exit_type_scans", []):
+                print(f"出口型方法扫描（{scan['module']}）：候选 {scan['candidates']}，"
+                      f"已标注成因的文件 {scan['annotated_files']}，无法解析 class {len(scan['unreadable'])}")
             for item in result["files"]:
                 if item["status"] not in {"passed", "not-applicable"}:
                     print(f"{item['path']}: [{item['status']}] line={item['lines']} method/function={item['methods_or_functions']}")
+                    if item["reason"]:
+                        print(f"  原因：{item['reason']}")
         return code
     except (OSError, ValueError, KeyError, TypeError, CheckError) as error:
         # 只打印类型名会让证据失效无法定位；补上原因，失败必须可诊断。

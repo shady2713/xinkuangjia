@@ -24,6 +24,7 @@ CLI_SCRIPTS = (
     "docs/verify_agent_note_classification.py",
     "skills/verify_skill_metadata.py",
     "code/web/check_worktree_web_comments.py",
+    "code/java/scan_exit_type_methods.py",
     "workflow/change_scope.py",
     "workflow/run_checks.py",
 )

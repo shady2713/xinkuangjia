@@ -338,6 +338,65 @@ class FileServiceImplUploadAndReadTest {
     }
 
     /**
+     * 记录存在时元数据查询必须返回校验通过的那条记录本身。
+     *
+     * <p>成功路径此前只有"记录不存在"一条出口被驱动过：任何只断言"会抛异常"的用例都不会执行
+     * 正常返回分支，删除与查询的实际返回契约反而没有任何断言。这里锁定三件事：按传入编号查询、
+     * 返回的就是被校验通过的那条记录、且查询元数据不触碰对象存储。</p>
+     */
+    @Test
+    void getFileReturnsStoredRecordForExistingId() {
+        FileDO stored = file(1L, "probe/20261004/a.png");
+        when(mapper.selectById(1L)).thenReturn(stored);
+
+        FileDO result = service.getFile(1L);
+
+        assertThat(result).isSameAs(stored);
+        assertThat(result.getId()).isEqualTo(1L);
+        assertThat(result.getPath()).isEqualTo("probe/20261004/a.png");
+        verify(mapper).selectById(1L);
+        verifyNoInteractions(storage);
+    }
+
+    /**
+     * 记录存在时删除必须先删对象存储内容再删元数据，成功返回后才算删除完成。
+     *
+     * <p>顺序颠倒会让数据库记录先消失，对象残留将失去可重试的凭据；因此这里用有序校验锁死
+     * "校验存在 → 删对象 → 删元数据"三步，并把元数据编号锁定为入参编号。</p>
+     */
+    @Test
+    void deleteFileRemovesStorageObjectBeforeMetadata() throws Exception {
+        FileDO stored = file(1L, "probe/20261004/a.png");
+        when(mapper.selectById(1L)).thenReturn(stored);
+
+        service.deleteFile(1L);
+
+        InOrder order = inOrder(mapper, storage);
+        order.verify(mapper).selectById(1L);
+        order.verify(storage).delete("probe/20261004/a.png");
+        order.verify(mapper).deleteById(1L);
+    }
+
+    /**
+     * 对象存储删除失败时必须原样抛出，并且不得删除元数据记录。
+     *
+     * <p>方法契约写明"数据库记录会保留以便重试"：若异常被吞掉或元数据先被删除，重试将既找不到
+     * 记录也无法确认对象是否残留，泄漏不可观测。这里对存储替身注入真实故障断言传播与保留。</p>
+     */
+    @Test
+    void deleteFileKeepsMetadataWhenStorageDeleteFails() throws Exception {
+        FileDO stored = file(1L, "probe/20261004/a.png");
+        when(mapper.selectById(1L)).thenReturn(stored);
+        IllegalStateException failure = new IllegalStateException("synthetic-storage-failure");
+        org.mockito.Mockito.doThrow(failure).when(storage).delete("probe/20261004/a.png");
+
+        assertThatThrownBy(() -> service.deleteFile(1L)).isSameAs(failure);
+
+        verify(storage).delete("probe/20261004/a.png");
+        verify(mapper, never()).deleteById(anyLong());
+    }
+
+    /**
      * 合法对象路径的读取必须委派给存储服务，暂存与越界路径仍返回 null。
      */
     @Test

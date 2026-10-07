@@ -142,6 +142,96 @@ class FileStorageServiceImplTest {
         verifyNoMoreInteractions(fileClient);
     }
 
+    /**
+     * 上传必须按原样转发内容、对象键与类型三个参数，并返回客户端给出的对象地址。
+     *
+     * <p>漏掉类型会让浏览器按默认类型下载，漏掉对象键会把对象写到错误前缀；两者都无法从返回值
+     * 反推，因此这里逐参数锁定转发结果。</p>
+     */
+    @Test
+    void uploadForwardsContentPathAndType() throws Exception {
+        byte[] content = {1, 2, 3};
+        when(fileClient.upload(content, "profile/avatar.png", "image/png"))
+                .thenReturn("profile/avatar.png");
+
+        assertThat(service.upload(content, "profile/avatar.png", "image/png"))
+                .isEqualTo("profile/avatar.png");
+
+        verify(fileClient).upload(content, "profile/avatar.png", "image/png");
+        verifyNoMoreInteractions(fileClient);
+    }
+
+    /** 单对象删除必须按原样转发对象键，返回后才算删除完成。 */
+    @Test
+    void deleteForwardsObjectKey() throws Exception {
+        service.delete("profile/avatar.png");
+
+        verify(fileClient).delete("profile/avatar.png");
+        verifyNoMoreInteractions(fileClient);
+    }
+
+    /** 完整读取必须原样返回客户端给出的字节，不得被截断或替换成空数组。 */
+    @Test
+    void getContentReturnsClientBytes() throws Exception {
+        when(fileClient.getContent("profile/avatar.png")).thenReturn(new byte[]{1, 2, 3});
+
+        assertThat(service.getContent("profile/avatar.png")).containsExactly(1, 2, 3);
+
+        verify(fileClient).getContent("profile/avatar.png");
+        verifyNoMoreInteractions(fileClient);
+    }
+
+    /**
+     * 有界读取必须把精确字节上限转发给客户端，让客户端在超限时提前失败。
+     *
+     * <p>上限被吞掉会让超大对象被完整读入内存，绕过"超预约大小立即失败"的保护。</p>
+     */
+    @Test
+    void getContentForwardsBoundedMaximumBytes() throws Exception {
+        when(fileClient.getContent("upload-staging/big.bin", 1024)).thenReturn(new byte[]{7});
+
+        assertThat(service.getContent("upload-staging/big.bin", 1024)).containsExactly(7);
+
+        verify(fileClient).getContent("upload-staging/big.bin", 1024);
+        verifyNoMoreInteractions(fileClient);
+    }
+
+    /** 上传预签名必须转发对象键与签名绑定的精确字节数，地址由客户端给出。 */
+    @Test
+    void presignPutUrlForwardsPathAndExactSize() {
+        when(fileClient.presignPutUrl("profile/avatar.png", 2048L))
+                .thenReturn("https://storage.example.test/put");
+
+        assertThat(service.presignPutUrl("profile/avatar.png", 2048L))
+                .isEqualTo("https://storage.example.test/put");
+
+        verify(fileClient).presignPutUrl("profile/avatar.png", 2048L);
+        verifyNoMoreInteractions(fileClient);
+    }
+
+    /**
+     * 读取地址必须转发对象键与有效期；有效期为 null 表示公开存储，同样不得被替换。
+     *
+     * <p>有效期被写死会让公开对象也走私有签名，客户端拿到 403；被吞成空值则私有存储退化成永久
+     * 公开链接，因此两种取值都必须逐字转发。</p>
+     */
+    @Test
+    void presignGetUrlForwardsUrlAndExpiration() {
+        when(fileClient.presignGetUrl("profile/avatar.png", 600))
+                .thenReturn("https://storage.example.test/get");
+        when(fileClient.presignGetUrl("profile/public.png", null))
+                .thenReturn("https://storage.example.test/public");
+
+        assertThat(service.presignGetUrl("profile/avatar.png", 600))
+                .isEqualTo("https://storage.example.test/get");
+        assertThat(service.presignGetUrl("profile/public.png", null))
+                .isEqualTo("https://storage.example.test/public");
+
+        verify(fileClient).presignGetUrl("profile/avatar.png", 600);
+        verify(fileClient).presignGetUrl("profile/public.png", null);
+        verifyNoMoreInteractions(fileClient);
+    }
+
     /** 客户端抛出的失败必须原样传播，不得被包装成"空结果"掩盖存储故障。 */
     @Test
     void clientFailuresPropagateUnchanged() throws Exception {
@@ -149,6 +239,16 @@ class FileStorageServiceImplTest {
         when(fileClient.listPrefixes("profile/", "/")).thenThrow(failure);
 
         assertThatThrownBy(() -> service.listPrefixes("profile/", "/")).isSameAs(failure);
+    }
+
+    /** 委托方法必须原样传播客户端的存储故障，不得替换成空结果。 */
+    @Test
+    void delegatingMethodsPropagateClientFailure() throws Exception {
+        IOException failure = new IOException("synthetic-upload-failure");
+        when(fileClient.upload(any(), any(), any())).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.upload(new byte[]{1}, "profile/avatar.png", "image/png"))
+                .isSameAs(failure);
     }
 
     /** 销毁前尚未初始化完成的 Bean 关闭时必须无操作，不得抛空指针。 */
