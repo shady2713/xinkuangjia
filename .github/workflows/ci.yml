@@ -627,7 +627,7 @@ jobs:
                    "command": "python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared --json"},
                   # 该检查按交付 JAR 字节裁决，没有可与用例数比对的第二份声明，声明 null。
                   {"name": "backend-license-materials", "status": "passed", "checked": None,
-                   "command": "python -B -X utf8 \"${{ github.workspace }}\"/scripts/license/verify_license_materials.py --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
+                   "command": "python -B -X utf8 ${GITHUB_WORKSPACE}/scripts/license/verify_license_materials.py --jar ${GITHUB_WORKSPACE}/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
               ],
               "coverage": {"kind": "backend", "evidence": "coverage-backend.json", "stage": "release",
                            "measured_files": coverage["measured_files"],
