@@ -81,7 +81,12 @@ def sha256_of(path: Path) -> str:
 
 
 def is_license_text(name: str) -> bool:
-    """判断归档条目是否按名称提供许可证文本。
+    """判断归档条目**名字**是否按名称提供许可证文本。
+
+    只看名字会把第三方类文件算成许可证文本：`io/swagger/v3/core/jackson/mixin/LicenseMixin.class`、
+    `software/amazon/awssdk/regions/servicemetadata/LicenseManagerServiceMetadata.class`、
+    `com/mysql/cj/protocol/x/Notice.class` 都命中许可证文件名规则。盘点结论必须落在
+    "条款文本是否真的随包提供"上，因此登记时还要用 `is_text_content` 过滤内容。
 
     Args:
         name: 归档内条目名。
@@ -91,6 +96,24 @@ def is_license_text(name: str) -> bool:
 
     upper = name.upper().rsplit("/", 1)[-1]
     return any(upper == candidate or upper.startswith(candidate + ".") for candidate in LICENSE_TEXT_NAMES)
+
+
+def is_text_content(content: bytes) -> bool:
+    """判断条目内容是不是可作为许可证文本分发的文本。
+
+    Args:
+        content: 条目字节内容。
+    Returns:
+        非空、不含 NUL 且可按 UTF-8 解码时为真。
+    """
+
+    if not content or b"\x00" in content:
+        return False
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 # --------------------------------------------------------------------------- 后端 JAR
@@ -342,7 +365,8 @@ def scan_backend_jar(jar_path: Path, maven_repo: Path) -> dict[str, Any]:
         raise InventoryFailure(f"后端 JAR 不可读：{error}") from error
     with outer:
         entries = outer.namelist()
-        own_texts = [name for name in entries if is_license_text(name)]
+        own_texts = [name for name in entries
+                     if is_license_text(name) and is_text_content(outer.read(name))]
         libraries = [name for name in entries
                      if name.startswith("BOOT-INF/lib/") and name.endswith(".jar")]
         components: list[JarComponent] = []
@@ -351,7 +375,8 @@ def scan_backend_jar(jar_path: Path, maven_repo: Path) -> dict[str, Any]:
             try:
                 with zipfile.ZipFile(io.BytesIO(payload)) as inner:
                     inner_entries = inner.namelist()
-                    embedded = [name for name in inner_entries if is_license_text(name)]
+                    embedded = [name for name in inner_entries
+                                if is_license_text(name) and is_text_content(inner.read(name))]
                     coordinates = component_coordinates(inner_entries, payload,
                                                         entry.rsplit("/", 1)[-1])
             except zipfile.BadZipFile:
@@ -416,7 +441,8 @@ def scan_frontend_archive(archive_path: Path) -> dict[str, Any]:
     with archive:
         infos = archive.infolist()
         names = [info.filename for info in infos]
-        texts = [name for name in names if is_license_text(name)]
+        texts = [info.filename for info in infos
+                 if is_license_text(info.filename) and is_text_content(archive.read(info))]
         assets = [{"entry": info.filename, "bytes": info.file_size,
                    "kind": ASSET_SUFFIXES.get(Path(info.filename).suffix.lower(), "其他"),
                    "provenance": "unrecorded"}

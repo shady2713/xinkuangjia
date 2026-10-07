@@ -152,6 +152,35 @@ def test_license_text_detection_matches_names_only() -> None:
     assert not inventory.is_license_text("assets/licenses-index.json")
 
 
+def test_license_text_detection_also_requires_text_content() -> None:
+    """名字命中但内容是编译产物的条目不是许可证文本，盘点不得据此声称"随包提供"。"""
+
+    assert inventory.is_license_text("io/swagger/v3/oas/models/info/License.class")
+    assert not inventory.is_text_content(b"\xca\xfe\xba\xbe\x00\x01class-body")
+    assert not inventory.is_text_content(b"")
+    assert not inventory.is_text_content(b"\xff\xfe not utf8")
+    assert inventory.is_text_content("条款\n".encode("utf-8"))
+
+
+def test_backend_scan_excludes_class_files_from_embedded_texts(tmp_path: Path) -> None:
+    """第三方类文件不得被登记为"构件自带的许可证文本"。"""
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as component:
+        component.writestr("META-INF/maven/org.example/widget/pom.properties",
+                           properties_of("org.example", "widget", "1.0.0"))
+        component.writestr("META-INF/LICENSE.txt", "synthetic license text")
+        component.writestr("io/swagger/v3/core/jackson/mixin/LicenseMixin.class",
+                           b"\xca\xfe\xba\xbe\x00\x01class-body")
+    jar = write_jar(tmp_path / "app.jar", {"BOOT-INF/lib/widget-1.0.0.jar": buffer.getvalue()})
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    backend = inventory.scan_backend_jar(jar, repository)
+
+    assert backend["components"][0]["embedded_license_texts"] == ["META-INF/LICENSE.txt"]
+
+
 def test_pom_licenses_reads_declared_names(tmp_path: Path) -> None:
     """POM 中直接声明的许可证名必须按原文读出。"""
 

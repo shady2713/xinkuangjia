@@ -39,6 +39,17 @@ from typing import Any, Mapping, Sequence
 
 NOTICES_NAME = "THIRD-PARTY-NOTICES"
 LICENSES_DIR = "licenses"
+# 收编构件内的许可证正文时只看文件名前缀会把**编译产物**一起收进来：真实构件里大量存在
+# `io/swagger/v3/core/jackson/mixin/LicenseMixin.class`、
+# `software/amazon/awssdk/regions/servicemetadata/LicenseManagerServiceMetadata.class`、
+# `com/mysql/cj/protocol/x/Notice.class`、`com/terracottatech/frs/io/CopyingChunk.class`
+# 这类类文件，名字同样以 LICENSE/LICENCE/NOTICE/COPYING 开头。它们不是许可证正文，
+# 却会被原样写进 licenses/，再由 Maven 作为资源复制进 target/classes；
+# JaCoCo 扫描 target/classes 时按类文件魔数把它们当成真类分析，
+# 覆盖率报告于是出现第三方包名，发布链被 report-source-unmanaged 卡死。
+# 因此正文必须同时满足"名字像许可证文档"与"内容确实是文本"，两者缺一不收。
+LICENSE_TEXT_PREFIXES = ("LICENSE", "LICENCE", "NOTICE", "COPYING")
+COMPILED_SUFFIXES = (".class",)
 # 报告结构版本：结构变了就拒绝拿旧报告生成材料，避免静默漏项。
 EXPECTED_SCHEMA = "component-license-metadata/v1"
 DISCLAIMER = (
@@ -78,6 +89,51 @@ def sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+def is_text_content(content: bytes) -> bool:
+    """判断字节内容是不是可直接分发的许可证正文。
+
+    许可证条款一定是文本。编译产物（含 Java 类文件）、压缩包与其他二进制条目都可能
+    以 LICENSE/NOTICE/COPYING 开头，靠前缀判断收编会把它们原样写进交付材料：
+    材料目录会被 Maven 当作资源复制进 `target/classes`，第三方类文件因此混进本模块的
+    字节码输出目录，被静态覆盖率报告当成受管源码之外的类。判据用"能按 UTF-8 解码且
+    不含 NUL 字节"，对任何二进制载荷都成立，不依赖具体文件后缀。
+
+    Args:
+        content: 条目字节内容。
+    Returns:
+        是可分发文本时为真。
+    """
+
+    if not content or b"\x00" in content:
+        return False
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def is_license_text_entry(name: str, content: bytes) -> bool:
+    """判断构件内条目是否为随包提供的许可证正文。
+
+    名字像许可证文档（以 LICENSE/LICENCE/NOTICE/COPYING 开头）只是必要条件：
+    上游类库里大量类文件名恰好以这些词开头，把它们当条款分发既不满足分发义务，
+    又会让第三方字节流进入本模块的 `target/classes`。因此还要排除编译后缀，
+    并要求内容确实是文本。
+
+    Args:
+        name: 构件内部条目名。
+        content: 条目字节内容。
+    Returns:
+        收编为许可证正文时为真。
+    """
+
+    base = name.rsplit("/", 1)[-1].upper()
+    if base.endswith(COMPILED_SUFFIXES) or not base.startswith(LICENSE_TEXT_PREFIXES):
+        return False
+    return is_text_content(content)
+
+
 class TextStore:
     """按内容摘要去重的许可证原文仓库。
 
@@ -102,8 +158,15 @@ class TextStore:
             component: 使用该文本的组件标识。
         Returns:
             十六进制 SHA-256 摘要。
+        Raises:
+            NoticeFailure: 内容不是可分发的文本；宁可拒绝生成，也不把二进制写进交付材料。
         """
 
+        # 最后一道关口：licenses/ 会被 Maven 复制进 target/classes 并随 JAR 分发，
+        # 任何二进制内容落到这里都会污染模块的字节码输出目录。登记时就拒绝，
+        # 不给"取材口径被改坏"留下静默通过的机会。
+        if not is_text_content(content):
+            raise NoticeFailure(f"许可证正文不是文本，拒绝写入材料：{origin}（{component}）")
         digest = hashlib.sha256(content).hexdigest()
         record = self.items.setdefault(digest, {"content": content, "used_by": []})
         if component not in record["used_by"]:
@@ -176,6 +239,10 @@ def closure_digest_from_jar(jar_path: Path, entries: Sequence[str]) -> str:
 def embedded_texts(jar: zipfile.ZipFile, entry: str) -> list[tuple[str, bytes]]:
     """读出单个第三方构件自带的许可证文本条目。
 
+    只收编 `is_license_text_entry` 认可的条目：按文件名前缀收编会把 `LicenseMixin.class`、
+    `LicenseManager*ServiceMetadata.class`、`Notice.class`、`Copying*.class` 这类第三方
+    编译产物一起写进材料，再经资源复制进入 `target/classes`。
+
     Args:
         jar: 已打开的可执行 JAR。
         entry: 构件在 JAR 内的条目名。
@@ -186,10 +253,14 @@ def embedded_texts(jar: zipfile.ZipFile, entry: str) -> list[tuple[str, bytes]]:
     try:
         payload = jar.read(entry)
         with zipfile.ZipFile(io.BytesIO(payload)) as inner:
-            names = [name for name in sorted(inner.namelist())
-                     if name.rsplit("/", 1)[-1].upper().startswith(("LICENSE", "LICENCE", "NOTICE", "COPYING"))
-                     and not name.endswith("/")]
-            return [(name, inner.read(name)) for name in names]
+            found: list[tuple[str, bytes]] = []
+            for name in sorted(inner.namelist()):
+                if name.endswith("/"):
+                    continue
+                content = inner.read(name)
+                if is_license_text_entry(name, content):
+                    found.append((name, content))
+            return found
     except (KeyError, zipfile.BadZipFile):
         return []
 

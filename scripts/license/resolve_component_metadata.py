@@ -204,7 +204,13 @@ def normalize_license_url(url: str) -> str:
 
 
 def is_license_text(name: str) -> bool:
-    """判断构件内部条目是否为许可证文本。
+    """判断构件内部条目**名字**是否像许可证文本。
+
+    只看名字不够：真实构件里 `io/swagger/v3/core/jackson/mixin/LicenseMixin.class`、
+    `software/amazon/awssdk/regions/servicemetadata/LicenseManagerServiceMetadata.class`、
+    `com/mysql/cj/protocol/x/Notice.class` 这类类文件同样命中许可证文件名规则。
+    登记正文时必须再用 `is_text_content` 过滤，否则核实的"随包许可证正文"里会混进
+    第三方编译产物，并被材料生成步骤写进 `target/classes`。
 
     Args:
         name: 构件内部条目名。
@@ -214,6 +220,24 @@ def is_license_text(name: str) -> bool:
 
     upper = name.upper().rsplit("/", 1)[-1]
     return any(upper == candidate or upper.startswith(candidate + ".") for candidate in LICENSE_TEXT_NAMES)
+
+
+def is_text_content(content: bytes) -> bool:
+    """判断字节内容是不是可作为许可证正文分发的文本。
+
+    Args:
+        content: 条目字节内容。
+    Returns:
+        非空、不含 NUL 且可按 UTF-8 解码时为真。
+    """
+
+    if not content or b"\x00" in content:
+        return False
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 # --------------------------------------------------------------------------- 网络
@@ -796,9 +820,16 @@ def scan_jar(jar_path: Path, repository: Path, fetcher: Fetcher,
             try:
                 with zipfile.ZipFile(io.BytesIO(payload)) as inner:
                     inner_entries = inner.namelist()
-                    embedded = [name for name in inner_entries
-                                if is_license_text(name) and not name.endswith("/")]
-                    embedded_payloads = {name: inner.read(name) for name in embedded}
+                    # 名字命中许可证规则后再按内容过滤：编译产物不是许可证正文，
+                    # 登记进去会让生成步骤把第三方字节流写进材料目录与 target/classes。
+                    embedded_payloads: dict[str, bytes] = {}
+                    for name in inner_entries:
+                        if name.endswith("/") or not is_license_text(name):
+                            continue
+                        content = inner.read(name)
+                        if is_text_content(content):
+                            embedded_payloads[name] = content
+                    embedded = list(embedded_payloads)
                     coordinates, candidates = coordinates_from_pom_properties(
                         inner_entries, payload, entry_name)
             except zipfile.BadZipFile:

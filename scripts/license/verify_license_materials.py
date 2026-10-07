@@ -17,8 +17,9 @@
 5. `coordinates`：构件内 `pom.properties` 能自证坐标时，材料里的坐标必须与构件自述一致，
    坐标被改写即失败；无法自证的只如实计数，不冒充已核对。
 6. `own-modules`：自有模块的声明数、列出的坐标与 `BOOT-INF/lib` 里的自有构件必须对齐。
-7. `license-texts`：材料引用的每一份 `licenses/*.txt` 都必须在 JAR 内存在且内容摘要与文件名
-   前缀一致，正文被替换或删除同样失败。
+7. `license-texts`：材料引用的每一份 `licenses/*.txt` 都必须在 JAR 内存在、内容摘要与文件名
+   前缀一致且**确实是文本**；正文被替换、删除，或条款目录里混进编译产物（多半是取材口径
+   只按文件名前缀收编，把第三方 `.class` 当成条款）同样失败。
 
 `--require-prepared` 追加第 8 项 `prepared-state`：发布链路要求"先准备材料再打包"，
 因此还必须确认准备目录存在，且其材料与 JAR 内材料逐字节一致；未准备状态直接失败。
@@ -462,22 +463,36 @@ def check_license_texts(jar: zipfile.ZipFile, notices: Mapping[str, Any]) -> dic
     referenced = set(str(item) for item in notices["license_references"])
     missing = sorted(referenced - present)
     altered: list[str] = []
+    non_text: list[str] = []
     for digest in sorted(referenced & present):
         payload = jar.read(f"{LICENSES_PREFIX}{digest}.txt")
         if not hashlib.sha256(payload).hexdigest().startswith(digest):
             altered.append(f"{digest}.txt")
-    if missing or altered:
+        # 条款正文必须是文本。这棵目录同时被 Maven 当作资源复制进 target/classes，
+        # 一旦混进编译产物，第三方类文件会进入本模块的字节码输出目录，
+        # 覆盖率报告随即出现第三方包名，发布链被 report-source-unmanaged 卡死。
+        if not payload or b"\x00" in payload:
+            non_text.append(f"{digest}.txt")
+            continue
+        try:
+            payload.decode("utf-8")
+        except UnicodeDecodeError:
+            non_text.append(f"{digest}.txt")
+    if missing or altered or non_text:
         detail = []
         if missing:
             detail.append(f"{len(missing)} 份被引用但缺失的许可证正文，例如 {missing[0]}.txt")
         if altered:
             detail.append(f"{len(altered)} 份正文内容与文件名摘要不符，例如 {altered[0]}")
+        if non_text:
+            detail.append(f"{len(non_text)} 份正文不是文本（多半是编译产物被当成条款收编），"
+                          f"例如 {non_text[0]}")
         return {"name": "license-texts", "status": "failed", "detail": "；".join(detail)}
     if not referenced:
         return {"name": "license-texts", "status": "failed",
                  "detail": "材料没有引用任何一份许可证正文，随包材料不完整"}
     return {"name": "license-texts", "status": "passed",
-             "detail": f"材料引用的 {len(referenced)} 份许可证正文全部存在且内容摘要一致"}
+             "detail": f"材料引用的 {len(referenced)} 份许可证正文全部存在、内容摘要一致且都是文本"}
 
 
 def check_prepared(prepared_dir: Path | None, jar: zipfile.ZipFile) -> dict[str, Any]:

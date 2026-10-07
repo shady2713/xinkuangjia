@@ -290,6 +290,27 @@ def test_missing_license_text_is_rejected(delivery: dict[str, object]) -> None:
     assert "license-texts" in failures(document)
 
 
+def test_compiled_artifact_in_license_texts_is_rejected(delivery: dict[str, object]) -> None:
+    """条款目录里混进编译产物时必须失败。
+
+    这棵目录会被 Maven 当作资源复制进 `target/classes`；第三方类文件一旦落进去，
+    覆盖率报告就会出现第三方包名，发布链被 report-source-unmanaged 卡死。
+    门禁必须在材料层就拦住，而不是等覆盖率门禁报出第三方包名。
+
+    Args:
+        delivery: 合成交付物。
+    """
+
+    compiled = b"\xca\xfe\xba\xbe\x00\x01third-party-class-body"
+    digest = hashlib.sha256(compiled).hexdigest()[:16]
+    notices = render_notices(delivery["components"], closure_digest(delivery["payloads"]), digest)
+    jar = build_jar(delivery["root"] / "compiled-text", notices=notices,
+                    payloads=delivery["payloads"], texts={digest: compiled})
+    code, document = run(jar)
+    assert code == 1
+    assert "license-texts" in failures(document)
+
+
 def test_own_modules_must_match_artifacts(delivery: dict[str, object]) -> None:
     """自有模块漏登记时必须失败，第三方与自有的划分不能只靠声明。
 
