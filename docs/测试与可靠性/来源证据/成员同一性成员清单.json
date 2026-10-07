@@ -193,7 +193,7 @@
  ],
  "branch_ineligible": [
   {
-   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/framework/sms/config/YudaoSmsCodeProperties.java",
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/framework/sms/config/SmsCodeProperties.java",
    "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/framework/sms/config/SmsCodeProperties.java",
    "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
    "exclusion_reason": "校验约束变化（新增 @Min(1)/@DurationMin、删除两处 @NotNull），且配置前缀 basic-framework.sms-code 不在已登记 T4 字面量映射内",
@@ -234,5 +234,5 @@
   }
  ],
  "generated_note": "本文件的 members_manifest_sha256 是规则集（除该字段与本说明外全部键）的规范化 SHA-256，由规则实现逐项复算；改动任何登记项而不同步重算即拒绝。",
- "members_manifest_sha256": "22609f835b75f6883f26e68ea0a1f8bdf4749c90f358daeabcc50d59d300f993"
+ "members_manifest_sha256": "22b37166d91cc16e3f6b0971dda3f9cecc64a82b62aa0ef8c81972d554d0e376"
 }
