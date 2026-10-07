@@ -1137,11 +1137,13 @@ def test_full_entry_uses_repository_default_index_and_reports_fingerprint(
     assert structured.returncode == 0, structured.stdout + structured.stderr
     value = json.loads(structured.stdout)
     assert value["checked"] == 1 and value["status"] == "passed"
+    # 外部受控快照没有仓内哈希清单时如实报告 null，不伪造完整性结论。
     assert value["evidence"] == {
         "registry": str(index),
         "registry_sha256": digest(index.read_text(encoding="utf-8")),
         "snapshots": str(snapshots),
         "records": 1,
+        "snapshot_manifest": None,
     }
     readable = run_checker(
         sandbox,
@@ -2573,3 +2575,273 @@ def test_repository_manifest_declares_ledger_replay_relation() -> None:
     assert replay["replay_inputs"] and replay["replay_command"] and replay["replay_rule"]
     assert manifest["duplicate_column_mismatches"]
     assert manifest["producer"].startswith("由 .bf-local/d10fix/")
+
+
+def snapshot_root() -> Path:
+    """返回仓内受控上游快照根目录。"""
+
+    return DEFAULT_ROOT / java.DEFAULT_EVIDENCE_SNAPSHOTS
+
+
+def snapshot_manifest() -> dict[str, object]:
+    """读取仓内受控上游快照的机器可读哈希清单。"""
+
+    return json.loads(
+        (snapshot_root() / java.SNAPSHOT_MANIFEST_NAME).read_text(encoding="utf-8")
+    )
+
+
+def test_repository_snapshot_is_the_default_evidence_snapshot() -> None:
+    """仓内受控快照必须在没有显式配置时自动生效，断网复核不需要额外环境变量。"""
+
+    root = DEFAULT_ROOT
+    registry, snapshots, source = java.resolve_evidence_paths(root=root)
+    assert source == "repository-default"
+    assert registry == root / java.DEFAULT_EVIDENCE_REGISTRY
+    assert snapshots == snapshot_root()
+    # 快照根目录缺失的临时仓库仍按“未配置快照”处理，既有夹具语义不变。
+    empty = root / "scripts"
+    assert java.resolve_evidence_paths(root=empty)[1] is None
+
+
+def test_repository_snapshot_manifest_verifies_and_matches_index() -> None:
+    """快照清单必须逐条复算通过，且与受控索引的指纹、记录与许可证声明逐项一致。"""
+
+    index = json.loads((DEFAULT_ROOT / java.DEFAULT_EVIDENCE_REGISTRY).read_text(encoding="utf-8"))
+    records = index["records"]
+    by_upstream: dict[str, list[dict[str, object]]] = {}
+    for record in records:
+        by_upstream.setdefault(str(record["upstream_path"]), []).append(record)
+    accepted = {
+        str(record["upstream_path"])
+        for record in records
+        if str(record["d12_verdict"])
+        in {
+            "已按 D12 格式写入来源说明并撤回无依据署名",
+            "A1（E1-author-only）成立，恢复上游证据支持的作者",
+        }
+    }
+    # 裁决 D15 §72/§115：已登记阻断不允许成为跳过绑定材料校验的理由，因此这些记录
+    # 同样消费上游字节，必须一并纳入仓内快照，否则断网复核会退化成「证据不可得」。
+    blocked = {
+        str(record["upstream_path"])
+        for record in records
+        if str(record["d12_verdict"])
+        in {
+            "证据不足，保持原状并登记阻断",
+            "复核回退，保持来源说明并登记阻断（尚未验收）",
+            "需补证，尚未验收",
+        }
+    }
+    branched = {
+        str(record["upstream_path"]) for record in records if record.get("evidence_branch")
+    }
+    manifest = snapshot_manifest()
+    entries = manifest["files"]
+    sources = [entry for entry in entries if entry["kind"] == "upstream-source"]
+    baselines = [entry for entry in entries if entry["kind"] == "local-baseline"]
+    licenses = [entry for entry in entries if entry["kind"] == "license"]
+    # 最小集合：已验收 ∪ 已登记阻断 ∪ 显式声明分支，不多收一个上游文件，也不少收一个。
+    assert {str(entry["upstream_path"]) for entry in sources} == accepted | blocked | branched
+    assert branched <= accepted | blocked, "声明分支记录必须落在已验收或已登记阻断之内"
+    assert manifest["totals"]["upstream_source_files"] == len(sources) == len(by_upstream)
+    for entry in sources:
+        users = by_upstream[str(entry["upstream_path"])]
+        assert entry["sha256"] == users[0]["upstream_sha256"].lower()
+        assert entry["matches_declared_upstream_sha256"] is True
+        assert entry["bytes"] == (snapshot_root() / entry["path"]).stat().st_size
+        assert entry["upstream_commit"] == UPSTREAM_COMMIT
+        assert entry["upstream_file_url"] == users[0]["upstream_file_url"]
+        assert entry["records"] == sorted(str(item["local_path"]) for item in users)
+        assert hashlib.sha256((snapshot_root() / entry["path"]).read_bytes()).hexdigest() == entry[
+            "sha256"
+        ]
+    # 许可证材料随快照交付，且与索引登记的许可证指纹、版权主体一致。
+    assert len(licenses) == 1
+    assert {str(record["license_sha256"]) for record in records} == {licenses[0]["sha256"]}
+    assert {str(record["license_copyright"]) for record in records} == {
+        licenses[0]["license_copyright"]
+    }
+    assert licenses[0]["license_identifier"] == "MIT"
+    # A1 本地比较输入按最小集合纳入仓内副本。
+    author_only = [record for record in records if record.get("evidence_branch") == "E1-author-only"]
+    assert len(author_only) == len(baselines) == 12
+    for record in author_only:
+        contract = json.loads(record["author_only_contract"])
+        baseline = contract["local_baseline"]
+        matching = [
+            entry for entry in baselines if entry["baseline_repository_path"] == baseline["path"]
+        ]
+        assert len(matching) == 1, record["local_path"]
+        assert matching[0]["baseline_commit"] == baseline["commit"]
+        assert matching[0]["sha256"] == baseline["sha256"].lower()
+    # 复算实现本身必须在清单存在时逐条校验，缺项或指纹不符都拒绝。
+    summary = java.verify_snapshot_manifest(snapshot_root(), manifest, {
+        str(record["local_path"]): record for record in records
+    })
+    assert summary["files"] == len(entries)
+    assert summary["licenses"] == 1
+    assert summary["bytes"] == sum(int(entry["bytes"]) for entry in entries)
+
+
+def test_repository_a1_baseline_copies_match_git_objects_when_available() -> None:
+    """仓内 A1 基线副本必须等于契约指纹；本地历史可达时还必须等于 git blob 原始字节。"""
+
+    manifest = snapshot_manifest()
+    baselines = [entry for entry in manifest["files"] if entry["kind"] == "local-baseline"]
+    reachable = 0
+    for entry in baselines:
+        target = snapshot_root() / entry["path"]
+        raw = target.read_bytes()
+        assert hashlib.sha256(raw).hexdigest() == entry["sha256"]
+        assert len(raw) == entry["bytes"]
+        completed = subprocess.run(
+            ["git", "show", f"{entry['baseline_commit']}:{entry['baseline_repository_path']}"],
+            cwd=DEFAULT_ROOT,
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode == 0:
+            # 完整历史下比较输入随时可取；仓内副本必须与之逐字节相同。
+            assert completed.stdout == raw, entry["path"]
+            reachable += 1
+        # 历史不可达（浅克隆或历史改写）时，仓内副本仍是契约指纹的仓内可复现来源。
+    if reachable == 0:
+        pytest.skip("本检出没有整改前基线提交对象；仓内副本已按契约指纹复算")
+
+
+def write_snapshot_manifest(root: Path, entries: list[dict[str, object]]) -> Path:
+    """在受控快照根目录写出机器可读哈希清单。"""
+
+    path = root / java.SNAPSHOT_MANIFEST_NAME
+    path.write_text(
+        json.dumps({"manifest_schema": java.SNAPSHOT_MANIFEST_SCHEMA, "files": entries},
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+def fixture_snapshot_manifest(snapshots: Path) -> list[dict[str, object]]:
+    """为隔离夹具的快照构造合法清单条目：一个上游来源文件加一份许可证。"""
+
+    snapshot = snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / UPSTREAM_PATH
+    raw = snapshot.read_bytes()
+    license_path = snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / "LICENSE"
+    license_path.write_text("MIT License\n", encoding="utf-8")
+    return [
+        {
+            "path": f"ruoyi-vue-pro@{UPSTREAM_COMMIT}/{UPSTREAM_PATH}",
+            "kind": "upstream-source",
+            "bytes": len(raw),
+            "sha256": digest(raw.decode("utf-8")),
+            "upstream_commit": UPSTREAM_COMMIT,
+            "upstream_path": UPSTREAM_PATH,
+            "upstream_file_url": upstream_file_url(),
+            "declared_upstream_sha256": digest(raw.decode("utf-8")),
+            "matches_declared_upstream_sha256": True,
+        },
+        {
+            "path": f"ruoyi-vue-pro@{UPSTREAM_COMMIT}/LICENSE",
+            "kind": "license",
+            "bytes": len("MIT License\n"),
+            "sha256": digest("MIT License\n"),
+        },
+    ]
+
+
+def test_snapshot_manifest_is_enforced_by_the_real_cli(
+    tmp_path: Path, evidence_dir: Path
+) -> None:
+    """缺文件、改一个字节、缺许可证都必须被真实入口拒绝，诊断指向清单条目与具体路径。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    source = demo_source()
+    registry, snapshots = prepare_case(sandbox, evidence_dir, source)
+    entries = fixture_snapshot_manifest(snapshots)
+    manifest_path = write_snapshot_manifest(snapshots, entries)
+    passed = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+    summary = json.loads(passed.stdout)["evidence"]["snapshot_manifest"]
+    assert summary["files"] == 2 and summary["licenses"] == 1
+    assert summary["manifest_sha256"] == digest(manifest_path.read_text(encoding="utf-8"))
+
+    snapshot = snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / UPSTREAM_PATH
+    original = snapshot.read_bytes()
+    snapshot.unlink()
+    missing = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+    assert missing.returncode == 2, missing.stdout
+    assert "上游快照文件缺失" in missing.stderr
+    assert str(snapshot) in missing.stderr
+    assert UPSTREAM_PATH in missing.stderr
+
+    snapshot.write_bytes(original[:-1] + bytes([original[-1] ^ 0x01]))
+    tampered = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+    assert tampered.returncode == 2, tampered.stdout
+    assert "上游快照指纹不符" in tampered.stderr
+    assert digest(original.decode("utf-8")) in tampered.stderr
+    assert hashlib.sha256(snapshot.read_bytes()).hexdigest() in tampered.stderr
+
+    snapshot.write_bytes(original)
+    (snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / "LICENSE").unlink()
+    unlicensed = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+    assert unlicensed.returncode == 2, unlicensed.stdout
+    assert "上游快照文件缺失" in unlicensed.stderr and "LICENSE" in unlicensed.stderr
+
+    without_license_entry = [entries[0]]
+    write_snapshot_manifest(snapshots, without_license_entry)
+    (snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / "LICENSE").write_text(
+        "MIT License\n", encoding="utf-8"
+    )
+    no_license_entry = run_checker(
+        sandbox,
+        "scripts/code/java/check_staged_java_comments.py",
+        "--validate-evidence-branches",
+        *checker_args(registry, snapshots),
+    )
+    assert no_license_entry.returncode == 2, no_license_entry.stdout
+    assert "没有任何许可证条目" in no_license_entry.stderr
+
+
+def test_snapshot_manifest_is_verified_by_the_full_entry(
+    tmp_path: Path, evidence_dir: Path
+) -> None:
+    """全量入口加载清单时同样复算，篡改快照必须以退出码 2 受控失败而不是静默取回。"""
+
+    sandbox = create_sandbox(tmp_path / "repository")
+    source = demo_source()
+    registry, snapshots = prepare_case(sandbox, evidence_dir, source)
+    write_snapshot_manifest(snapshots, fixture_snapshot_manifest(snapshots))
+    snapshot = snapshots / f"ruoyi-vue-pro@{UPSTREAM_COMMIT}" / UPSTREAM_PATH
+    original = snapshot.read_bytes()
+    snapshot.write_bytes(original.replace(b"EvidenceDemo", b"EvidenceDem0"))
+    result = run_checker(
+        sandbox,
+        "scripts/code/java/check_full_java_comments.py",
+        "--json",
+        "--root",
+        str(sandbox.root),
+        *checker_args(registry, snapshots),
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "上游快照指纹不符" in result.stderr

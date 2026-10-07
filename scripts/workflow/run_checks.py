@@ -106,6 +106,21 @@ def _acceptance_module():
     return check_staged_java_comments
 
 
+def _acceptance_vocabulary():
+    """按需取回来源验收判词词表的唯一定义处。
+
+    判词词表只能有一份：检查器负责改判，调度器与发布汇总按同一份词表复核。
+    两处各写一份会让未知判词在一侧被拒、在另一侧被当成“尚未验收”。
+
+    Returns:
+        提供 ``KNOWN_SOURCE_VERDICTS`` 与 ``unknown_verdict`` 的模块对象。
+    """
+
+    from scripts.code.java import check_full_java_comments
+
+    return check_full_java_comments
+
+
 @dataclass(frozen=True)
 class Gate:
     """定义固定的检查入口及其前置检查，不接受任意 Shell 命令。"""
@@ -170,6 +185,10 @@ GATES = (
     Gate("note-format", "docs/verify_agent_note_format.py", "docs", ("note-classification",), zero_reason="没有活动 Agent Notes，未执行笔记正文验证"),
     Gate("mermaid", "docs/verify_mermaid.py", "docs", zero_reason="没有 Mermaid 围栏，未执行图表解析"),
     Gate("web-comments", "code/web/check_worktree_web_comments.py", "comments", zero_reason="没有适用的 Web 增量文件，未验证 Web 声明", scope="worktree-incremental"),
+    # 与 java-comments-full 同理：增量入口只覆盖本次改动，干净检出上的「零对象」
+    # 不能证明全库注释合格。全量入口把整个前端受管文件集的全部声明都作为对象，
+    # 不登记零对象理由，因此零对象只能是环境错误，绝不会被当成通过。
+    Gate("web-comments-full", "code/web/check_full_web_comments.py", "comments"),
     Gate(
         "java-comments",
         "code/java/check_worktree_java_comments.py",
@@ -374,6 +393,140 @@ def _blocker_brief(item: object) -> dict[str, object]:
     }
 
 
+def ledger_entry_key(item: object, label: str) -> tuple[str, str]:
+    """取出一条逐项验收状态条目的 ``(文件, 类型)`` 唯一键。
+
+    对账必须按“文件 + 类型标识”而不是按文件：同一文件里的多个 public/嵌套类型各自
+    是一条独立记录，折叠成一条会让漏报的嵌套类型完全不可见。
+
+    Args:
+        item: 逐项状态条目。
+        label: 条目所属清单的可读名称，用于诊断。
+
+    Returns:
+        ``(仓库相对路径, 类型限定名)``。
+
+    Raises:
+        CheckError: 条目不是结构化对象，或缺少路径或类型限定名。
+    """
+
+    if not isinstance(item, dict):
+        raise CheckError(f"{label}必须是结构化对象")
+    path = str(item.get("path", ""))
+    type_name = str(item.get("type_name") or "").strip()
+    if not path:
+        raise CheckError(f"{label}缺少仓库相对路径，无法按文件+类型唯一键对账")
+    if not type_name:
+        raise CheckError(f"{label}缺少类型限定名，无法按文件+类型唯一键对账：{path}")
+    return path, type_name
+
+
+def registry_records(registry: object) -> dict[str, dict[str, object]]:
+    """取出受控索引的记录映射，兼容加载结果对象与已解析的映射本身。
+
+    Args:
+        registry: 已加载的受控索引对象，或 ``local_path`` 到记录的映射。
+
+    Returns:
+        ``local_path`` 到索引记录的映射。
+    """
+
+    records = getattr(registry, "records", registry)
+    if not isinstance(records, dict):
+        raise CheckError("受控索引没有可用的记录映射")
+    return records
+
+
+def ledger_expected_keys(
+    registry: object, scope_files: set[str] | None
+) -> dict[tuple[str, str], str]:
+    """按 ``(文件, 类型)`` 唯一键展开索引中本次扫描范围内的全部记录。
+
+    索引是对账真值：报告里的每一条逐项状态都必须命中这里的某个键，索引里的每个键也
+    都必须在报告里出现一次。真实值取自记录的 ``type_evidence.types[].qualified_name``；
+    没有逐类型映射的记录退回文件级键（空类型名），此时该文件只允许一条状态。
+
+    Args:
+        registry: 已加载的受控索引对象或记录映射。
+        scope_files: 本次报告声明的扫描范围；``None`` 表示不按范围收窄。
+
+    Returns:
+        ``(文件, 类型) -> 判词`` 的期望键集合。
+
+    Raises:
+        CheckError: 索引里同一个 ``(文件, 类型)`` 出现多次，唯一键不成立。
+    """
+
+    module = _acceptance_module()
+    expected: dict[tuple[str, str], str] = {}
+    for path, record in registry_records(registry).items():
+        if scope_files is not None and path not in scope_files:
+            continue
+        verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+        for key in record_type_keys(record, path):
+            if key in expected:
+                raise CheckError(f"索引中同一个文件+类型出现多次，唯一键不成立：{key[0]}#{key[1]}")
+            expected[key] = verdict
+    return expected
+
+
+def record_type_keys(record: dict[str, object], path: str) -> list[tuple[str, str]]:
+    """展开一条索引记录登记的逐类型条目。
+
+    Args:
+        record: 受控索引记录。
+        path: 记录登记的仓库相对路径。
+
+    Returns:
+        该记录应展开出的 ``(文件, 类型限定名)`` 键；没有可用逐类型映射时退回文件级键。
+    """
+
+    raw = record.get("type_evidence")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = None
+    if not isinstance(raw, dict):
+        return [(path, "")]
+    keys: list[tuple[str, str]] = []
+    entries = raw.get("types")
+    if not isinstance(entries, list):
+        return [(path, "")]
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        qualified = str(entry.get("qualified_name") or "").strip()
+        if qualified:
+            keys.append((path, qualified))
+    return keys or [(path, "")]
+
+
+def reject_unknown_verdicts(registry: object, scope_files: set[str] | None) -> None:
+    """拒绝索引中出现在已定义判词集合之外的 ``d12_verdict``。
+
+    未知判词既不能被当成“已验收”，也不能被当成“已登记阻断”：任意非 accepted 的
+    字符串都触发豁免，等于把登记完整性判据变成可伪造的开关（裁决 D15 §115）。
+
+    Args:
+        registry: 已加载的受控索引对象。
+        scope_files: 本次报告声明的扫描范围；``None`` 表示不按范围收窄。
+
+    Raises:
+        CheckError: 范围内存在未知判词，诊断逐字给出该判词。
+    """
+
+    module = _acceptance_module()
+    vocabulary = _acceptance_vocabulary()
+    for path, record in sorted(registry_records(registry).items()):
+        if scope_files is not None and path not in scope_files:
+            continue
+        verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+        if verdict in vocabulary.KNOWN_SOURCE_VERDICTS:
+            continue
+        raise CheckError(f"来源验收索引的判词不在已定义判词集合内：{path}：{verdict or '空'}")
+
+
 def _verify_acceptance_ledger(
     root: Path,
     registry_info: object,
@@ -385,12 +538,18 @@ def _verify_acceptance_ledger(
     """用受控索引与真实文件复算逐项验收状态（裁决 D15 §68/§72）。
 
     子工具声明不能作为唯一依据：本函数重新读取报告声明的索引，复算**该报告声明范围内**
-    的非验收记录集合，逐条核对阻断/硬失败条目的判词、阻断原因、缺口与最终对象指纹，
-    并确认已验收条目确实对应索引里已验收的记录。增量入口的范围是本次改动文件，
-    因此复算必须按报告范围收窄，不能拿全库账本要求增量报告逐一覆盖。
+    的非验收记录集合，按 ``(文件, 类型)`` 唯一键对 ``accepted``、``registered_blockers``
+    与 ``hard_failures`` 三张清单做**双向**对账——三张清单必须互斥、不得重复、不得超出
+    本次范围，且与索引逐键互为全集。逐条核对判词、阻断原因、缺口与最终对象指纹，并确认
+    已验收条目确实对应索引里已验收的记录。增量入口的范围是本次改动文件，因此复算必须按
+    报告范围收窄，不能拿全库账本要求增量报告逐一覆盖。
+
+    因为对账按唯一键求双向差集，子工具“少报一条阻断 + 同步把 counts 改小”这类让整体
+    自洽的掩盖手法仍然会被判为漏项。
 
     Raises:
-        CheckError: 索引不可读、指纹不符、判词不符、登记字段缺失或对象缺失。
+        CheckError: 索引不可读、指纹不符、判词未知或不在词表内、逐项状态缺失/多余/重复/
+            跨清单互斥、登记字段缺失、对象缺失或最终对象指纹不符。
     """
 
     module = _acceptance_module()
@@ -399,78 +558,89 @@ def _verify_acceptance_ledger(
         *module.SOURCE_NOTE_ACCEPTED_VERDICTS,
         *module.AUTHOR_TAG_ACCEPTED_VERDICTS,
     )
-    seen: set[str] = set()
-    for item in [*blockers, *hard]:
-        if not isinstance(item, dict):
-            raise CheckError("逐项验收状态必须是结构化对象")
-        path = str(item.get("path", ""))
-        record = registry.records.get(path)
-        if record is None:
-            raise CheckError(f"逐项验收状态指向索引中不存在的对象：{path}")
-        verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
-        if verdict in accepted_verdicts:
-            # 先分清“证据没取回来”与“内容确实不对”：上游取不回属于环境故障，
-            # 按内容不符报“已验收却进清单”会把整改指向错误方向，且会掩盖真实故障。
-            unavailable = next(
-                (
-                    found
-                    for reason in item.get("reasons") or ()
-                    if (found := upstream_unavailable(reason)) is not None
-                ),
-                None,
-            )
-            if unavailable is not None:
-                raise CheckError(unavailable_reason(path, unavailable))
-            content = next(
-                (
-                    str(reason).strip()
-                    for reason in item.get("reasons") or ()
-                    if str(reason).strip() and upstream_unavailable(reason) is None
-                ),
-                "",
-            )
-            raise CheckError(
-                f"已验收记录不能出现在阻断/硬失败清单：{path}"
-                + (f"（逐项原因：{content[:160]}）" if content else "")
-            )
-        if str(item.get("verdict") or "") != verdict:
-            raise CheckError(f"逐项判词与当前索引不一致：{path}")
-        if not str(item.get("blocker_reason") or "").strip():
-            raise CheckError(f"逐项验收状态缺少阻断原因：{path}")
-        if not str(item.get("open_gap") or "").strip():
-            raise CheckError(f"逐项验收状态缺少缺口登记：{path}")
-        source = root / path
-        if not source.is_file():
-            raise CheckError(f"逐项验收状态指向的对象不存在：{path}")
-        recorded = str(item.get("local_sha256") or "").lower()
-        if hashlib.sha256(source.read_bytes()).hexdigest() != recorded:
-            raise CheckError(f"逐项验收状态的最终对象指纹与当前文件不符：{path}")
-        if scope_files is not None and path not in scope_files:
-            raise CheckError(f"逐项验收状态超出本次声明的扫描范围：{path}")
-        seen.add(path)
-    for item in accepted:
-        if not isinstance(item, dict):
-            raise CheckError("已验收条目必须是结构化对象")
-        path = str(item.get("path", ""))
-        record = registry.records.get(path)
-        if record is None:
-            raise CheckError(f"已验收条目指向索引中不存在的对象：{path}")
-        if str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip() not in accepted_verdicts:
-            raise CheckError(f"索引未验收的记录不能出现在已验收清单：{path}")
-    expected = {
-        path
-        for path, record in registry.records.items()
-        if str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
-        not in accepted_verdicts
-        and (scope_files is None or path in scope_files)
+    reject_unknown_verdicts(registry, scope_files)
+    expected = ledger_expected_keys(registry, scope_files)
+    blocked_expected = {
+        key: verdict
+        for key, verdict in expected.items()
+        if verdict not in accepted_verdicts
     }
-    missing = sorted(expected - seen)
+    seen: set[tuple[str, str]] = set()
+    declared_in: dict[tuple[str, str], str] = {}
+    for label, items in (
+        ("已登记阻断", blockers),
+        ("硬失败", hard),
+        ("已验收", accepted),
+    ):
+        for item in items:
+            key = ledger_entry_key(item, f"{label}条目")
+            path = key[0]
+            if scope_files is not None and path not in scope_files:
+                raise CheckError(f"{label}条目超出本次声明的扫描范围：{path}")
+            record = registry.records.get(path)
+            if record is None:
+                raise CheckError(f"{label}条目指向索引中不存在的对象：{path}")
+            if key not in expected:
+                raise CheckError(
+                    f"{label}条目在索引中没有对应的（文件,类型）唯一键：{path}#{key[1]}"
+                )
+            if key in declared_in:
+                raise CheckError(
+                    f"同一个对象不能同时出现在{declared_in[key]}与{label}清单：{path}#{key[1]}"
+                )
+            declared_in[key] = label
+            seen.add(key)
+            if label == "已验收":
+                if str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip() not in accepted_verdicts:
+                    raise CheckError(f"索引未验收的记录不能出现在已验收清单：{path}")
+                continue
+            verdict = str(record.get(module.SOURCE_NOTE_VERDICT_FIELD) or "").strip()
+            if verdict in accepted_verdicts:
+                # 先分清“证据没取回来”与“内容确实不对”：上游取不回属于环境故障，
+                # 按内容不符报“已验收却进清单”会把整改指向错误方向，且会掩盖真实故障。
+                unavailable = next(
+                    (
+                        found
+                        for reason in item.get("reasons") or ()
+                        if (found := upstream_unavailable(reason)) is not None
+                    ),
+                    None,
+                )
+                if unavailable is not None:
+                    raise CheckError(unavailable_reason(path, unavailable))
+                content = next(
+                    (
+                        str(reason).strip()
+                        for reason in item.get("reasons") or ()
+                        if str(reason).strip() and upstream_unavailable(reason) is None
+                    ),
+                    "",
+                )
+                raise CheckError(
+                    f"已验收记录不能出现在阻断/硬失败清单：{path}"
+                    + (f"（逐项原因：{content[:160]}）" if content else "")
+                )
+            if str(item.get("verdict") or "") != verdict:
+                raise CheckError(f"逐项判词与当前索引不一致：{path}")
+            if not str(item.get("blocker_reason") or "").strip():
+                raise CheckError(f"逐项验收状态缺少阻断原因：{path}")
+            if not str(item.get("open_gap") or "").strip():
+                raise CheckError(f"逐项验收状态缺少缺口登记：{path}")
+            source = root / path
+            if not source.is_file():
+                raise CheckError(f"逐项验收状态指向的对象不存在：{path}")
+            recorded = str(item.get("local_sha256") or "").lower()
+            if hashlib.sha256(source.read_bytes()).hexdigest() != recorded:
+                raise CheckError(f"逐项验收状态的最终对象指纹与当前文件不符：{path}")
+    missing = sorted(key for key in blocked_expected if key not in seen)
     if missing:
-        raise CheckError(f"来源验收报告漏掉了索引中的未验收对象：{missing[0]}")
+        raise CheckError(
+            f"来源验收报告漏掉了索引中的未验收对象：{missing[0][0]}#{missing[0][1]}"
+        )
     return {
         "records": len(registry.records),
-        "not_accepted": len(expected),
-        "covered": len(seen),
+        "not_accepted": len(blocked_expected),
+        "covered": len([key for key in seen if key in blocked_expected]),
     }
 
 

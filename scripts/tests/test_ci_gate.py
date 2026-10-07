@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import sys
+from collections.abc import Callable
 from fnmatch import fnmatchcase
 from functools import lru_cache
 from pathlib import Path
@@ -70,6 +71,22 @@ def write(path: Path, element: ET.Element) -> Path:
 def digest(seed: object) -> str:
     """生成稳定的内容指纹文本，用于代替真实报告的 sha256 字段。"""
     return hashlib.sha256(str(seed).encode("utf-8")).hexdigest()
+
+
+# 受管 Web 文件全量的下限：真实仓库当前为 1530 个，低于该量说明枚举范围被意外缩小。
+MINIMUM_MANAGED_WEB_FILES = 1500
+
+
+@lru_cache(maxsize=None)
+def managed_web_files() -> int:
+    """独立复算真实仓库的受管 Web 文件数，与发布汇总的 own_count 复算同源。
+
+    下限来自仓库真实规模而不是被测代码的输出：枚举规则一旦被缩小（例如只遍历某个子目录），
+    这里和 ci_gate 的复算会一起变小，因此正例夹具必须另有独立下限钉住。
+    """
+    count = gate.managed_web_files(gate.ROOT)
+    assert count >= MINIMUM_MANAGED_WEB_FILES, f"受管 Web 文件数异常缩小：{count}"
+    return count
 
 
 @lru_cache(maxsize=None)
@@ -155,6 +172,9 @@ def manifest(job: str, cases: int, coverage_file: str, kind: str, measured: int,
             {"name": "frontend-production-build", "status": "passed", "checked": None, "command": "pnpm build:ele"},
             {"name": "frontend-production-scan", "status": "passed", "checked": None,
              "command": "pnpm quality:prod-scan"},
+            # 全量 Web 注释的计数必须等于汇总独立复算出的受管文件数（own_count）。
+            {"name": "web-comments-full", "status": "passed", "checked": managed_web_files(),
+             "command": "python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json"},
         ],
     }[job]
     document: dict[str, object] = {
@@ -796,6 +816,112 @@ class TestReleaseEvidence:
         directory = evidence_directory(tmp_path)
         with pytest.raises(ValueError):
             gate.release_evidence(directory, {"backend": 5, "docs_tools": 7, "frontend": 6}, "f" * 40)
+
+
+class TestWebCommentsFullReleaseBinding:
+    """Web 全量注释必须自己出现在发布证据里，并由汇总独立复算受管范围。
+
+    此前它只在 docs_tools 作业内真实执行并断言，发布汇总的检查清单里没有这一项：
+    四个作业全绿、前端其余检查都在，全库 Web 注释照样可以从缺口中签发发布结论。
+    现在 frontend 作业在 release 阶段重新真实执行并把实测对象数写进证据，
+    汇总按 own_count 复算受管范围——缩范围、编造数字、缺项或未真实通过都拒绝。
+    """
+
+    COUNTS = {"backend": 5, "docs_tools": 7, "frontend": 6}
+
+    def web_check(self, checks: object) -> dict[str, object]:
+        """取回前端发布证据里的 Web 全量注释检查项，供逐条篡改。"""
+        assert isinstance(checks, list)
+        return next(item for item in checks if isinstance(item, dict) and item.get("name") == "web-comments-full")
+
+    def release_frontend(self, tmp_path: Path, mutate: Callable[[list[dict[str, object]]], None]) -> Path:
+        """按给定篡改写出前端发布证据，返回可直接交给消费入口的证据目录。"""
+        document = manifest("frontend", 6, "coverage-web.json", "web", 4)
+        mutate(document["checks"])  # type: ignore[arg-type]
+        return evidence_directory(tmp_path, frontend_manifest=document)
+
+    def test_complete_evidence_lists_the_full_web_comment_check(self, tmp_path: Path) -> None:
+        """正例：前端证据含该项时发布汇总照常签发，并把检查名写进可公开摘要。"""
+        directory = evidence_directory(tmp_path)
+        summary = gate.release_evidence(directory, self.COUNTS, REVISION)
+        assert "web-comments-full" in summary["jobs"]["frontend"]["checks"]
+        document = manifest("frontend", 6, "coverage-web.json", "web", 4)
+        assert self.web_check(document["checks"])["checked"] == managed_web_files()
+
+    def test_missing_check_is_rejected(self, tmp_path: Path) -> None:
+        """反例：缺项——docs_tools 作业跑过不算发布证据，前端证据里没有就拒绝。"""
+        directory = self.release_frontend(tmp_path, lambda checks: checks.pop())
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    @pytest.mark.parametrize("status", [
+        "skipped", "failed", "not-applicable", "completed-with-registered-blockers", "passed-with-blockers",
+    ])
+    def test_status_must_be_passed(self, tmp_path: Path, status: str) -> None:
+        """反例：状态非 passed（维护完成态与不适用同样不算）不构成发布证据。"""
+        directory = self.release_frontend(
+            tmp_path, lambda checks: self.web_check(checks).__setitem__("status", status)
+        )
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    @pytest.mark.parametrize("checked", [
+        0, -1, "1530", None, True, 1530.0, [],
+    ])
+    def test_count_must_be_a_real_positive_integer(self, tmp_path: Path, checked: object) -> None:
+        """反例：零、负数、文本、null、布尔与浮点都不是实测整数对象数。"""
+        directory = self.release_frontend(
+            tmp_path, lambda checks: self.web_check(checks).__setitem__("checked", checked)
+        )
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    @pytest.mark.parametrize("delta", [-1, 1, -100, 100])
+    def test_count_must_match_independently_enumerated_scope(self, tmp_path: Path, delta: int) -> None:
+        """反例：与汇总独立复算的受管范围不一致（缩小或凭空放大）一律拒绝。"""
+        directory = self.release_frontend(
+            tmp_path,
+            lambda checks: self.web_check(checks).__setitem__("checked", managed_web_files() + delta),
+        )
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    def test_command_must_be_declared(self, tmp_path: Path) -> None:
+        """反例：没有可核对命令就无法证明这次执行真的发生过。"""
+        directory = self.release_frontend(
+            tmp_path, lambda checks: self.web_check(checks).__setitem__("command", "  ")
+        )
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    def test_aggregate_consumer_rejects_a_shrunk_web_comment_scope(self, tmp_path: Path) -> None:
+        """真实消费入口：release 阶段的发布汇总同样拒绝缩小的全量 Web 注释范围。"""
+        root = source_tree(tmp_path / "clean-source")
+        directory = self.release_frontend(
+            tmp_path,
+            lambda checks: self.web_check(checks).__setitem__("checked", managed_web_files() - 1),
+        )
+        write_source_report(root, REVISION, directory=directory)
+        with pytest.raises(ValueError, match="web-comments-full"):
+            gate.aggregate(release_needs(), "release", directory, REVISION, source_root=root)
+
+    def test_frontend_job_really_runs_it_and_reports_the_measured_count(self) -> None:
+        """真实编排：release 阶段必须重新执行全量入口，并把实测值写进发布证据。"""
+        section = job_section("frontend")
+        step = step_named("frontend", "Web 全量注释（发布阶段）")
+        assert "inputs.stage == 'release'" in step
+        assert "scripts/code/web/check_full_web_comments.py --root . --json" in step
+        # 不得用管道或 || true 吞掉真实退出码，也不得降级成增量入口。
+        assert "continue-on-error:" not in step
+        assert "|| true" not in step and "check_worktree_web_comments.py" not in step
+        evidence = step_named("frontend", "生成发布阶段前端证据")
+        assert '"web-comments-full"' in evidence
+        # 计数取自上一步真实执行的 JSON，而不是在证据步骤里写死数字。
+        assert '"checked": web_checked' in evidence
+        assert "web_comments.get(\"status\") != \"passed\"" in evidence
+        assert "python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json" in section
+        # 该检查必须登记为 own_count：既不是作业用例数，也不是覆盖率实测文件数。
+        assert gate.RELEASE_CHECKS["frontend"]["web-comments-full"] == "own_count"
 
 
 class TestReleaseStaticAnalysis:

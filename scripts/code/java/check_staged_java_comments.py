@@ -17,12 +17,17 @@ public 类型有两条合规路径：准确的 ``@author``，或按 D12 裁决�
 不能借作者格式分支漏报。只有显式维护模式才允许以“执行完成、存在已登记阻断”结束；
 未显式选择时既有验收入口保持严格拒绝。
 
-清单与快照位置按“命令行参数 > 环境变量 > 仓库内受控默认索引”解析：
+清单与快照位置按“命令行参数 > 环境变量 > 仓库内受控默认位置”解析：
 ``--evidence-registry``/``--evidence-snapshots`` 或
 ``JAVA_COMMENT_EVIDENCE_REGISTRY``/``JAVA_COMMENT_EVIDENCE_SNAPSHOTS`` 显式配置优先；
-都没有时读取被检查仓库内的 ``DEFAULT_EVIDENCE_REGISTRY``，不写死任何本机绝对路径。
-上游内容不复制进仓库：受控快照优先，缺失时按清单登记的固定提交地址取回并复算
-SHA-256；取不回或指纹不符即拒绝。证据不可读时以退出码 2 报告原因，不回退到无条件放行。
+都没有时读取被检查仓库内的 ``DEFAULT_EVIDENCE_REGISTRY``，并在该目录真实存在时启用
+``DEFAULT_EVIDENCE_SNAPSHOTS``，不写死任何本机绝对路径。
+上游内容的**逐字节副本**已按 D7 授权作为最小固定证据快照纳入版本控制：快照根目录下的
+``上游快照清单.json`` 逐条登记相对路径、字节数、SHA-256、上游固定提交、原始取回地址与
+声明指纹；存在清单时逐条复算，文件缺失、字节或指纹不符、以及许可证材料缺位都按硬失败
+拒绝。清单缺失的外部快照仍沿用既有行为：受控快照优先，缺失时按清单登记的固定提交地址
+取回并复算 SHA-256；取不回或指纹不符即拒绝。证据不可读时以退出码 2 报告原因，
+不回退到无条件放行。
 
 @author 李杰
 """
@@ -231,6 +236,15 @@ ACCEPTANCE_MODE_MAINTENANCE = "maintenance"
 EVIDENCE_SNAPSHOTS_ENV = "JAVA_COMMENT_EVIDENCE_SNAPSHOTS"
 # 仓库内受控来源索引；相对被检查仓库根目录解析，不是任何本机绝对路径。
 DEFAULT_EVIDENCE_REGISTRY = "docs/测试与可靠性/来源证据/d12-source-index.json"
+# 仓库内受控上游证据快照根目录（D7：最小固定上游证据快照已纳入版本控制）。只在目录
+# 真实存在时启用，因此外部受控快照、临时夹具与既有“未配置快照”行为都不受影响。
+DEFAULT_EVIDENCE_SNAPSHOTS = "docs/测试与可靠性/来源证据/上游快照"
+# 快照根目录下的机器可读哈希清单；存在时逐条复算文件字节与指纹，并要求许可证条目
+# 随快照交付，缺失、篡改或许可材料缺位都按硬失败拒绝，不静默回落到固定地址取回。
+SNAPSHOT_MANIFEST_NAME = "上游快照清单.json"
+SNAPSHOT_MANIFEST_SCHEMA = "d12-upstream-snapshot/v1"
+SNAPSHOT_MANIFEST_MAX_BYTES = 4 * 1024 * 1024
+SNAPSHOT_MANIFEST_KINDS = ("upstream-source", "local-baseline", "license")
 # 固定地址取回的边界：单个上游文件不超过 4 MiB，连接与读取合计不超过 30 秒；
 # 瞬时连接中断按固定次数重试，仍失败即按“取不回”拒绝。
 EVIDENCE_FETCH_TIMEOUT_SECONDS = 30.0
@@ -1126,6 +1140,8 @@ class EvidenceRegistry:
         unparsable: 字段数与表头不一致、无法逐项核验的 ``local_path``。
         requires_acceptance_state: 清单是否声明受控派生索引 schema（``d12-source-index/v1``）；
             声明时必须消费 ``d12_verdict`` 验收状态，否则沿用既有逐项核验。
+        snapshot_manifest: 已复算通过的受控快照哈希清单摘要；快照根目录没有哈希清单
+            （外部快照、旧夹具）时为 ``None``。
     """
 
     path: Path
@@ -1134,6 +1150,7 @@ class EvidenceRegistry:
     records: dict[str, dict[str, object]]
     unparsable: frozenset[str]
     requires_acceptance_state: bool = False
+    snapshot_manifest: dict[str, object] | None = None
 
     def describe(self) -> dict[str, object]:
         """返回可写入结构化报告的输入指纹，不含任何证据内容。"""
@@ -1143,6 +1160,7 @@ class EvidenceRegistry:
             "registry_sha256": self.sha256,
             "snapshots": None if self.snapshots is None else str(self.snapshots),
             "records": len(self.records),
+            "snapshot_manifest": self.snapshot_manifest,
         }
 
 
@@ -1569,6 +1587,11 @@ def load_evidence_registry(
             ) from error
         if not readable:
             raise EvidenceError(f"证据快照目录不可读：{snapshots_path}")
+    snapshot_manifest = None
+    if snapshots_path is not None:
+        document = _load_snapshot_manifest(snapshots_path)
+        if document is not None:
+            snapshot_manifest = verify_snapshot_manifest(snapshots_path, document, records)
     return EvidenceRegistry(
         path=registry_path,
         sha256=hashlib.sha256(raw).hexdigest(),
@@ -1576,6 +1599,7 @@ def load_evidence_registry(
         records=records,
         unparsable=unparsable,
         requires_acceptance_state=requires_acceptance_state,
+        snapshot_manifest=snapshot_manifest,
     )
 
 
@@ -1608,6 +1632,14 @@ def resolve_evidence_paths(
     snapshots_path = (
         snapshots if snapshots is not None else _environment_path(EVIDENCE_SNAPSHOTS_ENV)
     )
+    if snapshots_path is None and root is not None:
+        # 仓库内受控快照只在目录真实存在时启用；外部快照与未配置快照的既有行为不变。
+        default_snapshots = root / DEFAULT_EVIDENCE_SNAPSHOTS
+        try:
+            if default_snapshots.is_dir():
+                snapshots_path = default_snapshots
+        except OSError:
+            snapshots_path = None
     if registry is not None:
         source = "argument"
     elif registry_path is not None:
@@ -1726,6 +1758,229 @@ def _resolve_snapshot(
         if target.is_file():
             return target
     return None
+
+
+def _load_snapshot_manifest(snapshots: Path) -> dict[str, object] | None:
+    """读取受控快照根目录下的机器可读哈希清单。
+
+    快照根目录没有该清单时返回 ``None``（外部受控快照与旧夹具继续按固定地址取回）；
+    清单存在但不可读、结构不受支持或超出字节上限时一律拒绝，不静默跳过完整性复核。
+
+    Args:
+        snapshots: 受控快照根目录。
+
+    Returns:
+        解析后的清单结构化对象，或 ``None``。
+
+    Raises:
+        EvidenceError: 清单存在但不可读、不是有效 UTF-8 JSON、结构或 schema 不受支持。
+    """
+
+    path = snapshots / SNAPSHOT_MANIFEST_NAME
+    if not path.is_file():
+        return None
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise EvidenceError(
+            f"上游快照哈希清单不可读：{path}（{error.strerror or error}）"
+        ) from error
+    if len(raw) > SNAPSHOT_MANIFEST_MAX_BYTES:
+        raise EvidenceError(
+            f"上游快照哈希清单超过 {SNAPSHOT_MANIFEST_MAX_BYTES} 字节上限：{path}"
+        )
+    try:
+        document = json.loads(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise EvidenceError(f"上游快照哈希清单不是有效 UTF-8 JSON：{path}（{error}）") from error
+    if not isinstance(document, dict):
+        raise EvidenceError(f"上游快照哈希清单必须是结构化对象：{path}")
+    if document.get("manifest_schema") != SNAPSHOT_MANIFEST_SCHEMA:
+        raise EvidenceError(
+            "上游快照哈希清单 schema 不受支持："
+            f"{document.get('manifest_schema') or '空'}；期望 {SNAPSHOT_MANIFEST_SCHEMA}"
+        )
+    return document
+
+
+def verify_snapshot_manifest(
+    snapshots: Path,
+    document: dict[str, object],
+    records: dict[str, dict[str, object]] | None = None,
+) -> dict[str, object]:
+    """逐条复算受控快照哈希清单，并核对许可证材料随快照交付。
+
+    每条条目都必须存在、字节数与 SHA-256 与清单一致；上游来源文件的实测指纹还必须
+    与条目登记的声明指纹相同。清单必须至少包含一条许可证条目；当受控来源清单登记了
+    ``license_sha256`` 时，快照的许可证条目必须逐个覆盖该指纹。任一条不成立即拒绝，
+    诊断指向具体条目与具体路径；不回落到固定地址取回，也不放宽阈值。
+
+    Args:
+        snapshots: 受控快照根目录。
+        document: ``_load_snapshot_manifest`` 解析出的清单。
+        records: 受控来源清单的记录映射，用于核对登记的许可证指纹。
+
+    Returns:
+        清单摘要，含清单路径、指纹、条目数、字节数与许可证条目数。
+
+    Raises:
+        EvidenceError: 条目缺失、路径越界、字节或指纹不符，或许可证材料缺位。
+    """
+
+    entries = document.get("files")
+    if not isinstance(entries, list) or not entries:
+        raise EvidenceError("上游快照哈希清单缺少非空 files 条目数组")
+    declared_licenses = {
+        _text(record, "license_sha256").lower()
+        for record in (records or {}).values()
+        if _text(record, "license_sha256")
+    }
+    total_bytes = 0
+    license_entries = 0
+    for number, entry in enumerate(entries, 1):
+        if not isinstance(entry, dict):
+            raise EvidenceError(f"上游快照清单第 {number} 条不是结构化对象")
+        kind = _text(entry, "kind")
+        if kind not in SNAPSHOT_MANIFEST_KINDS:
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条的 kind 必须是 {'、'.join(SNAPSHOT_MANIFEST_KINDS)}"
+                f"：{kind or '空'}"
+            )
+        relative = _text(entry, "path")
+        if not relative or Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条的 path 不是安全的相对路径：{relative or '空'}"
+            )
+        target = snapshots / relative
+        if not target.is_file():
+            raise EvidenceError(
+                f"上游快照文件缺失：{target}（哈希清单第 {number} 条 {relative}）"
+            )
+        try:
+            raw = target.read_bytes()
+        except OSError as error:
+            raise EvidenceError(
+                f"上游快照文件不可读：{target}（{error.strerror or error}）"
+            ) from error
+        expected_bytes = entry.get("bytes")
+        if not isinstance(expected_bytes, int) or expected_bytes < 0:
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条缺少有效字节数：{relative}"
+            )
+        if len(raw) != expected_bytes:
+            raise EvidenceError(
+                f"上游快照字节数不符：{target} 清单 {expected_bytes}，实测 {len(raw)}"
+            )
+        digest = hashlib.sha256(raw).hexdigest()
+        expected = _text(entry, "sha256").lower()
+        if not SHA256_PATTERN.match(expected):
+            raise EvidenceError(f"上游快照清单第 {number} 条缺少有效 SHA-256：{relative}")
+        if digest != expected:
+            raise EvidenceError(
+                f"上游快照指纹不符：{target} 期望 {expected}，实测 {digest}"
+            )
+        total_bytes += len(raw)
+        if kind == "license":
+            license_entries += 1
+            continue
+        if kind == "local-baseline":
+            declared = _text(entry, "declared_baseline_sha256").lower()
+            if not SHA256_PATTERN.match(declared):
+                raise EvidenceError(
+                    f"上游快照清单第 {number} 条缺少有效的声明基线 SHA-256：{relative}"
+                )
+            if declared != digest:
+                raise EvidenceError(
+                    f"仓内基线副本与声明指纹不一致：{target} 声明 {declared}，实测 {digest}"
+                )
+            if entry.get("matches_declared_baseline_sha256") is not True:
+                raise EvidenceError(
+                    f"上游快照清单第 {number} 条未登记一致结论 "
+                    f"matches_declared_baseline_sha256：{relative}"
+                )
+            if not COMMIT_PATTERN.match(_text(entry, "baseline_commit")):
+                raise EvidenceError(
+                    f"上游快照清单第 {number} 条的基线提交不是完整 40 位 SHA：{relative}"
+                )
+            if not _text(entry, "baseline_repository_path"):
+                raise EvidenceError(
+                    f"上游快照清单第 {number} 条缺少仓库内基线路径：{relative}"
+                )
+            continue
+        declared = _text(entry, "declared_upstream_sha256").lower()
+        if not SHA256_PATTERN.match(declared):
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条缺少有效的声明上游 SHA-256：{relative}"
+            )
+        if declared != digest:
+            raise EvidenceError(
+                f"上游快照与声明的上游指纹不一致：{target} 声明 {declared}，实测 {digest}"
+            )
+        if entry.get("matches_declared_upstream_sha256") is not True:
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条未登记一致结论 matches_declared_upstream_sha256：{relative}"
+            )
+        commit = _text(entry, "upstream_commit")
+        if not COMMIT_PATTERN.match(commit):
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条的上游固定提交不是完整 40 位 SHA：{relative}"
+            )
+        url = _text(entry, "upstream_file_url")
+        if commit not in url or not _text(entry, "upstream_path"):
+            raise EvidenceError(
+                f"上游快照清单第 {number} 条缺少固定在登记提交上的原始取回地址：{relative}"
+            )
+    if license_entries == 0:
+        raise EvidenceError(
+            f"上游快照清单没有任何许可证条目（kind=license）：{snapshots / SNAPSHOT_MANIFEST_NAME}"
+        )
+    license_digests = {
+        _text(entry, "sha256").lower()
+        for entry in entries
+        if isinstance(entry, dict) and _text(entry, "kind") == "license"
+    }
+    for expected in sorted(declared_licenses):
+        if expected not in license_digests:
+            raise EvidenceError(
+                f"受控清单声明的许可证指纹 {expected} 未随快照交付："
+                f"{snapshots / SNAPSHOT_MANIFEST_NAME} 的许可证条目为"
+                f"{'、'.join(sorted(license_digests)) or '空'}"
+            )
+    baseline_digests = {
+        _text(entry, "sha256").lower()
+        for entry in entries
+        if isinstance(entry, dict) and _text(entry, "kind") == "local-baseline"
+    }
+    for path, record in sorted((records or {}).items()):
+        contract = record.get("author_only_contract")
+        if not contract:
+            continue
+        if isinstance(contract, str):
+            try:
+                contract = json.loads(contract)
+            except json.JSONDecodeError:
+                continue
+        if not isinstance(contract, dict):
+            continue
+        baseline = contract.get("local_baseline")
+        if not isinstance(baseline, dict):
+            continue
+        expected = _text(baseline, "sha256").lower()
+        if expected and expected not in baseline_digests:
+            raise EvidenceError(
+                f"记录 {path} 的 A1 本地比较输入指纹 {expected} 未随快照纳入仓内副本："
+                f"{snapshots / SNAPSHOT_MANIFEST_NAME} 的基线条目为"
+                f"{'、'.join(sorted(baseline_digests)) or '空'}"
+            )
+    return {
+        "manifest": str(snapshots / SNAPSHOT_MANIFEST_NAME),
+        "manifest_sha256": hashlib.sha256(
+            (snapshots / SNAPSHOT_MANIFEST_NAME).read_bytes()
+        ).hexdigest(),
+        "files": len(entries),
+        "bytes": total_bytes,
+        "licenses": license_entries,
+    }
 
 
 def _fixed_content_url(
@@ -4961,9 +5216,15 @@ def _describe_evidence(evidence: EvidenceRegistry | None) -> str:
     if evidence is None:
         return "Java 注释检查证据输入：未配置受控清单与快照，来源说明一律按无逐项依据拒绝。"
     snapshots = "未配置" if evidence.snapshots is None else str(evidence.snapshots)
+    manifest = evidence.snapshot_manifest
+    detail = "" if manifest is None else (
+        f"；快照哈希清单已复算通过（{manifest['files']} 个文件、{manifest['bytes']} 字节、"
+        f"{manifest['licenses']} 个许可证条目，SHA-256 {manifest['manifest_sha256']}）"
+    )
     return (
         f"Java 注释检查证据输入：清单 {evidence.path}"
         f"（SHA-256 {evidence.sha256}，{len(evidence.records)} 条记录）；受控快照 {snapshots}"
+        f"{detail}"
     )
 
 

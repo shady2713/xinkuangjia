@@ -29,6 +29,7 @@ if __package__ in (None, ""):
 
 from scripts.common.quality_common import CheckError
 from scripts.workflow import static_gate
+from scripts.workflow.run_checks import ledger_entry_key, ledger_expected_keys
 
 # 四个必需作业：文档与工具、管理前端、Java 后端、浏览器业务端到端。
 # 浏览器业务用例同样必须真实成功并上报正整数用例数，跳过或零用例一律拒绝。
@@ -58,7 +59,8 @@ RELEASE_JOBS = {
                  "coverage_file": "coverage-web.json"},
 }
 # 检查名 -> 计数核对方式：job_count 等于该作业上报的真实用例数，coverage_count 等于
-# 覆盖率裁决的实测文件数，no_count 表示该检查没有机器可读对象计数，只能声明 null。
+# 覆盖率裁决的实测文件数，own_count 的计数没有第二份声明可比，由本模块独立枚举受管
+# 范围复算（见 release_evidence），no_count 表示该检查没有机器可读对象计数，只能声明 null。
 RELEASE_CHECKS = {
     "backend": {"backend-tests-and-integration": "job_count",
                 "backend-release-coverage": "coverage_count"},
@@ -66,7 +68,10 @@ RELEASE_CHECKS = {
                  "frontend-release-coverage": "coverage_count",
                  "frontend-typecheck": "no_count",
                  "frontend-production-build": "no_count",
-                 "frontend-production-scan": "no_count"},
+                 "frontend-production-scan": "no_count",
+                 # 全库 Web 注释合格只有这一个依据：docs_tools 作业里那次执行不进入发布
+                 # 制品，发布结论必须自己重新执行并把实测对象数写进证据。
+                 "web-comments-full": "own_count"},
 }
 # 来源验收报告（裁决 D15 §65/§69）：由全量 Java 注释检查在真实扫描后写出，
 # 发布汇总必须取回并独立复核，不能用作业成功、默认 0 或旧账本代替。
@@ -78,6 +83,18 @@ SOURCE_ACCEPTED_VERDICTS = (
     "已按 D12 格式写入来源说明（D10b 改判）",
     "A1（E1-author-only）成立，恢复上游证据支持的作者",
 )
+
+
+def known_source_verdicts() -> tuple[str, ...]:
+    """按需取回判词词表的唯一定义处（检查器 → 调度器 → 本汇总共用同一份）。
+
+    Returns:
+        已定义判词的全集；表外取值一律按未知判词硬失败，不当成“尚未验收”。
+    """
+
+    from scripts.code.java import check_full_java_comments
+
+    return tuple(check_full_java_comments.KNOWN_SOURCE_VERDICTS)
 SOURCE_REPORT_NAME = "source-acceptance-report.json"
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
@@ -323,13 +340,36 @@ def coverage_declaration(declared: object, job: str, spec: dict[str, str], cover
         raise ValueError(f"发布证据的覆盖率声明与真实裁决不一致：{job}")
 
 
+def managed_web_files(root: Path) -> int:
+    """独立枚举纳管 Web 源码数量，用于复算 Web 全量注释声明的实测范围。
+
+    与检查器同源：受管扩展名、Git 忽略与固定排除规则都取自
+    ``scripts.common.quality_common.discover``，类型声明文件（``*.d.ts``）按
+    ``check_worktree_web_comments.collect`` 的同一规则排除，避免汇总与检查器各自
+    解释「全量」而让范围漂移不可见。
+
+    Args:
+        root: 待检查仓库根目录。
+    Returns:
+        纳管 Web 文件数；与 ``check_full_web_comments.py`` 上报的 checked 同口径。
+    Raises:
+        CheckError: 仓库根目录不可读、显式目标非法或文件发现失败。
+    """
+
+    from scripts.code.web.check_worktree_web_comments import EXTENSIONS
+    from scripts.common.quality_common import discover
+
+    return sum(1 for path in discover(root, EXTENSIONS) if not path.name.endswith(".d.ts"))
+
+
 def release_evidence(directory: Path | None, counts: dict[str, int], revision: str | None) -> dict[str, object]:
     """核验发布阶段的真实检查证据，缺少或不合格时拒绝给出发布结论。
 
     证据由 workflow 中的真实命令产出：每个作业的覆盖率裁决原始 JSON（含作业内
     static_gate.py 从真实 PMD/lint 报告生成的静态检查段），以及该作业在本次提交上
     真实执行检查的清单。计数必须与聚合门禁独立核对的作业计数、覆盖率裁决的实测文件数
-    一致，避免用标签或空报告冒充发布。
+    一致，避免用标签或空报告冒充发布；没有第二份声明可比的自有计数（Web 全量注释）
+    则由本模块独立枚举受管源码范围复算，缩范围或编造数字同样被拒绝。
     Args:
         directory: 发布检查写入证据的目录，缺失即拒绝。
         counts: 四个必需作业上报的正整数用例数。
@@ -337,7 +377,8 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
     Returns:
         只包含文件名、提交标识、实测文件数和检查名的可公开发布证据摘要。
     Raises:
-        ValueError: 缺少证据目录或文件、阶段/范围/阈值不符、检查未通过、计数不一致或提交不匹配。
+        ValueError: 缺少证据目录或文件、阶段/范围/阈值不符、检查未通过、计数不一致、
+            受管范围无法复算或提交不匹配。
     """
     if not isinstance(directory, Path) or not directory.is_dir():
         raise ValueError("发布阶段缺少真实发布证据目录")
@@ -348,8 +389,23 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
         coverage = coverage_document(directory, spec["coverage_file"], spec["coverage_kind"])
         checks, declared = release_manifest(directory, spec["evidence"], job, revision)
         coverage_declaration(declared, job, spec, coverage)
+        # 自有计数没有第二份声明可比（既不是作业用例数，也不是覆盖率实测文件数）：
+        # 这里独立枚举受管范围复算一次，声明值与真实范围不符一律拒绝。
+        own_checks = [check for check, mode in RELEASE_CHECKS[job].items() if mode == "own_count"]
+        if own_checks:
+            try:
+                own_scope = managed_web_files(ROOT)
+            except (CheckError, OSError, ValueError) as error:
+                raise ValueError("无法独立复算纳管 Web 源码范围") from error
         for check, mode in RELEASE_CHECKS[job].items():
             if mode == "no_count":
+                continue
+            if mode == "own_count":
+                if checks[check]["checked"] != own_scope:
+                    raise ValueError(
+                        f"发布检查计数与汇总独立复算的受管范围不一致：{job}/{check}"
+                        f"（声明 {checks[check]['checked']}，实测 {own_scope}）"
+                    )
                 continue
             expected = counts[job] if mode == "job_count" else coverage["measured_files"]
             if checks[check]["checked"] != expected:
@@ -566,53 +622,72 @@ def source_acceptance(
         raise ValueError("来源验收报告的 checked 与扫描范围不一致")
     if acceptance.get("revision") != revision:
         raise ValueError("来源验收报告的验收段没有绑定本次提交")
-    # 独立复算：非验收记录集合必须被阻断/硬失败清单逐条覆盖，条目的判词、登记字段与
-    # 最终对象指纹必须与当前索引和当前源码一致。
+    # 独立复算：按 (文件, 类型) 唯一键把非验收记录集合与阻断/硬失败/已验收三张清单做
+    # 双向对账。按文件折叠会让同一文件里的嵌套类型漏报不被发现，也会让重复条目与跨
+    # 清单互斥失效；“少报一条 + 同步改计数”在这里同样因双向差集而被拒。
+    all_keys = ledger_expected_keys(records, None)
     expected_blocked = {
-        path
-        for path, record in records.items()
-        if str(record.get("d12_verdict") or "").strip() not in SOURCE_ACCEPTED_VERDICTS
+        key: verdict
+        for key, verdict in all_keys.items()
+        if verdict not in SOURCE_ACCEPTED_VERDICTS
     }
-    covered: set[str] = set()
-    for item in [*blockers, *hard]:
-        if not isinstance(item, dict):
-            raise ValueError("来源验收报告的逐项状态必须是结构化对象")
-        path = str(item.get("path", ""))
-        record = records.get(path)
-        if record is None:
-            raise ValueError(f"来源验收报告引用了索引中不存在的对象：{path}")
-        verdict = str(record.get("d12_verdict") or "").strip()
-        if verdict in SOURCE_ACCEPTED_VERDICTS:
-            raise ValueError(f"索引已验收的记录不能出现在阻断清单：{path}")
-        if str(item.get("verdict") or "") != verdict:
-            raise ValueError(f"来源验收报告的逐项判词与当前索引不一致：{path}")
-        if not str(item.get("blocker_reason") or "").strip():
-            raise ValueError(f"来源验收报告的阻断条目缺少原因：{path}")
-        if not str(item.get("open_gap") or "").strip():
-            raise ValueError(f"来源验收报告的阻断条目缺少缺口：{path}")
-        source = root / path
-        if not source.is_file():
-            raise ValueError(f"来源验收报告的阻断条目指向不存在的对象：{path}")
-        if hashlib.sha256(source.read_bytes()).hexdigest() != str(
-            item.get("local_sha256", "")
-        ).lower():
-            raise ValueError(f"来源验收报告的最终对象指纹与当前文件不符：{path}")
-        covered.add(path)
-    for item in accepted:
-        if not isinstance(item, dict):
-            raise ValueError("来源验收报告的已验收条目必须是结构化对象")
-        path = str(item.get("path", ""))
-        record = records.get(path)
-        if record is None:
-            raise ValueError(f"来源验收报告的已验收条目指向不存在的对象：{path}")
-        if str(record.get("d12_verdict") or "").strip() not in SOURCE_ACCEPTED_VERDICTS:
-            raise ValueError(f"索引未验收的记录不能出现在已验收清单：{path}")
-    if covered != expected_blocked:
-        missing = sorted(expected_blocked - covered)
-        extra = sorted(covered - expected_blocked)
+    covered: set[tuple[str, str]] = set()
+    declared_in: dict[tuple[str, str], str] = {}
+    for label, items in (("阻断", blockers), ("硬失败", hard), ("已验收", accepted)):
+        for item in items:
+            key = ledger_entry_key(item, f"来源验收报告的{label}条目")
+            path = key[0]
+            record = records.get(path)
+            if record is None:
+                raise ValueError(f"来源验收报告引用了索引中不存在的对象：{path}")
+            if key not in all_keys:
+                raise ValueError(
+                    f"来源验收报告的{label}条目在索引中没有对应的（文件,类型）唯一键："
+                    f"{path}#{key[1]}"
+                )
+            if key in declared_in:
+                raise ValueError(
+                    f"同一个对象不能同时出现在{declared_in[key]}与{label}清单："
+                    f"{path}#{key[1]}"
+                )
+            declared_in[key] = label
+            if label != "已验收":
+                covered.add(key)
+            if label == "已验收":
+                if (
+                    str(record.get("d12_verdict") or "").strip()
+                    not in SOURCE_ACCEPTED_VERDICTS
+                ):
+                    raise ValueError(f"索引未验收的记录不能出现在已验收清单：{path}")
+                continue
+            verdict = str(record.get("d12_verdict") or "").strip()
+            if verdict not in known_source_verdicts():
+                raise ValueError(
+                    f"来源验收索引的判词不在已定义判词集合内：{path}：{verdict or '空'}"
+                )
+            if verdict in SOURCE_ACCEPTED_VERDICTS:
+                raise ValueError(f"索引已验收的记录不能出现在阻断清单：{path}")
+            if str(item.get("verdict") or "") != verdict:
+                raise ValueError(f"来源验收报告的逐项判词与当前索引不一致：{path}")
+            if not str(item.get("blocker_reason") or "").strip():
+                raise ValueError(f"来源验收报告的阻断条目缺少原因：{path}")
+            if not str(item.get("open_gap") or "").strip():
+                raise ValueError(f"来源验收报告的阻断条目缺少缺口：{path}")
+            source = root / path
+            if not source.is_file():
+                raise ValueError(f"来源验收报告的阻断条目指向不存在的对象：{path}")
+            if hashlib.sha256(source.read_bytes()).hexdigest() != str(
+                item.get("local_sha256", "")
+            ).lower():
+                raise ValueError(f"来源验收报告的最终对象指纹与当前文件不符：{path}")
+    missing = sorted(key for key in expected_blocked if key not in covered)
+    extra = sorted(key for key in covered if key not in expected_blocked)
+    if missing or extra:
+        shown_missing = f"{missing[0][0]}#{missing[0][1]}" if missing else "无"
+        shown_extra = f"{extra[0][0]}#{extra[0][1]}" if extra else "无"
         raise ValueError(
             "来源验收报告的阻断清单与索引复算不一致："
-            f"漏项 {missing[:1]}，多余 {extra[:1]}"
+            f"漏项 {shown_missing}，多余 {shown_extra}"
         )
     if uncovered:
         raise ValueError("来源验收报告存在未覆盖的索引记录，范围漏项不能按空集合降级")

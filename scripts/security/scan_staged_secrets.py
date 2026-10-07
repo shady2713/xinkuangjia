@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -234,6 +235,71 @@ def _is_code_path(path: str) -> bool:
     return (
         not _is_config_path(path) and PurePosixPath(path).suffix.lower() != ".py"
     )
+
+
+VENDOR_SNAPSHOT_ROOT = "docs/测试与可靠性/来源证据/上游快照"
+VENDOR_SNAPSHOT_MANIFEST = f"{VENDOR_SNAPSHOT_ROOT}/上游快照清单.json"
+
+
+def _pinned_vendor_snapshot_digests() -> dict[str, str]:
+    """读取仓库内上游快照哈希清单，返回「路径 -> SHA-256」。
+
+    清单缺失、不可解析或结构不符时返回空字典：调用方据此一律按普通源码扫描，
+    不会因为读不到清单就放宽检查。
+    """
+
+    try:
+        raw = _run_git(["show", f":{VENDOR_SNAPSHOT_MANIFEST}"], text=False)
+    except RuntimeError:
+        return {}
+    if not isinstance(raw, bytes):
+        return {}
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    root = document.get("snapshot_root_relative")
+    entries = document.get("files")
+    if not isinstance(root, str) or not isinstance(entries, list):
+        return {}
+    # 清单声明的根目录必须与本仓库约定的快照根一致，否则一律不放宽。
+    if root.rstrip("/") != VENDOR_SNAPSHOT_ROOT:
+        return {}
+    digests: dict[str, str] = {}
+    prefix = root.rstrip("/") + "/"
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        relative = entry.get("path")
+        digest = entry.get("sha256")
+        if not isinstance(relative, str) or not isinstance(digest, str):
+            continue
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            continue
+        digests[prefix + relative] = digest
+    return digests
+
+
+def _is_pinned_vendor_snapshot(path: str, digests: dict[str, str]) -> bool:
+    """判断暂存路径是否为哈希清单钉住、且暂存内容逐字节一致的固定上游快照。
+
+    只对哈希清单声明的快照根目录下的文件生效，且必须同时满足：路径在清单中登记、
+    SHA-256 为合法十六进制、暂存内容的实测摘要与清单一致。任一条件不成立（文件被改动、
+    未登记、清单不可读或 Git 读取失败）都返回 ``False``，继续按普通源码扫描；因此向
+    快照里塞入真实凭据的变体不会借助该校准绕过检查。调用方只跳过赋值启发式，
+    密钥前缀、URL 凭据与私钥等强信号检查仍然执行。
+    """
+
+    expected = digests.get(path)
+    if expected is None:
+        return False
+    try:
+        staged = _run_git(["show", f":{path}"], text=False)
+    except RuntimeError:
+        return False
+    if not isinstance(staged, bytes):
+        return False
+    return hashlib.sha256(staged).hexdigest() == expected
 
 
 def _string_literal_spans(line: str) -> list[tuple[int, int]]:
@@ -2028,6 +2094,8 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
     docstring_lines: set[int] = set()
     python_code_lines: set[int] = set()
     official_wrapper_script = False
+    pinned_vendor_snapshot = False
+    vendor_snapshot_digests: dict[str, str] = {}
     added_lines_by_path: dict[str, list[tuple[int, str]]] = {}
     python_candidates: dict[str, list[tuple[int, int, str, bool]] | None] = {}
     sql_sources: dict[str, str] = {}
@@ -2039,6 +2107,14 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
             # 指纹确认过整份内容的官方 Maven Wrapper 脚本只跳过赋值启发式；该判定对普通
             # 文件名立即返回，不产生额外 Git 读取。
             official_wrapper_script = _is_official_maven_wrapper_script(current_path)
+            # 只有遇到快照目录下的路径才惰性读取清单：其它路径不产生额外的 Git 读取。
+            pinned_vendor_snapshot = False
+            if current_path.startswith(VENDOR_SNAPSHOT_ROOT + "/"):
+                if not vendor_snapshot_digests:
+                    vendor_snapshot_digests = _pinned_vendor_snapshot_digests()
+                pinned_vendor_snapshot = _is_pinned_vendor_snapshot(
+                    current_path, vendor_snapshot_digests
+                )
             if current_path.lower().endswith(".py"):
                 # 必须读取暂存版本；工作区中未暂存的引号变化不能影响提交判定。
                 source = _run_git(["show", f":{current_path}"])
@@ -2069,7 +2145,8 @@ def _scan_staged_diff(paths: list[str] | None = None) -> list[Finding]:
                     is_docstring=current_line in docstring_lines,
                     is_python_code=current_line in python_code_lines,
                     scan_assignment=python_candidates.get(current_path) is None
-                    and not official_wrapper_script,
+                    and not official_wrapper_script
+                    and not pinned_vendor_snapshot,
                 )
             )
             added_lines_by_path.setdefault(current_path, []).append(
@@ -2770,6 +2847,64 @@ def _test_official_maven_wrapper_script_regressions() -> None:
         MAVEN_WRAPPER_SCRIPT_DIGESTS.update(original_digests)
 
 
+def _run_pinned_vendor_snapshot_self_test() -> None:
+    """自测哈希钉住的上游快照排除：钉住才跳过、任何偏离立即恢复全量扫描。
+
+    直接构造暂存内容并调用真实判定函数，不依赖真实暂存区，也不接受"读不到清单就
+    放宽"的行为：清单缺失、路径未登记、摘要非法、字节不符都必须返回 ``False``。
+    """
+
+    root = "docs/测试与可靠性/来源证据/上游快照"
+    manifest = f"{root}/上游快照清单.json"
+    # 自测负载按既有自检写法拼接构造，避免本文件自身被静态赋值启发式命中。
+    _field = "mock" + "Secret"
+    _value = "unit-" + "fixed"
+    payload = (
+        "package demo;\n\npublic class Demo {\n"
+        f'    private String {_field} = "{_value}";\n'
+        "}\n"
+    ).encode("utf-8")
+    digest = hashlib.sha256(payload).hexdigest()
+    target = f"{root}/ruoyi-vue-pro@fixed/demo/Demo.java"
+
+    staged: dict[str, bytes] = {
+        manifest: json.dumps(
+            {
+                "snapshot_root_relative": root,
+                "files": [{"path": "ruoyi-vue-pro@fixed/demo/Demo.java", "sha256": digest}],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8"),
+        target: payload,
+    }
+    original = _run_git
+
+    def fake_run_git(argv: list[str], text: bool = True):  # type: ignore[no-untyped-def]
+        """只回放本自测登记的暂存内容；任何其它只读调用都视为失败。"""
+
+        if argv[0] == "show" and argv[1].startswith(":"):
+            key = argv[1][1:]
+            if key not in staged:
+                raise RuntimeError(f"path does not exist: {key}")
+            raw = staged[key]
+            return raw.decode("utf-8") if text else raw
+        raise RuntimeError(f"unexpected argv: {argv}")
+
+    globals()["_run_git"] = fake_run_git
+    try:
+        digests = _pinned_vendor_snapshot_digests()
+        assert digests.get(target) == digest, "清单未按根相对路径登记"
+        assert _is_pinned_vendor_snapshot(target, digests), "钉住内容应被跳过赋值启发式"
+        staged[target] = payload + "// 偏离\n".encode("utf-8")
+        assert not _is_pinned_vendor_snapshot(target, digests), "字节偏离后必须恢复全量扫描"
+        del staged[manifest]
+        assert _pinned_vendor_snapshot_digests() == {}, "清单缺失时不得放宽"
+        staged[manifest] = b'{"snapshot_root_relative": "x", "files": [{"path": "y", "sha256": "not-a-digest"}]}'
+        assert _pinned_vendor_snapshot_digests() == {}, "非法摘要必须被忽略"
+    finally:
+        globals()["_run_git"] = original
+
+
 def _run_self_test() -> None:
     """使用伪造样本验证放行和拦截规则，避免测试中包含真实凭据。"""
 
@@ -2912,6 +3047,7 @@ def main() -> int:
 
     args = _parse_args()
     if args.self_test:
+        _run_pinned_vendor_snapshot_self_test()
         _run_self_test()
         return 0
     try:

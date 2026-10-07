@@ -39,6 +39,9 @@
 #   * release 结论必须有真实证据：aggregate 要求取回 release-backend.json /
 #     release-frontend.json 与 coverage-backend.json / coverage-web.json，文件缺失、零对象、
 #     审计阶段结论、阈值被改或计数与作业上报不一致一律拒绝。阶段标签本身不产生发布结论。
+#   * frontend 作业在 release 阶段还要真实执行 Web 全量注释检查，把本次实测对象数写进
+#     release-frontend.json；aggregate 按 own_count 独立复算受管 Web 源码范围，缺项、
+#     未通过、零对象或计数与实测范围不符一律拒绝（docs_tools 里的那次执行不进入发布制品）。
 #   * release 还必须取回 docs_tools 真实写出的来源验收报告
 #     （$RUNNER_TEMP/release-evidence/source-acceptance-report.json，schema
 #     source-acceptance-report/v1）：报告缺失、未知 schema、旧提交、规则实现指纹或受控账本
@@ -94,6 +97,14 @@ jobs:
       - name: 安装固定版本的 CI 工具依赖
         run: python -m pip install --require-hashes -r scripts/workflow/requirements-ci.txt
 
+      # Web 全量注释子检查（web-comments-full）通过 Node 解析器读取前端源码，必须有
+      # 与管理前端测试作业一致的固定 Node 版本；此前本作业只用 corepack，依赖运行器
+      # 预装的 Node。缺少 Node 或前端依赖时检查按环境错误退出 2，不会因为没装环境
+      # 而被记成通过。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       # 文档检查里的 Mermaid 解析使用管理前端已安装依赖，与本地要求一致。
       - name: 安装管理前端依赖
         working-directory: 前端代码/basic-framework-admin
@@ -140,9 +151,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # 注释检查器同样已登记在 run_checks.py 的 comments 组（全量 Java 注释与增量
-      # Web、Python 注释），但在本次改动前从未接入任何作业，属于"已登记却没真正运行"。
-      # 这里显式运行并复核报告：全量 Java 注释欠账、零对象、报告缺失都会让本作业红灯，
+      # 注释检查器同样已登记在 run_checks.py 的 comments 组（全量 Java 注释、全量 Web
+      # 注释与增量 Java/Web/Python 注释），但在本次改动前从未接入任何作业，属于"已登记却没真正运行"。
+      # 这里显式运行并复核报告：全量 Java 注释欠账、Web 全量注释欠账、零对象、报告缺失都会让本作业红灯，
       # 汇总门禁随即拒绝，不会静默通过。
       # 不写进上面的 checked 计数：该计数只表示文档与工具检查对象数，混入其他范围会失真。
       - name: 运行注释检查
@@ -169,6 +180,19 @@ jobs:
           python -B -X utf8 - <<'PY'
           import json, os, sys
           report = json.load(open(os.environ["REPORT"], encoding="utf-8"))
+          # Web 全量注释是「全库注释合格」的唯一依据：本次运行必须真的执行过它，
+          # 并且给出正整数的实测对象数。缺项、未通过或零对象一律让本作业红灯，
+          # 不能因为 comments 组的其他检查通过就把全量范围当成已覆盖。
+          full = next(
+              (item for item in report["results"] if item.get("name") == "web-comments-full"),
+              None,
+          )
+          if full is None:
+              sys.exit("注释检查没有执行 Web 全量注释子检查")
+          if full.get("status") != "passed":
+              sys.exit(f"Web 全量注释子检查未真实通过：{full.get('status')}")
+          if type(full.get("checked")) is not int or full["checked"] <= 0:
+              sys.exit("Web 全量注释子检查没有正整数的实测对象数")
           # 有实际对象的真实执行包括通过项与维护完成态；维护完成态计入“执行过”，
           # 但不计入通过数（counts.passed），也不代表来源验收通过。
           executed = [
@@ -179,8 +203,8 @@ jobs:
           if total <= 0:
               sys.exit("注释检查没有任何实际对象，不计为通过")
           print(
-              f"注释检查对象：{total}；其中已登记阻断 "
-              f"{report['counts']['registered_blockers']} 项，不计为通过"
+              f"注释检查对象：{total}（其中 Web 全量注释 {full['checked']} 个）；"
+              f"已登记阻断 {report['counts']['registered_blockers']} 项，不计为通过"
           )
           PY
 
@@ -365,6 +389,19 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
         run: python -B -X utf8 ../../scripts/workflow/static_gate.py --kind web --execute
 
+      # 全库 Web 注释合格只有这一个依据：docs_tools 作业里的那次执行不进入发布制品，
+      # 换阶段或换标签都看不到它。发布阶段因此在这里重新真实执行全量入口，退出码原样
+      # 传递（零对象按环境错误退出 2，检查失败退出 1），没有任何跳过或忽略分支；
+      # 实测对象数由下面的证据生成步骤直接读回本次 JSON，写进 release-frontend.json。
+      - name: Web 全量注释（发布阶段）
+        if: inputs.stage == 'release'
+        env:
+          WEB_COMMENTS: ${{ runner.temp }}/web-comments-full.json
+        run: |
+          python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json \
+            > "$WEB_COMMENTS"
+          cat "$WEB_COMMENTS"
+
       # 发布门槛由覆盖率先按可读方式裁决：未达标时日志直接给出缺口，不写出任何证据；
       # 只有真实通过才再产出机器证据，避免把失败或审计结论写成发布证据。
       - name: 发布阶段前端覆盖率裁决
@@ -385,6 +422,7 @@ jobs:
           EVIDENCE: ${{ runner.temp }}/release-evidence
           REVISION: ${{ github.sha }}
           UNIT_CASES: ${{ steps.count.outputs.checked }}
+          WEB_COMMENTS: ${{ runner.temp }}/web-comments-full.json
         run: |
           python -B -X utf8 - <<'PY'
           import json, os
@@ -392,6 +430,15 @@ jobs:
 
           evidence = Path(os.environ["EVIDENCE"])
           coverage = json.loads((evidence / "coverage-web.json").read_text(encoding="utf-8"))
+          # Web 全量注释的计数必须取自上一步真实执行的 JSON：这里重新读一遍状态与实测
+          # 对象数，不在本步骤内重新编造数字；缺文件、状态非 passed 或非正整数都让
+          # 本作业失败，汇总门禁随后按 RELEASE_CHECKS 的 own_count 独立复算受管范围。
+          web_comments = json.loads(Path(os.environ["WEB_COMMENTS"]).read_text(encoding="utf-8"))
+          if web_comments.get("status") != "passed" or web_comments.get("findings"):
+              raise SystemExit(f"Web 全量注释未真实通过：{web_comments.get('status')}")
+          web_checked = web_comments.get("checked")
+          if type(web_checked) is not int or web_checked <= 0:
+              raise SystemExit("Web 全量注释没有正整数的实测对象数")
           document = {
               "schema": "ci-release-evidence/v1",
               "job": "frontend",
@@ -408,6 +455,8 @@ jobs:
                    "command": "pnpm build:ele"},
                   {"name": "frontend-production-scan", "status": "passed", "checked": None,
                    "command": "pnpm quality:prod-scan"},
+                  {"name": "web-comments-full", "status": "passed", "checked": web_checked,
+                   "command": "python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json"},
               ],
               "coverage": {"kind": "web", "evidence": "coverage-web.json", "stage": "release",
                            "measured_files": coverage["measured_files"],

@@ -1,5 +1,5 @@
 ---
-description: "D12 来源例外的受控来源索引：派生规则、八个证据字段组、上游内容复取与门禁消费方式。"
+description: "D12 来源例外的受控来源索引：派生规则、八个证据字段组、上游内容复取与门禁消费方式，含 D7 轮纳入版本控制的最小上游证据快照入口。"
 kind: package-reference
 ---
 
@@ -7,7 +7,7 @@ kind: package-reference
 
 ## 摘要
 
-本目录存放 `type-author` 来源例外的受控来源索引，供提交路径、工作区路径、全量路径与 CI 使用同一份证据输入。索引是派生数据：只登记对象、指纹、比对依据与复核结论，不包含任何上游文件正文。索引由 D10/D12 账本派生，禁止手工新增或改写记录。
+本目录存放 `type-author` 来源例外的受控来源索引，供提交路径、工作区路径、全量路径与 CI 使用同一份证据输入。索引是派生数据：只登记对象、指纹、比对依据与复核结论，**记录本身不内嵌上游文件正文**。上游正文的逐字节副本按 D7 授权单独存放在同目录的[上游快照](上游快照/README.md)，由机器可读哈希清单逐条复算。索引由 D10/D12 账本派生，禁止手工新增或改写记录；工具指纹等机械重绑沿用既有口径登记在 `manifest`。
 
 ## 目录
 
@@ -26,6 +26,7 @@ kind: package-reference
 | 文件 | 内容 |
 | --- | --- |
 | [d12-source-index.json](d12-source-index.json) | 186 条 D12-174 候选记录；**索引当前判词分布**为 18 条已应用来源说明、11 条 A1 恢复署名、58 条复核回退、22 条需补证、77 条证据不足阻断；顶层 `manifest` 记录派生依据与指纹，`records` 为逐条清单记录 |
+| [上游快照](上游快照/README.md) | D7 轮纳入版本控制的最小固定上游证据快照：186 个上游文件、12 个 A1 本地比较输入、1 份许可证原文与机器可读哈希清单 |
 | [README.md](README.md) | 本说明 |
 
 索引中的每条记录对应一个本地对象（`local_path` 唯一），记录上游定位、上游内容指纹、历史依据、比对依据、作者判断、许可关联与逐项复核。规则只对主张来源证据的 public 类型读取这些记录；没有来源说明的类型继续走准确作者路径。
@@ -38,7 +39,7 @@ kind: package-reference
 - 重复列名：账本表头仍有 11 个重名（D10 列与 D10b 更新列同名）。派生取**末列**（D10b 更新值），并把选定记录上“首列与末列取值不同”的条数登记在 `manifest.duplicate_column_mismatches`（实测：`author_status` 12、`evidence_points`／`evidence_route`／`local_sha256_after` 各 17、`open_gap`／`review_by` 各 61、`review_conclusion` 65）。该差异必须如实登记，不能表述成“两侧一致”。
 - 逐类型证据：账本有 12 条记录没有 `type_evidence`（11 条 A1 恢复署名 + 1 条改判），索引沿用 D10b 构建的同路径逐类型证据，登记在 `manifest.synthesized_type_evidence`。
 - 本索引的中立指纹：见 `manifest.records_sha256`（逐条记录规范化 JSON 的 SHA-256）。
-- **本索引文件的当前整文件 SHA-256：`5b96faac4867543c1d54d2bc0f44096f59242667171185928d91a90531308c62`**（`records` = 186）。本值与检查器各入口实际报告的 `evidence.registry_sha256` 一致（2026-10-06 复算轮实测：`--validate-evidence-branches` 退出 0／`checked 16`／`findings 0`；`check_full_java_comments.py --maintenance` 退出 0／`checked 904`／`hard_failures 0`）。本轮改动前为 `282735c352a312f4fb22b3cad3f823e3ab6c531fef90287c89fe77e6e98b9b82`——该值是本仓库文档中若干历史运行记录（如 D12/D14 复算更正、本机 `run_checks` 探针、云端 run）当时**实际读到**的指纹，记录本身依然为真；本轮只因 `manifest` 补记工具指纹轨迹与 `ledger_replay` 范围声明（均不改动 `records`）而使整文件指纹变化，`manifest.records_sha256` 保持 `2a23d7ff…` 不变。
+- **本索引文件的当前整文件 SHA-256：`39f539cfb65ccf4af6c4aedcb9a78f77508ba2c1dfa3fd39b23cf505924151b4`**（`records` = 186）。本值与检查器各入口实际报告的 `evidence.registry_sha256` 一致（2026-10-07 D7 轮实测：`--validate-evidence-branches` 退出 0／`checked 16`／`findings 0`；`check_full_java_comments.py --maintenance` 退出 0／`checked 904`／`hard_failures 0`／`registered_blockers 162`）。此前登记的两个值——`5b96faac…`（2026-10-06 复算轮后）与更早的 `282735c3…`——是本仓库文档中若干历史运行记录（如 D12/D14 复算更正、本机 `run_checks` 探针、云端 run）当时**实际读到**的指纹，记录本身依然为真；`5b96faac… → 39f539cf…` 的变化只来自 D7 轮对 12 条 E1 记录 `author_only_contract.tool.sha256` 的机械重绑（见[工具指纹重绑](#工具指纹重绑与结构点重定位n1fix-轮)），`manifest.records_sha256` 随之由 `2a23d7ff…` 重算为 `48d0da82…`，判词与逐项复核结论一律未改写。
 
 ## 八个证据字段组
 
@@ -55,28 +56,36 @@ kind: package-reference
 
 ## 上游内容来源
 
-索引只保存固定地址与指纹，不保存正文。规则按以下顺序取得上游内容：
+索引只保存固定地址与指纹。**上游正文的逐字节副本已按 D7 授权纳入版本控制**，位于
+[上游快照](上游快照/README.md)；机器可读的哈希清单是 [上游快照清单.json](上游快照/上游快照清单.json)。
+规则按以下顺序取得上游内容：
 
-1. **受控快照优先**：`JAVA_COMMENT_EVIDENCE_SNAPSHOTS` 或 `--evidence-snapshots` 指向的快照目录中，固定提交的对应文件必须先通过 `upstream_sha256` 复算与无作者声明检查。
-2. **固定地址取回**：快照缺失时按 `upstream_file_url` 取回。地址必须固定在登记提交上，且路径与 `upstream_path` 一致；取回内容复算 SHA-256，不符即拒绝。
+1. **仓内受控快照优先**：`docs/测试与可靠性/来源证据/上游快照`（`DEFAULT_EVIDENCE_SNAPSHOTS`）在目录存在时自动生效，不需要设置任何环境变量；`JAVA_COMMENT_EVIDENCE_SNAPSHOTS` 或 `--evidence-snapshots` 可显式指向别处。固定提交的对应文件必须先通过 `upstream_sha256` 复算与无作者声明检查。
+   - **快照哈希清单强制复算**：仓内快照根目录存在 `上游快照清单.json` 时，加载受控证据即逐条复算每个文件的字节数与 SHA-256，并要求清单至少包含一条 `license` 条目且覆盖受控索引登记的 `license_sha256`。文件缺失、字节或指纹不符、许可证材料缺位都以 `EvidenceError` 拒绝（退出码 2），诊断指向具体条目与具体路径，**不回落到联网取回**。
+   - 快照根目录没有哈希清单时（外部受控快照、旧夹具）沿用既有行为，不做完整性复算。
+2. **固定地址取回**：仓内快照没有对应文件时按 `upstream_file_url` 取回。地址必须固定在登记提交上，且路径与 `upstream_path` 一致；取回内容复算 SHA-256，不符即拒绝。
 3. **取不回与内容不符是两件事**：**取不回**（网络不可达、HTTP 错误、超时）由全量入口记录失败地址，该记录若**全部**原因都来自取不回即进入独立的“证据不可得”集合（`evidence-unavailable`），报告写明固定地址与原因并以退出码 **2** 受控失败；**内容不符**（指纹或内容与登记不一致）仍是硬失败。判据与阈值不因故障而放宽；同一条记录若还有真实内容问题，硬失败与证据不可得并存。
 
-> 当前本机与云端都**没有**配置受控快照（报告里 `acceptance.evidence.snapshots = null`），因此每次都走第 2 步联网取回；
-> 离线复核必须显式提供受控快照目录。是否把受控快照纳入版本控制或 CI 制品属[有权者决定](../待有权者决定事项.md) D7，本轮未 vendored。
+> D7 已获有权者授权：**不必等待整个项目根许可证选择，先把最小固定上游证据快照纳入版本控制**，
+> 并保留原始声明、完整许可证与哈希清单。实际收录 **186 个上游文件 + 12 个 A1 本地比较输入 + 1 份许可证原文**
+> （上游仓库在该提交上共 8744 个文件），收录口径与逐条复算方式见[上游快照说明](上游快照/README.md)。仓内快照缺位时仍可按固定地址联网取回。
+>
+> **登记在案的差异**：[待有权者决定事项](../待有权者决定事项.md) D7 条目本轮未在授权范围内，
+> 其正文仍写着「本轮未 vendored 任何上游快照」，与本目录的实测状态不符，须由该文件的属主按授权更新。
 
-`upstream_file_url` 使用 `github.com` 的 `blob` 固定提交地址；规则转换为 `raw.githubusercontent.com` 的同提交内容地址。受控快照与网络取回都不可用时，需要显式配置快照才能离线复核。
+`upstream_file_url` 使用 `github.com` 的 `blob` 固定提交地址；规则转换为 `raw.githubusercontent.com` 的同提交内容地址。
 
 ## 门禁消费方式
 
 | 入口 | 默认证据输入 |
 | --- | --- |
-| 提交路径 `scripts/workflow/check_staged_quality.py` | 本目录 `d12-source-index.json`，快照未配置时按固定地址取回 |
-| CI `scripts/workflow/run_checks.py` 的 Java 注释检查 | 同上，路径相对被检查仓库根目录解析 |
-| 全量入口 `scripts/code/java/check_full_java_comments.py` | 同上，并在 JSON 与非 JSON 输出中报告清单路径、SHA-256 与记录数 |
+| 提交路径 `scripts/workflow/check_staged_quality.py` | 本目录 `d12-source-index.json` + `上游快照/`（两者都相对仓库根解析），由 `evidence_cli_arguments` 自动追加 `--evidence-snapshots` |
+| CI `scripts/workflow/run_checks.py` 的 Java 注释检查 | 同上，由 `evidence_environment` 自动导出 `JAVA_COMMENT_EVIDENCE_SNAPSHOTS` |
+| 全量入口 `scripts/code/java/check_full_java_comments.py` | 同上，并在 JSON 与非 JSON 输出中报告清单路径、SHA-256、记录数与快照哈希清单复算结论 |
 | 工作区入口 `scripts/code/java/check_worktree_java_comments.py` | 继承上述环境变量与默认位置 |
 | 分支复核 `scripts/code/java/check_staged_java_comments.py --validate-evidence-branches` | 复算清单中所有显式声明证据分支的记录；未声明分支的记录不由该入口判定 |
 
-显式配置优先于默认位置：命令行参数 `--evidence-registry`/`--evidence-snapshots` 高于 `JAVA_COMMENT_EVIDENCE_REGISTRY`/`JAVA_COMMENT_EVIDENCE_SNAPSHOTS`，环境变量高于本目录默认值。显式配置不可读时退出非零，不静默回落到默认位置。
+显式配置优先于默认位置：命令行参数 `--evidence-registry`/`--evidence-snapshots` 高于 `JAVA_COMMENT_EVIDENCE_REGISTRY`/`JAVA_COMMENT_EVIDENCE_SNAPSHOTS`，环境变量高于本目录默认值。显式配置不可读时退出非零，不静默回落到默认位置。仓内快照只在目录真实存在时启用，外部受控快照与既有夹具的「未配置快照」语义不变。
 
 ### 三态验收与当前实测分布
 
@@ -167,20 +176,25 @@ bash .bf-local/d10fix/rebind_pipeline.sh [账本路径]   # 从账本重放 → 
 
 ### 工具指纹重绑与结构点重定位（n1fix 轮）
 
-- **工具指纹重绑**：证据分支契约的 `tool.sha256` 必须等于当前规则实现指纹；每轮规则实现改动都会改动同一文件 `scripts/code/java/check_staged_java_comments.py`，因此 11 条 A1 记录的 `author_only_contract.tool.sha256` 按同一口径机械重绑，**当前实测值为 `b396db67…`**，完整重绑轨迹为 `1a06a625…`（D10close 基线）→ `2839dddd…`（n1fix：N1 分支↔路线归属修法）→ `5fbbf43d…`（同一实现文件被并行会话继续修改）→ `dffc690f…`（d10review2：D14 §132 来源说明验收状态 + §112 内容点绑定判据落地）→ `b396db67…`（d15impl：裁决 D15 落地），逐步明细登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind_history`，汇总值与轨迹说明在同节 `tool_sha_rebind.after` / `after_trace`。`manifest.records_sha256` 随之重算。A1 比较实现（`_comment_body_line`、`_exclusion_reason`、`_a1_normalize`、`_a1_raw_changed_lines`、`_a1_compare`、`_a1_baseline_bytes`、`_author_only_contract_reasons`）的逐函数 SHA-256 未变，登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind`。**冻结账本分歧**：声明账本 `registry-d12b.tsv`（SHA-256 `986b40a0…`）仍保留重绑前的 `1a06a625…`，从该账本完整重放会在这一个嵌套字段上产生旧值；`ledger_replay` 的比较字段不含 `author_only_contract`，其余重放关系不变，该差异已按上节范围声明登记在 `additional_differing_fields`（12 条）。
+- **工具指纹重绑**：证据分支契约的 `tool.sha256` 必须等于当前规则实现指纹；每轮规则实现改动都会改动同一文件 `scripts/code/java/check_staged_java_comments.py`，因此声明 `E1-author-only` 的 12 条记录（11 条 A1 + D15 §107 改判的 `ApiEncrypt.java`）的 `author_only_contract.tool.sha256` 按同一口径机械重绑，**当前实测值为 `037ce2f6…`**，完整重绑轨迹为 `1a06a625…`（D10close 基线）→ `2839dddd…`（n1fix：N1 分支↔路线归属修法）→ `5fbbf43d…`（同一实现文件被并行会话继续修改）→ `dffc690f…`（d10review2：D14 §132 来源说明验收状态 + §112 内容点绑定判据落地）→ `b396db67…`（d15impl：裁决 D15 落地）→ `037ce2f6…`（D7：仓内受控快照默认解析 + 快照哈希清单逐条复算），逐步明细登记在 `manifest.branch_route_ownership_fix.tool_sha_rebind_history`，汇总值与轨迹说明在同节 `tool_sha_rebind.after` / `after_trace`。`manifest.records_sha256` 随之重算为 `48d0da82…`。
+  - **D7 轮的重绑理由**：把最小固定上游证据快照纳入版本控制需要在同一实现文件里新增「仓库内受控快照默认位置」与「快照哈希清单逐条复算」，整文件指纹因此变化。A1 比较实现的八个函数（`_comment_body_line`、`_exclusion_reason`、`_a1_normalize`、`_a1_raw_changed_lines`、`_a1_compare`、`_a1_baseline_bytes`、`_author_only_contract_reasons`、`_content_independent_reasons`）经 `git diff` 与 AST 源码段逐项比对**确认一行未改**；本轮按可复现口径（`ast.get_source_segment` 源码段的 UTF-8 字节 SHA-256）重新登记逐函数指纹，上一轮登记的取值口径已不可复现，故不沿用旧值并在该处如实标注。
+  - **冻结账本分歧**：声明账本 `registry-d12b.tsv`（SHA-256 `986b40a0…`）仍保留重绑前的 `1a06a625…`，从该账本完整重放会在这一个嵌套字段上产生旧值；`ledger_replay` 的比较字段不含 `author_only_contract`，其余重放关系不变，该差异已按上节范围声明登记在 `additional_differing_fields`（12 条）。
 - **结构点行号重定位**：上一轮 155 个无 `fragment` 的结构/说明点中有 6 个未定位。n1fix 轮逐点重定位——按记录 `size` 枚举双方 R5 归一化序列里长度恰为 `size` 的完全相同窗口，并用记录 `head` 锚定起点（容忍账本端定长截断）；注释剥离按 Java 词法识别字符串/字符字面量，`FileController.java` 第 11 点上一轮未命中即来自把 `@GetMapping("/…/**")` 里的 `/**` 误当块注释起点。结果见 `manifest.structural_point_localization`：155 点中 **144 定位 + 11 条作者声明说明点，0 个不可定位**，逐点行号在同节 `items[]`。
 
 ## 复核与重生成
 - 门禁每次都会报告本次采用的清单路径、SHA-256 与记录数；报告中的指纹应与本目录文件一致。
 - 账本更新后必须重新派生本索引并保留整改前事实、变更理由与候选指纹；不得直接编辑记录。
-- 索引只承载可复算的来源数据，不承载维护会话日志；上游正文与许可结论按裁决在仓库外单独处置。
-- 复核最终版本时至少实际验证：六类字段与工作树逐条一致、对应点能在所声明的输入版本上定位、尾部空白负对照按 D13 被拒、声明分支的比较能被复算。
+- 索引只承载可复算的来源数据，不承载维护会话日志；上游正文的逐字节副本按 D7 授权进入[上游快照](上游快照/README.md)，许可验收结论仍不由本目录给出。
+- 复核最终版本时至少实际验证：六类字段与工作树逐条一致、对应点能在所声明的输入版本上定位、尾部空白负对照按 D13 被拒、声明分支的比较能被复算、快照哈希清单逐条复算通过。
 
 ## 已知限制与暂缓工作
 
 - 索引只覆盖 D12-174 候选 186 条；账本中其余 **811** 条“不适用（非 D12-174 候选）”对象不由本索引授权。D12 裁决另有“431 个未核实或冲突项”的口径，与本账本 997 行不是同一范围，二者都不得被本索引当作已验收。
-- 固定地址取回依赖到 `raw.githubusercontent.com` 的网络可达性；离线复核必须显式提供受控快照目录。
-- 上游文件正文与许可结论按裁决留在仓库外，本目录不提供许可验收结论。
+- 固定地址取回仍依赖到 `raw.githubusercontent.com` 的网络可达性，但**只作为仓内快照缺位时的回退**；仓内快照已覆盖全部 186 条记录的实际消费集合，实测可完全离线复核。
+- **收录量随判据变化**：裁决 D15 §72/§115 要求已登记阻断逐条复算绑定材料实测字节，因此 157 条已登记阻断记录同样需要上游字节，快照从最初的 29 个文件扩到 186 个（上游仓库共 8744 个文件）。今后任何新增或放宽的「消费上游字节」的判据，都必须同步扩充快照与哈希清单，否则断网复核会按「证据不可得」失败。
+- **索引 `license_path` 的登记值 `yudao/LICENSE@<commit>` 不是任何可解析形态**，既有取回实现从未消费过它；快照按上游树真实位置交付许可证并在清单中登记同一指纹，索引侧是否改正属有权者裁决事项。
+- 12 条 A1 契约的本地比较输入仍按 `git show <整改前基线提交>:<路径>` 取回。完整历史下随时可得（本机实测可达），但浅克隆、历史改写或对象回收会取不回；仓内已按最小集合纳入这 12 个文件的副本并纳入哈希清单，作为仓内可复现来源，详见[上游快照说明](上游快照/README.md#a1-本地比较输入的仓内副本)。
+- 上游快照与许可材料的存在**不表示**本仓库已为其自有代码选择许可证，也不表示 Java 后端整体派生关系已完成声明义务；那仍属[待有权者决定事项](../待有权者决定事项.md) 的未决事项。
 - 规则校验结构、版本、指纹与映射一致性；有区分力的对应与身份贡献仍需人工逐项复核。
 - 155 个结构/A1 说明点（原 138 个 P3 结构点 + 11 条 A1 记录 + 6 条改判记录的说明点）没有 `fragment`，其行号记录在 D10 的 R1–R6 归一化比对空间或 A1 比较空间，不是当前文件的物理行号；D10close 轮完成 138 个 P3 结构点的 head 匹配定位，n1fix 轮把剩余 6 个逐点重定位（0 个不可定位），两次结果都登记在 `manifest.structural_point_localization`。
 - 14 处记录自由文本的「本地 L… / 上游 L…」引用既不属于任何对应点、也与记录声明的作者行原文不符（集中在 11 条 A1 记录与 3 条改判/结构点记录），无法用当前文件内容复算；未做猜测性改写，登记在 `manifest.relocalization.record_text_unattributed_records`，须由账本产出方修正。

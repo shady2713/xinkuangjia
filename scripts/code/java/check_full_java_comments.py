@@ -32,6 +32,7 @@ import json
 import re
 import sys
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -44,6 +45,12 @@ if __package__ in (None, ""):
 from scripts.code.java import check_staged_java_comments
 from scripts.code.java.check_staged_java_comments import (
     ACCEPTANCE_REPORT_SCHEMA,
+    ACCEPTANCE_STATE_ACCEPTED,
+    ACCEPTANCE_STATE_HARD_FAILURE,
+    ACCEPTANCE_STATE_REGISTERED_BLOCKER,
+    AUTHOR_TAG_ACCEPTED_VERDICTS,
+    EVIDENCE_SNAPSHOTS_ENV,
+    SOURCE_NOTE_ACCEPTED_VERDICTS,
     AcceptanceLedger,
     EvidenceRegistry,
     Finding,
@@ -73,6 +80,61 @@ UPSTREAM_UNAVAILABLE_PATTERN = re.compile(
 ACCEPTANCE_STATE_EVIDENCE_UNAVAILABLE = "evidence-unavailable"
 # 诊断与报告里“取不回”的统一表述：消费者按该前缀识别环境故障。
 UPSTREAM_UNAVAILABLE_MESSAGE = "上游内容取不回"
+# 版本化判词词表：索引 ``d12_verdict`` 只允许取这些值。取值与来源证据索引 README
+# 登记的实测分布逐条对应（18 条已应用来源说明、11 条 A1 恢复署名、58 条复核回退、
+# 22 条需补证、77 条证据不足阻断）。词表之外的值既不是已验收也不是已登记阻断：按
+# 裁决 D15 §115，伪造未知判词必须硬失败，不能因为“不是 accepted”就自动纳管。
+REGISTERED_BLOCKER_VERDICTS = (
+    "证据不足，保持原状并登记阻断",
+    "复核回退，保持来源说明并登记阻断（尚未验收）",
+    "需补证，尚未验收",
+)
+KNOWN_SOURCE_VERDICTS = (
+    *SOURCE_NOTE_ACCEPTED_VERDICTS,
+    *AUTHOR_TAG_ACCEPTED_VERDICTS,
+    *REGISTERED_BLOCKER_VERDICTS,
+)
+# 已登记阻断绑定材料复算的并发取回上限：只影响取回耗时，不改变任何判据或阈值。
+BOUND_MATERIAL_WORKERS = 8
+
+
+def unknown_verdict(verdict: object) -> str | None:
+    """判断一个 ``d12_verdict`` 是否是词表之外的未知判词。
+
+    Args:
+        verdict: 索引记录的验收判词原值。
+
+    Returns:
+        可直接展示的诊断（逐字包含该未知判词）；判词合法时返回 ``None``。
+    """
+
+    value = str(verdict or "").strip()
+    if value in KNOWN_SOURCE_VERDICTS:
+        return None
+    if not value:
+        return "清单索引缺少 d12_verdict 验收状态，验收状态不得省略"
+    return f"清单索引的 d12_verdict 取值不在已定义判词集合内：{value}"
+
+
+def bound_material_unavailable_reason(url: str, detail: str) -> str:
+    """按规则实现同一形状写出“取不回”原因。
+
+    与 ``check_staged_java_comments._verify_upstream_snapshot`` 的措辞保持逐字一致，
+    使既有 ``parse_upstream_unavailable`` 判定与 ``run_checks`` 的消费者前缀都能把这条
+    原因识别为环境故障，而不是内容不符。
+
+    Args:
+        url: 实际尝试过的固定地址。
+        detail: 真实故障说明。
+
+    Returns:
+        可直接写入逐项原因与诊断的文本。
+    """
+
+    return (
+        f"{UPSTREAM_UNAVAILABLE_PREFIX} {url}（{detail}）；"
+        f"可设置 {EVIDENCE_SNAPSHOTS_ENV} 提供受控快照"
+    )
 
 
 def scan_all_java_comments(
@@ -191,6 +253,173 @@ def upstream_fetch_recorder() -> Iterator[list[dict[str, str]]]:
         yield failures
     finally:
         check_staged_java_comments._fetch_upstream_bytes = original
+
+
+def _demote_to_hard_failure(
+    ledger: AcceptanceLedger,
+    index: int,
+    reason: str,
+    findings: list[Finding],
+) -> None:
+    """把一条逐项状态就地改判为硬失败并补出对应诊断。
+
+    改判只发生在“已登记阻断”这一分类上：已登记只说明缺口被纳管，不说明绑定材料成立。
+    诊断写成与其它证据绑定诊断同一形状（来源证据主张类），消费者据此把它当成真实拒绝
+    而不是历史欠账。
+
+    Args:
+        ledger: 本次扫描收集的逐项验收状态，按位置就地替换。
+        index: 目标状态在 ``ledger.states`` 中的下标。
+        reason: 改判原因，诊断逐字包含它。
+        findings: 本次扫描的硬失败诊断列表。
+    """
+
+    state = ledger.states[index]
+    ledger.states[index] = replace(
+        state, classification=ACCEPTANCE_STATE_HARD_FAILURE, reasons=(reason,)
+    )
+    findings.append(Finding(state.path, state.line, "type-author", reason, True))
+
+
+def reject_unknown_verdicts(
+    ledger: AcceptanceLedger, findings: list[Finding]
+) -> int:
+    """把判词不在已定义集合内的记录改判为硬失败（裁决 D15 §115）。
+
+    未知判词既不是已验收也不是已登记阻断：维护入口不得因为“它不是 accepted”就把它
+    纳管成已登记阻断，严格入口的诊断也必须直接指出是未知判词，而不是把它说成合法
+    判词里的“尚未验收”。本判据不改判任何合法判词的记录。
+
+    Args:
+        ledger: 本次扫描收集的逐项验收状态，命中时按对象就地改写分类。
+        findings: 本次扫描的硬失败诊断列表。
+
+    Returns:
+        被改判为硬失败的条目数。
+    """
+
+    changed = 0
+    for index, state in enumerate(ledger.states):
+        reason = unknown_verdict(state.verdict)
+        if reason is None:
+            continue
+        _demote_to_hard_failure(ledger, index, reason, findings)
+        changed += 1
+    return changed
+
+
+def _bound_material_verdict(
+    registry: EvidenceRegistry, record: dict[str, object], path: str
+) -> tuple[str | None, str | None]:
+    """复算一条记录绑定材料的实际字节。
+
+    受控快照优先，缺失时按索引登记的固定地址取回；只复算 SHA-256，不套用“上游必须
+    未声明作者”这一来源说明专属门槛——作者标签形态的已登记阻断，其上游版本本来就可能
+    声明作者，那由分支契约负责，本判据只回答“登记的这段字节是不是现在这一段字节”。
+
+    Args:
+        registry: 受控证据清单，含快照根目录。
+        record: 受控索引记录。
+        path: 记录登记的仓库相对路径。
+
+    Returns:
+        ``(内容不符原因, 取不回原因)``；两者都为 ``None`` 表示绑定材料的实测字节与登记
+        指纹一致。两类原因不会同时出现：取不回是环境故障，内容不符是数据不一致。
+    """
+
+    module = check_staged_java_comments
+    expected = str(record.get("upstream_sha256") or "").strip().lower()
+    if not module.SHA256_PATTERN.match(expected):
+        return f"清单缺少有效的上游内容 SHA-256，绑定材料无法核对：{path}", None
+    commit = str(record.get("upstream_commit") or "")
+    repository = module._repository_identifier(str(record.get("upstream_repo_url") or ""))
+    if repository is None or not module.COMMIT_PATTERN.match(commit):
+        return "清单缺少有效的上游仓库与固定提交，绑定材料无法核对：" + path, None
+    upstream_path = str(record.get("upstream_path") or "")
+    if registry.snapshots is not None:
+        candidate = module._resolve_snapshot(registry.snapshots, repository, commit, upstream_path)
+        if candidate is not None:
+            try:
+                raw = candidate.read_bytes()
+            except OSError as error:
+                return f"上游快照不可读：{candidate}（{error.strerror or error}）", None
+            return _bound_material_digest(raw, expected, path), None
+    content_url, url_error = module._fixed_content_url(
+        str(record.get("upstream_file_url") or ""), repository, commit, upstream_path
+    )
+    if url_error:
+        return url_error, None
+    assert content_url is not None
+    try:
+        raw = module._fetch_upstream_bytes(content_url)
+    except (OSError, ValueError) as error:
+        detail = getattr(error, "reason", None) or error
+        return None, bound_material_unavailable_reason(
+            content_url, f"{type(error).__name__}: {detail}"
+        )
+    return _bound_material_digest(raw, expected, path), None
+
+
+def _bound_material_digest(raw: bytes, expected: str, path: str) -> str | None:
+    """比较绑定材料的实测指纹与登记指纹，返回内容不符原因或 ``None``。"""
+
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != expected:
+        return (
+            f"已登记阻断的绑定材料实测指纹 {digest} 与索引登记 {expected} 不符：{path}"
+        )
+    return None
+
+
+def verify_blocker_material_bytes(
+    registry: EvidenceRegistry | None,
+    ledger: AcceptanceLedger,
+    findings: list[Finding],
+) -> int:
+    """复算每条已登记阻断的绑定材料实际字节（裁决 D15 §72/§115）。
+
+    规则实现在“未验收”分支提前返回，内容核对整段被跳过；只登记不核对等于把“它是阻断”
+    变成跳过材料校验的理由。因此本判据在扫描之后对已登记阻断独立复算一次：哈希不符
+    是内容硬失败，材料不可得写入独立的“取不回”原因交既有机制归入证据不可得集合。
+    两类错误分别呈现，互不吞并。
+
+    Args:
+        registry: 本次采用的受控证据清单；未启用验收状态时不做本判据。
+        ledger: 本次扫描收集的逐项验收状态，命中时按对象就地改写分类。
+        findings: 本次扫描的硬失败诊断列表。
+
+    Returns:
+        被改判为硬失败的条目数。
+    """
+
+    if registry is None or not registry.requires_acceptance_state:
+        return 0
+    targets = [
+        index
+        for index, state in enumerate(ledger.states)
+        if state.classification == ACCEPTANCE_STATE_REGISTERED_BLOCKER
+        and state.path in registry.records
+    ]
+    if not targets:
+        return 0
+    with ThreadPoolExecutor(max_workers=BOUND_MATERIAL_WORKERS) as pool:
+        verdicts = list(
+            pool.map(
+                lambda index: _bound_material_verdict(
+                    registry, registry.records[ledger.states[index].path],
+                    ledger.states[index].path,
+                ),
+                targets,
+            )
+        )
+    changed = 0
+    for index, (content, unavailable) in zip(targets, verdicts):
+        reason = content if content is not None else unavailable
+        if reason is None:
+            continue
+        _demote_to_hard_failure(ledger, index, reason, findings)
+        changed += 1
+    return changed
 
 
 def split_evidence_unavailability(
@@ -401,6 +630,11 @@ def main() -> int:
                 acceptance=ledger,
                 maintenance=args.maintenance,
             )
+            # 扫描后再独立复核两件事：判词是否在已定义集合内，以及已登记阻断的绑定材料
+            # 实际字节是否与索引一致。两者都不是“未验收”可以豁免的理由。
+            reject_unknown_verdicts(ledger, findings)
+            verify_blocker_material_bytes(registry, ledger, findings)
+            findings[:] = sorted(set(findings), key=lambda item: (item.path, item.line, item.rule))
             unavailable = split_evidence_unavailability(ledger, findings, fetch_failures)
     except CheckError as error:
         print(f"Java 全量注释检查失败：{error}", file=sys.stderr)
