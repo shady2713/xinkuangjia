@@ -245,6 +245,11 @@ SNAPSHOT_MANIFEST_NAME = "上游快照清单.json"
 SNAPSHOT_MANIFEST_SCHEMA = "d12-upstream-snapshot/v1"
 SNAPSHOT_MANIFEST_MAX_BYTES = 4 * 1024 * 1024
 SNAPSHOT_MANIFEST_KINDS = ("upstream-source", "local-baseline", "license")
+# 许可证定位形态与 `_resolve_snapshot` 的固定提交布局一致：<仓库名>@<提交>/<上游相对路径>。
+# 索引登记的 `license_path` 必须能被这条规则解析并落到快照内的一条许可证条目上。
+LICENSE_PATH_PATTERN = re.compile(
+    r"^(?P<repository>[^/@]+)@(?P<commit>[0-9a-f]{40})/(?P<upstream_path>.+)$"
+)
 # 固定地址取回的边界：单个上游文件不超过 4 MiB，连接与读取合计不超过 30 秒；
 # 瞬时连接中断按固定次数重试，仍失败即按“取不回”拒绝。
 EVIDENCE_FETCH_TIMEOUT_SECONDS = 30.0
@@ -1884,6 +1889,135 @@ def _load_snapshot_manifest(snapshots: Path) -> dict[str, object] | None:
     return document
 
 
+def _upstream_repository_name(record: dict[str, object]) -> str:
+    """取记录登记的上游仓库名（``拥有者/仓库名`` 的最后一段）。
+
+    Args:
+        record: 受控来源清单记录。
+
+    Returns:
+        仓库名，例如 ``ruoyi-vue-pro``；两处登记都为空时返回空串。
+    """
+
+    raw = _text(record, "upstream_repo_id") or _text(record, "upstream_repo_url")
+    value = raw.strip().rstrip("/")
+    if not value:
+        return ""
+    if "://" in value:
+        value = value.split("://", 1)[1]
+        value = value.split("/", 1)[1] if "/" in value else ""
+    name = value.split("/", 1)[-1]
+    return name[:-4] if name.endswith(".git") else name
+
+
+def resolve_license_relative_path(record: dict[str, object], label: str) -> str:
+    """把记录登记的 ``license_path`` 解析成快照根目录下的相对路径。
+
+    可解析形态与 ``_resolve_snapshot`` 的固定提交布局一致：``<仓库名>@<提交>/<上游相对路径>``。
+    登记的仓库名与提交必须等于该记录自己的上游定位，形态不符或路径越界一律拒绝，
+    定位不到真实文件的情况由调用方按受控失败处理。
+
+    Args:
+        record: 受控来源清单记录。
+        label: 诊断中用于指代该记录的文本。
+
+    Returns:
+        快照根目录下的相对路径。
+
+    Raises:
+        EvidenceError: 形态非法、仓库名或提交与记录不一致，或路径越界。
+    """
+
+    value = _text(record, "license_path")
+    matched = LICENSE_PATH_PATTERN.match(value)
+    if matched is None:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 不是可解析形态"
+            f"（期望 <仓库名>@<40 位提交>/<上游相对路径>）：{value or '空'}"
+        )
+    repository = matched.group("repository")
+    commit = matched.group("commit")
+    upstream_path = matched.group("upstream_path")
+    expected_repository = _upstream_repository_name(record)
+    if expected_repository and repository != expected_repository:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 仓库名 {repository} 与登记的上游仓库"
+            f" {expected_repository} 不一致"
+        )
+    expected_commit = _text(record, "upstream_commit")
+    if expected_commit and commit != expected_commit:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 提交 {commit} 与登记的上游固定提交"
+            f" {expected_commit} 不一致"
+        )
+    relative = Path(upstream_path)
+    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 上游路径不是安全的相对路径：{upstream_path}"
+        )
+    return f"{repository}@{commit}/{upstream_path}"
+
+
+def verify_record_license_binding(
+    snapshots: Path,
+    license_entries: dict[str, str],
+    label: str,
+    record: dict[str, object],
+) -> None:
+    """复算一条记录登记的许可证定位、实际字节与指纹。
+
+    ``license_path`` 必须能被固定提交布局解析成快照内的一条许可证条目，且该条目的
+    指纹与记录声明的 ``license_sha256`` 相同、文件实际字节的 SHA-256 也相同。三者任一
+    不成立即拒绝：不解析、只比对清单自报的指纹、或只比对记录自报的指纹都不算通过。
+    未声明 ``license_path`` 与 ``license_sha256`` 的记录不在本判据范围内（不新增义务），
+    只声明其一时按缺失处理。
+
+    Args:
+        snapshots: 受控快照根目录。
+        license_entries: 清单中 ``kind=license`` 的条目，路径到指纹的映射。
+        label: 诊断中用于指代该记录的文本。
+        record: 受控来源清单记录。
+
+    Raises:
+        EvidenceError: 定位不可解析、指向清单外的文件、文件缺失或字节与指纹不符。
+    """
+
+    declared = _text(record, "license_sha256").lower()
+    located = _text(record, "license_path")
+    if not declared and not located:
+        return
+    if not declared:
+        raise EvidenceError(
+            f"记录 {label} 登记了 license_path {located} 却没有 license_sha256，"
+            "定位无法校验"
+        )
+    if not SHA256_PATTERN.match(declared):
+        raise EvidenceError(f"记录 {label} 的 license_sha256 不是有效 SHA-256：{declared}")
+    relative = resolve_license_relative_path(record, label)
+    if relative not in license_entries:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 指向清单外的文件：{relative}"
+            f"；快照的许可证条目为 {'、'.join(sorted(license_entries)) or '空'}"
+        )
+    if license_entries[relative] != declared:
+        raise EvidenceError(
+            f"记录 {label} 的 license_path 指向的许可证指纹与声明不符："
+            f"清单 {license_entries[relative]}，记录 {declared}"
+        )
+    target = snapshots / relative
+    try:
+        raw = target.read_bytes()
+    except OSError as error:
+        raise EvidenceError(
+            f"记录 {label} 的许可证文件不可读：{target}（{error.strerror or error}）"
+        ) from error
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != declared:
+        raise EvidenceError(
+            f"记录 {label} 的许可证文件指纹与声明不符：{target} 声明 {declared}，实测 {digest}"
+        )
+
+
 def verify_snapshot_manifest(
     snapshots: Path,
     document: dict[str, object],
@@ -2027,6 +2161,13 @@ def verify_snapshot_manifest(
                 f"{snapshots / SNAPSHOT_MANIFEST_NAME} 的许可证条目为"
                 f"{'、'.join(sorted(license_digests)) or '空'}"
             )
+    license_entries_by_path = {
+        _text(entry, "path"): _text(entry, "sha256").lower()
+        for entry in entries
+        if isinstance(entry, dict) and _text(entry, "kind") == "license"
+    }
+    for path, record in sorted((records or {}).items()):
+        verify_record_license_binding(snapshots, license_entries_by_path, path, record)
     baseline_digests = {
         _text(entry, "sha256").lower()
         for entry in entries
@@ -6284,16 +6425,59 @@ def _emit(
     return int(result["process_exit_code"])
 
 
+def record_type_keys(record: dict[str, object], path: str) -> list[tuple[str, str]]:
+    """展开一条索引记录应当产出的 ``(文件, 类型)`` 唯一键。
+
+    对账必须按“文件 + 类型标识”而不是按文件：同一文件里的多个 public/嵌套类型各自
+    是一条独立声明，按文件前缀折叠会让“只报了其中一个类型”看起来像“整个文件已覆盖”。
+    本函数的取值口径与 ``scripts/workflow/run_checks.py`` 的 ``record_type_keys`` 一致，
+    因此检查器、调度器与发布汇总对同一输入必须给出同一判定。真实值取自
+    ``type_evidence.types[].qualified_name``；没有逐类型映射时退回文件级键（空类型名），
+    此时该文件只能有一条逐项状态，文件级键不做类型方向的反向核对。
+
+    Args:
+        record: 受控索引记录。
+        path: 该记录登记的仓库相对路径。
+
+    Returns:
+        ``(仓库相对路径, 类型限定名)`` 列表；重复登记不会被折叠，由调用方判为唯一键不成立。
+    """
+
+    raw = record.get("type_evidence")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = None
+    if not isinstance(raw, dict):
+        return [(path, "")]
+    entries = raw.get("types")
+    if not isinstance(entries, list):
+        return [(path, "")]
+    keys: list[tuple[str, str]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        qualified = _text(entry, "qualified_name").strip()
+        if qualified:
+            keys.append((path, qualified))
+    return keys or [(path, "")]
+
+
 def uncovered_acceptance_records(
     registry: EvidenceRegistry | None,
     scanned: set[str],
     ledger: AcceptanceLedger | None,
 ) -> list[dict[str, object]]:
-    """列出扫描范围内有非验收索引记录但没有逐项状态的漏项（裁决 D15 §68/§69）。
+    """按 ``(文件, 类型)`` 唯一键双向列出扫描范围内的对账缺口（裁决 D15 §68/§69）。
 
-    消费者的“范围漏项”指的是：索引声明了某对象尚未验收，本次扫描又确实覆盖了该文件，
-    但报告里既没有它的已验收条目，也没有阻断或硬失败条目。这类漏项不能按默认 0、
-    空集合或旧账本降级。
+    消费者的“范围漏项”指的是：索引声明了某个 ``(文件, 类型)`` 对象尚未验收，本次扫描
+    又确实覆盖了该文件，但报告里既没有它的已验收条目，也没有阻断或硬失败条目。这类
+    漏项不能按默认 0、空集合或旧账本降级。反方向同样核对：报告里出现索引中不存在的
+    ``(文件, 类型)`` 键，或索引把同一个键重复登记，唯一键都不成立，按缺口拒绝。
+
+    按文件前缀折叠会让一个文件内多个类型时“只用其中一个类型的记录即声称覆盖整个文件”，
+    因此这里逐键比较；与 ``run_checks``／``ci_gate`` 的唯一键口径保持一致。
 
     Args:
         registry: 受控证据清单。
@@ -6301,36 +6485,100 @@ def uncovered_acceptance_records(
         ledger: 本次收集的逐项验收状态。
 
     Returns:
-        漏项摘要列表（含记录标识与判词）；没有漏项时为空。
+        漏项摘要列表（含唯一键、判词与缺口原因）；没有漏项时为空。
     """
 
     if registry is None or not registry.requires_acceptance_state:
         return []
-    covered: set[str] = set()
+    covered: set[tuple[str, str]] = set()
     if ledger is not None:
         for state in ledger.states:
-            covered.add(state.record_id)
-            covered.add(f"{state.path}#{state.type_name}")
+            covered.add((state.path, state.type_name))
     uncovered: list[dict[str, object]] = []
+    declared: set[tuple[str, str]] = set()
+    typed: set[str] = set()
     for path, record in sorted(registry.records.items()):
         if path not in scanned:
             continue
         verdict = _index_verdict(record)
+        keys = record_type_keys(record, path)
+        if keys == [(path, "")]:
+            # 没有逐类型映射的记录只能按文件级键核对，不展开类型方向。
+            continue
+        typed.add(path)
+        declared.update(keys)
         if verdict in (*SOURCE_NOTE_ACCEPTED_VERDICTS, *AUTHOR_TAG_ACCEPTED_VERDICTS):
             continue
-        if any(record_id.startswith(f"{path}#") for record_id in covered):
+        for key in keys:
+            if keys.count(key) > 1:
+                uncovered.append(
+                    _uncovered_entry(
+                        path, key[1], verdict, record, "index-duplicate",
+                        "索引把同一个（文件, 类型）唯一键重复登记，唯一键不成立",
+                    )
+                )
+                continue
+            if key in covered:
+                continue
+            uncovered.append(
+                _uncovered_entry(
+                    path, key[1], verdict, record, "missing-state",
+                    "索引登记的（文件, 类型）在本次报告里没有逐项状态，不能按文件前缀折叠为已覆盖",
+                )
+            )
+    if ledger is None:
+        return uncovered
+    for state in ledger.states:
+        if state.path not in typed or state.path not in scanned:
+            continue
+        key = (state.path, state.type_name)
+        if key in declared:
             continue
         uncovered.append(
-            {
-                "record_id": path,
-                "path": path,
-                "verdict": verdict,
-                "blocker_reason": _text(record, SOURCE_NOTE_BLOCKER_FIELD),
-                "open_gap": _text(record, "open_gap"),
-            }
+            _uncovered_entry(
+                state.path,
+                state.type_name,
+                _index_verdict(registry.records[state.path]),
+                registry.records[state.path],
+                "undeclared-state",
+                "报告里的（文件, 类型）在索引中没有对应的唯一键",
+            )
         )
     return uncovered
 
+
+def _uncovered_entry(
+    path: str,
+    type_name: str,
+    verdict: str,
+    record: dict[str, object],
+    reason_code: str,
+    reason: str,
+) -> dict[str, object]:
+    """构造一条范围漏项摘要。
+
+    Args:
+        path: 仓库相对路径。
+        type_name: 类型限定名；空串表示没有逐类型映射的文件级键。
+        verdict: 索引 ``d12_verdict`` 当前判词。
+        record: 受控索引记录。
+        reason_code: 缺口种类：``missing-state``／``index-duplicate``／``undeclared-state``。
+        reason: 缺口的可读说明。
+
+    Returns:
+        可写入 v2 报告 ``uncovered_records`` 的结构化条目。
+    """
+
+    return {
+        "record_id": f"{path}#{type_name}" if type_name else path,
+        "path": path,
+        "type_name": type_name,
+        "reason_code": reason_code,
+        "reason": reason,
+        "verdict": verdict,
+        "blocker_reason": _text(record, SOURCE_NOTE_BLOCKER_FIELD),
+        "open_gap": _text(record, "open_gap"),
+    }
 
 
 def _describe_evidence(evidence: EvidenceRegistry | None) -> str:

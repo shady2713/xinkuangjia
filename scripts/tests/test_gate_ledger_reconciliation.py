@@ -451,17 +451,28 @@ def test_missing_top_level_type_entry_is_rejected(tmp_path: Path) -> None:
 
 
 def test_missing_type_entry_is_rejected_by_real_cli(tmp_path: Path) -> None:
-    """反例·漏项：索引登记的类型在报告里没有条目时，真实调度器 CLI 必须非零退出。"""
+    """反例·漏项：索引登记的类型在报告里没有条目时，检查器与调度器都必须非零退出。
+
+    本用例曾把「全量入口对缺失的类型仍退出 0」断言为基线：那正是
+    ``uncovered_acceptance_records`` 的文件前缀折叠缺陷（同一文件里多个类型时，
+    只用其中一个类型的条目即声称覆盖整个文件）。判据改为按 ``(文件, 类型)`` 唯一键
+    对账后，检查器自身就报漏项，断言只作加强：全量入口由退出 0 改为退出 1，并逐条
+    点名缺失的 ``example.ProbeDemo.Ghost``。
+    """
 
     root, snapshots = write_root(
         tmp_path, "ledger-missing-cli", index_names=("ProbeDemo", "Api", "Ui", "Ghost")
     )
     checked = full_cli(root, snapshots, "--maintenance")
-    assert checked.returncode == 0, checked.stdout + checked.stderr
-    assert len(json.loads(checked.stdout)["acceptance"]["registered_blockers"]) == 3
+    acceptance = json.loads(checked.stdout)["acceptance"]
+    assert checked.returncode == 1, checked.stdout + checked.stderr
+    assert len(acceptance["registered_blockers"]) == 3
+    assert acceptance["counts"]["uncovered_records"] == 1
+    assert acceptance["uncovered_records"][0]["type_name"] == "example.ProbeDemo.Ghost"
     done = run_checks_cli(root, snapshots, "--maintenance")
     assert done.returncode != 0, done.stdout
-    assert "example.ProbeDemo.Ghost" in done.stdout + done.stderr
+    # 检查器自己报出漏项后，调度器按范围漏项拒绝（不再依赖它独立复算才点名缺失类型）。
+    assert "范围漏项" in done.stdout + done.stderr
 
 
 def test_dropping_entry_and_counts_together_is_rejected(tmp_path: Path) -> None:

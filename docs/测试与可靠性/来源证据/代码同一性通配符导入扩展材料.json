@@ -1,0 +1,1813 @@
+{
+  "schema": "d16-wildcard-import-extension-materials/v1",
+  "title": "D16 §84 通配符导入扩展材料（3 条严格比较拒绝对象）",
+  "notice": "本文件由实施方生成，判定列留空待独立复核方填写；实施方不得自行填写。本文件不含任何验收结论，也不改判索引中的任何记录：d12_verdict / evidence_branch / evidence_route 一律保持原值。 本文件只准备扩展路线所需的材料并提出**候选规则草案**，草案未实施、未登记进受控变换集，待裁决。",
+  "ruling_reference": "裁决 D16 §84：本轮不批准“剥离全部 import”作为新分支规则；通配符与显式导入不能按当前 T5 直接同一化；若确需这种扩展，须另行固定 Java 版本和完整编译依赖，证明全部实际类型与静态成员引用的解析绑定对应，并提供未使用、冲突和同名类型反例，再形成明确的比较契约。",
+  "generated_by": "scripts/tools/build_d16_review_package.py",
+  "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
+  "repository": {
+    "root": "/home/weetion/桌面/kuangjia/repo",
+    "head": "0e08c16f3622b74fdd8625c819d8e346396145c4",
+    "branch": "codex/framework-remediation"
+  },
+  "java_version_and_dependencies": {
+    "workspace": "后端代码/basic-framework-boot",
+    "poms": [
+      {
+        "path": "后端代码/basic-framework-boot/pom.xml",
+        "sha256": "880a3d12c54be8f6019e4e3e955e1fcf0b6dcdec35c462309d2bc60e0d8d89c0",
+        "artifact_id": "basic-framework",
+        "packaging": "pom",
+        "properties": {
+          "java.version": "17",
+          "maven.compiler.release": "${java.version}",
+          "maven-compiler-plugin.version": "3.15.0",
+          "maven-enforcer-plugin.version": "3.6.2"
+        },
+        "maven_compiler_plugin": {}
+      },
+      {
+        "path": "后端代码/basic-framework-boot/basic-framework-core/pom.xml",
+        "sha256": "64b548e18c72b56622e4a7473fa6fe2c24e92fbcfa37fe5c9a7a67febd23e9ee",
+        "artifact_id": "basic-framework-core",
+        "packaging": "pom",
+        "properties": {},
+        "maven_compiler_plugin": {}
+      },
+      {
+        "path": "后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml",
+        "sha256": "2d61187c6657740dd6f901830969fdcad57cc7b119d891d92b03a1d070c60ca8",
+        "artifact_id": "basic-framework-dependencies",
+        "packaging": "pom",
+        "properties": {},
+        "maven_compiler_plugin": {}
+      },
+      {
+        "path": "后端代码/basic-framework-boot/basic-framework-module-infra/pom.xml",
+        "sha256": "cc188808b9a0f4f185087c3f395efc571a12be6c037c8e736e91bb7fedcea221",
+        "artifact_id": "basic-framework-module-infra",
+        "packaging": "jar",
+        "properties": {},
+        "maven_compiler_plugin": {}
+      },
+      {
+        "path": "后端代码/basic-framework-boot/basic-framework-module-system/pom.xml",
+        "sha256": "af8f09d0d34be99fd70130ae719cbff29e71ce59e4d08f31bf7fded154f2b492",
+        "artifact_id": "basic-framework-module-system",
+        "packaging": "jar",
+        "properties": {},
+        "maven_compiler_plugin": {}
+      },
+      {
+        "path": "后端代码/basic-framework-boot/basic-framework-server/pom.xml",
+        "sha256": "33cc24159c7d4ef9d0e5b5abbe21f52ab2390b8e118a1fcd8c880601d128abfb",
+        "artifact_id": "basic-framework-server",
+        "packaging": "jar",
+        "properties": {},
+        "maven_compiler_plugin": {}
+      }
+    ],
+    "measured": {
+      "java_version_property": "17",
+      "maven_compiler_release": "${java.version}",
+      "maven_compiler_source": null,
+      "maven_compiler_target": null,
+      "maven_compiler_plugin_version": "3.15.0",
+      "poms_overriding_compiler_settings": []
+    },
+    "how_to_pin": [
+      "固定方式 1（逐字节）：以本节每个 POM 的 path + sha256 为准，任何 POM 改动都会使本材料失效，复核方应重跑本工具而不是沿用本节读数。",
+      "固定方式 2（属性口径）：根 POM 的 java.version 与 maven.compiler.release 属性逐字见 measured；maven-compiler-plugin 的版本与 configuration 见各条 maven_compiler_plugin。",
+      "固定方式 3（实跑口径）：flock 串行执行 cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && cd 后端代码/basic-framework-boot && mvn -B -ntp -o help:evaluate -Dexpression=maven.compiler.release -q -DforceStdout；本轮是否实跑见 measured_runtime。"
+    ],
+    "measured_runtime": {
+      "status": "未运行",
+      "reason": "本轮未实跑 Maven；判定一律以 POM 逐字节指纹与属性取值为准，不以推测代替实测。",
+      "command": "flock /home/weetion/桌面/kuangjia/.bf-local/mvn.lock bash -lc \"cd 后端代码/basic-framework-boot && mvn -B -ntp -o help:evaluate -Dexpression=maven.compiler.release -q -DforceStdout\""
+    }
+  },
+  "items": [
+    {
+      "item_id": "WC-01",
+      "declaration": "com.basicframework.framework.dict.validation.InDict",
+      "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-excel/src/main/java/com/basicframework/framework/dict/validation/InDict.java",
+      "upstream_path": "yudao-framework/yudao-spring-boot-starter-excel/src/main/java/cn/iocoder/yudao/framework/dict/validation/InDict.java",
+      "upstream_sha256": "57fb23740c8ec348855e67ea6f0231010aad4d96bd6e5d48394b3482de4266e3",
+      "index_d12_verdict": "证据不足，保持原状并登记阻断",
+      "current_rule_result": {
+        "equal": false,
+        "first_difference": "代码流第 11 个 token 不同：本地 name:'java.lang.annotation.Documented'（第 6 行），上游 name:'java.lang.annotation.*'（第 5 行）",
+        "local_import_count": 7,
+        "upstream_import_count": 3,
+        "local_code_stream_sha256": "0e396c8e684bb92054f67d57a379b4ee0760d4b3adee4ce8d0bfed9dc94d7d4f",
+        "upstream_code_stream_sha256": "599ac70049bac0f5ef1a6876da27e950663e85709407fd20583a2ffccd335194"
+      },
+      "import_correspondence": {
+        "jdk_index_evidence": {
+          "source": "/home/weetion/tools/jdk17/jdk-17.0.20.1+1/lib/src.zip",
+          "source_sha256": "cbc429f64abf85ca18f38a95007b8c6ebbd96642650db0c8ca17461ca8e8cbda",
+          "java_source_entries": 15131,
+          "packages": 845
+        },
+        "local_import_entries": [
+          {
+            "statement": "import jakarta.validation.Constraint;",
+            "line": 3,
+            "static": false,
+            "wildcard": false,
+            "package": "jakarta.validation",
+            "simple_name": "Constraint"
+          },
+          {
+            "statement": "import jakarta.validation.Payload;",
+            "line": 4,
+            "static": false,
+            "wildcard": false,
+            "package": "jakarta.validation",
+            "simple_name": "Payload"
+          },
+          {
+            "statement": "import java.lang.annotation.Documented;",
+            "line": 6,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Documented"
+          },
+          {
+            "statement": "import java.lang.annotation.ElementType;",
+            "line": 7,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "ElementType"
+          },
+          {
+            "statement": "import java.lang.annotation.Retention;",
+            "line": 8,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Retention"
+          },
+          {
+            "statement": "import java.lang.annotation.RetentionPolicy;",
+            "line": 9,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "RetentionPolicy"
+          },
+          {
+            "statement": "import java.lang.annotation.Target;",
+            "line": 10,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Target"
+          }
+        ],
+        "upstream_import_entries": [
+          {
+            "statement": "import javax.validation.Constraint;",
+            "line": 3,
+            "static": false,
+            "wildcard": false,
+            "package": "javax.validation",
+            "simple_name": "Constraint"
+          },
+          {
+            "statement": "import javax.validation.Payload;",
+            "line": 4,
+            "static": false,
+            "wildcard": false,
+            "package": "javax.validation",
+            "simple_name": "Payload"
+          },
+          {
+            "statement": "import java.lang.annotation.*;",
+            "line": 5,
+            "static": false,
+            "wildcard": true,
+            "package": "java.lang.annotation",
+            "simple_name": "*"
+          }
+        ],
+        "local_import_count": 7,
+        "upstream_import_count": 3,
+        "local_body_type_names": [
+          "ANNOTATION_TYPE",
+          "CONSTRUCTOR",
+          "Class",
+          "Constraint",
+          "Documented",
+          "ElementType",
+          "FIELD",
+          "InDict",
+          "InDictCollectionValidator",
+          "InDictValidator",
+          "METHOD",
+          "PARAMETER",
+          "Payload",
+          "RUNTIME",
+          "Retention",
+          "RetentionPolicy",
+          "String",
+          "TYPE_USE",
+          "Target",
+          "basicframework",
+          "class",
+          "com",
+          "default",
+          "dict",
+          "extends",
+          "framework",
+          "groups",
+          "interface",
+          "message",
+          "package",
+          "payload",
+          "public",
+          "type",
+          "validatedBy",
+          "validation"
+        ],
+        "upstream_body_type_names": [
+          "ANNOTATION_TYPE",
+          "CONSTRUCTOR",
+          "Class",
+          "Constraint",
+          "Documented",
+          "ElementType",
+          "FIELD",
+          "InDict",
+          "InDictCollectionValidator",
+          "InDictValidator",
+          "METHOD",
+          "PARAMETER",
+          "Payload",
+          "RUNTIME",
+          "Retention",
+          "RetentionPolicy",
+          "String",
+          "TYPE_USE",
+          "Target",
+          "class",
+          "cn",
+          "default",
+          "dict",
+          "extends",
+          "framework",
+          "groups",
+          "interface",
+          "iocoder",
+          "message",
+          "package",
+          "payload",
+          "public",
+          "type",
+          "validatedBy",
+          "validation",
+          "yudao"
+        ],
+        "local_packages": [
+          "jakarta.validation",
+          "java.lang.annotation"
+        ],
+        "rows": [
+          {
+            "upstream": {
+              "statement": "import javax.validation.Constraint;",
+              "line": 3,
+              "static": false,
+              "wildcard": false,
+              "package": "javax.validation",
+              "simple_name": "Constraint"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import jakarta.validation.Constraint;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": {
+              "statement": "import jakarta.validation.Constraint;",
+              "line": 3,
+              "static": false,
+              "wildcard": false,
+              "package": "jakarta.validation",
+              "simple_name": "Constraint"
+            },
+            "equivalent": false,
+            "equivalent_after_registered_mapping": true,
+            "note": "上游条目按登记变换映射后与本地某条显式导入逐字相同"
+          },
+          {
+            "upstream": {
+              "statement": "import javax.validation.Payload;",
+              "line": 4,
+              "static": false,
+              "wildcard": false,
+              "package": "javax.validation",
+              "simple_name": "Payload"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import jakarta.validation.Payload;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": {
+              "statement": "import jakarta.validation.Payload;",
+              "line": 4,
+              "static": false,
+              "wildcard": false,
+              "package": "jakarta.validation",
+              "simple_name": "Payload"
+            },
+            "equivalent": false,
+            "equivalent_after_registered_mapping": true,
+            "note": "上游条目按登记变换映射后与本地某条显式导入逐字相同"
+          },
+          {
+            "upstream": {
+              "statement": "import java.lang.annotation.*;",
+              "line": 5,
+              "static": false,
+              "wildcard": true,
+              "package": "java.lang.annotation",
+              "simple_name": "*"
+            },
+            "kind": "通配符导入",
+            "package": "java.lang.annotation",
+            "package_in_fixed_jdk_index": true,
+            "jdk_package_type_count": 13,
+            "jdk_package_types": [
+              "Annotation",
+              "AnnotationFormatError",
+              "AnnotationTypeMismatchException",
+              "Documented",
+              "ElementType",
+              "IncompleteAnnotationException",
+              "Inherited",
+              "Native",
+              "Repeatable",
+              "Retention",
+              "RetentionPolicy",
+              "Target",
+              "package-info"
+            ],
+            "upstream_body_names_after_import": [
+              "ANNOTATION_TYPE",
+              "CONSTRUCTOR",
+              "Class",
+              "Constraint",
+              "Documented",
+              "ElementType",
+              "FIELD",
+              "InDict",
+              "InDictCollectionValidator",
+              "InDictValidator",
+              "METHOD",
+              "PARAMETER",
+              "Payload",
+              "RUNTIME",
+              "Retention",
+              "RetentionPolicy",
+              "String",
+              "TYPE_USE",
+              "Target"
+            ],
+            "wildcard_actually_binds": [
+              "Documented",
+              "ElementType",
+              "Retention",
+              "RetentionPolicy",
+              "Target"
+            ],
+            "body_names_not_in_that_package": [
+              "ANNOTATION_TYPE",
+              "CONSTRUCTOR",
+              "Class",
+              "Constraint",
+              "FIELD",
+              "InDict",
+              "InDictCollectionValidator",
+              "InDictValidator",
+              "METHOD",
+              "PARAMETER",
+              "Payload",
+              "RUNTIME",
+              "String",
+              "TYPE_USE"
+            ],
+            "local_explicit_same_package": [
+              "Documented",
+              "ElementType",
+              "Retention",
+              "RetentionPolicy",
+              "Target"
+            ],
+            "local_imports_from_package": [
+              "import java.lang.annotation.Documented;",
+              "import java.lang.annotation.ElementType;",
+              "import java.lang.annotation.Retention;",
+              "import java.lang.annotation.RetentionPolicy;",
+              "import java.lang.annotation.Target;"
+            ],
+            "bound_missing_on_local_side": [],
+            "local_explicit_not_bound_upstream": [],
+            "set_equivalent": true,
+            "equivalence_basis": "通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ 固定 JDK src.zip 中该包的顶层类型）与本地同包显式导入简单名集合逐项比较",
+            "import_forms_identical": false
+          }
+        ],
+        "method": "词法还原 import 条目；通配符可绑定集合 = 正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型；与本地同包显式导入集合比较。该比较不解析类路径与静态成员绑定，也不替代 D16 §84 要求的解析绑定证明。"
+      },
+      "wildcard_rows": [
+        {
+          "upstream": {
+            "statement": "import java.lang.annotation.*;",
+            "line": 5,
+            "static": false,
+            "wildcard": true,
+            "package": "java.lang.annotation",
+            "simple_name": "*"
+          },
+          "kind": "通配符导入",
+          "package": "java.lang.annotation",
+          "package_in_fixed_jdk_index": true,
+          "jdk_package_type_count": 13,
+          "jdk_package_types": [
+            "Annotation",
+            "AnnotationFormatError",
+            "AnnotationTypeMismatchException",
+            "Documented",
+            "ElementType",
+            "IncompleteAnnotationException",
+            "Inherited",
+            "Native",
+            "Repeatable",
+            "Retention",
+            "RetentionPolicy",
+            "Target",
+            "package-info"
+          ],
+          "upstream_body_names_after_import": [
+            "ANNOTATION_TYPE",
+            "CONSTRUCTOR",
+            "Class",
+            "Constraint",
+            "Documented",
+            "ElementType",
+            "FIELD",
+            "InDict",
+            "InDictCollectionValidator",
+            "InDictValidator",
+            "METHOD",
+            "PARAMETER",
+            "Payload",
+            "RUNTIME",
+            "Retention",
+            "RetentionPolicy",
+            "String",
+            "TYPE_USE",
+            "Target"
+          ],
+          "wildcard_actually_binds": [
+            "Documented",
+            "ElementType",
+            "Retention",
+            "RetentionPolicy",
+            "Target"
+          ],
+          "body_names_not_in_that_package": [
+            "ANNOTATION_TYPE",
+            "CONSTRUCTOR",
+            "Class",
+            "Constraint",
+            "FIELD",
+            "InDict",
+            "InDictCollectionValidator",
+            "InDictValidator",
+            "METHOD",
+            "PARAMETER",
+            "Payload",
+            "RUNTIME",
+            "String",
+            "TYPE_USE"
+          ],
+          "local_explicit_same_package": [
+            "Documented",
+            "ElementType",
+            "Retention",
+            "RetentionPolicy",
+            "Target"
+          ],
+          "local_imports_from_package": [
+            "import java.lang.annotation.Documented;",
+            "import java.lang.annotation.ElementType;",
+            "import java.lang.annotation.Retention;",
+            "import java.lang.annotation.RetentionPolicy;",
+            "import java.lang.annotation.Target;"
+          ],
+          "bound_missing_on_local_side": [],
+          "local_explicit_not_bound_upstream": [],
+          "set_equivalent": true,
+          "equivalence_basis": "通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ 固定 JDK src.zip 中该包的顶层类型）与本地同包显式导入简单名集合逐项比较",
+          "import_forms_identical": false
+        }
+      ],
+      "sets_equivalent": true,
+      "import_forms_identical": false,
+      "equivalence_note": "等价性按“通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型）vs 本地同包显式导入集合”机械比较；这是集合层面的证据，不等于双方解析到同一目标类型，D16 §84 要求的是逐类型解析绑定证明，本材料不提供该证明。",
+      "candidate_rule_probe_on_this_item": {
+        "variant_expand_compare_qualified_equal": false,
+        "variant_expand_compare_simple_name_equal": false,
+        "variant_drop_unused_compare_qualified_equal": false
+      },
+      "candidate_rule_probe_qualified_sets": {
+        "local": [
+          "jakarta.validation.Constraint",
+          "jakarta.validation.Payload",
+          "java.lang.annotation.Documented",
+          "java.lang.annotation.ElementType",
+          "java.lang.annotation.Retention",
+          "java.lang.annotation.RetentionPolicy",
+          "java.lang.annotation.Target"
+        ],
+        "upstream": [
+          "java.lang.annotation.Documented",
+          "java.lang.annotation.ElementType",
+          "java.lang.annotation.Retention",
+          "java.lang.annotation.RetentionPolicy",
+          "java.lang.annotation.Target",
+          "javax.validation.Constraint",
+          "javax.validation.Payload"
+        ]
+      },
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "java.lang.annotation",
+          "assumed_types": [
+            "ANNOTATION_TYPE",
+            "CONSTRUCTOR",
+            "Class",
+            "Constraint",
+            "FIELD",
+            "InDict",
+            "InDictCollectionValidator",
+            "InDictValidator",
+            "METHOD",
+            "PARAMETER",
+            "Payload",
+            "RUNTIME",
+            "String",
+            "TYPE_USE"
+          ]
+        }
+      ],
+      "reproduction": {
+        "item_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/tools/build_d16_review_package.py --verify-wildcard --item 'com.basicframework.framework.dict.validation.InDict' --json",
+        "gate_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/code/java/check_full_java_comments.py --json"
+      },
+      "reviewer_decision": {
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      }
+    },
+    {
+      "item_id": "WC-02",
+      "declaration": "com.basicframework.framework.excel.core.annotations.DictFormat",
+      "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-excel/src/main/java/com/basicframework/framework/excel/core/annotations/DictFormat.java",
+      "upstream_path": "yudao-framework/yudao-spring-boot-starter-excel/src/main/java/cn/iocoder/yudao/framework/excel/core/annotations/DictFormat.java",
+      "upstream_sha256": "e7c980d2d70694a65ccddb66616830833ac9f136f9c67c5ce4552cae18dbe112",
+      "index_d12_verdict": "证据不足，保持原状并登记阻断",
+      "current_rule_result": {
+        "equal": false,
+        "first_difference": "代码流第 5 个 token 不同：本地 name:'java.lang.annotation.ElementType'（第 3 行），上游 name:'java.lang.annotation.*'（第 3 行）",
+        "local_import_count": 5,
+        "upstream_import_count": 1,
+        "local_code_stream_sha256": "47bb89513454aa3ea508d82d3bed4b280f3056805141e65e536252746e31ffef",
+        "upstream_code_stream_sha256": "840701c8ab9bba88e7a5e965bd38aa58ded0ab9410c358c01e3e7de5e0afcbcc"
+      },
+      "import_correspondence": {
+        "jdk_index_evidence": {
+          "source": "/home/weetion/tools/jdk17/jdk-17.0.20.1+1/lib/src.zip",
+          "source_sha256": "cbc429f64abf85ca18f38a95007b8c6ebbd96642650db0c8ca17461ca8e8cbda",
+          "java_source_entries": 15131,
+          "packages": 845
+        },
+        "local_import_entries": [
+          {
+            "statement": "import java.lang.annotation.ElementType;",
+            "line": 3,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "ElementType"
+          },
+          {
+            "statement": "import java.lang.annotation.Inherited;",
+            "line": 4,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Inherited"
+          },
+          {
+            "statement": "import java.lang.annotation.Retention;",
+            "line": 5,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Retention"
+          },
+          {
+            "statement": "import java.lang.annotation.RetentionPolicy;",
+            "line": 6,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "RetentionPolicy"
+          },
+          {
+            "statement": "import java.lang.annotation.Target;",
+            "line": 7,
+            "static": false,
+            "wildcard": false,
+            "package": "java.lang.annotation",
+            "simple_name": "Target"
+          }
+        ],
+        "upstream_import_entries": [
+          {
+            "statement": "import java.lang.annotation.*;",
+            "line": 3,
+            "static": false,
+            "wildcard": true,
+            "package": "java.lang.annotation",
+            "simple_name": "*"
+          }
+        ],
+        "local_import_count": 5,
+        "upstream_import_count": 1,
+        "local_body_type_names": [
+          "DictFormat",
+          "ElementType",
+          "FIELD",
+          "Inherited",
+          "RUNTIME",
+          "Retention",
+          "RetentionPolicy",
+          "String",
+          "Target",
+          "annotations",
+          "basicframework",
+          "com",
+          "core",
+          "excel",
+          "framework",
+          "interface",
+          "package",
+          "public",
+          "value"
+        ],
+        "upstream_body_type_names": [
+          "DictFormat",
+          "ElementType",
+          "FIELD",
+          "Inherited",
+          "RUNTIME",
+          "Retention",
+          "RetentionPolicy",
+          "String",
+          "Target",
+          "annotations",
+          "cn",
+          "core",
+          "excel",
+          "framework",
+          "interface",
+          "iocoder",
+          "package",
+          "public",
+          "value",
+          "yudao"
+        ],
+        "local_packages": [
+          "java.lang.annotation"
+        ],
+        "rows": [
+          {
+            "upstream": {
+              "statement": "import java.lang.annotation.*;",
+              "line": 3,
+              "static": false,
+              "wildcard": true,
+              "package": "java.lang.annotation",
+              "simple_name": "*"
+            },
+            "kind": "通配符导入",
+            "package": "java.lang.annotation",
+            "package_in_fixed_jdk_index": true,
+            "jdk_package_type_count": 13,
+            "jdk_package_types": [
+              "Annotation",
+              "AnnotationFormatError",
+              "AnnotationTypeMismatchException",
+              "Documented",
+              "ElementType",
+              "IncompleteAnnotationException",
+              "Inherited",
+              "Native",
+              "Repeatable",
+              "Retention",
+              "RetentionPolicy",
+              "Target",
+              "package-info"
+            ],
+            "upstream_body_names_after_import": [
+              "DictFormat",
+              "ElementType",
+              "FIELD",
+              "Inherited",
+              "RUNTIME",
+              "Retention",
+              "RetentionPolicy",
+              "String",
+              "Target"
+            ],
+            "wildcard_actually_binds": [
+              "ElementType",
+              "Inherited",
+              "Retention",
+              "RetentionPolicy",
+              "Target"
+            ],
+            "body_names_not_in_that_package": [
+              "DictFormat",
+              "FIELD",
+              "RUNTIME",
+              "String"
+            ],
+            "local_explicit_same_package": [
+              "ElementType",
+              "Inherited",
+              "Retention",
+              "RetentionPolicy",
+              "Target"
+            ],
+            "local_imports_from_package": [
+              "import java.lang.annotation.ElementType;",
+              "import java.lang.annotation.Inherited;",
+              "import java.lang.annotation.Retention;",
+              "import java.lang.annotation.RetentionPolicy;",
+              "import java.lang.annotation.Target;"
+            ],
+            "bound_missing_on_local_side": [],
+            "local_explicit_not_bound_upstream": [],
+            "set_equivalent": true,
+            "equivalence_basis": "通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ 固定 JDK src.zip 中该包的顶层类型）与本地同包显式导入简单名集合逐项比较",
+            "import_forms_identical": false
+          }
+        ],
+        "method": "词法还原 import 条目；通配符可绑定集合 = 正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型；与本地同包显式导入集合比较。该比较不解析类路径与静态成员绑定，也不替代 D16 §84 要求的解析绑定证明。"
+      },
+      "wildcard_rows": [
+        {
+          "upstream": {
+            "statement": "import java.lang.annotation.*;",
+            "line": 3,
+            "static": false,
+            "wildcard": true,
+            "package": "java.lang.annotation",
+            "simple_name": "*"
+          },
+          "kind": "通配符导入",
+          "package": "java.lang.annotation",
+          "package_in_fixed_jdk_index": true,
+          "jdk_package_type_count": 13,
+          "jdk_package_types": [
+            "Annotation",
+            "AnnotationFormatError",
+            "AnnotationTypeMismatchException",
+            "Documented",
+            "ElementType",
+            "IncompleteAnnotationException",
+            "Inherited",
+            "Native",
+            "Repeatable",
+            "Retention",
+            "RetentionPolicy",
+            "Target",
+            "package-info"
+          ],
+          "upstream_body_names_after_import": [
+            "DictFormat",
+            "ElementType",
+            "FIELD",
+            "Inherited",
+            "RUNTIME",
+            "Retention",
+            "RetentionPolicy",
+            "String",
+            "Target"
+          ],
+          "wildcard_actually_binds": [
+            "ElementType",
+            "Inherited",
+            "Retention",
+            "RetentionPolicy",
+            "Target"
+          ],
+          "body_names_not_in_that_package": [
+            "DictFormat",
+            "FIELD",
+            "RUNTIME",
+            "String"
+          ],
+          "local_explicit_same_package": [
+            "ElementType",
+            "Inherited",
+            "Retention",
+            "RetentionPolicy",
+            "Target"
+          ],
+          "local_imports_from_package": [
+            "import java.lang.annotation.ElementType;",
+            "import java.lang.annotation.Inherited;",
+            "import java.lang.annotation.Retention;",
+            "import java.lang.annotation.RetentionPolicy;",
+            "import java.lang.annotation.Target;"
+          ],
+          "bound_missing_on_local_side": [],
+          "local_explicit_not_bound_upstream": [],
+          "set_equivalent": true,
+          "equivalence_basis": "通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ 固定 JDK src.zip 中该包的顶层类型）与本地同包显式导入简单名集合逐项比较",
+          "import_forms_identical": false
+        }
+      ],
+      "sets_equivalent": true,
+      "import_forms_identical": false,
+      "equivalence_note": "等价性按“通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型）vs 本地同包显式导入集合”机械比较；这是集合层面的证据，不等于双方解析到同一目标类型，D16 §84 要求的是逐类型解析绑定证明，本材料不提供该证明。",
+      "candidate_rule_probe_on_this_item": {
+        "variant_expand_compare_qualified_equal": true,
+        "variant_expand_compare_simple_name_equal": false,
+        "variant_drop_unused_compare_qualified_equal": true
+      },
+      "candidate_rule_probe_qualified_sets": {
+        "local": [
+          "java.lang.annotation.ElementType",
+          "java.lang.annotation.Inherited",
+          "java.lang.annotation.Retention",
+          "java.lang.annotation.RetentionPolicy",
+          "java.lang.annotation.Target"
+        ],
+        "upstream": [
+          "java.lang.annotation.ElementType",
+          "java.lang.annotation.Inherited",
+          "java.lang.annotation.Retention",
+          "java.lang.annotation.RetentionPolicy",
+          "java.lang.annotation.Target"
+        ]
+      },
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "java.lang.annotation",
+          "assumed_types": [
+            "DictFormat",
+            "FIELD",
+            "RUNTIME",
+            "String"
+          ]
+        }
+      ],
+      "reproduction": {
+        "item_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/tools/build_d16_review_package.py --verify-wildcard --item 'com.basicframework.framework.excel.core.annotations.DictFormat' --json",
+        "gate_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/code/java/check_full_java_comments.py --json"
+      },
+      "reviewer_decision": {
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      }
+    },
+    {
+      "item_id": "WC-03",
+      "declaration": "com.basicframework.framework.ratelimiter.config.BasicFrameworkRateLimiterConfiguration",
+      "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-protection/src/main/java/com/basicframework/framework/ratelimiter/config/BasicFrameworkRateLimiterConfiguration.java",
+      "upstream_path": "yudao-framework/yudao-spring-boot-starter-protection/src/main/java/cn/iocoder/yudao/framework/ratelimiter/config/YudaoRateLimiterConfiguration.java",
+      "upstream_sha256": "d0ea74cc40dc77ce3edc420911e44595780764a0799225cb97a8817b90f0a261",
+      "index_d12_verdict": "需补证，尚未验收",
+      "current_rule_result": {
+        "equal": false,
+        "first_difference": "代码流第 11 个 token 不同：本地 name:'com.basicframework.framework.ratelimiter.core.keyresolver.impl.ClientIpRateLimiterKeyResolver'（第 5 行），上游 name:'com.basicframework.framework.ratelimiter.core.keyresolver.impl.*'（第 5 行）",
+        "local_import_count": 13,
+        "upstream_import_count": 9,
+        "local_code_stream_sha256": "2a578797d4577f2ee50497554212bcfcf768af8cd997176073327eb86d154289",
+        "upstream_code_stream_sha256": "f1a58032e738667b40f6ba6e812395bbced58eac3889fa5821f8959e00a8feb8"
+      },
+      "import_correspondence": {
+        "jdk_index_evidence": {
+          "source": "/home/weetion/tools/jdk17/jdk-17.0.20.1+1/lib/src.zip",
+          "source_sha256": "cbc429f64abf85ca18f38a95007b8c6ebbd96642650db0c8ca17461ca8e8cbda",
+          "java_source_entries": 15131,
+          "packages": 845
+        },
+        "local_import_entries": [
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.aop.RateLimiterAspect;",
+            "line": 3,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.aop",
+            "simple_name": "RateLimiterAspect"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver;",
+            "line": 4,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver",
+            "simple_name": "RateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.impl.ClientIpRateLimiterKeyResolver;",
+            "line": 5,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "ClientIpRateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.impl.DefaultRateLimiterKeyResolver;",
+            "line": 6,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "DefaultRateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.impl.ExpressionRateLimiterKeyResolver;",
+            "line": 7,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "ExpressionRateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.impl.ServerNodeRateLimiterKeyResolver;",
+            "line": 8,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "ServerNodeRateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.impl.UserRateLimiterKeyResolver;",
+            "line": 9,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "UserRateLimiterKeyResolver"
+          },
+          {
+            "statement": "import com.basicframework.framework.ratelimiter.core.redis.RateLimiterRedisDAO;",
+            "line": 10,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.ratelimiter.core.redis",
+            "simple_name": "RateLimiterRedisDAO"
+          },
+          {
+            "statement": "import com.basicframework.framework.redis.config.BasicFrameworkRedisAutoConfiguration;",
+            "line": 11,
+            "static": false,
+            "wildcard": false,
+            "package": "com.basicframework.framework.redis.config",
+            "simple_name": "BasicFrameworkRedisAutoConfiguration"
+          },
+          {
+            "statement": "import org.redisson.api.RedissonClient;",
+            "line": 12,
+            "static": false,
+            "wildcard": false,
+            "package": "org.redisson.api",
+            "simple_name": "RedissonClient"
+          },
+          {
+            "statement": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+            "line": 13,
+            "static": false,
+            "wildcard": false,
+            "package": "org.springframework.boot.autoconfigure",
+            "simple_name": "AutoConfiguration"
+          },
+          {
+            "statement": "import org.springframework.context.annotation.Bean;",
+            "line": 14,
+            "static": false,
+            "wildcard": false,
+            "package": "org.springframework.context.annotation",
+            "simple_name": "Bean"
+          },
+          {
+            "statement": "import java.util.List;",
+            "line": 16,
+            "static": false,
+            "wildcard": false,
+            "package": "java.util",
+            "simple_name": "List"
+          }
+        ],
+        "upstream_import_entries": [
+          {
+            "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.aop.RateLimiterAspect;",
+            "line": 3,
+            "static": false,
+            "wildcard": false,
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.aop",
+            "simple_name": "RateLimiterAspect"
+          },
+          {
+            "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver;",
+            "line": 4,
+            "static": false,
+            "wildcard": false,
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver",
+            "simple_name": "RateLimiterKeyResolver"
+          },
+          {
+            "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl.*;",
+            "line": 5,
+            "static": false,
+            "wildcard": true,
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "*"
+          },
+          {
+            "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.redis.RateLimiterRedisDAO;",
+            "line": 6,
+            "static": false,
+            "wildcard": false,
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.redis",
+            "simple_name": "RateLimiterRedisDAO"
+          },
+          {
+            "statement": "import cn.iocoder.yudao.framework.redis.config.YudaoRedisAutoConfiguration;",
+            "line": 7,
+            "static": false,
+            "wildcard": false,
+            "package": "cn.iocoder.yudao.framework.redis.config",
+            "simple_name": "YudaoRedisAutoConfiguration"
+          },
+          {
+            "statement": "import org.redisson.api.RedissonClient;",
+            "line": 8,
+            "static": false,
+            "wildcard": false,
+            "package": "org.redisson.api",
+            "simple_name": "RedissonClient"
+          },
+          {
+            "statement": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+            "line": 9,
+            "static": false,
+            "wildcard": false,
+            "package": "org.springframework.boot.autoconfigure",
+            "simple_name": "AutoConfiguration"
+          },
+          {
+            "statement": "import org.springframework.context.annotation.Bean;",
+            "line": 10,
+            "static": false,
+            "wildcard": false,
+            "package": "org.springframework.context.annotation",
+            "simple_name": "Bean"
+          },
+          {
+            "statement": "import java.util.List;",
+            "line": 12,
+            "static": false,
+            "wildcard": false,
+            "package": "java.util",
+            "simple_name": "List"
+          }
+        ],
+        "local_import_count": 13,
+        "upstream_import_count": 9,
+        "local_body_type_names": [
+          "AutoConfiguration",
+          "BasicFrameworkRateLimiterConfiguration",
+          "BasicFrameworkRedisAutoConfiguration",
+          "Bean",
+          "ClientIpRateLimiterKeyResolver",
+          "DefaultRateLimiterKeyResolver",
+          "ExpressionRateLimiterKeyResolver",
+          "List",
+          "RateLimiterAspect",
+          "RateLimiterKeyResolver",
+          "RateLimiterRedisDAO",
+          "RedissonClient",
+          "ServerNodeRateLimiterKeyResolver",
+          "SuppressWarnings",
+          "UserRateLimiterKeyResolver",
+          "after",
+          "basicframework",
+          "class",
+          "clientIpRateLimiterKeyResolver",
+          "com",
+          "config",
+          "defaultRateLimiterKeyResolver",
+          "expressionRateLimiterKeyResolver",
+          "framework",
+          "keyResolvers",
+          "new",
+          "package",
+          "public",
+          "rateLimiterAspect",
+          "rateLimiterRedisDAO",
+          "ratelimiter",
+          "redissonClient",
+          "return",
+          "serverNodeRateLimiterKeyResolver",
+          "userRateLimiterKeyResolver"
+        ],
+        "upstream_body_type_names": [
+          "AutoConfiguration",
+          "Bean",
+          "ClientIpRateLimiterKeyResolver",
+          "DefaultRateLimiterKeyResolver",
+          "ExpressionRateLimiterKeyResolver",
+          "List",
+          "RateLimiterAspect",
+          "RateLimiterKeyResolver",
+          "RateLimiterRedisDAO",
+          "RedissonClient",
+          "ServerNodeRateLimiterKeyResolver",
+          "SuppressWarnings",
+          "UserRateLimiterKeyResolver",
+          "YudaoRateLimiterConfiguration",
+          "YudaoRedisAutoConfiguration",
+          "after",
+          "class",
+          "clientIpRateLimiterKeyResolver",
+          "cn",
+          "config",
+          "defaultRateLimiterKeyResolver",
+          "expressionRateLimiterKeyResolver",
+          "framework",
+          "iocoder",
+          "keyResolvers",
+          "new",
+          "package",
+          "public",
+          "rateLimiterAspect",
+          "rateLimiterRedisDAO",
+          "ratelimiter",
+          "redissonClient",
+          "return",
+          "serverNodeRateLimiterKeyResolver",
+          "userRateLimiterKeyResolver",
+          "yudao"
+        ],
+        "local_packages": [
+          "com.basicframework.framework.ratelimiter.core.aop",
+          "com.basicframework.framework.ratelimiter.core.keyresolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl",
+          "com.basicframework.framework.ratelimiter.core.redis",
+          "com.basicframework.framework.redis.config",
+          "java.util",
+          "org.redisson.api",
+          "org.springframework.boot.autoconfigure",
+          "org.springframework.context.annotation"
+        ],
+        "rows": [
+          {
+            "upstream": {
+              "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.aop.RateLimiterAspect;",
+              "line": 3,
+              "static": false,
+              "wildcard": false,
+              "package": "cn.iocoder.yudao.framework.ratelimiter.core.aop",
+              "simple_name": "RateLimiterAspect"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import com.basicframework.framework.ratelimiter.core.aop.RateLimiterAspect;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": {
+              "statement": "import com.basicframework.framework.ratelimiter.core.aop.RateLimiterAspect;",
+              "line": 3,
+              "static": false,
+              "wildcard": false,
+              "package": "com.basicframework.framework.ratelimiter.core.aop",
+              "simple_name": "RateLimiterAspect"
+            },
+            "equivalent": false,
+            "equivalent_after_registered_mapping": true,
+            "note": "上游条目按登记变换映射后与本地某条显式导入逐字相同"
+          },
+          {
+            "upstream": {
+              "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver;",
+              "line": 4,
+              "static": false,
+              "wildcard": false,
+              "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver",
+              "simple_name": "RateLimiterKeyResolver"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import com.basicframework.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": {
+              "statement": "import com.basicframework.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver;",
+              "line": 4,
+              "static": false,
+              "wildcard": false,
+              "package": "com.basicframework.framework.ratelimiter.core.keyresolver",
+              "simple_name": "RateLimiterKeyResolver"
+            },
+            "equivalent": false,
+            "equivalent_after_registered_mapping": true,
+            "note": "上游条目按登记变换映射后与本地某条显式导入逐字相同"
+          },
+          {
+            "upstream": {
+              "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl.*;",
+              "line": 5,
+              "static": false,
+              "wildcard": true,
+              "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+              "simple_name": "*"
+            },
+            "kind": "通配符导入",
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+            "package_in_fixed_jdk_index": false,
+            "jdk_package_type_count": 0,
+            "jdk_package_types": [],
+            "upstream_body_names_after_import": [
+              "AutoConfiguration",
+              "Bean",
+              "ClientIpRateLimiterKeyResolver",
+              "DefaultRateLimiterKeyResolver",
+              "ExpressionRateLimiterKeyResolver",
+              "List",
+              "RateLimiterAspect",
+              "RateLimiterKeyResolver",
+              "RateLimiterRedisDAO",
+              "RedissonClient",
+              "ServerNodeRateLimiterKeyResolver",
+              "SuppressWarnings",
+              "UserRateLimiterKeyResolver",
+              "YudaoRateLimiterConfiguration",
+              "YudaoRedisAutoConfiguration"
+            ],
+            "wildcard_actually_binds": [],
+            "body_names_not_in_that_package": [],
+            "local_explicit_same_package": [],
+            "local_imports_from_package": [],
+            "bound_missing_on_local_side": [],
+            "local_explicit_not_bound_upstream": [],
+            "set_equivalent": null,
+            "equivalence_basis": "该通配符包不属于固定 JDK 的包索引（项目自身包），仓内上游快照只收录 186 个文件、不足以复算整包类型集合，因此集合等价性**未核实**，不做判定",
+            "import_forms_identical": false
+          },
+          {
+            "upstream": {
+              "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.redis.RateLimiterRedisDAO;",
+              "line": 6,
+              "static": false,
+              "wildcard": false,
+              "package": "cn.iocoder.yudao.framework.ratelimiter.core.redis",
+              "simple_name": "RateLimiterRedisDAO"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import com.basicframework.framework.ratelimiter.core.redis.RateLimiterRedisDAO;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": {
+              "statement": "import com.basicframework.framework.ratelimiter.core.redis.RateLimiterRedisDAO;",
+              "line": 10,
+              "static": false,
+              "wildcard": false,
+              "package": "com.basicframework.framework.ratelimiter.core.redis",
+              "simple_name": "RateLimiterRedisDAO"
+            },
+            "equivalent": false,
+            "equivalent_after_registered_mapping": true,
+            "note": "上游条目按登记变换映射后与本地某条显式导入逐字相同"
+          },
+          {
+            "upstream": {
+              "statement": "import cn.iocoder.yudao.framework.redis.config.YudaoRedisAutoConfiguration;",
+              "line": 7,
+              "static": false,
+              "wildcard": false,
+              "package": "cn.iocoder.yudao.framework.redis.config",
+              "simple_name": "YudaoRedisAutoConfiguration"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import com.basicframework.framework.redis.config.YudaoRedisAutoConfiguration;",
+            "local_counterpart": null,
+            "local_counterpart_mapped": null,
+            "equivalent": false,
+            "equivalent_after_registered_mapping": false,
+            "note": "本地没有对应条目"
+          },
+          {
+            "upstream": {
+              "statement": "import org.redisson.api.RedissonClient;",
+              "line": 8,
+              "static": false,
+              "wildcard": false,
+              "package": "org.redisson.api",
+              "simple_name": "RedissonClient"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import org.redisson.api.RedissonClient;",
+            "local_counterpart": {
+              "statement": "import org.redisson.api.RedissonClient;",
+              "line": 12,
+              "static": false,
+              "wildcard": false,
+              "package": "org.redisson.api",
+              "simple_name": "RedissonClient"
+            },
+            "local_counterpart_mapped": {
+              "statement": "import org.redisson.api.RedissonClient;",
+              "line": 12,
+              "static": false,
+              "wildcard": false,
+              "package": "org.redisson.api",
+              "simple_name": "RedissonClient"
+            },
+            "equivalent": true,
+            "equivalent_after_registered_mapping": true,
+            "note": "双方逐字相同的显式导入条目"
+          },
+          {
+            "upstream": {
+              "statement": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+              "line": 9,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.boot.autoconfigure",
+              "simple_name": "AutoConfiguration"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+            "local_counterpart": {
+              "statement": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+              "line": 13,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.boot.autoconfigure",
+              "simple_name": "AutoConfiguration"
+            },
+            "local_counterpart_mapped": {
+              "statement": "import org.springframework.boot.autoconfigure.AutoConfiguration;",
+              "line": 13,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.boot.autoconfigure",
+              "simple_name": "AutoConfiguration"
+            },
+            "equivalent": true,
+            "equivalent_after_registered_mapping": true,
+            "note": "双方逐字相同的显式导入条目"
+          },
+          {
+            "upstream": {
+              "statement": "import org.springframework.context.annotation.Bean;",
+              "line": 10,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.context.annotation",
+              "simple_name": "Bean"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import org.springframework.context.annotation.Bean;",
+            "local_counterpart": {
+              "statement": "import org.springframework.context.annotation.Bean;",
+              "line": 14,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.context.annotation",
+              "simple_name": "Bean"
+            },
+            "local_counterpart_mapped": {
+              "statement": "import org.springframework.context.annotation.Bean;",
+              "line": 14,
+              "static": false,
+              "wildcard": false,
+              "package": "org.springframework.context.annotation",
+              "simple_name": "Bean"
+            },
+            "equivalent": true,
+            "equivalent_after_registered_mapping": true,
+            "note": "双方逐字相同的显式导入条目"
+          },
+          {
+            "upstream": {
+              "statement": "import java.util.List;",
+              "line": 12,
+              "static": false,
+              "wildcard": false,
+              "package": "java.util",
+              "simple_name": "List"
+            },
+            "kind": "显式导入",
+            "upstream_statement_after_registered_mapping": "import java.util.List;",
+            "local_counterpart": {
+              "statement": "import java.util.List;",
+              "line": 16,
+              "static": false,
+              "wildcard": false,
+              "package": "java.util",
+              "simple_name": "List"
+            },
+            "local_counterpart_mapped": {
+              "statement": "import java.util.List;",
+              "line": 16,
+              "static": false,
+              "wildcard": false,
+              "package": "java.util",
+              "simple_name": "List"
+            },
+            "equivalent": true,
+            "equivalent_after_registered_mapping": true,
+            "note": "双方逐字相同的显式导入条目"
+          }
+        ],
+        "method": "词法还原 import 条目；通配符可绑定集合 = 正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型；与本地同包显式导入集合比较。该比较不解析类路径与静态成员绑定，也不替代 D16 §84 要求的解析绑定证明。"
+      },
+      "wildcard_rows": [
+        {
+          "upstream": {
+            "statement": "import cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl.*;",
+            "line": 5,
+            "static": false,
+            "wildcard": true,
+            "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+            "simple_name": "*"
+          },
+          "kind": "通配符导入",
+          "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+          "package_in_fixed_jdk_index": false,
+          "jdk_package_type_count": 0,
+          "jdk_package_types": [],
+          "upstream_body_names_after_import": [
+            "AutoConfiguration",
+            "Bean",
+            "ClientIpRateLimiterKeyResolver",
+            "DefaultRateLimiterKeyResolver",
+            "ExpressionRateLimiterKeyResolver",
+            "List",
+            "RateLimiterAspect",
+            "RateLimiterKeyResolver",
+            "RateLimiterRedisDAO",
+            "RedissonClient",
+            "ServerNodeRateLimiterKeyResolver",
+            "SuppressWarnings",
+            "UserRateLimiterKeyResolver",
+            "YudaoRateLimiterConfiguration",
+            "YudaoRedisAutoConfiguration"
+          ],
+          "wildcard_actually_binds": [],
+          "body_names_not_in_that_package": [],
+          "local_explicit_same_package": [],
+          "local_imports_from_package": [],
+          "bound_missing_on_local_side": [],
+          "local_explicit_not_bound_upstream": [],
+          "set_equivalent": null,
+          "equivalence_basis": "该通配符包不属于固定 JDK 的包索引（项目自身包），仓内上游快照只收录 186 个文件、不足以复算整包类型集合，因此集合等价性**未核实**，不做判定",
+          "import_forms_identical": false
+        }
+      ],
+      "sets_equivalent": null,
+      "import_forms_identical": false,
+      "equivalence_note": "等价性按“通配符实际可绑定类型集合（正文使用的首字母大写简单名 ∩ JDK src.zip 中该包的顶层类型）vs 本地同包显式导入集合”机械比较；这是集合层面的证据，不等于双方解析到同一目标类型，D16 §84 要求的是逐类型解析绑定证明，本材料不提供该证明。",
+      "candidate_rule_probe_on_this_item": {
+        "variant_expand_compare_qualified_equal": false,
+        "variant_expand_compare_simple_name_equal": false,
+        "variant_drop_unused_compare_qualified_equal": false
+      },
+      "candidate_rule_probe_qualified_sets": {
+        "local": [
+          "com.basicframework.framework.ratelimiter.core.aop.RateLimiterAspect",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl.ClientIpRateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl.DefaultRateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl.ExpressionRateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl.ServerNodeRateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.keyresolver.impl.UserRateLimiterKeyResolver",
+          "com.basicframework.framework.ratelimiter.core.redis.RateLimiterRedisDAO",
+          "com.basicframework.framework.redis.config.BasicFrameworkRedisAutoConfiguration",
+          "java.util.List",
+          "org.redisson.api.RedissonClient",
+          "org.springframework.boot.autoconfigure.AutoConfiguration",
+          "org.springframework.context.annotation.Bean"
+        ],
+        "upstream": [
+          "cn.iocoder.yudao.framework.ratelimiter.core.aop.RateLimiterAspect",
+          "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.RateLimiterKeyResolver",
+          "cn.iocoder.yudao.framework.ratelimiter.core.redis.RateLimiterRedisDAO",
+          "cn.iocoder.yudao.framework.redis.config.YudaoRedisAutoConfiguration",
+          "java.util.List",
+          "org.redisson.api.RedissonClient",
+          "org.springframework.boot.autoconfigure.AutoConfiguration",
+          "org.springframework.context.annotation.Bean"
+        ]
+      },
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl",
+          "assumed_types": [
+            "AutoConfiguration",
+            "Bean",
+            "ClientIpRateLimiterKeyResolver",
+            "DefaultRateLimiterKeyResolver",
+            "ExpressionRateLimiterKeyResolver",
+            "List",
+            "RateLimiterAspect",
+            "RateLimiterKeyResolver",
+            "RateLimiterRedisDAO",
+            "RedissonClient",
+            "ServerNodeRateLimiterKeyResolver",
+            "SuppressWarnings",
+            "UserRateLimiterKeyResolver",
+            "YudaoRateLimiterConfiguration",
+            "YudaoRedisAutoConfiguration"
+          ]
+        }
+      ],
+      "reproduction": {
+        "item_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/tools/build_d16_review_package.py --verify-wildcard --item 'com.basicframework.framework.ratelimiter.config.BasicFrameworkRateLimiterConfiguration' --json",
+        "gate_command": "cd /home/weetion/桌面/kuangjia/repo && export PATH=/home/weetion/.nvm/versions/node/v24.15.0/bin:$PATH && python3 -B -X utf8 scripts/code/java/check_full_java_comments.py --json"
+      },
+      "reviewer_decision": {
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      }
+    }
+  ],
+  "counter_examples": [
+    {
+      "id": "CE-1",
+      "category": "未使用的导入",
+      "name": "本地存在上游从未绑定的未使用显式导入",
+      "question": "把通配符展开、并丢弃未使用导入之后，两侧会被判为相等吗？",
+      "local_source": "package p;\n\nimport java.lang.annotation.Documented;\nimport java.lang.annotation.Inherited;\nimport java.lang.annotation.Retention;\n\n/** 本地：多出一条从未使用的导入。 */\n@Documented\n@Retention\npublic class Demo {\n}\n",
+      "upstream_source": "package p;\n\nimport java.lang.annotation.*;\n\n/** 上游：通配符，正文只用两种注解。 */\n@Documented\n@Retention\npublic class Demo {\n}\n",
+      "current_rule": {
+        "equal": false,
+        "note": "当前规则实现保留全部 import 条目并逐字节比较，形态不同即拒绝"
+      },
+      "candidate_variants": {
+        "expand_compare_qualified_equal": false,
+        "expand_compare_simple_name_equal": false,
+        "drop_unused_compare_qualified_equal": true
+      },
+      "wrongly_accepting_variants": [
+        "丢弃未使用导入后按限定名比较"
+      ],
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "java.lang.annotation",
+          "assumed_types": [
+            "Demo"
+          ]
+        }
+      ],
+      "real_difference": "本地多出 `import java.lang.annotation.Inherited;` 且从未使用；上游的通配符并不绑定 `Inherited`（正文没有引用它）。“丢弃未使用导入后再比较”的变体会把这一真实文件差异判为相等。",
+      "conclusion": "当前规则拒绝；候选变体「丢弃未使用导入后按限定名比较」会放行"
+    },
+    {
+      "id": "CE-2",
+      "category": "同名类型来自不同 import",
+      "name": "双方简单名相同、限定包完全不同的显式导入",
+      "question": "只按简单名集合比较的变体会不会放过这个差异？",
+      "local_source": "package p;\n\nimport java.util.List;\n\npublic class Demo {\n    List<String> value;\n}\n",
+      "upstream_source": "package p;\n\nimport java.awt.List;\n\npublic class Demo {\n    List<String> value;\n}\n",
+      "current_rule": {
+        "equal": false,
+        "note": "当前规则实现保留全部 import 条目并逐字节比较，形态不同即拒绝"
+      },
+      "candidate_variants": {
+        "expand_compare_qualified_equal": false,
+        "expand_compare_simple_name_equal": true,
+        "drop_unused_compare_qualified_equal": false
+      },
+      "wrongly_accepting_variants": [
+        "展开后只按简单名比较"
+      ],
+      "fabricated_imports": [],
+      "real_difference": "`java.util.List` 与 `java.awt.List` 是两个不同的 JDK 类型（两者都真实存在）。只比较简单名 `List` 的变体会判为相等，从而丢掉“同名类型来自不同 import”这一真实差异；D16 §98 明确要求这类差异必须保留并拒绝。",
+      "conclusion": "当前规则拒绝；候选变体「展开后只按简单名比较」会放行"
+    },
+    {
+      "id": "CE-3",
+      "category": "通配符集不等价",
+      "name": "上游通配符声明的绑定面大于本地显式导入集合",
+      "question": "展开后被判为相等，是否等于双方导入集合真的等价？",
+      "local_source": "package p;\n\nimport java.lang.annotation.Documented;\n\n/** 本地：只绑定一种注解。 */\n@Documented\npublic class Demo {\n}\n",
+      "upstream_source": "package p;\n\nimport java.lang.annotation.*;\n\n/** 上游：通配符，声明了整包绑定面。 */\n@Documented\npublic class Demo {\n}\n",
+      "current_rule": {
+        "equal": false,
+        "note": "当前规则实现保留全部 import 条目并逐字节比较，形态不同即拒绝"
+      },
+      "candidate_variants": {
+        "expand_compare_qualified_equal": true,
+        "expand_compare_simple_name_equal": false,
+        "drop_unused_compare_qualified_equal": true
+      },
+      "wrongly_accepting_variants": [
+        "展开后按限定名比较",
+        "丢弃未使用导入后按限定名比较"
+      ],
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "java.lang.annotation",
+          "assumed_types": [
+            "Demo"
+          ]
+        }
+      ],
+      "real_difference": "上游声明的是整包绑定面，本地只绑定一种类型；两者后续任何一方新增一个 `@Retention` 都会改变行为，但被归一化后的比较看不出这个差别。D16 §84 与 §98 都要求“通配符集不等即拒绝”，而不是展开后判等。",
+      "conclusion": "当前规则拒绝；候选变体「展开后按限定名比较、丢弃未使用导入后按限定名比较」会放行"
+    },
+    {
+      "id": "CE-4",
+      "category": "展开会虚构不存在的类型",
+      "name": "多个通配符导入会让“按正文简单名展开”生成不存在的类型",
+      "question": "展开结果里有没有 JDK 中并不存在的类型？",
+      "local_source": "package p;\n\nimport java.util.List;\n\npublic class Demo {\n    List<String> value;\n}\n",
+      "upstream_source": "package p;\n\nimport java.lang.annotation.*;\nimport java.util.*;\n\n/** 上游：两个通配符。 */\n@Documented\npublic class Demo {\n    List<String> value;\n}\n",
+      "current_rule": {
+        "equal": false,
+        "note": "当前规则实现保留全部 import 条目并逐字节比较，形态不同即拒绝"
+      },
+      "candidate_variants": {
+        "expand_compare_qualified_equal": false,
+        "expand_compare_simple_name_equal": false,
+        "drop_unused_compare_qualified_equal": false
+      },
+      "wrongly_accepting_variants": [],
+      "fabricated_imports": [
+        {
+          "side": "上游",
+          "package": "java.lang.annotation",
+          "assumed_types": [
+            "Demo",
+            "List",
+            "String"
+          ]
+        },
+        {
+          "side": "上游",
+          "package": "java.util",
+          "assumed_types": [
+            "Demo",
+            "Documented",
+            "String"
+          ]
+        }
+      ],
+      "real_difference": "按“正文用到的每个大写简单名”展开 `java.lang.annotation.*` 会生成 `import java.lang.annotation.List;`——该类型在固定 JDK 的 `src.zip` 中并不存在。展开规则因此会**虚构**出无法解析的绑定，而 JDK 类型索引能把这一点机械证伪。",
+      "conclusion": "当前规则与三个候选变体都保留该差异（可作为正向对照）"
+    },
+    {
+      "id": "CE-5",
+      "category": "静态成员导入",
+      "name": "一侧静态成员导入、另一侧全限定名调用",
+      "question": "各变体是否都保留这条差异？",
+      "local_source": "package p;\n\nimport static java.util.Collections.emptyList;\n\npublic class Demo {\n    java.util.List<String> value = emptyList();\n}\n",
+      "upstream_source": "package p;\n\npublic class Demo {\n    java.util.List<String> value = java.util.Collections.emptyList();\n}\n",
+      "current_rule": {
+        "equal": false,
+        "note": "当前规则实现保留全部 import 条目并逐字节比较，形态不同即拒绝"
+      },
+      "candidate_variants": {
+        "expand_compare_qualified_equal": false,
+        "expand_compare_simple_name_equal": false,
+        "drop_unused_compare_qualified_equal": false
+      },
+      "wrongly_accepting_variants": [],
+      "fabricated_imports": [],
+      "real_difference": "D16 §T5 要求“静态属性、完整限定名和条目集合必须一致”。本反例用于确认：一旦任何变体选择忽略静态成员导入，这条差异就会被放过；当前规则与三个变体在本夹具上都保留该差异，可作为正向对照。",
+      "conclusion": "当前规则与三个候选变体都保留该差异（可作为正向对照）"
+    }
+  ],
+  "candidate_rule_draft": {
+    "id": "T5-IMPORT-RESOLUTION-draft-1",
+    "status": "待裁决（草案不实施）",
+    "name": "导入解析绑定对应（候选扩展）",
+    "direction": "both",
+    "operation": "import-resolution-binding-map",
+    "definition": "仅当满足全部前置条件时，才允许把双方的 import 语句组替换为**逐类型解析绑定等价**的规范形式再比较：(1) 双方 Java 版本与完整编译依赖已按本文件 `java_version_and_dependencies` 逐字节固定；(2) 对双方每个实际被引用的简单名，分别给出解析到的全限定名（类型引用与静态成员引用分别登记）；(3) 解析结果按登记的 T1/T2/T3 映射逐条对应，任何一方解析失败、未解析、依赖同包同名类型或依赖 import 顺序的情形一律拒绝；(4) 替换后双方仍必须保留各自全部 import 条目，并在比较报告中登记替换前后原文与发生点；(5) 规范形式只是比较的中间表示，双方各自仍要独立登记 import 条目集合与静态成员导入。",
+    "scope": "代码流中的 import 语句组与静态成员导入；不删除条目、不合并包、不放宽 T2/T3 的逐条登记要求。",
+    "preconditions": [
+      "D16 §84 的三项前置：固定 Java 版本与完整编译依赖、证明解析绑定对应、提供未使用/冲突/同名类型反例。",
+      "反例矩阵必须先以真实 CLI 跑通：合法正例通过，CE-1 至 CE-4 各自失败。",
+      "受控变换集必须新增并登记该操作，同时同步 transforms_sha256 与记录侧绑定。"
+    ],
+    "risks": [
+      {
+        "id": "R1",
+        "risk": "解析绑定依赖编译器与类路径，单凭文本分析无法证明；本文件的集合等价比较只覆盖简单名层面。",
+        "evidence": "items[].equivalence_note"
+      },
+      {
+        "id": "R2",
+        "risk": "展开通配符会抹平“未使用导入”“同名不同包”“静态成员导入 vs 全限定名”三类真实差异。",
+        "evidence": "counter_examples CE-1、CE-2、CE-4 的 candidate_rule_probe.equal=true"
+      },
+      {
+        "id": "R3",
+        "risk": "平台迁移（javax→jakarta）在通配符形态下没有逐类型绑定，可能把未登记的迁移当作合法适配。",
+        "evidence": "counter_examples CE-3"
+      },
+      {
+        "id": "R4",
+        "risk": "Java 版本或依赖变化会让解析结果改变，而材料本身不随 POM 自动失效，除非绑定 POM 指纹。",
+        "evidence": "java_version_and_dependencies.how_to_pin"
+      },
+      {
+        "id": "R5",
+        "risk": "即便解析绑定等价，import 形态差异本身仍可能承载作者风格差异；放宽比较范围需要独立裁决。",
+        "evidence": "裁决 D16 §84「单独编译成功不证明双方解析到同一目标」"
+      }
+    ],
+    "decision_columns": {
+      "reviewer_verdict": null,
+      "reviewer": null,
+      "review_date": null,
+      "review_reason": null
+    }
+  },
+  "counts": {
+    "items": 3,
+    "sets_equivalent": 2,
+    "sets_equivalence_unknown": 1,
+    "import_forms_identical": 0,
+    "counter_examples": 5,
+    "counter_examples_accepted_by_a_candidate_variant": 3,
+    "fabricated_imports_detected": 4
+  },
+  "open_questions": [
+    "三条对象的实际解析绑定证明尚未取得：需要固定类路径并逐类型给出解析目标，本轮未实跑 javac 解析（java_version_and_dependencies.measured_runtime.status=未运行），因此本材料只给集合层面的机械证据。",
+    "D16 §84 要求的“未使用／冲突／同名类型反例”已构造 5 条最小夹具：当前规则实现对 5 条全部拒绝，其中 3 条会被至少一个候选变体放行、4 处展开会虚构出 JDK 中并不存在的类型；是否据此裁决该扩展仍属有权者事项。",
+    "BasicFrameworkRateLimiterConfiguration 的通配符包是项目自身包（cn.iocoder.yudao.framework.ratelimiter.core.keyresolver.impl），仓内上游快照只收录 186 个文件，不足以复算整包类型集合，其集合等价性记为未核实；要闭合该缺口需要补齐上游该包的文件或改用编译期解析证据。",
+    "候选规则未登记进受控变换集，也没有任何门禁入口消费；三个 Java 源文件内容未改动。"
+  ],
+  "review_decision_table": {
+    "notice": "本文件由实施方生成，判定列留空待独立复核方填写；实施方不得自行填写。本文件不含任何验收结论，也不改判索引中的任何记录：d12_verdict / evidence_branch / evidence_route 一律保持原值。",
+    "columns": [
+      "item_id",
+      "declaration",
+      "sets_equivalent",
+      "reviewer_verdict",
+      "reviewer",
+      "review_date",
+      "review_reason"
+    ],
+    "allowed_verdicts": [
+      "accept",
+      "reject",
+      "need-more"
+    ],
+    "rows": [
+      {
+        "item_id": "WC-01",
+        "declaration": "com.basicframework.framework.dict.validation.InDict",
+        "sets_equivalent": true,
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      },
+      {
+        "item_id": "WC-02",
+        "declaration": "com.basicframework.framework.excel.core.annotations.DictFormat",
+        "sets_equivalent": true,
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      },
+      {
+        "item_id": "WC-03",
+        "declaration": "com.basicframework.framework.ratelimiter.config.BasicFrameworkRateLimiterConfiguration",
+        "sets_equivalent": null,
+        "reviewer_verdict": null,
+        "reviewer": null,
+        "review_date": null,
+        "review_reason": null
+      }
+    ]
+  }
+}
