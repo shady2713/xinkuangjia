@@ -48,6 +48,10 @@ from scripts.code.java.check_staged_java_comments import (
     ACCEPTANCE_STATE_ACCEPTED,
     CODE_IDENTITY_TRANSFORM_SET_ENV,
     DEFAULT_CODE_IDENTITY_TRANSFORM_SET,
+    DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA,
+    DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST,
+    MEMBER_IDENTITY_ENV_MEMBERS,
+    MEMBER_IDENTITY_ENV_SCHEMA,
     ACCEPTANCE_STATE_HARD_FAILURE,
     ACCEPTANCE_STATE_REGISTERED_BLOCKER,
     AUTHOR_TAG_ACCEPTED_VERDICTS,
@@ -61,6 +65,7 @@ from scripts.code.java.check_staged_java_comments import (
     describe_evidence,
     resolve_evidence,
     set_code_identity_transform_set,
+    set_member_identity_documents,
     scan_full_source,
     uncovered_acceptance_records,
 )
@@ -615,6 +620,24 @@ def main() -> int:
         ),
     )
     arguments.add_argument(
+        "--member-identity-contract-schema",
+        type=Path,
+        default=None,
+        help=(
+            "E2-member-identity 分支的受控契约 schema 清单路径；默认读取 "
+            f"{MEMBER_IDENTITY_ENV_SCHEMA}，再退回 {DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA}"
+        ),
+    )
+    arguments.add_argument(
+        "--member-identity-member-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "E2-member-identity 分支的受控成员清单路径；默认读取 "
+            f"{MEMBER_IDENTITY_ENV_MEMBERS}，再退回 {DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST}"
+        ),
+    )
+    arguments.add_argument(
         "--maintenance",
         action="store_true",
         help=(
@@ -634,6 +657,11 @@ def main() -> int:
     # 裁决 D16 §69：比较器、暂存、工作区与全量入口消费同一份显式变换集契约。
     # 显式位置不可读时立即受控失败，不静默回落到「无变换」把分支当成永假。
     set_code_identity_transform_set(args.code_identity_transform_set)
+    # 裁决 D17：全量入口与分支入口、暂存入口、run_checks 消费**同一份**显式的成员级
+    # 受控文档。显式位置不可读时同样受控失败，不静默回落到“没有规则”把分支变成永假。
+    set_member_identity_documents(
+        args.member_identity_contract_schema, args.member_identity_member_manifest
+    )
     try:
         registry = resolve_evidence(args.evidence_registry, args.evidence_snapshots, repository)
         ledger = AcceptanceLedger()

@@ -12,7 +12,7 @@
   "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
   "repository": {
     "root": "/home/weetion/桌面/kuangjia/repo",
-    "head": "62358e033e7044ece3dc35aa75f3717ab56f9991",
+    "head": "8e11252de195c257831b330e986904c599de5bee",
     "branch": "codex/framework-remediation",
     "python": "3.12.3"
   },
@@ -23,8 +23,8 @@
     },
     "source_index": {
       "path": "docs/测试与可靠性/来源证据/d12-source-index.json",
-      "sha256": "6b325a13587a31449393bc148680ca6d3b1ec7dce4ca477cc0ddfc2f5391f905",
-      "records_sha256": "8b202ef64a96e5981afff1f3754336fd2318b6e448f5d0547529963ae2ba8d4d"
+      "sha256": "889082c77e33a929a7771fb11d1a9d6ff8821bd123eb800f0de237f8a935c6aa",
+      "records_sha256": "b8b9e63e8486fa894b1474b19dc9ce9869b1fcbb1da4eb151c75d911fbeb28cd"
     },
     "transform_set": {
       "path": "docs/测试与可靠性/来源证据/代码同一性变换集.json",
@@ -206,7 +206,7 @@
     },
     "rule_implementation": {
       "path": "scripts/code/java/check_staged_java_comments.py",
-      "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+      "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
     },
     "upstream_snapshot": {
       "root": "docs/测试与可靠性/来源证据/上游快照",
@@ -1613,7 +1613,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -3036,7 +3036,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -4344,7 +4344,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -5245,7 +5245,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -6362,7 +6362,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -7487,7 +7487,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -8600,7 +8600,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -9770,7 +9770,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -10634,7 +10634,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -12341,7 +12341,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -13318,7 +13318,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -14732,7 +14732,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -16011,7 +16011,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -17375,7 +17375,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -18655,7 +18655,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -19416,7 +19416,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -20683,7 +20683,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -21755,7 +21755,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -22876,7 +22876,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -24006,7 +24006,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -25136,7 +25136,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -26103,7 +26103,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -27238,7 +27238,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -28733,7 +28733,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -30768,7 +30768,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -32481,7 +32481,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -33526,7 +33526,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -34630,7 +34630,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -35984,7 +35984,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -37161,7 +37161,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -38192,7 +38192,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -39223,7 +39223,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -41178,7 +41178,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -42945,7 +42945,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -43982,7 +43982,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -45139,7 +45139,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -46388,7 +46388,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -47612,7 +47612,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -48646,7 +48646,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -49743,7 +49743,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -51107,7 +51107,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",
@@ -51987,7 +51987,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d16-code-identity/v1",
-          "sha256": "f39bc764038626927367a6f0faa3375be5b1cafbabf236548b3eeba3bff2499c"
+          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
         },
         "review": {
           "implementer": "D16 复核材料实施方（scripts/tools/build_d16_review_package.py）",

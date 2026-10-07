@@ -287,26 +287,42 @@ EVIDENCE_BRANCH_CONTENT_INDEPENDENT = "C2-independent-content"
 # 它**不是**绕过作者、历史、类型映射与发布门禁的通用第四路线：作者/来源仍按
 # D10/D12/D15 各自条件验收，代码同一只提供内容关系证据（§120）。
 EVIDENCE_BRANCH_CODE_IDENTITY = "E1-code-identity"
+# 裁决 D17 §新分支的严格成立条件：成员级内容关系分支 E2-member-identity 同样归入
+# D10 路线 2。它**只**在“完整、非通用且有区分力”的成员上提供内容关系证据，不放宽
+# 作者、历史、类型映射、差异归因与发布门禁：作者/署名/历史/许可仍按 D10/D12/D15
+# 各自条件独立验收（§G7），已点名契约冲突对象被显式排除（§C 类四条）。
+EVIDENCE_BRANCH_MEMBER_IDENTITY = "E2-member-identity"
 EVIDENCE_BRANCHES = (
     EVIDENCE_BRANCH_AUTHOR_ONLY,
     EVIDENCE_BRANCH_CONTENT_INDEPENDENT,
     EVIDENCE_BRANCH_CODE_IDENTITY,
+    EVIDENCE_BRANCH_MEMBER_IDENTITY,
 )
 AUTHOR_ONLY_SCHEMA = "d10-author-only/v1"
 CONTENT_INDEPENDENT_SCHEMA = "d10-content-independent/v1"
 CODE_IDENTITY_SCHEMA = "d16-code-identity/v1"
+MEMBER_IDENTITY_SCHEMA = "d17-member-identity/v1"
+# 成员级分支受控的两份清单：契约 schema 约束“必须登记什么”，成员清单约束“什么样的
+# 成员才算数”。两者都自述规范化指纹，复算不符即拒绝，不能靠自报哈希自我授权。
+MEMBER_IDENTITY_CONTRACT_SCHEMA_FILE = "d17-member-identity-contract/v1"
+MEMBER_IDENTITY_MEMBERS_FILE = "d17-member-identity-members/v1"
 CODE_IDENTITY_TRANSFORM_SET_SCHEMA = "d16-code-identity-transforms/v1"
 CODE_IDENTITY_RULES_VERSION = "d16-strict-compare/v1"
+MEMBER_IDENTITY_RULES_VERSION = "d17-member-compare/v1"
+# 成员级分支复用 D16 的安全序列化契约（token 类别 + 分隔符 + 原文 + 终止符），
+# 判定 M0 时还必须分别登记未执行 T1–T5 的原始成员字节（D17 §52）。
 CODE_IDENTITY_SERIALIZATION = "d16-token-major/v1"
 AUTHOR_ONLY_ROUTE = "路线 2"
 CONTENT_INDEPENDENT_ROUTE = "路线 3"
 CODE_IDENTITY_ROUTE = "路线 2"
+MEMBER_IDENTITY_ROUTE = "路线 2"
 # 分支是版本化契约的启用开关，同时约束记录必须归属的证据路线；分支入口与
 # 来源说明入口都只认这一份映射，避免两处口径不一致（N1 覆盖缺口）。
 EVIDENCE_BRANCH_ROUTES = {
     EVIDENCE_BRANCH_AUTHOR_ONLY: AUTHOR_ONLY_ROUTE,
     EVIDENCE_BRANCH_CONTENT_INDEPENDENT: CONTENT_INDEPENDENT_ROUTE,
     EVIDENCE_BRANCH_CODE_IDENTITY: CODE_IDENTITY_ROUTE,
+    EVIDENCE_BRANCH_MEMBER_IDENTITY: MEMBER_IDENTITY_ROUTE,
 }
 # 比较契约只允许 D10 §0.3 原列的 R1–R4，且顺序固定；R5/R6 不得用于本分支。
 AUTHOR_ONLY_NORMALIZATION_ORDER = ("R1 LF 化", "R2 映射", "R3 行首尾空白", "R4 丢空行")
@@ -443,6 +459,102 @@ CONTENT_POINT_GENERIC_PATTERNS = (
     re.compile(r"^(?:true|false|null|0|1|示例|example|test|demo)$", re.IGNORECASE),
     re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$"),
 )
+# ── 裁决 D17：E2-member-identity 成员级内容关系分支 ──
+# 成员切分必须保证「成员可逐 token 拼回整条文件流」；但裁决 D17 §58 实测证明
+# **拼回成功不足以**防止多切成员、以半个成员计数（``int[] x = {1,2};`` 曾被切成
+# 不含分号的字段片段 + 独立 ``;`` + 方法片段，覆盖标志仍为真）。因此本分支在
+# 覆盖自检之外，另做**成员边界合法性**自检：每个计数对象必须是完整合法成员。
+MEMBER_IDENTITY_ENV_SCHEMA = "JAVA_COMMENT_MEMBER_IDENTITY_CONTRACT_SCHEMA"
+MEMBER_IDENTITY_ENV_MEMBERS = "JAVA_COMMENT_MEMBER_IDENTITY_MEMBER_MANIFEST"
+DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA = (
+    "docs/测试与可靠性/来源证据/成员同一性契约schema.json"
+)
+DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST = (
+    "docs/测试与可靠性/来源证据/成员同一性成员清单.json"
+)
+# 成员种类：只有完整方法／构造器／字段声明／初始化块／有实际内容的嵌套类型成员
+# 可计数；package/import 段、类型头、纯注释、半个成员与单独分号一律不计数。
+MEMBER_IDENTITY_MEMBER_KINDS = (
+    "method",
+    "constructor",
+    "field",
+    "initializer-block",
+    "nested-type",
+    "enum-constant",
+)
+# 成员入口：M0（一个未执行 T1–T5 的相等成员）或 MT（两个变换后相等成员）。
+MEMBER_IDENTITY_ENTRIES = ("M0", "MT")
+# 差异账的类别：归因必须**恰好**覆盖这些类别下实测到的差异，多一处少一处都拒绝。
+MEMBER_IDENTITY_DIFFERENCE_CATEGORIES = (
+    "package-import",
+    "type-header",
+    "member",
+    "local-only",
+    "upstream-only",
+    "order",
+    "comment",
+)
+# 原始差异的可接受归因；任何未解释的差异继续阻断（D17 §G6）。
+MEMBER_IDENTITY_ATTRIBUTION_CAUSES = (
+    "registered-transform",
+    "code-outside-whitespace",
+    "comment-difference",
+    "local-responsibility-javadoc",
+    "d12-source-note",
+    "d15-inplace-marker",
+    "license-or-copyright",
+    # 成员级分支特有的差异形态：包名/导入、类型头、成员内容、单侧成员与次序变化。
+    "package-import-adaptation",
+    "type-header-adaptation",
+    "member-content-difference",
+    "local-only-member",
+    "upstream-only-member",
+    "member-order-change",
+)
+# 「完整、非通用且有区分力」的机械判据在受控成员清单里登记；下面只放**内建兜底**，
+# 保证清单缺项时按更严的一侧处理（拒绝），而不是退化为「看起来像就算」。
+MEMBER_IDENTITY_BOILERPLATE_ACCESSOR = re.compile(
+    r"^(?:get|set|is|has|add|remove|clear|size|count|equals|hashCode|toString|clone"
+    r"|compareTo|iterator|stream|forEach|accept|apply|test|run|call|do|execute)$"
+)
+# 惯用字段名：``private Long id;`` 这类普通字段即使逐字节相同也只证明不了来源关系。
+MEMBER_IDENTITY_BOILERPLATE_FIELD_NAMES = frozenset(
+    {
+        "id", "ids", "name", "names", "code", "type", "types", "status", "remark",
+        "remarkStr", "sort", "deleted", "tenantId", "creator", "updater",
+        "createTime", "updateTime", "deletedTime", "version", "flag", "enabled",
+        "visible", "value", "key", "label", "title", "url", "uuid", "uuidStr",
+        "serialVersionUID", "LOG", "LOGGER", "log", "logger",
+    }
+)
+# 样板字面量：只由惯用取值构成的字符串不构成业务语义主体。
+MEMBER_IDENTITY_BOILERPLATE_LITERALS = frozenset(
+    {
+        "", " ", "true", "false", "null", "0", "1", "-1", "id", "name", "code",
+        "string", "String", "int", "Integer", "long", "Long", "boolean",
+        "Boolean", "list", "map", "set", "test", "demo", "example", "示例",
+    }
+)
+# 样板注解：只由这些注解与「类型 + 名字」构成的字段不计入证据。
+MEMBER_IDENTITY_BOILERPLATE_ANNOTATIONS = frozenset(
+    {
+        "NotNull", "NotBlank", "NotEmpty", "Size", "Min", "Max", "Pattern",
+        "Valid", "Schema", "ApiModelProperty", "ApiOperation", "Data", "Getter",
+        "Setter", "Builder", "Value", "EqualsAndHashCode", "ToString", "NoArgsConstructor",
+        "AllArgsConstructor", "RequiredArgsConstructor", "Override", "Nullable",
+        "NonNull", "Slf4j",
+    }
+)
+# 纯样板方法体：只有 return 字段、字段赋值或直接透传时视为 getter/setter 样板。
+# 允许 ``this.a = b;`` 与 ``a = b;``（形参名可与字段同名，是惯用 setter 写法）。
+MEMBER_IDENTITY_TRIVIAL_RETURN = re.compile(
+    r"^\s*(?:"
+    r"return\s+(?:this\s*\.\s*)?[A-Za-z_$][A-Za-z0-9_$]*\s*;?"
+    r"|(?:this\s*\.\s*)?[A-Za-z_$][A-Za-z0-9_$]*\s*=\s*(?:this\s*\.\s*)?[A-Za-z_$][A-Za-z0-9_$]*\s*;?"
+    r")\s*$"
+)
+# getter/setter 命名：`getX`/`setX`/`isX` 后跟一个大写字母（`get` 本身不算）。
+MEMBER_IDENTITY_ACCESSOR_NAME = re.compile(r"^(?:get|set|is|has)[A-Z]")
 # 上游文件的等价作者声明；版权与许可证主体不当作作者姓名。
 UPSTREAM_AUTHOR_PATTERN = re.compile(
     r"@author\b"
@@ -3913,6 +4025,1995 @@ def _code_identity_author_handling_reasons(
     return reasons
 
 
+# 入口显式指定的成员级受控文档位置（进程内共享）。
+_MEMBER_IDENTITY_CONTRACT_SCHEMA_OVERRIDE: str | None = None
+_MEMBER_IDENTITY_MEMBER_MANIFEST_OVERRIDE: str | None = None
+
+
+def set_member_identity_documents(
+    contract_schema: str | Path | None, member_manifest: str | Path | None
+) -> None:
+    """登记本次运行显式采用的成员级契约 schema 与成员清单路径。
+
+    全部真实消费者（分支入口、暂存、工作区、全量、run_checks 子检查）必须消费
+    **同一份**显式受控文档；显式位置与解析顺序由各入口自己传入，规则实现只负责
+    加载器逐项复算并缓存。
+
+    Args:
+        contract_schema: 显式指定的契约 schema 路径；``None`` 表示按环境变量与
+            仓内默认位置解析。
+        member_manifest: 显式指定的成员清单路径；``None`` 同上。
+    """
+
+    global _MEMBER_IDENTITY_CONTRACT_SCHEMA_OVERRIDE, _MEMBER_IDENTITY_MEMBER_MANIFEST_OVERRIDE
+    _MEMBER_IDENTITY_CONTRACT_SCHEMA_OVERRIDE = (
+        str(contract_schema) if contract_schema is not None else None
+    )
+    _MEMBER_IDENTITY_MEMBER_MANIFEST_OVERRIDE = (
+        str(member_manifest) if member_manifest is not None else None
+    )
+    _load_member_identity_contract_schema.cache_clear()
+    _load_member_identity_member_manifest.cache_clear()
+
+
+def _member_identity_resolve_document(
+    path: str | Path | None,
+    env_name: str,
+    default_relative: str,
+    loader,
+    override: str | None = None,
+) -> dict[str, object] | None:
+    """按“命令行参数 > 环境变量 > 仓内受控默认清单”解析并校验一份受控文档。
+
+    成员级分支的两份受控文档（契约 schema 与成员清单）与 D16 变换集采用**同一套**
+    解析优先级：显式位置优先，其次环境变量，最后才是仓内受控默认清单。任何一层
+    给出的文件都必须通过加载器的逐项自检；不可读或不自洽即返回拒绝原因，绝不
+    静默回落到“没有规则”把该分支变成永假或永真。
+
+    Args:
+        path: 命令行显式指定的路径。
+        env_name: 环境变量名。
+        default_relative: 仓内受控默认清单的仓库相对路径。
+        loader: 加载器，签名为 ``(str) -> tuple[dict | None, str | None]``。
+
+    Returns:
+        ``(文档内容或 None, 拒绝原因)``。
+    """
+
+    if path is not None:
+        candidate = Path(path)
+    elif override:
+        candidate = Path(override)
+    else:
+        configured = os.environ.get(env_name, "").strip()
+        candidate = (
+            Path(configured)
+            if configured
+            else _code_identity_implementation_root() / default_relative
+        )
+    return loader(str(candidate))
+
+
+@lru_cache(maxsize=4)
+def _load_member_identity_contract_schema(path: str) -> tuple[dict[str, object] | None, str | None]:
+    """加载并逐项校验成员级分支的**契约 schema** 受控文档。
+
+    schema 约束“必须登记什么”：入口取值、成员必填字段、归因原因词表、注释角色与
+    语义记录的最小长度。schema 自述的规范化指纹与实测不符即拒绝，登记值与当前
+    schema 不符的契约同样拒绝——否则收紧规则会因旧契约继续有效而失效。
+
+    Args:
+        path: 契约 schema 清单路径。
+
+    Returns:
+        ``(校验通过的文档, None)`` 或 ``(None, 拒绝原因)``。
+    """
+
+    target = Path(path)
+    try:
+        raw = target.read_bytes()
+    except OSError as error:
+        return None, f"成员同一性契约 schema 不可读：{target}（{error.strerror or error}）"
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return None, f"成员同一性契约 schema 不是有效 UTF-8 JSON：{target}（{error}）"
+    if not isinstance(document, dict):
+        return None, "成员同一性契约 schema 必须是结构化对象"
+    if document.get("schema") != MEMBER_IDENTITY_CONTRACT_SCHEMA_FILE:
+        return None, f"成员同一性契约 schema 的 schema 不是 {MEMBER_IDENTITY_CONTRACT_SCHEMA_FILE}"
+    if document.get("branch") != EVIDENCE_BRANCH_MEMBER_IDENTITY:
+        return None, f"成员同一性契约 schema 的 branch 不是 {EVIDENCE_BRANCH_MEMBER_IDENTITY}"
+    if document.get("route") != MEMBER_IDENTITY_ROUTE:
+        return None, f"成员同一性契约 schema 的 route 不是 {MEMBER_IDENTITY_ROUTE}"
+    if document.get("rules_version") != MEMBER_IDENTITY_RULES_VERSION:
+        return None, f"成员同一性契约 schema 的 rules_version 不是 {MEMBER_IDENTITY_RULES_VERSION}"
+    entries = document.get("entries")
+    if not isinstance(entries, list) or [str(item) for item in entries] != list(MEMBER_IDENTITY_ENTRIES):
+        return None, f"成员同一性契约 schema 的 entries 必须逐项登记 {list(MEMBER_IDENTITY_ENTRIES)}"
+    required = document.get("required_fields")
+    if not isinstance(required, list) or not required:
+        return None, "成员同一性契约 schema 必须逐项登记 required_fields"
+    for field in required:
+        if not isinstance(field, str) or not field:
+            return None, f"成员同一性契约 schema 的 required_fields 存在非字符串项：{field!r}"
+    member_required = document.get("member_required_fields")
+    if not isinstance(member_required, list) or not member_required:
+        return None, "成员同一性契约 schema 必须逐项登记 member_required_fields"
+    for field in member_required:
+        if not isinstance(field, str) or not field:
+            return None, f"成员同一性契约 schema 的 member_required_fields 存在非字符串项：{field!r}"
+    causes = document.get("attribution_causes")
+    if not isinstance(causes, list) or [str(item) for item in causes] != list(
+        MEMBER_IDENTITY_ATTRIBUTION_CAUSES
+    ):
+        return None, (
+            "成员同一性契约 schema 的 attribution_causes 必须与规则实现的归因词表逐项一致："
+            f"清单 {causes!r}，规则 {list(MEMBER_IDENTITY_ATTRIBUTION_CAUSES)}"
+        )
+    kinds = document.get("member_kinds")
+    if not isinstance(kinds, list) or [str(item) for item in kinds] != list(
+        MEMBER_IDENTITY_MEMBER_KINDS
+    ):
+        return None, (
+            "成员同一性契约 schema 的 member_kinds 必须与规则实现的成员种类逐项一致："
+            f"清单 {kinds!r}，规则 {list(MEMBER_IDENTITY_MEMBER_KINDS)}"
+        )
+    minima = document.get("text_minimums")
+    if not isinstance(minima, dict) or not minima:
+        return None, "成员同一性契约 schema 必须登记文本字段最小长度 text_minimums"
+    for field, value in minima.items():
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            return None, f"成员同一性契约 schema 的 text_minimums.{field} 必须是正整数：{value!r}"
+    rules = {
+        key: value
+        for key, value in document.items()
+        if key not in {"contract_schema_sha256", "generated_note"}
+    }
+    declared = document.get("contract_schema_sha256")
+    measured = hashlib.sha256(
+        json.dumps(rules, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    if declared != measured:
+        return None, (
+            "成员同一性契约 schema 自述的 contract_schema_sha256 与实测规范化指纹不符："
+            f"清单 {declared or '空'}，实测 {measured}"
+        )
+    document["contract_schema_sha256_measured"] = measured
+    document["file_sha256"] = hashlib.sha256(raw).hexdigest()
+    return document, None
+
+
+@lru_cache(maxsize=4)
+def _load_member_identity_member_manifest(path: str) -> tuple[dict[str, object] | None, str | None]:
+    """加载并逐项校验成员级分支的**成员清单** 受控文档。
+
+    成员清单承载三件事：样板成员的排除口径、每个成员必须登记的区分力口径，以及
+    裁决 D17 §B/§C 明确点名的**不可由本分支关闭**对象（契约冲突 4 条、B 类 5 条）。
+    清单自述指纹与实测不符、排除项缺字段或对象登记不完整都返回拒绝原因。
+
+    Args:
+        path: 成员清单路径。
+
+    Returns:
+        ``(校验通过的文档, None)`` 或 ``(None, 拒绝原因)``。
+    """
+
+    target = Path(path)
+    try:
+        raw = target.read_bytes()
+    except OSError as error:
+        return None, f"成员清单不可读：{target}（{error.strerror or error}）"
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return None, f"成员清单不是有效 UTF-8 JSON：{target}（{error}）"
+    if not isinstance(document, dict):
+        return None, "成员清单必须是结构化对象"
+    if document.get("schema") != MEMBER_IDENTITY_MEMBERS_FILE:
+        return None, f"成员清单的 schema 不是 {MEMBER_IDENTITY_MEMBERS_FILE}"
+    if document.get("branch") != EVIDENCE_BRANCH_MEMBER_IDENTITY:
+        return None, f"成员清单的 branch 不是 {EVIDENCE_BRANCH_MEMBER_IDENTITY}"
+    if document.get("route") != MEMBER_IDENTITY_ROUTE:
+        return None, f"成员清单的 route 不是 {MEMBER_IDENTITY_ROUTE}"
+    if document.get("rules_version") != MEMBER_IDENTITY_RULES_VERSION:
+        return None, f"成员清单的 rules_version 不是 {MEMBER_IDENTITY_RULES_VERSION}"
+    boilerplate = document.get("boilerplate_exclusions")
+    if not isinstance(boilerplate, dict) or not boilerplate:
+        return None, "成员清单必须登记样板排除口径 boilerplate_exclusions"
+    for key in (
+        "kinds",
+        "accessor_methods",
+        "trivial_body_patterns",
+        "generic_field_names",
+        "generic_literals",
+        "annotation_only_names",
+        "no_anchor_members",
+    ):
+        value = boilerplate.get(key)
+        if not isinstance(value, list) or not value:
+            return None, f"成员清单的 boilerplate_exclusions.{key} 必须是非空清单"
+    discrimination = document.get("discrimination")
+    if not isinstance(discrimination, dict):
+        return None, "成员清单必须登记区分力口径 discrimination"
+    for key in ("anchor_kinds", "min_anchors", "min_member_lexeme_count", "generic_string_patterns"):
+        if key not in discrimination:
+            return None, f"成员清单的 discrimination 缺少 {key}"
+    if not isinstance(discrimination.get("anchor_kinds"), list) or not discrimination["anchor_kinds"]:
+        return None, "成员清单的 discrimination.anchor_kinds 必须是非空清单"
+    for key in ("min_anchors", "min_member_lexeme_count"):
+        value = discrimination.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            return None, f"成员清单的 discrimination.{key} 必须是正整数：{value!r}"
+    if not isinstance(discrimination.get("generic_string_patterns"), list):
+        return None, "成员清单的 discrimination.generic_string_patterns 必须是清单"
+    for key in ("contract_conflicts", "branch_ineligible"):
+        roster = document.get(key)
+        if not isinstance(roster, list) or not roster:
+            return None, f"成员清单必须逐条登记 {key}"
+        for item in roster:
+            if not isinstance(item, dict):
+                return None, f"成员清单的 {key} 存在非结构化条目：{item!r}"
+            for field in (
+                "upstream_path", "local_path", "required_verification",
+                "exclusion_reason", "exclusion_basis",
+            ):
+                if not _text(item, field):
+                    return None, f"成员清单的 {key} 条目缺少 {field}：{item!r}"
+            if not COMMIT_PATTERN.match(_text(item, "commit")):
+                return None, f"成员清单的 {key} 条目缺少 40 位固定提交 commit：{item!r}"
+        if key == "contract_conflicts":
+            for item in roster:
+                if not _text(item, "pending_decision"):
+                    return None, (
+                        f"成员清单的 {key} 条目缺少待签认问题 pending_decision：{item!r}"
+                    )
+    rules = {
+        key: value
+        for key, value in document.items()
+        if key not in {"members_manifest_sha256", "generated_note"}
+    }
+    declared = document.get("members_manifest_sha256")
+    measured = hashlib.sha256(
+        json.dumps(rules, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    if declared != measured:
+        return None, (
+            "成员清单自述的 members_manifest_sha256 与实测规范化指纹不符："
+            f"清单 {declared or '空'}，实测 {measured}"
+        )
+    document["members_manifest_sha256_measured"] = measured
+    document["file_sha256"] = hashlib.sha256(raw).hexdigest()
+    return document, None
+
+
+def _member_identity_document_reasons(
+    record: dict[str, object],
+    contract: dict[str, object],
+    schema: dict[str, object] | None,
+    manifest: dict[str, object] | None,
+    schema_error: str | None,
+    manifest_error: str | None,
+    key: str,
+    field: str,
+) -> list[str]:
+    """核对契约与两份受控文档的绑定，并要求冲突对象被显式拒绝。
+
+    Args:
+        record: 清单记录。
+        contract: 记录声明的成员级比较契约。
+        schema: 已校验的契约 schema；不可用时为 ``None``。
+        manifest: 已校验的成员清单；不可用时为 ``None``。
+        schema_error: 契约 schema 的加载错误。
+        manifest_error: 成员清单的加载错误。
+        key: 契约内绑定字段名（``contract_schema`` 或 ``member_manifest``）。
+        field: 诊断中展示的清单名称。
+
+    Returns:
+        逐项拒绝原因。
+    """
+
+    reasons: list[str] = []
+    if key == "contract_schema":
+        document, error = schema, schema_error
+        rules_field = "contract_schema_sha256_measured"
+    else:
+        document, error = manifest, manifest_error
+        rules_field = "members_manifest_sha256_measured"
+    if error:
+        return reasons + [f"成员同一性{field}不可用：{error}"]
+    assert document is not None
+    binding = contract.get(key)
+    if not isinstance(binding, dict):
+        return reasons + [f"成员同一性比较契约缺少{field}绑定 {key}"]
+    if _text(binding, "path") != _member_identity_default_path(key):
+        reasons.append(
+            f"成员同一性比较契约的 {key}.path 必须是仓内受控清单 "
+            f"{_member_identity_default_path(key)}"
+        )
+    if _text(binding, "sha256").lower() != str(document.get("file_sha256", "")).lower():
+        reasons.append(
+            f"成员同一性{field}被篡改或与记录登记不符："
+            f"记录 {_text(binding, 'sha256').lower() or '空'}，"
+            f"实测 {document.get('file_sha256')}"
+        )
+    if _text(binding, "rules_sha256").lower() != str(document.get(rules_field, "")).lower():
+        reasons.append(
+            f"成员同一性{field}登记的 rules_sha256 与实测规范化指纹不符："
+            f"记录 {_text(binding, 'rules_sha256').lower() or '空'}，"
+            f"实测 {document.get(rules_field)}"
+        )
+    return reasons
+
+
+def _member_identity_default_path(key: str) -> str:
+    """返回受控文档的仓内默认相对路径。"""
+
+    return (
+        DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA
+        if key == "contract_schema"
+        else DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST
+    )
+
+
+def _member_identity_prologue_and_header(
+    lexemes: list[list[str]]
+) -> tuple[int, int, str | None]:
+    """切出包名/导入段终点与类型体左花括号位置。
+
+    注解实参里的花括号数组（``@Target({METHOD})``、``@X({A.class})``）不是类型体；
+    只有不在圆括号／方括号内的左花括号才是类型体起点。返回 ``(prologue_end,
+    body_open, 错误说明)``。
+
+    Args:
+        lexemes: 单侧代码词素流。
+
+    Returns:
+        ``(prologue 终点, 类型体左花括号下标, 错误说明或 None)``。
+    """
+
+    paren = bracket = 0
+    prologue_end = 0
+    seen_package = False
+    for index, (_kind, text, _line) in enumerate(lexemes):
+        if text == "(":
+            paren += 1
+        elif text == ")":
+            paren = max(paren - 1, 0)
+        elif text == "[":
+            bracket += 1
+        elif text == "]":
+            bracket = max(bracket - 1, 0)
+        elif text == "{" and paren == 0 and bracket == 0:
+            if not seen_package:
+                return 0, -1, "代码流没有 package 声明，无法确定类型体起点"
+            if index <= prologue_end:
+                return 0, -1, "类型体左花括号出现在包名/导入段之内，切分不可靠"
+            return prologue_end, index, None
+        elif text == ";" and paren == 0 and bracket == 0:
+            prologue_end = index + 1
+        elif text == "package":
+            seen_package = True
+    return 0, -1, "代码流没有可识别的类型体左花括号，成员切分不可靠"
+
+
+def _member_identity_first_top_level_brace(lexemes: list[list[str]]) -> int:
+    """返回成员内第一个类型体层级的左花括号下标；没有则返回 ``-1``。"""
+
+    paren = bracket = brace = 0
+    for index, (_kind, text, _line) in enumerate(lexemes):
+        if text == "(":
+            paren += 1
+        elif text == ")":
+            paren = max(paren - 1, 0)
+        elif text == "[":
+            bracket += 1
+        elif text == "]":
+            bracket = max(bracket - 1, 0)
+        elif text == "{":
+            if paren == 0 and bracket == 0 and brace == 0:
+                return index
+            brace += 1
+        elif text == "}":
+            brace = max(brace - 1, 0)
+    return -1
+
+
+def _member_identity_is_nested_type(lexemes: list[list[str]], body_brace: int) -> bool:
+    """判断成员是否是嵌套类型声明（方法、字段与初始化块都不是）。"""
+
+    keywords = {"class", "interface", "enum", "record", "@interface"}
+    for kind, text, _line in _member_identity_declaration_head(lexemes, body_brace):
+        if kind == "op" and text in {"=", ";", "("}:
+            return False
+        if kind == "op" and text == "{":
+            return False
+        if kind == "ident" and text in keywords:
+            return True
+        if kind == "op" and text == "@" :
+            continue
+    return False
+
+
+def _member_identity_type_simple_name(lexemes: list[list[str]], body_brace: int) -> str:
+    """返回嵌套类型的简单名；无法确定时返回空串。"""
+
+    keywords = {"class", "interface", "enum", "record", "@interface"}
+    head = _member_identity_declaration_head(lexemes, body_brace)
+    for index, (kind, text, _line) in enumerate(head):
+        if kind == "ident" and text in keywords and index + 1 < len(head):
+            return head[index + 1][1]
+    return ""
+
+
+def _member_identity_parameter_signature(lexemes: list[list[str]]) -> str:
+    """返回方法/构造器的重载签名（参数类型列表），用于完整限定成员标识。
+
+    D17 §54 指出按固定词素数截断的签名键不唯一、且按出现顺序配对不能证明成员
+    身份映射正确。本函数改为提取**参数类型列表**：两个同名但参数类型不同的方法
+    因此得到不同成员标识，不会被当成同一个对象重复配对。
+
+    Args:
+        lexemes: 成员词素切片。
+
+    Returns:
+        形如 ``(java.lang.String,int)`` 的参数类型签名；取不到时返回空串。
+    """
+
+    start = None
+    for index, (_kind, text, _line) in enumerate(lexemes):
+        if text == "(":
+            start = index
+            break
+    if start is None:
+        return ""
+    depth = 0
+    end = None
+    for index in range(start, len(lexemes)):
+        text = lexemes[index][1]
+        if text == "(":
+            depth += 1
+        elif text == ")":
+            depth -= 1
+            if depth == 0:
+                end = index
+                break
+    if end is None:
+        return ""
+    inner = lexemes[start + 1 : end]
+    parameters: list[str] = []
+    current: list[list[str]] = []
+    depth_paren = depth_bracket = depth_brace = 0
+    for lexeme in inner:
+        text = lexeme[1]
+        if text == "(":
+            depth_paren += 1
+        elif text == ")":
+            depth_paren -= 1
+        elif text == "[":
+            depth_bracket += 1
+        elif text == "]":
+            depth_bracket -= 1
+        elif text == "{":
+            depth_brace += 1
+        elif text == "}":
+            depth_brace -= 1
+        if text == "," and depth_paren == depth_bracket == depth_brace == 0:
+            parameters.append(current)
+            current = []
+            continue
+        current.append(lexeme)
+    if current:
+        parameters.append(current)
+    rendered: list[str] = []
+    for parameter in parameters:
+        significant = [
+            lexeme
+            for lexeme in parameter
+            if lexeme[0] in {"ident", "name", "number", "string", "char", "textblock"}
+            or (lexeme[0] == "op" and lexeme[1] in {"<", ">", "[", "]", ".", "...", "?"})
+        ]
+        # 去掉参数名：类型之后紧跟的那个标识符是形参名，不是类型的一部分。
+        while significant and significant[-1][0] == "ident":
+            candidate = significant.pop()
+            previous = significant[-1][1] if significant else ""
+            if previous in {"<", ">", ",", ".", "[", "extends", "super"} or not significant:
+                significant.append(candidate)
+            break
+        rendered.append("".join(lexeme[1] for lexeme in significant) or "".join(lexeme[1] for lexeme in parameter))
+    return "(" + ",".join(rendered) + ")"
+
+
+def _member_identity_declaration_head(
+    lexemes: list[list[str]], body_brace: int
+) -> list[list[str]]:
+    """剥掉成员的前导注解与修饰符，返回真正的声明头。
+
+    ``@Schema(description = "任务编号", example = "10") private Long jobId;``
+    的成员名是 ``jobId``，不是 ``Schema``。按出现顺序配对只有在这一步剥掉注解与
+    修饰符之后才可能得到正确的完整限定成员标识（D17 §54）。
+
+    Args:
+        lexemes: 成员词素切片。
+        body_brace: 成员内第一个成员体左花括号的**切片内**下标；``-1`` 表示无成员体。
+
+    Returns:
+        声明头 lexeme 列表。
+    """
+
+    head = lexemes[: body_brace + 1] if body_brace >= 0 else list(lexemes)
+    if body_brace < 0:
+        # 字段/枚举常量：声明名在顶层 ``=`` 之前。两个字段即使初始化表达式
+        # 完全相同，名字不同就仍是两个不同成员（不能因同名键被合并或覆盖）。
+        depth_paren = depth_bracket = depth_brace = 0
+        cut = None
+        for position, lexeme in enumerate(head):
+            if lexeme[1] == "(":
+                depth_paren += 1
+            elif lexeme[1] == ")":
+                depth_paren -= 1
+            elif lexeme[1] == "[":
+                depth_bracket += 1
+            elif lexeme[1] == "]":
+                depth_bracket -= 1
+            elif lexeme[1] == "{":
+                depth_brace += 1
+            elif lexeme[1] == "}":
+                depth_brace -= 1
+            elif (
+                lexeme[1] == "="
+                and depth_paren == 0
+                and depth_bracket == 0
+                and depth_brace == 0
+            ):
+                cut = position
+                break
+        if cut is not None:
+            head = head[:cut]
+    modifiers = {
+        "public", "protected", "private", "static", "final", "abstract",
+        "default", "synchronized", "native", "strictfp", "transient", "volatile",
+        "sealed", "non-sealed", "const",
+    }
+    index = 0
+    while index < len(head):
+        lexeme = head[index]
+        if lexeme[0] == "op" and lexeme[1] == "@":
+            # 跳过注解名，以及它可能带的一整段实参。
+            cursor = index + 1
+            if cursor < len(head) and head[cursor][0] == "ident":
+                cursor += 1
+            if cursor < len(head) and head[cursor][1] == "(":
+                depth = 0
+                while cursor < len(head):
+                    if head[cursor][1] == "(":
+                        depth += 1
+                    elif head[cursor][1] == ")":
+                        depth -= 1
+                        if depth == 0:
+                            cursor += 1
+                            break
+                    cursor += 1
+            index = cursor
+            continue
+        if lexeme[0] == "ident" and lexeme[1] in modifiers:
+            index += 1
+            continue
+        break
+    return head[index:]
+
+
+def _member_identity_member_name(lexemes: list[list[str]]) -> str:
+    """返回成员名：方法取声明头里 ``(`` 前的标识符，字段取声明名。
+
+    Args:
+        lexemes: 已剥离注解与修饰符的声明头 lexeme 列表。
+
+    Returns:
+        成员名；无法确定时返回空串（此时该成员会在边界自检中被判为不合格）。
+    """
+
+    for index, (_kind, text, _line) in enumerate(lexemes):
+        if text == "(":
+            for back in range(index - 1, -1, -1):
+                if lexemes[back][0] == "ident":
+                    return lexemes[back][1]
+            return ""
+        if text in {"=", ";"}:
+            break
+    significant = [lexeme for lexeme in lexemes if lexeme[0] in {"ident", "name"}]
+    return significant[-1][1] if significant else ""
+
+
+def _member_identity_classify(
+    lexemes: list[list[str]], body_brace: int, kind_hint: str
+) -> str:
+    """按切片形状判定成员种类。"""
+
+    if kind_hint == "enum-body":
+        return "enum-constant"
+    significant = [lexeme for lexeme in lexemes if lexeme[0] not in {"ws", "nl", "comment"}]
+    if not significant:
+        return "fragment"
+    if significant[0][1] == "{":
+        return "initializer-block"
+    if body_brace < 0:
+        # 无成员体：按**剥离注解与修饰符后**的声明头判定。否则字段上的
+        # ``@Schema(description = "...")`` 会因实参圆括号被误判成方法。
+        declaration = _member_identity_declaration_head(lexemes, -1)
+        if any(lexeme[1] == "(" for lexeme in declaration):
+            return "method"
+        return "field"
+    if _member_identity_is_nested_type(lexemes, body_brace):
+        return "nested-type"
+    # 判定基于**剥离注解与修饰符后**的声明头：否则字段上的
+    # ``@Schema(description = "...")`` 会因为实参圆括号被误判成方法。
+    declaration = _member_identity_declaration_head(lexemes, body_brace)
+    limit = body_brace + 1 if body_brace >= 0 else len(declaration)
+    head = "".join(lexeme[1] for lexeme in declaration[:limit])
+    if any(lexeme[1] == "(" for lexeme in declaration[:limit]):
+        return "method"
+    if head.lstrip().startswith("static{") or head.lstrip().startswith("{"):
+        return "initializer-block"
+    return "field"
+
+
+def _member_identity_member_body_brace(lexemes: list[list[str]]) -> int:
+    """独立复算成员体左花括号下标：只认出现在顶层 ``=`` **之前**的左花括号。
+
+    边界自检用它**独立**判定切片形态，而不是采信切分函数给出的标记——这样
+    “字段初始化器被当成成员体”这种切错（D17 §58）一定会被边界自检抓住。
+
+    Args:
+        lexemes: 成员词素切片。
+
+    Returns:
+        成员体左花括号在切片内的下标；没有成员体时返回 ``-1``。
+    """
+
+    paren = bracket = brace = 0
+    seen_assign = False
+    seen_parameter_list = False
+    for index, lexeme in enumerate(lexemes):
+        text = lexeme[1]
+        at_type_level = brace == 0 and paren == 0 and bracket == 0
+        if text == "(":
+            paren += 1
+        elif text == ")":
+            paren = max(paren - 1, 0)
+            if paren == 0 and brace == 0 and bracket == 0:
+                seen_parameter_list = True
+        elif text == "[":
+            bracket += 1
+        elif text == "]":
+            bracket = max(bracket - 1, 0)
+        elif text == "=" and at_type_level:
+            seen_assign = True
+        elif text == "default" and at_type_level and lexeme[0] == "ident" and seen_parameter_list:
+            seen_assign = True
+        elif text == "{" and at_type_level and not seen_assign:
+            return index
+        elif text == "{":
+            brace += 1
+        elif text == "}":
+            brace = max(brace - 1, 0)
+    return -1
+
+
+def _member_identity_boundary_reasons(
+    lexemes: list[list[str]], kind: str, body_brace: int
+) -> list[str]:
+    """校验成员边界：必须是完整合法成员，不允许半个成员或单独分号。
+
+    裁决 D17 §58 实测：``class A { int[] x = {1,2}; void f() {} }`` 曾被切成不含
+    分号的数组字段片段 + 独立 ``;`` + 方法片段，而覆盖标志仍为真。因此在覆盖自检
+    之外另做本函数：**只有**括号平衡、终止符正确、且不落在“字段初始化器花括号被
+    当成成员体”这种错误边界上的切片才算完整成员。
+
+    Args:
+        lexemes: 成员词素切片。
+        kind: 成员种类。
+        body_brace: 成员内第一个类型体层级左花括号下标；``-1`` 表示无方法体。
+
+    Returns:
+        ``(严重级别, 说明)`` 列表：``hard`` 表示切分本身不可靠（整侧读数作废），
+        ``non-countable`` 表示该切片不是完整成员、不得计入证据但不影响整侧读数。
+        为空表示该切片是完整合法成员。
+    """
+
+    reasons: list[str] = []
+    if not lexemes:
+        return [("non-countable", "成员切片为空，不是完整成员")]
+    significant = [lexeme for lexeme in lexemes if lexeme[0] not in {"ws", "nl", "comment"}]
+    if not significant:
+        return [("non-countable", "成员切片只剩注释或空白，不是完整成员")]
+    if len(significant) == 1 and significant[0][1] == ";":
+        # 枚举常量表后可以跟一个独立分号（合法 Java）。它**不是**成员，
+        # 不得计入证据，但也不因此否定整条文件读数。
+        return [("non-countable", "成员切片是单独分号，不是完整成员，不得计入证据")]
+    if significant[0][1] in {";", "}", ")", ","}:
+        reasons.append(
+            (
+                "hard",
+                f"成员切片以分隔符 {significant[0][1]!r} 起始，是被切碎的残片而不是完整成员",
+            )
+        )
+    paren = bracket = brace = 0
+    for lexeme in significant:
+        text = lexeme[1]
+        if text == "(":
+            paren += 1
+        elif text == ")":
+            paren -= 1
+        elif text == "[":
+            bracket += 1
+        elif text == "]":
+            bracket -= 1
+        elif text == "{":
+            brace += 1
+        elif text == "}":
+            brace -= 1
+        if paren < 0 or bracket < 0 or brace < 0:
+            reasons.append(("hard", "成员切片出现提前闭合的定界符，成员边界错误"))
+            break
+    if paren or bracket or brace:
+        reasons.append(
+            (
+                "hard",
+                f"成员切片定界符不平衡（圆括号 {paren}／方括号 {bracket}／花括号 {brace}），"
+                "不是完整成员；半个成员不得计入证据",
+            )
+        )
+    # 独立复算“成员体左花括号”而不是直接采信切分结果：只有出现在顶层 ``=``
+    # **之前**的左花括号才是成员体。``int[] x = {1,2};`` 的花括号是初始化器，
+    # 而“初始化器被当成成员体 + 收尾分号被切成独立成员”正是 D17 §58 的切错形态。
+    member_body = _member_identity_member_body_brace(significant)
+    if body_brace >= 0 and member_body < 0:
+        reasons.append(
+            (
+                "hard",
+                "成员边界错误：字段初始化器的左花括号被当成成员体，收尾分号被切成独立成员；"
+                "该切片不是完整成员，不得计入证据",
+            )
+        )
+    text = significant[-1][1]
+    if member_body < 0:
+        if text != ";":
+            reasons.append(
+                ("hard", f"字段/枚举常量成员必须以分号结束，实际以 {text!r} 结束")
+            )
+    elif text != "}":
+        reasons.append(
+            ("hard", f"块成员必须以自己的闭合花括号结束，实际以 {text!r} 结束")
+        )
+    if kind == "fragment":
+        reasons.append(("non-countable", "成员种类无法判定为完整成员，不得计入证据"))
+    return reasons
+
+
+def _member_identity_member_anchors(
+    lexemes: list[list[str]], generic_patterns: tuple[re.Pattern[str], ...]
+) -> list[dict[str, str]]:
+    """提取成员内可机械识别的**区分力锚点**。
+
+    D17 §G5 明确：单凭字节长度、成员数、覆盖百分比、名称、语料低频或哈希相等都不
+    足以证明业务语义主体。本函数只给出**候选**锚点（非惯用字符串字面量、非惯用数值
+    字面量、非样板限定类型引用、非样板业务标识符），是否真的承载目标声明保留的业务
+    语义仍由 G5 的语义复核负责；机械侧只保证“没有任何锚点”的成员不可能冒充证据。
+
+    Args:
+        lexemes: 成员词素切片。
+        generic_patterns: 惯用字符串形态的正则。
+
+    Returns:
+        锚点列表，每项含 ``kind`` 与 ``lexeme``。
+    """
+
+    anchors: list[dict[str, str]] = []
+    for kind, text, _line in lexemes:
+        if kind in {"string", "char", "textblock"}:
+            value = text.strip("\"'")
+            if not value or value in MEMBER_IDENTITY_BOILERPLATE_LITERALS:
+                continue
+            if any(pattern.match(value) for pattern in generic_patterns):
+                continue
+            anchors.append({"kind": "string-literal", "lexeme": text})
+        elif kind == "number":
+            if text in {"0", "1", "-1", "0L", "1L"}:
+                continue
+            anchors.append({"kind": "numeric-literal", "lexeme": text})
+        elif kind == "name":
+            simple = text.split(".")[-1]
+            if simple in MEMBER_IDENTITY_BOILERPLATE_ANNOTATIONS:
+                continue
+            if simple in MEMBER_IDENTITY_BOILERPLATE_LITERALS:
+                continue
+            if simple in MEMBER_IDENTITY_BOILERPLATE_FIELD_NAMES:
+                continue
+            anchors.append({"kind": "qualified-type", "lexeme": text})
+        elif kind == "ident":
+            if text in MEMBER_IDENTITY_BOILERPLATE_FIELD_NAMES:
+                continue
+            if text in MEMBER_IDENTITY_BOILERPLATE_ANNOTATIONS:
+                continue
+            if text in {
+                "return", "new", "this", "super", "if", "else", "for", "while",
+                "switch", "case", "default", "break", "continue", "throw", "throws",
+                "try", "catch", "finally", "null", "true", "false", "void", "int",
+                "long", "double", "boolean", "char", "byte", "short", "float",
+                "String", "Object", "List", "Map", "Set", "Integer", "Long", "Boolean",
+                "class", "interface", "enum", "record", "public", "private",
+                "protected", "static", "final", "abstract", "synchronized",
+                "volatile", "transient", "extends", "implements", "instanceof",
+            }:
+                continue
+            if len(text) >= 4 and not text.isupper():
+                anchors.append({"kind": "identifier", "lexeme": text})
+    return anchors
+
+
+def _member_identity_boilerplate_reasons(
+    member: dict[str, object], manifest: dict[str, object]
+) -> list[str]:
+    """按受控成员清单排除样板成员（空方法、getter/setter、纯样板字段等）。
+
+    D17 §3 明确要求**显式**排除样板成员。本函数把该要求机械化：成员种类不在可计数
+    种类内、方法体为空、getter/setter 惯用体、只由样板注解与惯用字段名构成的字段、
+    以及完全没有区分力锚点的成员，一律不计入证据。
+
+    Args:
+        member: 成员读数（含 ``kind``、``lexemes``、``anchors``、``key``）。
+        manifest: 已校验的成员清单。
+
+    Returns:
+        逐项样板排除原因；为空表示该成员通过样板门槛。
+    """
+
+    reasons: list[str] = []
+    kind = str(member["kind"])
+    if kind not in MEMBER_IDENTITY_MEMBER_KINDS:
+        reasons.append(f"成员种类 {kind!r} 不是可计数的完整成员")
+    boilerplate = manifest.get("boilerplate_exclusions", {})
+    if kind in {str(item) for item in boilerplate.get("kinds", [])}:
+        reasons.append(f"成员种类 {kind!r} 被成员清单列为不可计数的样板形态")
+    lexemes: list[list[str]] = member["tokens"]  # type: ignore[assignment]
+    body_brace = int(member["body_brace"])
+    name = str(member["name"])
+    body_lexemes = lexemes[body_brace + 1 : -1] if body_brace >= 0 else []
+    # 规范化代码流里点号限定名是**整体 lexeme**（``this.dictTypePrefix``），
+    # 直接拼接会得到 ``returnthis.dictTypePrefix;``，正则匹配不到。这里按词法
+    # 形态插入分隔符后再比对形状，只用于样板判定，不参与任何字节比较。
+    body_text = " ".join(lexeme[1] for lexeme in body_lexemes)
+    accessors = {str(item) for item in boilerplate.get("accessor_methods", [])}
+    trivial_body = bool(MEMBER_IDENTITY_TRIVIAL_RETURN.match(body_text.strip()))
+    # 具名的 getter/setter（getX/setX/isX/hasX）：只要方法体是惯用取值或赋值就排除。
+    # 体是空的已经由下方“空方法”规则覆盖，这里不再重复判定。
+    if MEMBER_IDENTITY_ACCESSOR_NAME.match(name) and trivial_body:
+        reasons.append(
+            f"成员 {member['key']!r} 是 getter/setter 样板（{name}，方法体为惯用取值或赋值），"
+            "样板成员不得冒充内容关系证据"
+        )
+    # 词表内的通用方法名（toString/hashCode/iterator/…）：体为空或惯用时排除。
+    if name in accessors or MEMBER_IDENTITY_BOILERPLATE_ACCESSOR.match(name):
+        if not body_text.strip() or trivial_body:
+            reasons.append(
+                f"成员 {member['key']!r} 是通用样板方法（{name}），"
+                "样板成员不得冒充内容关系证据"
+            )
+    if kind in {"method", "constructor", "initializer-block"} and not body_lexemes:
+        reasons.append(f"成员 {member['key']!r} 的方法体为空，空方法不计入证据")
+    if kind in {"method", "constructor", "initializer-block"} and not body_text.strip():
+        reasons.append(f"成员 {member['key']!r} 的方法体只有空白或注释，空方法不计入证据")
+    if kind == "field":
+        generic_names = {str(item) for item in boilerplate.get("generic_field_names", [])}
+        literal_names = {str(item) for item in boilerplate.get("annotation_only_names", [])}
+        has_initializer = any(lexeme[1] == "=" for lexeme in lexemes)
+        identifier_lexemes = [
+            lexeme[1] for lexeme in lexemes if lexeme[0] in {"ident", "name"}
+        ]
+        if name in generic_names or name in MEMBER_IDENTITY_BOILERPLATE_FIELD_NAMES:
+            if not has_initializer:
+                reasons.append(
+                    f"成员 {member['key']!r} 是无初始化表达式的普通字段（{name}），"
+                    "普通字段相等不能证明整条来源关系"
+                )
+        elif not has_initializer and all(item in literal_names for item in identifier_lexemes):
+            reasons.append(
+                f"成员 {member['key']!r} 只由样板注解与惯用类型名构成，属于自动生成模板"
+            )
+    if kind == "field" and not any(lexeme[1] == "=" for lexeme in lexemes):
+        if str(member.get("modifiers", "")).find("static") >= 0 and str(member.get("modifiers", "")).find("final") >= 0:
+            reasons.append(f"成员 {member['key']!r} 是无取值的常量样板")
+    discrimination = manifest.get("discrimination", {})
+    if int(discrimination.get("min_anchors", 1)) > len(member.get("anchors", [])):  # type: ignore[arg-type]
+        reasons.append(
+            f"成员 {member['key']!r} 的区分力锚点只有 {len(member.get('anchors', []))} 个，"
+            f"不足成员清单要求的 {discrimination.get('min_anchors')} 个；"
+            "没有具体非通用事实的成员不能证明业务语义主体"
+        )
+    if int(discrimination.get("min_member_lexeme_count", 1)) > len(lexemes):
+        reasons.append(
+            f"成员 {member['key']!r} 的词素数只有 {len(lexemes)} 个，"
+            f"不足成员清单要求的 {discrimination.get('min_member_lexeme_count')} 个"
+        )
+    if kind in {str(item) for item in boilerplate.get("no_anchor_members", [])}:
+        reasons.append(f"成员种类 {kind!r} 被成员清单列为不得单独作为证据")
+    return reasons
+
+
+def _member_identity_segment(
+    lexemes: list[list[str]], owner_chain: str, in_enum_body: bool = False
+) -> tuple[list[list[list[str]]], list[dict[str, object]], list[str], int | None]:
+    """把类型体切成成员，并给出覆盖性与边界自检结果。
+
+    返回 ``(铺满类型体的切片, 可计数成员, 自检问题, 类型体收尾右花括号下标)``。
+    覆盖性自检要求 ``prologue + header + 全部铺满切片 + 类型体收尾右花括号``
+    **逐词素** 拼回整条代码流；边界自检要求每个切片都是完整合法成员。两者任一
+    不成立都不得用于结论（D17 §G3、§58）。
+
+    成员终止规则（类型体层级，即 paren/bracket 与花括号栈均为空时）：
+
+    - 字段、枚举常量与抽象方法声明以 ``;`` 结束；
+    - 方法、构造器、初始化块与嵌套类型以**自己的**闭合花括号结束；
+    - 字段初始化器（``= {`` 或 ``= new X() {``）的左花括号**不是**成员体，
+      它闭合后仍需 ``;`` 才能收束——这正是 D17 §58 实测的切错点。
+
+    Args:
+        lexemes: 从类型体左花括号开始到流末尾的词素。
+        owner_chain: 拥有该类型体的限定名链。
+        in_enum_body: 正在切分枚举体（首段是枚举常量表，其后仍是普通成员）。
+
+    Returns:
+        ``(铺满切片, 成员列表, 自检问题, 类型体收尾右花括号下标或 None)``。
+    """
+
+    tiles: list[list[list[str]]] = []
+    members: list[dict[str, object]] = []
+    problems: list[str] = []
+    index = 1 if lexemes and lexemes[0][1] == "{" else 0
+    total = len(lexemes)
+    enum_constants_pending = in_enum_body
+    while index < total:
+        cursor = index
+        paren = bracket = 0
+        seen_assign = False
+        seen_default = False
+        seen_parameter_list = False
+        # 花括号栈：True 表示该层是**成员体**（方法、构造器、初始化块、嵌套类型），
+        # False 表示字段初始化器或注解实参里的数组。栈顶回到空时，成员体闭合即终止
+        # 成员；初始化器闭合后仍需分号才能收束。
+        brace_kinds: list[bool] = []
+        body_brace = -1
+        body_close: int | None = None
+        while cursor < total:
+            kind, text, _line = lexemes[cursor]
+            at_type_level = not brace_kinds and paren == 0 and bracket == 0
+            if text == "(":
+                paren += 1
+            elif text == ")":
+                paren = max(paren - 1, 0)
+                if paren == 0 and not brace_kinds and bracket == 0:
+                    seen_parameter_list = True
+            elif text == "[":
+                bracket += 1
+            elif text == "]":
+                bracket = max(bracket - 1, 0)
+            elif text == "=" and at_type_level:
+                seen_assign = True
+            elif text == "default" and at_type_level and kind == "ident" and seen_parameter_list:
+                # 注解成员的 `default <值>`：其后的花括号是默认值，不是方法体。
+                # 接口方法体上的 `default` 出现在参数表**之前**，不按默认值处理。
+                seen_default = True
+            elif text == "{":
+                is_body = at_type_level and not seen_assign and not seen_default
+                if is_body and body_brace < 0:
+                    body_brace = cursor - index
+                brace_kinds.append(is_body)
+            elif text == "}":
+                if not brace_kinds:
+                    if paren == 0 and bracket == 0:
+                        # 类型体收尾右花括号：它本身**不是**任何成员的一部分。
+                        body_close = cursor
+                        break
+                    problems.append(
+                        f"成员切分在 {owner_chain} 处遇到不匹配的右花括号，切分不可靠"
+                    )
+                    return tiles, members, problems, None
+                was_body = brace_kinds.pop()
+                if not brace_kinds and was_body and paren == 0 and bracket == 0:
+                    # 成员体闭合：成员到此结束（切片**包含**这个闭合花括号）。
+                    cursor += 1
+                    break
+            elif text == ";" and at_type_level:
+                cursor += 1
+                break
+            cursor += 1
+        if body_close is not None:
+            if cursor > index:
+                problems.append(
+                    f"类型体收尾前存在无法收束为完整成员的残留词素（{owner_chain}）"
+                )
+            return tiles, members, problems, body_close
+        if cursor == index:
+            problems.append(f"成员切分在 {owner_chain} 处无法前进，拒绝以该读数作结论")
+            return tiles, members, problems, None
+        slice_lexemes = lexemes[index:cursor]
+        tiles.append(slice_lexemes)
+        kind = _member_identity_classify(
+            slice_lexemes, body_brace, "enum-body" if enum_constants_pending else ""
+        )
+        if enum_constants_pending:
+            # 枚举常量表以第一个分号结束；其后是普通成员，不再按常量表处理。
+            enum_constants_pending = False
+        boundary = _member_identity_boundary_reasons(slice_lexemes, kind, body_brace)
+        problems.extend(
+            f"成员边界自检失败（{owner_chain}）：{reason}"
+            for severity, reason in boundary
+            if severity == "hard"
+        )
+        if any(severity == "hard" for severity, _ in boundary):
+            # 切分本身不可靠（定界符不平衡、边界错误）：整侧读数作废，**不**登记成员。
+            return tiles, members, problems, None
+        if any(severity == "non-countable" for severity, _ in boundary):
+            # 不是完整成员：保留切片以维持覆盖性自检，但**不**登记为可计数成员。
+            # 这里**显式记录**该形态：枚举常量表后的独立分号等合法 Java 语法必须
+            # 可见，既证明它被看见过，也证明它没有混进证据成员。
+            problems.extend(
+                f"成员边界自检不计入（{owner_chain}）：{reason}"
+                for severity, reason in boundary
+                if severity == "non-countable"
+            )
+            index = cursor
+            if body_close is not None:
+                return tiles, members, problems, body_close
+            continue
+        if kind == "nested-type" and body_brace >= 0:
+            inner_name = _member_identity_type_simple_name(slice_lexemes, body_brace)
+            inner_chain = f"{owner_chain}.{inner_name}" if inner_name else owner_chain
+            _tiles, inner, inner_problems, _close = _member_identity_segment(
+                slice_lexemes[body_brace + 1 :], inner_chain
+            )
+            problems.extend(inner_problems)
+            # 嵌套类型按自身归属验收：外层证据不外推到嵌套声明（D17 §G2）。
+            members.append(
+                {
+                    "key": f"{owner_chain}#nested-type#{inner_name or '<anonymous>'}",
+                    "kind": "nested-type",
+                    "name": inner_name,
+                    "tokens": slice_lexemes,
+                    "owner": owner_chain,
+                    "line_first": int(slice_lexemes[0][2]),
+                    "line_last": int(slice_lexemes[-1][2]),
+                    "body_brace": body_brace,
+                }
+            )
+            members.extend(inner)
+        else:
+            head = _member_identity_declaration_head(slice_lexemes, body_brace)
+            name = _member_identity_member_name(head)
+            signature = _member_identity_parameter_signature(head)
+            key = (
+                f"{owner_chain}#{kind}#{name}{signature}"
+                if kind in {"method", "constructor"}
+                else f"{owner_chain}#{kind}#{name}"
+            )
+            members.append(
+                {
+                    "key": key,
+                    "kind": kind,
+                    "name": name,
+                    "tokens": slice_lexemes,
+                    "owner": owner_chain,
+                    "line_first": int(slice_lexemes[0][2]),
+                    "line_last": int(slice_lexemes[-1][2]),
+                    "body_brace": body_brace,
+                }
+            )
+        index = cursor
+    return tiles, members, problems, None
+
+
+def _member_identity_view(
+    source: str, transforms: list[dict[str, object]], side: str
+) -> dict[str, object]:
+    """产出单侧的成员级读数：覆盖自检、边界自检与逐成员指纹。
+
+    Args:
+        source: 单侧原文。
+        transforms: 已按执行顺序排列的登记变换。
+        side: ``local`` 或 ``upstream``。
+
+    Returns:
+        含 ``members``/``problems``/``coverage_complete``/``prologue_sha256``/
+        ``header_sha256``/``code_stream_sha256`` 的读数字典。
+    """
+
+    stream = _code_identity_stream(source, transforms, side)
+    lexemes: list[list[str]] = stream["tokens"]  # type: ignore[assignment]
+    raw_lexemes, raw_errors = _code_identity_code_tokens(source)
+    raw_prologue_end, raw_body_open, raw_error = _member_identity_prologue_and_header(raw_lexemes)
+    prologue_end, body_open, error = _member_identity_prologue_and_header(lexemes)
+    problems: list[str] = []
+    if error:
+        problems.append(f"{side} 侧：{error}")
+    if raw_error:
+        problems.append(f"{side} 侧未变换代码流：{raw_error}")
+    prologue = lexemes[:prologue_end]
+    header = lexemes[prologue_end : body_open + 1] if body_open >= prologue_end else []
+    owner = ""
+    for kind, text, _line in header:
+        if kind == "ident" and text in {"class", "interface", "enum", "record", "@interface"}:
+            owner = text
+    for index, (kind, text, _line) in enumerate(header):
+        if kind == "ident" and text in {"class", "interface", "enum", "record", "@interface"}:
+            if index + 1 < len(header):
+                owner = header[index + 1][1]
+            break
+    kind_hint = "enum-body" if any(item[1] == "enum" for item in header) else ""
+    tiles, members, segment_problems, body_close = _member_identity_segment(
+        lexemes[body_open:], owner, kind_hint
+    )
+    problems.extend(segment_problems)
+    # 覆盖性自检：包/导入段 + 类型头（含类型体左花括号）+ 全部铺满切片
+    # + 类型体收尾右花括号必须**逐词素** 拼回整条代码流。
+    covered = list(prologue) + list(header) + [lexeme for tile in tiles for lexeme in tile]
+    if body_close is None:
+        # 类型体没有收尾右花括号：切分根本没走完，覆盖性自检**不成立**。
+        problems.append(f"{side} 侧类型体没有收尾右花括号，覆盖性自检不成立")
+        coverage_complete = False
+    else:
+        covered.extend(lexemes[body_open + body_close : body_open + body_close + 1])
+        coverage_complete = covered == lexemes
+    if not coverage_complete:
+        problems.append(
+            f"{side} 侧覆盖性自检不成立：包/导入段 + 类型头 + 全部成员 + 类型体收尾右花括号"
+            "没有逐词素拼回整条代码流"
+        )
+    # 覆盖自检之外还要**逐词素对账**：铺满切片必须与类型体区域完全一致，
+    # 少收、多收或边界错误都会在这里暴露，而不是等到比较阶段才发现。
+    if body_close is not None:
+        rebuilt = [lexeme for tile in tiles for lexeme in tile]
+        expected = lexemes[body_open + 1 : body_open + body_close]
+        if rebuilt != expected:
+            problems.append(
+                f"{side} 侧成员铺满对账不成立：成员切片没有恰好覆盖类型体区域"
+                f"（实测 {len(rebuilt)} 个 lexeme，类型体区域 {len(expected)} 个 lexeme）"
+            )
+    raw_members: dict[str, str] = {}
+    if not raw_error and raw_body_open >= 0:
+        _raw_tiles, raw_slice, raw_problems, _raw_close = _member_identity_segment(
+            raw_lexemes[raw_body_open:], owner, kind_hint
+        )
+        problems.extend(f"{side} 侧未变换代码流：{item}" for item in raw_problems)
+        for member in raw_slice:
+            # 未变换侧的成员键只用于**本侧**原始字节登记，不参与跨侧配对。
+            raw_members[str(member["key"])] = hashlib.sha256(
+                _code_identity_serialize(member["tokens"])  # type: ignore[arg-type]
+            ).hexdigest()
+    rows: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for member in members:
+        key = str(member["key"])
+        if key in seen:
+            problems.append(
+                f"{side} 侧存在重复的完整限定成员标识 {key!r}；重复键不得覆盖或偷换对象"
+            )
+        seen.add(key)
+        serialized = _code_identity_serialize(member["tokens"])  # type: ignore[arg-type]
+        entry = dict(member)
+        entry["sha256"] = hashlib.sha256(serialized).hexdigest()
+        entry["bytes"] = len(serialized)
+        entry["token_count"] = len(member["tokens"])  # type: ignore[arg-type]
+        entry["raw_sha256"] = raw_members.get(key)
+        rows.append(entry)
+    return {
+        "side": side,
+        "code_stream_sha256": stream["sha256"],
+        "code_bytes": stream["bytes"],
+        "token_count": stream["token_count"],
+        "import_count": stream["import_count"],
+        "errors": list(stream["errors"]) + list(raw_errors),
+        "prologue_sha256": hashlib.sha256(_code_identity_serialize(prologue)).hexdigest(),
+        "header_sha256": hashlib.sha256(_code_identity_serialize(header)).hexdigest(),
+        "members": rows,
+        "problems": problems,
+        "coverage_complete": coverage_complete,
+    }
+
+
+def _member_identity_anchors_for(
+    member: dict[str, object], generic_patterns: tuple[re.Pattern[str], ...]
+) -> list[dict[str, str]]:
+    """为单个成员计算区分力锚点（供样板门槛与契约复核共用）。"""
+
+    return _member_identity_member_anchors(member["tokens"], generic_patterns)  # type: ignore[arg-type]
+
+
+def _member_identity_pair(
+    local: dict[str, object], upstream: dict[str, object]
+) -> dict[str, list[dict[str, object]]]:
+    """按完整限定成员标识配对成员。
+
+    D17 §54：按出现顺序配对只保证可重复，**不**证明成员身份映射正确。本实现要求
+    两侧的完整限定成员标识（含重载签名）互不相同，重复键直接由切分自检拒绝；配对
+    只在键完全相等时发生，绝不按位置猜测。
+
+    Args:
+        local: 本侧成员读数。
+        upstream: 上游侧成员读数。
+
+    Returns:
+        含 ``equal``/``raw_equal``/``differing``/``local_only``/``upstream_only`` 的配对结果。
+    """
+
+    left = {str(item["key"]): item for item in local["members"]}  # type: ignore[union-attr]
+    right = {str(item["key"]): item for item in upstream["members"]}  # type: ignore[union-attr]
+    equal: list[dict[str, object]] = []
+    raw_equal: list[dict[str, object]] = []
+    differing: list[dict[str, object]] = []
+    local_only: list[dict[str, object]] = []
+    upstream_only: list[dict[str, object]] = []
+    for key in sorted(set(left) | set(right)):
+        a = left.get(key)
+        b = right.get(key)
+        if a is not None and b is not None:
+            item = {
+                "key": key,
+                "kind": a["kind"],
+                "local_lines": [a["line_first"], a["line_last"]],
+                "upstream_lines": [b["line_first"], b["line_last"]],
+                "local_member_sha256": a["sha256"],
+                "upstream_member_sha256": b["sha256"],
+                "local_member_bytes": a["bytes"],
+                "upstream_member_bytes": b["bytes"],
+                "local_member_lexeme_count": a["token_count"],
+                "upstream_member_lexeme_count": b["token_count"],
+                "raw_local_member_sha256": a.get("raw_sha256"),
+                "raw_upstream_member_sha256": b.get("raw_sha256"),
+            }
+            if a["sha256"] == b["sha256"]:
+                item["raw_identical"] = bool(
+                    a.get("raw_sha256") is not None and a.get("raw_sha256") == b.get("raw_sha256")
+                )
+                equal.append(item)
+                if item["raw_identical"]:
+                    raw_equal.append(item)
+            else:
+                differing.append(item)
+        elif a is not None:
+            local_only.append({"key": key, "kind": a["kind"], "local_lines": [a["line_first"], a["line_last"]]})
+        else:
+            upstream_only.append(
+                {"key": key, "kind": b["kind"], "upstream_lines": [b["line_first"], b["line_last"]]}  # type: ignore[union-attr]
+            )
+    return {
+        "equal": equal,
+        "raw_equal": raw_equal,
+        "differing": differing,
+        "local_only": local_only,
+        "upstream_only": upstream_only,
+    }
+
+
+def _member_identity_attribution_covers(
+    contract: dict[str, object], measured: dict[str, int]
+) -> tuple[bool, str]:
+    """判断逐处差异归因是否**恰好**覆盖全部实测差异。
+
+    D17 §5/§G6 要求 ``difference_attribution[]`` 恰好覆盖实测的全部差异：多登记一处
+    未发生的差异、漏登记一处真实差异、或只登记“其余是适配”都拒绝。这里同时按**类别**
+    与**行数**两种口径核对，避免用总数凑数。
+
+    Args:
+        contract: 成员级比较契约。
+        measured: 实测差异账，键为差异类别。
+
+    Returns:
+        ``(是否恰好覆盖, 拒绝说明)``。
+    """
+
+    attribution = contract.get("difference_attribution")
+    if not isinstance(attribution, list) or not attribution:
+        return False, "成员同一性比较契约必须逐处登记差异归因 difference_attribution"
+    totals: dict[str, int] = {}
+    for entry in attribution:
+        if not isinstance(entry, dict):
+            return False, f"成员同一性归因记录不是结构化对象：{entry!r}"
+        category = _text(entry, "category")
+        if category not in MEMBER_IDENTITY_DIFFERENCE_CATEGORIES:
+            return False, f"成员同一性归因记录的 category 不受支持：{category!r}"
+        changed = entry.get("changed_lines")
+        if (
+            not isinstance(changed, dict)
+            or not isinstance(changed.get("local"), int)
+            or not isinstance(changed.get("upstream"), int)
+        ):
+            return False, f"成员同一性归因记录缺少 changed_lines.local/upstream：{entry!r}"
+        if not _text(entry, "location"):
+            return False, f"成员同一性归因记录缺少位置 location：{entry!r}"
+        if not _text(entry, "before_text") and category != "comment":
+            return False, f"成员同一性归因记录缺少前后原文 before_text：{entry!r}"
+        if not _text(entry, "after_text") and category != "comment":
+            return False, f"成员同一性归因记录缺少前后原文 after_text：{entry!r}"
+        if not _text(entry, "declaration"):
+            return False, f"成员同一性归因记录缺少所属声明 declaration：{entry!r}"
+        if not _text(entry, "nature"):
+            return False, f"成员同一性归因记录缺少实际修改性质 nature：{entry!r}"
+        totals[category] = totals.get(category, 0) + int(changed["local"])
+    for category, value in measured.items():
+        if value == 0:
+            if category in totals:
+                return False, f"差异归因登记了实测不存在的差异类别 {category!r}"
+            continue
+        if totals.get(category, 0) != value:
+            return (
+                False,
+                f"差异归因没有恰好覆盖实测的 {category!r} 差异："
+                f"登记 {totals.get(category, 0)}，实测 {value}",
+            )
+    for category in totals:
+        if category not in measured:
+            return False, f"差异归因登记了未知的差异类别 {category!r}"
+    return True, ""
+
+
+def _member_identity_boiler_c_object(
+    record: dict[str, object], manifest: dict[str, object]
+) -> dict[str, object] | None:
+    """返回该记录命中的契约冲突对象登记；未命中时返回 ``None``。"""
+
+    upstream_path = _text(record, "upstream_path")
+    local_path = _text(record, "local_path")
+    for item in manifest.get("contract_conflicts", []):  # type: ignore[union-attr]
+        if not isinstance(item, dict):
+            continue
+        if _text(item, "upstream_path") == upstream_path and _text(item, "local_path") in {
+            local_path,
+            "",
+        }:
+            return item
+    return None
+
+
+def _member_identity_ineligible_object(
+    record: dict[str, object], manifest: dict[str, object]
+) -> dict[str, object] | None:
+    """返回该记录命中的“本分支不可关闭”对象登记；未命中时返回 ``None``。"""
+
+    upstream_path = _text(record, "upstream_path")
+    for item in manifest.get("branch_ineligible", []):  # type: ignore[union-attr]
+        if isinstance(item, dict) and _text(item, "upstream_path") == upstream_path:
+            return item
+    return None
+
+
+def _member_identity_contract_reasons(
+    record: dict[str, object],
+    local_path: str,
+    local_source: str | None,
+    local_sha256: str,
+    registry: EvidenceRegistry,
+    *,
+    root: Path | None = None,
+    transform_set_path: Path | None = None,
+    contract_schema_path: Path | None = None,
+    member_manifest_path: Path | None = None,
+) -> list[str]:
+    """核验 ``E2-member-identity`` 分支：成员级内容关系证据的严格成立条件。
+
+    本函数落实裁决 D17：M0/MT 数量条件 → 成员完整性与覆盖性自检 → 样板排除与区分力
+    → 直接相等与变换授权 → 全部残余差异逐项归因 → 注释与署名独立验收 → 契约冲突
+    对象显式拒绝。**不**放宽作者、历史、类型映射与发布门禁：作者/来源仍按 D10/D12
+    各自条件验收，成员证据只提供内容关系。
+
+    Args:
+        record: 清单记录。
+        local_path: 被检查的本地对象路径。
+        local_source: 本地对象当前原文；``None`` 时按 ``root`` 读取工作树。
+        local_sha256: 当前对象原始字节 SHA-256。
+        registry: 受控证据清单。
+        root: 读取本地对象与受控文档的仓库根。
+        transform_set_path: 显式指定的 D16 变换集清单路径。
+        contract_schema_path: 显式指定的契约 schema 路径。
+        member_manifest_path: 显式指定的成员清单路径。
+
+    Returns:
+        逐项拒绝原因；为空表示成员级分支的契约与实测结果全部成立。
+    """
+
+    reasons: list[str] = []
+    if _text(record, "evidence_route") != MEMBER_IDENTITY_ROUTE:
+        reasons.append(
+            f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 分支归属路线 2，"
+            f"当前 evidence_route={_text(record, 'evidence_route') or '空'}"
+        )
+    value, error = _json_field(record, "member_identity_contract")
+    if value is None:
+        return reasons + [f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 分支缺少成员级比较契约：{error}"]
+    if not isinstance(value, dict):
+        return reasons + [f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 成员级比较契约必须是结构化对象"]
+    contract = value
+
+    schema, schema_error = _member_identity_resolve_document(
+        contract_schema_path,
+        MEMBER_IDENTITY_ENV_SCHEMA,
+        DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA,
+        _load_member_identity_contract_schema,
+        _MEMBER_IDENTITY_CONTRACT_SCHEMA_OVERRIDE,
+    )
+    manifest, manifest_error = _member_identity_resolve_document(
+        member_manifest_path,
+        MEMBER_IDENTITY_ENV_MEMBERS,
+        DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST,
+        _load_member_identity_member_manifest,
+        _MEMBER_IDENTITY_MEMBER_MANIFEST_OVERRIDE,
+    )
+    # 契约冲突拦截优先于一切其他检查：已点名对象即使带着再完整的成员证据也不放行。
+    if manifest is not None:
+        conflict = _member_identity_boiler_c_object(record, manifest)
+        if conflict is not None:
+            return reasons + [
+                f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 分支显式排除该对象：{_text(conflict, 'pending_decision')}"
+                f"（待签认问题；必要验证方向：{_text(conflict, 'required_verification')}）。"
+                f"排除依据：{_text(conflict, 'exclusion_reason')}。"
+                "该对象在有权者逐条签认并完成相应验证之前，"
+                "在全部自动来源验收、改判与解除阻断路线之外；"
+                "改分类、换证据路线或只更新本契约都不能解除。"
+            ]
+        ineligible = _member_identity_ineligible_object(record, manifest)
+        if ineligible is not None:
+            return reasons + [
+                f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 分支不能关闭该对象：{_text(ineligible, 'exclusion_reason')}"
+                f"（待补证据方向：{_text(ineligible, 'required_verification')}）。"
+                "D17 §B 类五条在当前固定输入与登记变换下没有任何逐字节相等的完整成员，"
+                "本分支不接受它们；改判需另按 D10 路线 1/3 取得独立证据。"
+            ]
+
+    if contract.get("schema") != MEMBER_IDENTITY_SCHEMA:
+        reasons.append(f"成员同一性比较契约 schema 不是 {MEMBER_IDENTITY_SCHEMA}")
+    if contract.get("branch") != EVIDENCE_BRANCH_MEMBER_IDENTITY:
+        reasons.append(f"成员同一性比较契约 branch 不是 {EVIDENCE_BRANCH_MEMBER_IDENTITY}")
+    if contract.get("route") != MEMBER_IDENTITY_ROUTE:
+        reasons.append(f"成员同一性比较契约 route 不是 {MEMBER_IDENTITY_ROUTE}")
+    if contract.get("rules_version") != MEMBER_IDENTITY_RULES_VERSION:
+        reasons.append(f"成员同一性比较契约 rules_version 不是 {MEMBER_IDENTITY_RULES_VERSION}")
+    serialization = contract.get("serialization")
+    if not isinstance(serialization, dict):
+        reasons.append("成员同一性比较契约缺少规范序列化契约 serialization")
+    else:
+        for field, expected in (
+            ("version", CODE_IDENTITY_SERIALIZATION),
+            ("encoding", "utf-8"),
+            ("lexeme_separator", "U+001F"),
+            ("lexeme_terminator", "U+001E"),
+        ):
+            if serialization.get(field) != expected:
+                reasons.append(
+                    f"成员同一性比较契约的 serialization.{field} 必须是 {expected}"
+                )
+    reasons.extend(
+        _member_identity_document_reasons(
+            record, contract, schema, manifest, schema_error, manifest_error,
+            "contract_schema", "契约 schema",
+        )
+    )
+    reasons.extend(
+        _member_identity_document_reasons(
+            record, contract, schema, manifest, schema_error, manifest_error,
+            "member_manifest", "成员清单",
+        )
+    )
+    if schema is None or manifest is None:
+        return reasons
+
+    # D17 §G4：复用 D16 变换必须显式登记到本契约，既有变换清单的 branch 字段
+    # 不能被当作已授权的 E2 实现。
+    reuse = contract.get("transform_reuse")
+    if not isinstance(reuse, dict):
+        reasons.append(
+            "成员同一性比较契约必须显式登记 transform_reuse（D17 §G4：复用 D16 变换须登记到本分支）"
+        )
+    else:
+        if _text(reuse, "source_branch") != EVIDENCE_BRANCH_CODE_IDENTITY:
+            reasons.append(
+                f"transform_reuse.source_branch 必须是 {EVIDENCE_BRANCH_CODE_IDENTITY}"
+            )
+        if _text(reuse, "authorized_by") != "D17 §G4":
+            reasons.append("transform_reuse.authorized_by 必须是 D17 §G4")
+        if not _text(reuse, "reason"):
+            reasons.append("transform_reuse 必须说明复用范围与理由 reason")
+    transform_set, set_error = _code_identity_resolve_transform_set(transform_set_path)
+    if transform_set is None:
+        return reasons + [f"成员同一性分支复用的代码同一性变换集不可用：{set_error}"]
+    declared_set = contract.get("transform_set")
+    if not isinstance(declared_set, dict):
+        reasons.append("成员同一性比较契约缺少变换集绑定 transform_set")
+    else:
+        if _text(declared_set, "path") != DEFAULT_CODE_IDENTITY_TRANSFORM_SET:
+            reasons.append(
+                "成员同一性比较契约的 transform_set.path 必须是仓内受控清单 "
+                f"{DEFAULT_CODE_IDENTITY_TRANSFORM_SET}"
+            )
+        for field in ("sha256", "transforms_sha256", "normalizations_sha256"):
+            measured = (
+                transform_set["file_sha256"]
+                if field == "sha256"
+                else str(transform_set.get(field, ""))
+            )
+            if _text(declared_set, field).lower() != str(measured).lower():
+                reasons.append(
+                    f"成员同一性分支复用的变换集 {field} 被篡改或与记录登记不符："
+                    f"记录 {_text(declared_set, field).lower() or '空'}，实测 {measured}"
+                )
+    registered_order = [str(item) for item in transform_set.get("execution_order") or []]
+    applied = [str(item) for item in contract.get("applied_transforms") or []]
+    if applied != registered_order:
+        reasons.append(
+            "成员同一性比较契约的 applied_transforms 必须与受控变换集登记的执行顺序逐项一致："
+            f"记录 {applied}，清单 {registered_order}"
+        )
+    by_id = {str(_text(item, "id")): item for item in transform_set["transforms"]}  # type: ignore[index]
+    transforms: list[dict[str, object]] = []
+    for identifier in registered_order:
+        transform = by_id.get(identifier)
+        if transform is None:
+            reasons.append(f"受控变换集缺少已登记的变换 {identifier}")
+            continue
+        transforms.append(transform)
+
+    # 固定输入（G1）
+    inputs = contract.get("inputs")
+    if not isinstance(inputs, dict):
+        return reasons + ["成员同一性比较契约缺少固定输入 inputs"]
+    local_input = inputs.get("local")
+    if not isinstance(local_input, dict):
+        reasons.append("成员同一性比较契约缺少本地固定输入 inputs.local")
+    else:
+        if _text(local_input, "path") != local_path:
+            reasons.append("成员同一性比较契约的 inputs.local.path 与被检查对象不一致")
+        if _text(local_input, "sha256").lower() != local_sha256:
+            reasons.append(
+                "成员级比较的本地最终指纹不符："
+                f"记录 {_text(local_input, 'sha256').lower() or '空'}，实测 {local_sha256}"
+            )
+    if local_source is None:
+        base = root or _code_identity_implementation_root()
+        candidate = base / local_path
+        try:
+            local_text = candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as read_error:
+            return reasons + [f"成员级比较的本地对象不可读：{candidate}（{read_error}）"]
+    else:
+        local_text = local_source
+    reasons.extend(_code_identity_comment_unchanged_reasons(contract, local_text))
+    upstream_input = inputs.get("upstream")
+    if not isinstance(upstream_input, dict):
+        return reasons + ["成员同一性比较契约缺少上游固定输入 inputs.upstream"]
+    for key, record_key in (
+        ("repo_url", "upstream_repo_url"),
+        ("commit", "upstream_commit"),
+        ("path", "upstream_path"),
+        ("sha256", "upstream_sha256"),
+        ("file_url", "upstream_file_url"),
+    ):
+        if _text(upstream_input, key) != _text(record, record_key):
+            reasons.append(f"成员同一性比较契约的 inputs.upstream.{key} 与记录登记不一致")
+    upstream_sha = _text(record, "upstream_sha256").lower()
+    if not SHA256_PATTERN.match(upstream_sha):
+        reasons.append(f"{EVIDENCE_BRANCH_MEMBER_IDENTITY} 分支缺少有效的上游内容 SHA-256")
+    upstream_raw, upstream_error = _upstream_bytes_for_contract(registry, record)
+    if upstream_error:
+        reasons.append(f"成员级比较的上游输入未通过核验：{upstream_error}")
+        return reasons
+    assert upstream_raw is not None
+    if hashlib.sha256(upstream_raw).hexdigest() != upstream_sha:
+        reasons.append("成员级比较的上游输入实测指纹与记录登记不符")
+        return reasons
+    upstream_text = upstream_raw.decode("utf-8-sig", errors="replace")
+
+    local_view = _member_identity_view(local_text, transforms, "local")
+    upstream_view = _member_identity_view(upstream_text, transforms, "upstream")
+    for side, view in (("本地", local_view), ("上游", upstream_view)):
+        for message in view["errors"]:  # type: ignore[union-attr]
+            reasons.append(f"{side}代码流无法可靠解析，受控拒绝：{message}")
+    if local_view["errors"] or upstream_view["errors"]:  # type: ignore[index]
+        return reasons
+    if not local_view["token_count"] or not upstream_view["token_count"]:  # type: ignore[index]
+        reasons.append("成员级比较的代码序列为空（只剩注释或空白），不能据此判派生")
+    # G3：覆盖性自检与成员边界自检任一不成立都不得用于结论。
+    for side, view in (("本地", local_view), ("上游", upstream_view)):
+        if not view["coverage_complete"]:
+            reasons.append(
+                f"{side}侧成员覆盖性自检不成立：{'; '.join(str(item) for item in view['problems'])}"
+            )
+        for problem in view["problems"]:  # type: ignore[union-attr]
+            # ``non-countable`` 的显式记录（例如枚举常量表后的独立分号）不是缺陷：
+            # 它被看见、被排除，且不计入证据。这里放行它，其余形态一律硬拒绝。
+            if "成员边界自检不计入" in str(problem):
+                continue
+            if "覆盖性自检" in str(problem) or "边界" in str(problem) or "完整成员" in str(problem) \
+                    or "重复的完整限定成员标识" in str(problem) or "无法收束" in str(problem) \
+                    or "无法确定类型体起点" in str(problem) \
+                    or "无法前进" in str(problem):
+                reasons.append(f"{side}侧成员切分自检失败：{problem}")
+    if reasons:
+        return reasons
+
+    # 覆盖账：契约必须逐项登记双方切分读数，且必须与实测完全一致。
+    coverage = contract.get("coverage")
+    if not isinstance(coverage, dict):
+        reasons.append("成员同一性比较契约缺少覆盖性自检读数 coverage")
+    else:
+        measured = {
+            "local_code_stream_sha256": local_view["code_stream_sha256"],
+            "upstream_code_stream_sha256": upstream_view["code_stream_sha256"],
+            "local_prologue_sha256": local_view["prologue_sha256"],
+            "upstream_prologue_sha256": upstream_view["prologue_sha256"],
+            "local_header_sha256": local_view["header_sha256"],
+            "upstream_header_sha256": upstream_view["header_sha256"],
+            "local_members": len(local_view["members"]),  # type: ignore[arg-type]
+            "upstream_members": len(upstream_view["members"]),  # type: ignore[arg-type]
+            "local_coverage_complete": bool(local_view["coverage_complete"]),
+            "upstream_coverage_complete": bool(upstream_view["coverage_complete"]),
+        }
+        for field, value in measured.items():
+            if coverage.get(field) != value:
+                reasons.append(
+                    f"成员同一性比较契约的 coverage.{field} 与实测不符："
+                    f"记录 {coverage.get(field)!r}，实测 {value!r}"
+                )
+
+    paired = _member_identity_pair(local_view, upstream_view)
+    generic_patterns = tuple(
+        re.compile(str(item)) for item in manifest["discrimination"]["generic_string_patterns"]  # type: ignore[index]
+    )
+    countable: list[dict[str, object]] = []
+    for item in paired["equal"]:
+        member_local = next(
+            entry for entry in local_view["members"] if entry["key"] == item["key"]  # type: ignore[union-attr]
+        )
+        member_local["anchors"] = _member_identity_anchors_for(member_local, generic_patterns)
+        boiler_reasons = _member_identity_boilerplate_reasons(member_local, manifest)
+        item["boilerplate_reasons"] = boiler_reasons
+        if not boiler_reasons:
+            countable.append(item)
+    raw_qualifying = [item for item in countable if item.get("raw_identical")]
+    transformed_qualifying = [item for item in countable if not item.get("raw_identical")]
+
+    entry_name = _text(contract, "entry")
+    if entry_name not in MEMBER_IDENTITY_ENTRIES:
+        reasons.append(
+            f"成员同一性比较契约的 entry 必须是 {MEMBER_IDENTITY_ENTRIES} 之一：{entry_name!r}"
+        )
+    # M0：一个合格的、未执行 T1–T5 的相等成员。
+    if entry_name == "M0":
+        if len(raw_qualifying) < 1:
+            reasons.append(
+                "M0 入口不成立：没有 1 个完整、非通用且有区分力的成员在未执行 T1–T5 时"
+                f"逐字节相等（变换后相等成员 {len(transformed_qualifying)} 个，"
+                f"其中原始即相等 0 个；样板或无锚点成员 {len(paired['equal']) - len(countable)} 个已被排除）"
+            )
+    # MT：两个合格的变换后相等成员，范围不重叠且证据依据独立。
+    if entry_name == "MT":
+        if raw_qualifying:
+            reasons.append(
+                "MT 入口不成立：M0 已成立（存在 "
+                f"{len(raw_qualifying)} 个未变换即相等的合格成员），"
+                "按 D17 §相等成员的数量条件必须走 M0 入口"
+            )
+        if len(transformed_qualifying) < 2:
+            reasons.append(
+                "MT 入口不成立：没有 2 个完整、非通用且有区分力的成员在登记变换后逐字节相等"
+                f"（实测 {len(transformed_qualifying)} 个）"
+            )
+        else:
+            first, second = transformed_qualifying[0], transformed_qualifying[1]
+            if first["key"] == second["key"]:
+                reasons.append("MT 入口的两个成员是同一个对象包装两次，不构成两个独立证据")
+            # 范围不重叠必须**分别在两侧**成立：本地行区间与上游行区间各自
+            # 不得交叉。把两侧行号混在一起比较会因两侧行数不同而误判。
+            for side, field in (("本地", "local_lines"), ("上游", "upstream_lines")):
+                left = list(first[field])  # type: ignore[index]
+                right = list(second[field])  # type: ignore[index]
+                if not (max(left) < min(right) or max(right) < min(left)):
+                    reasons.append(
+                        f"MT 入口的两个成员在{side}行号范围上重叠，"
+                        "不是两个范围不重叠的独立成员"
+                    )
+    for item in paired["equal"]:
+        if item["boilerplate_reasons"] and any(
+            str(item["key"]) == str(declared.get("member_key")) for declared in contract.get("members", [])
+        ):
+            reasons.append(
+                f"契约登记的成员 {item['key']!r} 未通过样板与区分力门槛："
+                + "；".join(str(reason) for reason in item["boilerplate_reasons"])
+            )
+
+    members = contract.get("members")
+    if not isinstance(members, list) or not members:
+        reasons.append("成员同一性比较契约必须逐条登记参与判定的成员 members[]")
+    else:
+        required = [str(item) for item in schema["member_required_fields"]]  # type: ignore[index]
+        declared_keys: list[str] = []
+        for entry in members:
+            if not isinstance(entry, dict):
+                reasons.append(f"成员登记不是结构化对象：{entry!r}")
+                continue
+            for field in required:
+                if field not in entry or entry[field] in (None, ""):
+                    reasons.append(f"成员登记缺少必填字段 {field}：{entry.get('member_key')!r}")
+            key = _text(entry, "member_key")
+            declared_keys.append(key)
+            matched = next(
+                (item for item in paired["equal"] if item["key"] == key), None
+            )
+            if matched is None:
+                reasons.append(
+                    f"成员登记的 {key!r} 在实测配对中不是相等成员；登记的成员必须能被逐项复算"
+                )
+                continue
+            for field, value in (
+                ("local_member_sha256", matched["local_member_sha256"]),
+                ("upstream_member_sha256", matched["upstream_member_sha256"]),
+                ("local_member_bytes", matched["local_member_bytes"]),
+                ("upstream_member_bytes", matched["upstream_member_bytes"]),
+                ("local_member_lexeme_count", matched["local_member_lexeme_count"]),
+                ("upstream_member_lexeme_count", matched["upstream_member_lexeme_count"]),
+            ):
+                if entry.get(field) != value:
+                    reasons.append(
+                        f"成员 {key!r} 登记的 {field} 与实测不符：记录 {entry.get(field)!r}，实测 {value!r}"
+                    )
+            if list(entry.get("local_lines") or []) != list(matched["local_lines"]):  # type: ignore[arg-type]
+                reasons.append(f"成员 {key!r} 登记的 local_lines 与实测行号范围不符")
+            if list(entry.get("upstream_lines") or []) != list(matched["upstream_lines"]):  # type: ignore[arg-type]
+                reasons.append(f"成员 {key!r} 登记的 upstream_lines 与实测行号范围不符")
+            # D17 §52：必须分别登记未执行 T1–T5 的原始成员字节与变换后规范字节。
+            if entry.get("raw_local_member_sha256") != matched["raw_local_member_sha256"]:
+                reasons.append(
+                    f"成员 {key!r} 登记的 raw_local_member_sha256 与实测不符"
+                )
+            if entry.get("raw_upstream_member_sha256") != matched["raw_upstream_member_sha256"]:
+                reasons.append(
+                    f"成员 {key!r} 登记的 raw_upstream_member_sha256 与实测不符"
+                )
+            if bool(entry.get("raw_identical")) != bool(matched.get("raw_identical")):
+                reasons.append(
+                    f"成员 {key!r} 登记的 raw_identical 与实测不符："
+                    f"记录 {entry.get('raw_identical')!r}，实测 {matched.get('raw_identical')!r}"
+                )
+            role = contract.get("business_subject")
+            minima = schema["text_minimums"]  # type: ignore[index]
+            anchors = entry.get("anchors")
+            if not isinstance(anchors, list) or not anchors:
+                reasons.append(f"成员 {key!r} 必须登记区分力锚点 anchors[]")
+            else:
+                local_member = next(
+                    item
+                    for item in local_view["members"]  # type: ignore[union-attr]
+                    if item["key"] == key
+                )
+                measured_anchors = {
+                    f"{item['kind']}:{item['lexeme']}" for item in _member_identity_anchors_for(local_member, generic_patterns)
+                }
+                for anchor in anchors:
+                    if not isinstance(anchor, dict) or anchor.get("kind") not in {
+                        str(item) for item in manifest["discrimination"]["anchor_kinds"]  # type: ignore[index]
+                    }:
+                        reasons.append(f"成员 {key!r} 登记的锚点种类不受支持：{anchor!r}")
+                        continue
+                    if not _text(anchor, "lexeme"):
+                        reasons.append(f"成员 {key!r} 登记的锚点缺少具体词素：{anchor!r}")
+                        continue
+                    if f"{anchor.get('kind')}:{anchor.get('lexeme')}" not in measured_anchors:
+                        reasons.append(
+                            f"成员 {key!r} 登记的锚点 {anchor.get('lexeme')!r} 不是该成员实测的区分力事实"
+                        )
+            # 成员级语义字段的最小长度只作用于**成员登记**；归因记录的最小长度
+            # 在 ``_member_identity_attribution_covers`` 中按归因自身校验。
+            for field in (
+                "owner_responsibility", "non_generic_reason",
+                "discriminative_reason", "coverage_reason",
+            ):
+                minimum = int(minima.get(field, 1))
+                if len(_text(entry, field)) < minimum:
+                    reasons.append(
+                        f"成员 {key!r} 的 {field} 少于受控 schema 要求的 {minimum} 字："
+                        f"{_text(entry, field)!r}"
+                    )
+            if role is not None and not isinstance(role, dict):
+                reasons.append("成员同一性比较契约的 business_subject 必须是结构化对象")
+        if len(set(declared_keys)) != len(declared_keys):
+            reasons.append("成员登记存在重复的 member_key；重复键不得覆盖或偷换对象")
+        needed = 1 if entry_name == "M0" else 2
+        qualifying = raw_qualifying if entry_name == "M0" else transformed_qualifying
+        if len(qualifying) < needed:
+            reasons.append(
+                f"契约登记的成员数 {len(declared_keys)} 不足以支撑 {entry_name} 入口所需的 {needed} 个合格成员"
+            )
+        for item in qualifying:
+            if item["key"] not in declared_keys:
+                reasons.append(
+                    f"实测存在合格成员 {item['key']!r}，但契约没有登记它；"
+                    "登记必须覆盖实际参与判定的成员"
+                )
+
+    # 业务语义主体复核（G5）：机械校验绑定，语义理由由实施者之外的负责方给出。
+    business = contract.get("business_subject")
+    if not isinstance(business, dict):
+        reasons.append(
+            "成员同一性比较契约缺少业务语义主体复核 business_subject（机械校验不能代替语义复核）"
+        )
+    else:
+        for field in ("owner_responsibility", "non_generic_reason", "coverage_reason", "reviewer"):
+            if not _text(business, field):
+                reasons.append(f"business_subject 缺少 {field}")
+        if not _text(business, "declaration"):
+            reasons.append("business_subject 缺少所针对的声明 declaration")
+        if _text(business, "reviewer") and _text(business, "reviewer") == _text(business, "implementer"):
+            reasons.append(
+                "business_subject 的语义复核人必须独立于实施者；同一署名不能既是实施者又是复核人"
+            )
+        for field in ("owner_responsibility", "non_generic_reason", "coverage_reason"):
+            minimum = int(schema["text_minimums"].get(field, 1))  # type: ignore[union-attr]
+            if _text(business, field) and len(_text(business, field)) < minimum:
+                reasons.append(f"business_subject.{field} 少于受控 schema 要求的 {minimum} 字")
+
+    # 全部残余差异逐项归因（G6）
+    measured_diff = _member_identity_measured_differences(
+        local_view, upstream_view, local_text, upstream_text
+    )
+    covers, cover_reason = _member_identity_attribution_covers(contract, measured_diff)
+    if not covers:
+        reasons.append(
+            "成员同一性的原始差异归因没有恰好覆盖全部实测差异：" + cover_reason
+        )
+    else:
+        for entry in contract.get("difference_attribution", []):  # type: ignore[union-attr]
+            if not isinstance(entry, dict):
+                continue
+            cause = _text(entry, "cause")
+            if cause not in MEMBER_IDENTITY_ATTRIBUTION_CAUSES:
+                reasons.append(f"成员同一性归因记录的 cause 不受支持：{cause!r}")
+            if cause == "registered-transform" and not _text(entry, "rule"):
+                reasons.append("成员同一性归因为获准变换时必须指明具体规则 rule（变换标识）")
+
+    reasons.extend(_member_identity_comment_binding_reasons(contract))
+    reasons.extend(_member_identity_author_handling_reasons(contract, record))
+
+    tool = contract.get("tool")
+    if not isinstance(tool, dict) or not _text(tool, "name"):
+        reasons.append("成员同一性比较契约缺少工具名 tool.name")
+    else:
+        if _text(tool, "version") != MEMBER_IDENTITY_SCHEMA:
+            reasons.append(f"成员同一性比较契约的 tool.version 不是 {MEMBER_IDENTITY_SCHEMA}")
+        checker_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        if _text(tool, "sha256").lower() != checker_sha:
+            reasons.append(
+                "成员同一性比较契约的 tool.sha256 与当前规则实现不符："
+                f"记录 {_text(tool, 'sha256').lower() or '空'}，实测 {checker_sha}"
+            )
+    review = contract.get("review")
+    if not isinstance(review, dict):
+        reasons.append("成员同一性比较契约缺少复核记录 review")
+    else:
+        for field in ("implementer", "reviewer", "date", "conclusion"):
+            if not _text(review, field):
+                reasons.append(f"成员同一性比较契约缺少 review.{field}")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(review, "date")):
+            reasons.append("成员同一性比较契约的 review.date 必须是 YYYY-MM-DD")
+        if _text(review, "reviewer") and _text(review, "reviewer") == _text(review, "implementer"):
+            reasons.append("成员同一性比较契约的复核人必须独立于实施者")
+    if not _text(contract, "counter_evidence_conclusion"):
+        reasons.append("成员同一性比较契约缺少反证结论 counter_evidence_conclusion")
+    return reasons
+
+
+def _member_identity_measured_differences(
+    local_view: dict[str, object],
+    upstream_view: dict[str, object],
+    local_text: str,
+    upstream_text: str,
+) -> dict[str, int]:
+    """实测并按类别汇总双方残余差异，供归因完整性核对。
+
+    Args:
+        local_view: 本地成员读数。
+        upstream_view: 上游成员读数。
+        local_text: 本地原文。
+        upstream_text: 上游原文。
+
+    Returns:
+        键为差异类别、值为该类别**本地**差异行数的字典。
+    """
+
+    measured = {category: 0 for category in MEMBER_IDENTITY_DIFFERENCE_CATEGORIES}
+    if local_view["prologue_sha256"] != upstream_view["prologue_sha256"]:
+        left, _right = _code_identity_diff_lines(local_text, upstream_text)
+        measured["package-import"] = max(left, 1)
+    if local_view["header_sha256"] != upstream_view["header_sha256"]:
+        measured["type-header"] = 1
+    local_map = {str(item["key"]): item for item in local_view["members"]}  # type: ignore[union-attr]
+    upstream_map = {str(item["key"]): item for item in upstream_view["members"]}  # type: ignore[union-attr]
+    for key in sorted(set(local_map) | set(upstream_map)):
+        a = local_map.get(key)
+        b = upstream_map.get(key)
+        if a is not None and b is not None:
+            if a["sha256"] != b["sha256"]:
+                measured["member"] += 1
+        elif a is not None:
+            measured["local-only"] += 1
+        else:
+            measured["upstream-only"] += 1
+    measured["order"] = 0
+    if [item for item in local_view["members"]] and [item for item in upstream_view["members"]]:  # type: ignore[union-attr]
+        local_order = [str(item["key"]) for item in local_view["members"]]  # type: ignore[union-attr]
+        upstream_order = [str(item["key"]) for item in upstream_view["members"]]  # type: ignore[union-attr]
+        if sorted(local_order) == sorted(upstream_order) and local_order != upstream_order:
+            measured["order"] = 1
+    left_changed, right_changed = _code_identity_diff_lines(local_text, upstream_text)
+    if left_changed or right_changed:
+        measured["comment"] = 1
+    return measured
+
+
+def _member_identity_comment_binding_reasons(contract: dict[str, object]) -> list[str]:
+    """要求注释与署名单独验收：注释角色必须逐条登记且保持不变。
+
+    成员级内容关系**不**覆盖注释与署名（D17 §G7）：代码里某几个成员逐字节相同，
+    既不证明作者，也不证明版权、许可与职责说明。登记本身只是形状校验，逐条实测比对
+    由 ``_code_identity_comment_unchanged_reasons`` 按本地对象真实注释文本完成。
+    """
+
+    reasons: list[str] = []
+    bindings = contract.get("comment_bindings")
+    if not isinstance(bindings, list) or not bindings:
+        return ["成员同一性比较契约必须单独登记 comment_bindings（职责 JavaDoc/D12 来源说明/D15 标注）"]
+    for entry in bindings:
+        if not isinstance(entry, dict):
+            reasons.append(f"成员同一性注释绑定不是结构化对象：{entry!r}")
+            continue
+        if _text(entry, "role") not in CODE_IDENTITY_COMMENT_ROLES:
+            reasons.append(f"成员同一性注释绑定的 role 不受支持：{_text(entry, 'role')!r}")
+        if not SHA256_PATTERN.match(_text(entry, "sha256").lower()):
+            reasons.append(f"成员同一性注释绑定缺少有效 SHA-256：{entry!r}")
+        lines = entry.get("lines")
+        if (
+            not isinstance(lines, list)
+            or len(lines) != 2
+            or not all(isinstance(item, int) and item > 0 for item in lines)
+            or lines[0] > lines[1]
+        ):
+            reasons.append(f"成员同一性注释绑定的 lines 必须是递增的正整数行区间：{entry!r}")
+        if not _text(entry, "text"):
+            reasons.append(f"成员同一性注释绑定缺少逐字原文 text：{entry!r}")
+    return reasons
+
+
+def _member_identity_author_handling_reasons(
+    contract: dict[str, object], record: dict[str, object]
+) -> list[str]:
+    """要求作者/来源另行验收：成员级内容关系不得当作署名通过依据。"""
+
+    reasons: list[str] = []
+    handling = contract.get("author_handling")
+    if not isinstance(handling, dict):
+        return ["成员同一性比较契约缺少 author_handling（成员级内容关系不覆盖作者与来源验收）"]
+    if handling.get("member_identity_accepts_signature") is not False:
+        reasons.append("成员同一性比较契约必须显式登记 member_identity_accepts_signature=false")
+    if not _text(handling, "declared_author_status"):
+        reasons.append("成员同一性比较契约缺少现存署名形态声明 declared_author_status")
+    if not _text(handling, "author_route"):
+        reasons.append("成员同一性比较契约缺少作者/来源各自的验收路径 author_route")
+    if not _text(handling, "history_gap"):
+        reasons.append(
+            "成员同一性比较契约必须登记历史缺口 history_gap；成员级内容关系不关闭历史引入版本缺口"
+        )
+    if not _text(record, "author_status"):
+        reasons.append("清单缺少 author_status，成员级内容关系不替代作者判断")
+    return reasons
+
+
 def _type_evidence_value(
     record: dict[str, object],
 ) -> tuple[dict[str, object] | None, str | None]:
@@ -4081,6 +6182,11 @@ def _route_reasons(record: dict[str, object]) -> list[str]:
     if branch == EVIDENCE_BRANCH_CODE_IDENTITY:
         # 裁决 D16 §120：代码同一性作为 D10 路线 2 的局部补充分支，完整比较
         # 契约由 _code_identity_contract_reasons 复算；不改变 C2 的路线 3 门槛。
+        return []
+    if branch == EVIDENCE_BRANCH_MEMBER_IDENTITY:
+        # 裁决 D17：成员级内容关系是 D10 路线 2 的**局部**补充分支，成员级比较
+        # 契约由 _member_identity_contract_reasons 复算；它不放宽 C2 的路线 3
+        # 门槛，也不改变作者、历史、类型映射与发布门禁的既有条件。
         return []
     if branch == EVIDENCE_BRANCH_CONTENT_INDEPENDENT:
         return _content_independent_reasons(record)
@@ -4594,27 +6700,46 @@ def _acceptance_state(
             branch, branch_error = _evidence_branch(record)
             if branch_error:
                 reasons.append(branch_error)
-            elif branch not in {EVIDENCE_BRANCH_AUTHOR_ONLY, EVIDENCE_BRANCH_CODE_IDENTITY}:
+            elif branch not in {
+                EVIDENCE_BRANCH_AUTHOR_ONLY,
+                EVIDENCE_BRANCH_CODE_IDENTITY,
+                EVIDENCE_BRANCH_MEMBER_IDENTITY,
+            }:
                 reasons.append(
                     "作者标签形态的已验收记录必须显式声明 "
                     f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支与比较契约"
                 )
-            elif branch == EVIDENCE_BRANCH_CODE_IDENTITY:
-                # 裁决 D16 §86/§101：代码同一性不覆盖署名。作者标签形态仍须按
-                # D10/D12 的作者条件独立验收，不能借代码相同放行未核实的署名。
-                reasons.extend(
-                    _code_identity_contract_reasons(
-                        record,
-                        path,
-                        local_source,
-                        local_sha256 or "",
-                        registry,
+            elif branch in {EVIDENCE_BRANCH_CODE_IDENTITY, EVIDENCE_BRANCH_MEMBER_IDENTITY}:
+                # 裁决 D16 §86/§101 与 D17 §G7：代码/成员级内容关系不覆盖署名。
+                # 作者标签形态仍须按 D10/D12 的作者条件独立验收，不能借内容相同放行。
+                if branch == EVIDENCE_BRANCH_CODE_IDENTITY:
+                    reasons.extend(
+                        _code_identity_contract_reasons(
+                            record,
+                            path,
+                            local_source,
+                            local_sha256 or "",
+                            registry,
+                        )
                     )
-                )
-                reasons.append(
-                    "代码同一性不覆盖作者与署名验收：作者标签形态仍须声明 "
-                    f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支并按 D10/D12 各自条件验收"
-                )
+                    reasons.append(
+                        "代码同一性不覆盖作者与署名验收：作者标签形态仍须声明 "
+                        f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支并按 D10/D12 各自条件验收"
+                    )
+                else:
+                    reasons.extend(
+                        _member_identity_contract_reasons(
+                            record,
+                            path,
+                            local_source,
+                            local_sha256 or "",
+                            registry,
+                        )
+                    )
+                    reasons.append(
+                        "成员级内容关系不覆盖作者与署名验收：作者标签形态仍须声明 "
+                        f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支并按 D10/D12 各自条件验收"
+                    )
             else:
                 reasons.extend(
                     _author_only_contract_reasons(
@@ -4769,6 +6894,14 @@ def _verify_single_note(
         # 该分支只覆盖代码流，注释与署名仍按 D12/D15 各自规则核验。
         reasons.extend(
             _code_identity_contract_reasons(
+                record, path, local_source, local_sha256, registry
+            )
+        )
+    elif _text(record, EVIDENCE_BRANCH_FIELD) == EVIDENCE_BRANCH_MEMBER_IDENTITY:
+        # 裁决 D17：声明成员级分支就必须能按登记变换集与受控成员清单复算成员级
+        # 比较；该分支只覆盖成员内容关系，注释、署名、历史与许可仍独立验收。
+        reasons.extend(
+            _member_identity_contract_reasons(
                 record, path, local_source, local_sha256, registry
             )
         )
@@ -5941,6 +8074,8 @@ def _validate_declared_branches(
     *,
     root: Path | None = None,
     transform_set_path: Path | None = None,
+    contract_schema_path: Path | None = None,
+    member_manifest_path: Path | None = None,
 ) -> tuple[int, list[str]]:
     """复算清单中所有显式声明证据分支的记录。
 
@@ -5955,6 +8090,8 @@ def _validate_declared_branches(
         evidence: 已加载的受控证据清单。
         root: 读取本地对象与默认变换集的仓库根；默认取本规则实现所在仓库根。
         transform_set_path: 显式指定的代码同一性变换集清单路径。
+        contract_schema_path: 显式指定的成员级契约 schema 路径。
+        member_manifest_path: 显式指定的成员清单路径。
 
     Returns:
         ``(检查的记录数, 拒绝原因列表)``。
@@ -5990,6 +8127,20 @@ def _validate_declared_branches(
                 evidence,
                 root=root,
                 transform_set_path=transform_set_path,
+            ):
+                reasons.append(f"{path}：[{reason}]")
+        elif branch == EVIDENCE_BRANCH_MEMBER_IDENTITY:
+            local_sha = _text(record, "local_sha256_after").lower()
+            for reason in _member_identity_contract_reasons(
+                record,
+                path,
+                None,
+                local_sha,
+                evidence,
+                root=root,
+                transform_set_path=transform_set_path,
+                contract_schema_path=contract_schema_path,
+                member_manifest_path=member_manifest_path,
             ):
                 reasons.append(f"{path}：[{reason}]")
         else:
@@ -6252,7 +8403,8 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "复算清单中所有显式声明证据分支"
-            "（E1-author-only / C2-independent-content / E1-code-identity）的记录"
+            "（E1-author-only / C2-independent-content / E1-code-identity /"
+            " E2-member-identity）的记录"
         ),
     )
     parser.add_argument(
@@ -6281,6 +8433,24 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="E1-code-identity 分支读取本地对象与默认变换集的仓库根；默认取本规则实现所在仓库根",
+    )
+    parser.add_argument(
+        "--member-identity-contract-schema",
+        type=Path,
+        default=None,
+        help=(
+            "E2-member-identity 分支的受控契约 schema 清单路径；"
+            f"默认读取 {MEMBER_IDENTITY_ENV_SCHEMA}，再退回 {DEFAULT_MEMBER_IDENTITY_CONTRACT_SCHEMA}"
+        ),
+    )
+    parser.add_argument(
+        "--member-identity-member-manifest",
+        type=Path,
+        default=None,
+        help=(
+            "E2-member-identity 分支的受控成员清单路径；"
+            f"默认读取 {MEMBER_IDENTITY_ENV_MEMBERS}，再退回 {DEFAULT_MEMBER_IDENTITY_MEMBER_MANIFEST}"
+        ),
     )
     parser.add_argument(
         "--maintenance",
@@ -6651,6 +8821,8 @@ def main() -> int:
             evidence,
             root=args.code_identity_root,
             transform_set_path=args.code_identity_transform_set,
+            contract_schema_path=args.member_identity_contract_schema,
+            member_manifest_path=args.member_identity_member_manifest,
         )
         report = {
             "check": "Java 注释证据分支",

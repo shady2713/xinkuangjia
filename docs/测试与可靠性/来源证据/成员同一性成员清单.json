@@ -1,0 +1,238 @@
+{
+ "schema": "d17-member-identity-members/v1",
+ "branch": "E2-member-identity",
+ "route": "路线 2",
+ "rules_version": "d17-member-compare/v1",
+ "serialization": "d16-token-major/v1",
+ "ruling": "docs/测试与可靠性/裁决-D17-成员级代码同一性与逐条来源验收.md（仓库外原件 .bf-local/d17/裁决-D17.md）",
+ "description": "裁决 D17 的成员清单：规定什么样的成员才算“完整、非通用且有区分力”，并登记**不可由本分支关闭**的对象。样板排除清单把“空方法、getter/setter、纯注释、常量样板、只由样板注解与惯用类型名构成的字段”明确排除；区分力口径要求每个计数成员至少带一个可机械识别的非惯用锚点（非惯用字符串字面量、非惯用数值字面量、非样板限定类型引用或非样板业务标识符）。本清单不含任何批准名单。",
+ "boilerplate_exclusions": {
+  "kinds": [
+   "fragment"
+  ],
+  "accessor_methods": [
+   "get",
+   "set",
+   "is",
+   "has",
+   "add",
+   "remove",
+   "clear",
+   "size",
+   "count",
+   "equals",
+   "hashCode",
+   "toString",
+   "clone",
+   "compareTo",
+   "iterator",
+   "stream",
+   "forEach",
+   "accept",
+   "apply",
+   "test",
+   "run",
+   "call",
+   "do",
+   "execute"
+  ],
+  "trivial_body_patterns": [
+   "return this.<field>;",
+   "return <field>;",
+   "this.<field> = <field>;"
+  ],
+  "generic_field_names": [
+   "id",
+   "ids",
+   "name",
+   "names",
+   "code",
+   "type",
+   "types",
+   "status",
+   "remark",
+   "remarkStr",
+   "sort",
+   "deleted",
+   "tenantId",
+   "creator",
+   "updater",
+   "createTime",
+   "updateTime",
+   "deletedTime",
+   "version",
+   "flag",
+   "enabled",
+   "visible",
+   "value",
+   "key",
+   "label",
+   "title",
+   "url",
+   "uuid",
+   "uuidStr",
+   "serialVersionUID",
+   "LOG",
+   "LOGGER",
+   "log",
+   "logger"
+  ],
+  "generic_literals": [
+   "",
+   "true",
+   "false",
+   "null",
+   "0",
+   "1",
+   "-1",
+   "id",
+   "name",
+   "code",
+   "string",
+   "String",
+   "int",
+   "Integer",
+   "long",
+   "Long",
+   "boolean",
+   "Boolean",
+   "list",
+   "map",
+   "set",
+   "test",
+   "demo",
+   "example",
+   "示例"
+  ],
+  "annotation_only_names": [
+   "NotNull",
+   "NotBlank",
+   "NotEmpty",
+   "Size",
+   "Min",
+   "Max",
+   "Pattern",
+   "Valid",
+   "Schema",
+   "ApiModelProperty",
+   "ApiOperation",
+   "Data",
+   "Getter",
+   "Setter",
+   "Builder",
+   "Value",
+   "EqualsAndHashCode",
+   "ToString",
+   "NoArgsConstructor",
+   "AllArgsConstructor",
+   "RequiredArgsConstructor",
+   "Override",
+   "Nullable",
+   "NonNull",
+   "Slf4j"
+  ],
+  "no_anchor_members": [
+   "enum-constant"
+  ]
+ },
+ "discrimination": {
+  "anchor_kinds": [
+   "string-literal",
+   "numeric-literal",
+   "qualified-type",
+   "identifier"
+  ],
+  "min_anchors": 1,
+  "min_member_lexeme_count": 6,
+  "generic_string_patterns": [
+   "^(?:校验|验证)?(?:不能为空|必须|长度不能超过|格式不正确|已存在|不存在|不正确)",
+   "^(?:管理后台 - |获得|获取|创建|修改|删除|导出|导入|新增|更新|查询|分页|列表)",
+   "^(?:Request|Response) VO$",
+   "^@(?:Schema|NotNull|NotBlank|Size|Min|Max|Valid|ApiModelProperty|ApiOperation)\\b",
+   "^(?:true|false|null|0|1|示例|example|test|demo)$"
+  ],
+  "note": "锚点只是机械可识别的**非惯用事实**候选，不等于业务语义主体成立。D17 §G5 明确单凭字节长度、成员数、覆盖百分比、名称、语料低频或哈希相等均不足；是否承载目标声明实际保留的业务内容，仍由契约的 business_subject 与实施者之外的负责方逐项复核给出。锚点为 0 的成员一律不得计入证据。"
+ },
+ "contract_conflicts": [
+  {
+   "upstream_path": "yudao-framework/yudao-spring-boot-starter-redis/src/main/java/cn/iocoder/yudao/framework/redis/config/YudaoCacheAutoConfiguration.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-redis/src/main/java/com/basicframework/framework/redis/config/BasicFrameworkCacheAutoConfiguration.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "pending_decision": "当前未调用 setTransactionAware，是否符合预期事务及缓存生命周期",
+   "required_verification": "真实事务的提交、回滚和缓存读写边界",
+   "exclusion_reason": "资源/事务生命周期：本地缓存管理器未开启事务感知",
+   "exclusion_basis": "裁决 D17 §C 类四条：明确排除在全部自动来源验收、自动改判与自动解除阻断路线之外"
+  },
+  {
+   "upstream_path": "yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/yudao/framework/xss/core/clean/JsoupXssCleaner.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-web/src/main/java/com/basicframework/framework/xss/core/clean/JsoupXssCleaner.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "pending_decision": "本地 safelist 不含 style，是否为目标 XSS 策略",
+   "required_verification": "实际清理输出，合法输入及恶意输入的保留/拒绝边界",
+   "exclusion_reason": "XSS 过滤语义：本地 safelist 去掉了 style 属性",
+   "exclusion_basis": "裁决 D17 §C 类四条：明确排除在全部自动来源验收、自动改判与自动解除阻断路线之外"
+  },
+  {
+   "upstream_path": "yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/framework/security/config/SecurityConfiguration.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-infra/src/main/java/com/basicframework/module/infra/framework/security/config/SecurityConfiguration.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "pending_decision": "匿名白名单从上游集合收窄，目标允许和拒绝路径是什么",
+   "required_verification": "真实安全链下匿名、认证、权限以及实际路径匹配",
+   "exclusion_reason": "认证与安全策略：匿名放行白名单被收窄",
+   "exclusion_basis": "裁决 D17 §C 类四条：明确排除在全部自动来源验收、自动改判与自动解除阻断路线之外"
+  },
+  {
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/dict/vo/type/DictTypeRespVO.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/dict/vo/type/DictTypeRespVO.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "pending_decision": "导出列标题“字典编号”是否为目标对外契约",
+   "required_verification": "实际导出内容、列标题及消费方兼容性",
+   "exclusion_reason": "对外输出契约：导出列标题措辞与上游不同",
+   "exclusion_basis": "裁决 D17 §C 类四条：明确排除在全部自动来源验收、自动改判与自动解除阻断路线之外"
+  }
+ ],
+ "branch_ineligible": [
+  {
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/framework/sms/config/YudaoSmsCodeProperties.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/framework/sms/config/SmsCodeProperties.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "exclusion_reason": "校验约束变化（新增 @Min(1)/@DurationMin、删除两处 @NotNull），且配置前缀 basic-framework.sms-code 不在已登记 T4 字面量映射内",
+   "required_verification": "核实校验与配置契约；补可靠导入记录或合格路线 3 证据",
+   "exclusion_basis": "裁决 D17 §B 类五条的出口：当前固定输入与登记变换下没有任何逐字节相等的完整成员，本分支不接受它们"
+  },
+  {
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthLoginReqVO.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthLoginReqVO.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "exclusion_reason": "自定义账号/密码约束取代原校验方法、字段注解及示例变化；两侧没有任何逐字节相等的完整成员",
+   "required_verification": "核实实际约束与接口契约；旧“账号不能为空/密码不能为空”两串仍不构成合格 C2",
+   "exclusion_basis": "裁决 D17 §B 类五条的出口：当前固定输入与登记变换下没有任何逐字节相等的完整成员，本分支不接受它们"
+  },
+  {
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthRegisterReqVO.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthRegisterReqVO.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "exclusion_reason": "类/字段描述与示例变化，5 个成员全部不等",
+   "required_verification": "比较完整模型与有效字段约束；补独立的非通用对应或可靠导入记录",
+   "exclusion_basis": "裁决 D17 §B 类五条的出口：当前固定输入与登记变换下没有任何逐字节相等的完整成员，本分支不接受它们"
+  },
+  {
+   "upstream_path": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthSmsSendReqVO.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthSmsSendReqVO.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "exclusion_reason": "Lombok 注解契约不同（@EqualsAndHashCode 取代 @NoArgsConstructor），4 个成员全部不等",
+   "required_verification": "核实构造、equals/hashCode 与实际消费；不把注解改写自行包装成同一性变换",
+   "exclusion_basis": "裁决 D17 §B 类五条的出口：当前固定输入与登记变换下没有任何逐字节相等的完整成员，本分支不接受它们"
+  },
+  {
+   "upstream_path": "yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/translate/config/YudaoTranslateAutoConfiguration.java",
+   "local_path": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-mybatis/src/main/java/com/basicframework/framework/translate/config/BasicFrameworkTranslateAutoConfiguration.java",
+   "commit": "ac022b15a094cf9cf82903d429b9729e72309da5",
+   "exclusion_reason": "第三方翻译实现换包（org.dromara 换为 com.fhs）并新增 translateUtils() Bean，条件装配变化；没有相等成员",
+   "required_verification": "核实依赖、装配及调用契约；补来源记录或合格路线 3 证据",
+   "exclusion_basis": "裁决 D17 §B 类五条的出口：当前固定输入与登记变换下没有任何逐字节相等的完整成员，本分支不接受它们"
+  }
+ ],
+ "generated_note": "本文件的 members_manifest_sha256 是规则集（除该字段与本说明外全部键）的规范化 SHA-256，由规则实现逐项复算；改动任何登记项而不同步重算即拒绝。",
+ "members_manifest_sha256": "22609f835b75f6883f26e68ea0a1f8bdf4749c90f358daeabcc50d59d300f993"
+}
