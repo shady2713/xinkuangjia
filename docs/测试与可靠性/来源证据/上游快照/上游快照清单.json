@@ -23,7 +23,7 @@
     "upstream_files": 186,
     "rule": "收录「判词消费上游字节」的全部记录：已验收记录（判词为已应用来源说明或 A1 成立）∪ 已登记阻断记录（证据不足／复核回退／需补证；裁决 D15 §72/§115 要求逐条复算绑定材料的实测字节）∪ 显式声明证据分支的记录，取其 upstream_path 去重并集。当前索引的三类记录合计覆盖全部 186 条记录，因此上游文件数等于索引声明的186 个互不相同的 upstream_path；上游仓库共 8744 个文件，未纳入其余任何文件。",
     "measured_by": "本口径由真实入口埋点复核：check_full_java_comments.py --maintenance 在快照缺位时取回的互不相同上游 URL 数，必须等于本清单的 upstream_files。",
-    "registry_index_sha256": "39f539cfb65ccf4af6c4aedcb9a78f77508ba2c1dfa3fd39b23cf505924151b4"
+    "registry_index_sha256": "6b325a13587a31449393bc148680ca6d3b1ec7dce4ca477cc0ddfc2f5391f905"
   },
   "retention": {
     "byte_for_byte": true,
@@ -4480,9 +4480,9 @@
       "declared_index_license_sha256": "772daf1f82a50025a74e4066050490d875feba62a49cf0ecefa1b4cc824e9a07",
       "matches_index_license_sha256": true,
       "original_declarations_preserved": true,
-      "index_license_path": "yudao/LICENSE@ac022b15a094cf9cf82903d429b9729e72309da5",
-      "index_license_path_layout_supported": false,
-      "index_license_path_note": "受控索引把许可证登记为相对路径 yudao/LICENSE@ac022b15a094cf9cf82903d429b9729e72309da5；既有取回实现按 <仓库名>@<提交>/<上游路径> 定位，该取值不是可解析形态，历史上从未被任何入口消费。本快照按上游树的真实位置（ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE）交付许可证，并在本条目登记同一指纹；是否把索引 license_path 改成可解析形态留待有权者裁决。"
+      "index_license_path": "ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE",
+      "index_license_path_layout_supported": true,
+      "index_license_path_note": "受控索引现把许可证登记为相对路径 ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE，即检查器 resolve_license_relative_path 按 <仓库名>@<40 位提交>/<上游相对路径> 解析的可解析形态（186/186 条记录同一取值，2026-10-07 实测）。取值与本条目的 path、license_sha256 及快照内文件实际字节三者逐项相等。加载受控证据的五个入口会真实消费该字段：把取值改回历史形态 yudao/LICENSE@<提交> 后，check_staged_java_comments.py --validate-evidence-branches、check_full_java_comments.py --maintenance、check_worktree_java_comments.py、check_staged_quality.py（隔离暂存区实测）与 run_checks.py --group comments 五个真实 CLI 均以退出码 2 报「license_path 不是可解析形态」。ci_gate 只按整文件指纹绑定受控索引（source_acceptance 的 registry_sha256），自身不解析该字段，因此不计入「解析消费」一列。改前取值与理由仍登记在受控索引的 manifest.license_path_fix。"
     }
   ],
   "totals": {

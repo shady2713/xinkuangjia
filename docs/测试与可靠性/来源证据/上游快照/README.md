@@ -149,6 +149,6 @@ kind: package-reference
 
 ## 已知限制与暂缓工作
 
-1. **索引 `license_path` 的登记值不可解析**：受控索引把许可证位置登记为 `yudao/LICENSE@ac022b15…`，而既有取回实现按 `<仓库名>@<提交>/<上游路径>` 定位，该取值不是任何可解析形态，历史上从未被任何入口消费。本快照按上游树的真实位置交付许可证并在清单中登记同一指纹；是否把索引 `license_path` 改成可解析形态，属有权者裁决事项。
+1. **索引 `license_path` 已是可解析形态**：受控索引现登记 `ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE`（2026-10-07 实测，186/186 条同一取值），与本快照交付许可证的真实位置、清单条目指纹及文件实际字节三者相等；加载受控证据的五个入口（`check_staged_java_comments.py`、`check_full_java_comments.py`、`check_worktree_java_comments.py`、`check_staged_quality.py`、`run_checks.py`）逐条复算该定位，改回历史形态 `yudao/LICENSE@<commit>` 时五个 CLI 均以退出码 2 拒绝。`ci_gate` 只按整文件指纹绑定索引，不解析该字段。改前取值登记在受控索引 `manifest.license_path_fix`。
 2. **本快照不覆盖全部 186 条记录的上游正文**：157 条记录的判词不依赖上游正文，其上游字节仍未纳入。若将来其中任何一条被改判为已验收，必须先扩充本清单再改判，不得先改判后补快照。
 3. **快照是本仓库 Java 后端的一部分**：目录内 `.java` 文件位于 `docs/` 之下，不在 `JAVA_SOURCE_ROOT` 内，因此不会被全量注释检查扫描为纳管源码；它们只是证据材料。
