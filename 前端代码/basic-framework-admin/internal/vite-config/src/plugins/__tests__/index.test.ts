@@ -74,7 +74,7 @@ function namesOf(plugins: ResolvedPlugin[]) {
 const workspaceRoot = process.cwd();
 
 describe('loadApplicationPlugins', /** 条件插件集合决定哪些构建能力进入产物。 */ () => {
-  it('按顺序装配通用插件、分析插件、首屏 loading 与 HTML 插件', /** 顺序与集合同时写错时最容易被忽略，必须整体核对。 */ async () => {
+  it('按顺序装配通用插件、分析插件、首屏 loading、HTML 与许可材料插件', /** 顺序与集合同时写错时最容易被忽略，必须整体核对。 */ async () => {
     const plugins = await resolvePlugins(
       await loadApplicationPlugins({
         html: true,
@@ -87,6 +87,7 @@ describe('loadApplicationPlugins', /** 条件插件集合决定哪些构建能�
 
     // vite-plugin-html 开启压缩后同时注册管道的 vite:html 与压缩环节 vite:minify-html，
     // 两者都要出现在插件表里，缺一说明该条件分支没有按真实工厂装配。
+    // 许可材料两个插件按 isBuild 条件装配，且排在最后：它们改写产物内容，必须晚于上面所有插件。
     expect(namesOf(plugins)).toEqual([
       'vite:vue',
       'vite:vue-jsx',
@@ -95,6 +96,30 @@ describe('loadApplicationPlugins', /** 条件插件集合决定哪些构建能�
       'vite:inject-app-loading',
       'vite:html',
       'vite:minify-html',
+      'vite:license',
+      'vite:third-party-notices',
+    ]);
+  });
+
+  it('生产构建装配许可材料插件且不装配分析与首屏插件', /** 许可材料必须随发布产物产出，而分析报告与首屏动画只属于各自的模式。 */ async () => {
+    const plugins = await resolvePlugins(
+      await loadApplicationPlugins({
+        html: true,
+        injectAppLoading: false,
+        isBuild: true,
+        mode: 'production',
+        root: workspaceRoot,
+      }),
+    );
+
+    expect(namesOf(plugins)).toEqual([
+      'vite:vue',
+      'vite:vue-jsx',
+      'vite:extra-app-config',
+      'vite:html',
+      'vite:minify-html',
+      'vite:license',
+      'vite:third-party-notices',
     ]);
   });
 
@@ -116,7 +141,7 @@ describe('loadApplicationPlugins', /** 条件插件集合决定哪些构建能�
     );
   });
 
-  it('未开启的条件不安装对应插件', /** 生产构建混入分析插件或 HTML 插件会改变发布产物。 */ async () => {
+  it('开发服务不安装许可材料与分析插件', /** 开发服务不产出静态资源，装上许可材料插件只会反复写许可证文本。 */ async () => {
     const plugins = await resolvePlugins(
       await loadApplicationPlugins({
         html: false,

@@ -210,16 +210,28 @@ describe('defineApplicationConfig', /** 构建入口的产物契约与条件分�
       { command: 'build', mode: 'production' },
     );
 
+    // 生产构建按 isBuild 装配许可材料两个插件：横幅改写入口分块、第三方材料写入产物文件，
+    // 两者都排在 HTML 压缩之后，改写内容必须晚于全部产出环节。
     expect(await pluginNames(defaultConfig)).toEqual([
       'vite:vue',
       'vite:vue-jsx',
       'vite:extra-app-config',
       'vite:html',
       'vite:minify-html',
+      'vite:license',
+      'vite:third-party-notices',
     ]);
-    expect(await pluginNames(analyzeConfig)).toContain(
+    // 分析模式同样产出许可材料，并额外装配分析插件；用全量比对钉住集合与顺序。
+    expect(await pluginNames(analyzeConfig)).toEqual([
+      'vite:vue',
+      'vite:vue-jsx',
+      'vite:extra-app-config',
       'weetion:bundle-analysis',
-    );
+      'vite:html',
+      'vite:minify-html',
+      'vite:license',
+      'vite:third-party-notices',
+    ]);
   });
 
   it('关闭全局 SCSS 注入时不产生预处理器配置', /** 关闭后仍写入 scss 配置会改变不使用全局样式的应用产物。 */ async () => {
