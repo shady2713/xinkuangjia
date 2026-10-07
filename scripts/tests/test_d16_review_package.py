@@ -440,6 +440,19 @@ def test_verify_item_entry_point_reports_mismatch(tool: object, tmp_path: Path) 
     assert report_missing["status"] == "not-found"
 
 
+def _drop_head(raw: bytes) -> bytes:
+    """剔除材料中记录生成时提交的 head 字段，其余字节原样保留。
+
+    `repository.head` 是"何时生成"的元数据：把它写死会让本用例在任何后续提交上都失败
+    （提交即改值）。逐条证据、读数、归因与判定列仍逐字节一致。
+    """
+
+    head = json.loads(raw.decode("utf-8")).get("repository", {}).get("head")
+    if head is None:
+        return raw
+    return raw.replace(head.encode("utf-8"), b"<normalized-head>")
+
+
 def test_generator_cli_rebuilds_identical_materials(tmp_path: Path) -> None:
     """真实 CLI：--build 重新生成的材料与仓内已生成版本逐字节一致。"""
 
@@ -457,7 +470,7 @@ def test_generator_cli_rebuilds_identical_materials(tmp_path: Path) -> None:
     assert report["status"] == "written"
     # 机器可读材料不得写入逐次变化的时间戳，否则无法按整文件 SHA-256 复算；
     # 人读材料允许记录生成时间，比较时只剔除该行。
-    assert REVIEW_JSON.read_bytes() == before_json
+    assert _drop_head(REVIEW_JSON.read_bytes()) == _drop_head(before_json)
     assert b"generated_at_utc" not in before_json
     strip_time = lambda text: [  # noqa: E731 - 测试内一次性辅助
         line for line in text.splitlines() if not line.startswith("生成时间（UTC）：")

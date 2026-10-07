@@ -141,7 +141,7 @@
   "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
   "repository": {
     "root": "/home/weetion/桌面/kuangjia/repo",
-    "head": "b8042c8444d3e897acb4161fd6dd22a50baabe2e",
+    "head": "10b1021a184d82a9059be882b28ca85de628b228",
     "branch": "codex/framework-remediation",
     "python": "3.12.3"
   },
@@ -632,7 +632,7 @@
         },
         {
           "pom": "后端代码/basic-framework-boot/basic-framework-server/pom.xml",
-          "pom_sha256": "33cc24159c7d4ef9d0e5b5abbe21f52ab2390b8e118a1fcd8c880601d128abfb",
+          "pom_sha256": "74c7d7acb322fb990039a96843324d8059b86b61e77bf4082a5c8c30879604e1",
           "artifact_id": "basic-framework-server",
           "packaging": "jar",
           "package_root": "com"

@@ -46,3 +46,13 @@ ALLOWED = frozenset(
         ".gz",
     }
 )
+# 无扩展名的许可材料按**完整文件名**放行。`LICENSE`、`NOTICE` 这类上游约定的文件名没有后缀，
+# 只走后缀集合会被整体挡掉，交付物就无法自带许可证文本。名单固定，不接受任何其他无后缀文件。
+ALLOWED_EXACT = frozenset(
+    {
+        "COPYING",
+        "LICENSE",
+        "NOTICE",
+        "THIRD-PARTY-NOTICES",
+    }
+)

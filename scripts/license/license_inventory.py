@@ -35,9 +35,9 @@ from xml.etree import ElementTree
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_ROOT = REPOSITORY_ROOT / "前端代码" / "basic-framework-admin"
-POM_NAMESPACE = "{http://maven.apache.org/POM/4.0.0}"
 # 归档或 JAR 内出现这些文件名的条目，才算"随交付物提供了许可证文本"。
-LICENSE_TEXT_NAMES = ("LICENSE", "LICENCE", "NOTICE", "COPYING", "LICENSE.txt", "LICENSE.md")
+LICENSE_TEXT_NAMES = ("LICENSE", "LICENCE", "NOTICE", "COPYING", "LICENSE.txt", "LICENSE.md",
+                     "THIRD-PARTY-NOTICES")
 # 静态交付物里需要单独确认来源与许可的资源类型。
 ASSET_SUFFIXES = {".woff": "字体", ".woff2": "字体", ".ttf": "字体", ".otf": "字体",
                    ".eot": "字体", ".svg": "图像", ".png": "图像", ".jpg": "图像",
@@ -147,6 +147,52 @@ class JarComponent:
         }
 
 
+def _local_name(tag: str) -> str:
+    """去掉 XML 命名空间前缀，只留元素本地名。
+
+    历史 POM 的根元素常常没有 Maven 命名空间（如 org.apache.xmlbeans 的 5.3.0 POM），
+    按命名空间精确匹配会把"上游没声明许可证"误判成"我们没读出来"。统一按本地名查找，
+    盘点口径才是"读没读到"，而不是"匹没匹配上命名空间"。
+
+    Args:
+        tag: 元素标签，可能带 `{uri}` 前缀。
+    Returns:
+        去掉命名空间后的本地名。
+    """
+
+    return tag.rsplit("}", 1)[-1]
+
+
+def _find_local(element: ElementTree.Element, name: str) -> ElementTree.Element | None:
+    """按本地名查找直接子元素。
+
+    Args:
+        element: 父元素。
+        name: 子元素本地名。
+    Returns:
+        命中的子元素；没有时为 None。
+    """
+
+    for child in element:
+        if _local_name(child.tag) == name:
+            return child
+    return None
+
+
+def _text_local(element: ElementTree.Element, name: str) -> str:
+    """按本地名读取直接子元素文本。
+
+    Args:
+        element: 父元素。
+        name: 子元素本地名。
+    Returns:
+        子元素文本并去除首尾空白；没有该子元素时为空串。
+    """
+
+    child = _find_local(element, name)
+    return (child.text or "").strip() if child is not None else ""
+
+
 def pom_licenses(pom_bytes: bytes) -> list[str]:
     """读取单个 POM 中直接声明的许可证名。
 
@@ -157,12 +203,14 @@ def pom_licenses(pom_bytes: bytes) -> list[str]:
     """
 
     root = ElementTree.fromstring(pom_bytes)
-    licenses = root.find(f"{POM_NAMESPACE}licenses")
+    licenses = _find_local(root, "licenses")
     if licenses is None:
         return []
     names = []
-    for element in licenses.findall(f"{POM_NAMESPACE}license"):
-        name = (element.findtext(f"{POM_NAMESPACE}name") or "").strip()
+    for element in licenses:
+        if _local_name(element.tag) != "license":
+            continue
+        name = _text_local(element, "name")
         if name:
             names.append(name)
     return names
@@ -178,14 +226,13 @@ def pom_parent(pom_bytes: bytes) -> tuple[str, str, str] | None:
     """
 
     root = ElementTree.fromstring(pom_bytes)
-    parent = root.find(f"{POM_NAMESPACE}parent")
+    parent = _find_local(root, "parent")
     if parent is None:
         return None
-    values = [(parent.findtext(f"{POM_NAMESPACE}{tag}") or "").strip()
-              for tag in ("groupId", "artifactId", "version")]
+    values = tuple(_text_local(parent, tag) for tag in ("groupId", "artifactId", "version"))
     if not all(values):
         return None
-    return values[0], values[1], values[2]
+    return values  # type: ignore[return-value]
 
 
 def resolve_licenses(maven_repo: Path, group: str, artifact: str, version: str,
@@ -224,30 +271,56 @@ def resolve_licenses(maven_repo: Path, group: str, artifact: str, version: str,
     return [], "unknown"
 
 
-def component_coordinates(entries: Sequence[str], payload: bytes) -> str:
-    """从组件 JAR 内的 pom.properties 读取真实坐标。
+def pom_properties_candidates(entries: Sequence[str], payload: bytes) -> list[str]:
+    """列出组件 JAR 内全部 `pom.properties` 声明的坐标。
+
+    聚合打包的构件（shaded jar）里会同时出现多个模块的 `pom.properties`，按条目顺序取第一份
+    会把别的模块当成构件自身，因此这里全部读出，交给调用方按构件文件名判定。
 
     Args:
         entries: 组件 JAR 的条目名。
         payload: 组件 JAR 的字节内容。
     Returns:
-        groupId:artifactId:version；无法确定时为空串。
+        坐标列表，按条目名排序去重。
     """
 
-    for name in entries:
+    candidates: list[str] = []
+    for name in sorted(entries):
         if not (name.startswith("META-INF/maven/") and name.endswith("pom.properties")):
             continue
         try:
             with zipfile.ZipFile(io.BytesIO(payload)) as inner:
                 text = inner.read(name).decode("utf-8", "replace")
         except (KeyError, zipfile.BadZipFile):
-            return ""
+            continue
         values = dict(line.split("=", 1) for line in text.strip().splitlines() if "=" in line)
         group, artifact, version = (values.get("groupId", ""), values.get("artifactId", ""),
                                     values.get("version", ""))
-        if group and artifact and version:
-            return f"{group}:{artifact}:{version}"
-        return ""
+        coordinate = f"{group}:{artifact}:{version}" if group and artifact and version else ""
+        if coordinate and coordinate not in candidates:
+            candidates.append(coordinate)
+    return candidates
+
+
+def component_coordinates(entries: Sequence[str], payload: bytes, file_name: str) -> str:
+    """从组件 JAR 内的 pom.properties 读取真实坐标。
+
+    只有当声明的 `artifactId-version` 与包内文件名一致时才采信：聚合打包的构件内部带有多个
+    模块的 `pom.properties`，不对齐文件名的那些属于被打包进去的模块，不是构件自身。
+
+    Args:
+        entries: 组件 JAR 的条目名。
+        payload: 组件 JAR 的字节内容。
+        file_name: 包内的构件文件名，含 `.jar` 后缀。
+    Returns:
+        groupId:artifactId:version；无法确定时为空串。
+    """
+
+    stem = file_name[:-4] if file_name.endswith(".jar") else file_name
+    for coordinate in pom_properties_candidates(entries, payload):
+        _, artifact, version = coordinate.split(":", 2)
+        if f"{artifact}-{version}" == stem:
+            return coordinate
     return ""
 
 
@@ -279,7 +352,8 @@ def scan_backend_jar(jar_path: Path, maven_repo: Path) -> dict[str, Any]:
                 with zipfile.ZipFile(io.BytesIO(payload)) as inner:
                     inner_entries = inner.namelist()
                     embedded = [name for name in inner_entries if is_license_text(name)]
-                    coordinates = component_coordinates(inner_entries, payload)
+                    coordinates = component_coordinates(inner_entries, payload,
+                                                        entry.rsplit("/", 1)[-1])
             except zipfile.BadZipFile:
                 embedded, coordinates = [], ""
             licenses: list[str] = []

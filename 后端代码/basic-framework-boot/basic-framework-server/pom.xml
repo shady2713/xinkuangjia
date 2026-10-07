@@ -47,6 +47,18 @@
     </dependencies>
 
     <build>
+        <!-- 第三方许可材料由 scripts/license/generate_third_party_notices.py 生成到
+             ${project.build.directory}/generated-license-materials，打包时随 JAR 一起分发。
+             该目录不存在时 Maven 静默跳过、不阻断既有构建；因此发布流程必须先执行生成步骤，
+             漏执行时交付物会退回"零份许可材料"，由发布前核对发现。 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.build.directory}/generated-license-materials</directory>
+            </resource>
+        </resources>
         <!-- 设置构建的 jar 包名 -->
         <finalName>${project.artifactId}</finalName>
         <plugins>

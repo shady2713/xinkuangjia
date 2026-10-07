@@ -1,0 +1,28 @@
+{
+  "schema": "additional-license-evidence/v1",
+  "disclaimer": "本表只登记自动化读不到的许可证结论：每条都必须有可核验来源 URL 与逐字引文，不作推测。本表不构成合规结论，也不代表任何许可选择已获批准。",
+  "components": {
+    "jcip-annotations-1.0.jar": {
+      "coordinates": "net.jcip:jcip-annotations:1.0",
+      "source": "central-sources-jar-header",
+      "source_url": "https://repo1.maven.org/maven2/net/jcip/jcip-annotations/1.0/jcip-annotations-1.0-sources.jar",
+      "note": "Maven Central 上 net.jcip:jcip-annotations:1.0 的 POM 自身没有 <licenses> 且没有父构件可继承，构件 JAR 内也没有任何许可证文本条目；许可声明只出现在官方 sources JAR 的每个源文件头部，因此以该文件头部为来源。",
+      "quote": "/*\n * Copyright (c) 2005 Brian Goetz and Tim Peierls\n * Released under the Creative Commons Attribution License\n *   (http://creativecommons.org/licenses/by/2.5)\n * Official home: http://www.jcip.net\n *\n * Any republication or derived work distributed in source code form\n * must include this copyright and license notice.\n */",
+      "licenses": [
+        {
+          "name": "Creative Commons Attribution License 2.5",
+          "url": "http://creativecommons.org/licenses/by/2.5",
+          "distribution": ""
+        }
+      ],
+      "needs_legal_review": [
+        {
+          "name": "Creative Commons Attribution License 2.5",
+          "url": "http://creativecommons.org/licenses/by/2.5",
+          "reason": "源文件头把通知义务限定在 source code form；本项目以二进制形式再分发该构件，随包 THIRD-PARTY-NOTICES 已按最宽松口径保留版权与许可声明，义务是否已履行仍需法务确认。",
+          "candidate_spdx_id": "CC-BY-2.5"
+        }
+      ]
+    }
+  }
+}

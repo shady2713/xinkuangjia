@@ -21,6 +21,8 @@ import { createHtmlPlugin as viteHtmlPlugin } from 'vite-plugin-html';
 import { bundleAnalysis } from './bundle-analysis.mjs';
 import { viteExtraAppConfigPlugin } from './extra-app-config.ts';
 import { viteInjectAppLoadingPlugin } from './inject-app-loading/index.ts';
+import { viteLicensePlugin } from './license.ts';
+import { viteThirdPartyNotices } from './third-party-notices.ts';
 
 /**
  * 展开带开关的插件条目：condition 为真时才调用 plugins，并把结果汇总、扁平化。
@@ -98,6 +100,18 @@ async function loadApplicationPlugins(
       condition: options.html,
       // 仅在启用 HTML 处理时装载模板压缩插件。
       plugins: () => [...viteHtmlPlugin({ minify: true })],
+    },
+    {
+      // 许可材料只在生产构建产出：开发服务不产出静态资源，也不该反复写许可证文本。
+      condition: options.isBuild ?? false,
+      // 装配横幅与第三方许可材料两个插件；横幅插件读不到包清单时返回 undefined，先过滤再展开。
+      plugins: async () => {
+        const licensePlugin = await viteLicensePlugin(options.root ?? process.cwd());
+        return [
+          ...(licensePlugin ? [licensePlugin] : []),
+          viteThirdPartyNotices(options.root ?? process.cwd()),
+        ];
+      },
     },
   ]);
 }

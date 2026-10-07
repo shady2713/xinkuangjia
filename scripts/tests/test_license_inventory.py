@@ -220,13 +220,35 @@ def test_component_coordinates_reads_embedded_properties() -> None:
     payload = make_component("org.example", "widget")
 
     assert inventory.component_coordinates(["META-INF/maven/org.example/widget/pom.properties"],
-                                          payload) == "org.example:widget:1.0.0"
+                                          payload, "widget-1.0.0.jar") == "org.example:widget:1.0.0"
 
 
 def test_component_coordinates_absent_is_empty_string() -> None:
     """构件内没有坐标信息时返回空串，不从文件名反推。"""
 
-    assert inventory.component_coordinates(["META-INF/services/x"], make_component("", "")) == ""
+    assert inventory.component_coordinates(["META-INF/services/x"], make_component("", ""),
+                                           "widget-1.0.0.jar") == ""
+
+
+def test_component_coordinates_ignore_bundled_modules_of_shaded_jar() -> None:
+    """聚合打包的构件内有多个 pom.properties，只有与文件名对齐的才是构件自身。"""
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("META-INF/maven/org.example.inside/inside/pom.properties",
+                         properties_of("org.example.inside", "inside", "1.0.0"))
+        archive.writestr("META-INF/maven/org.example/widget/pom.properties",
+                         properties_of("org.example", "widget", "1.0.0"))
+    payload = buffer.getvalue()
+
+    assert inventory.component_coordinates(
+        ["META-INF/maven/org.example.inside/inside/pom.properties",
+         "META-INF/maven/org.example/widget/pom.properties"],
+        payload, "widget-1.0.0.jar") == "org.example:widget:1.0.0"
+    # 构件自身的属性文件缺失时不能把被打包进去的模块当成构件坐标。
+    assert inventory.component_coordinates(
+        ["META-INF/maven/org.example.inside/inside/pom.properties"],
+        payload, "widget-1.0.0.jar") == ""
 
 
 def test_backend_scan_reports_no_license_text_and_unresolved_component(tmp_path: Path) -> None:
@@ -257,23 +279,23 @@ def test_backend_scan_reports_no_license_text_and_unresolved_component(tmp_path:
 def test_backend_scan_separates_first_party_modules(tmp_path: Path) -> None:
     """自有模块没有许可证声明属权利决定，不能算成第三方合规缺口。"""
 
-    own = inventory.JarComponent(jar_entry="BOOT-INF/lib/basic-framework-common.jar",
+    own = inventory.JarComponent(jar_entry="BOOT-INF/lib/basic-framework-common-1.0.0.jar",
                                  coordinates=f"{inventory.FIRST_PARTY_GROUP}:basic-framework-common:1.0",
                                  size_bytes=1)
-    other = inventory.JarComponent(jar_entry="BOOT-INF/lib/widget.jar",
+    other = inventory.JarComponent(jar_entry="BOOT-INF/lib/widget-1.0.0.jar",
                                    coordinates="org.example:widget:1.0", size_bytes=1)
     write_pom(tmp_path, "org.example", "widget", "1.0.0", POM_WITH_LICENSE)
     jar = write_jar(tmp_path / "app.jar", {
-        "BOOT-INF/lib/basic-framework-common.jar": make_component(
+        "BOOT-INF/lib/basic-framework-common-1.0.0.jar": make_component(
             inventory.FIRST_PARTY_GROUP, "basic-framework-common", license_text=None),
-        "BOOT-INF/lib/widget.jar": make_component("org.example", "widget"),
+        "BOOT-INF/lib/widget-1.0.0.jar": make_component("org.example", "widget"),
     })
 
     backend = inventory.scan_backend_jar(jar, tmp_path)
 
     classifications = {item["jar_entry"]: item["classification"] for item in backend["components"]}
-    assert classifications["BOOT-INF/lib/basic-framework-common.jar"] == "first-party"
-    assert classifications["BOOT-INF/lib/widget.jar"] == "third-party"
+    assert classifications["BOOT-INF/lib/basic-framework-common-1.0.0.jar"] == "first-party"
+    assert classifications["BOOT-INF/lib/widget-1.0.0.jar"] == "third-party"
     assert own.first_party and not other.first_party
     assert backend["first_party_modules"] == [
         f"{inventory.FIRST_PARTY_GROUP}:basic-framework-common:1.0.0"]

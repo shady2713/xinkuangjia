@@ -32,7 +32,7 @@ import verify_workspace_constraints as workspace
 ARCHIVE = Path(".cache/release/前端交付包.zip")
 MANIFEST = "交付清单.json"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from delivery_rules import ALLOWED, MAX_FILE, MAX_FILES, MAX_TOTAL
+from delivery_rules import ALLOWED, ALLOWED_EXACT, MAX_FILE, MAX_FILES, MAX_TOTAL
 
 
 def safe_name(name: str) -> str:
@@ -52,9 +52,10 @@ def safe_name(name: str) -> str:
         )
     ):
         raise ValueError("交付路径不安全")
-    if "/".join(parts) != name or (
-        name != MANIFEST and PurePosixPath(name).suffix not in ALLOWED
-    ):
+    # 许可材料既可能带后缀（licenses/…txt），也可能无后缀（LICENSE、THIRD-PARTY-NOTICES），
+    # 两类都放行；其余文件仍必须命中后缀白名单。
+    allowed = name in ALLOWED_EXACT or PurePosixPath(name).suffix in ALLOWED
+    if "/".join(parts) != name or (name != MANIFEST and not allowed):
         raise ValueError("交付文件不在允许范围")
     return name
 
