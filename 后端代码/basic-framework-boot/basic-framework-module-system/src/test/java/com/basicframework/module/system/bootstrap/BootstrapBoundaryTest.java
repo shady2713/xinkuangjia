@@ -1,6 +1,7 @@
 package com.basicframework.module.system.bootstrap;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.basicframework.framework.common.util.validation.ValidationUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -130,6 +131,27 @@ class BootstrapBoundaryTest {
         assertThat(second).containsOnly('\0');
         assertThat(output.toString(StandardCharsets.UTF_8)).contains("PASSWORD_CONFIRMATION")
                 .doesNotContain(secret, environment.get("DB_PASSWORD"), environment.get("BOOTSTRAP_JDBC_URL"));
+    }
+
+    /**
+     * 初始化账号名必须逐字返回受控环境里通过用户名协议校验的那个值。
+     *
+     * <p>{@code adminUsername()} 是创建超级管理员时真正写入账号列的取值。运维在受控环境里声明的
+     * 账号名如果被静默改写（去空白、转小写、换成默认值），落库账号就会与运维预期不一致，
+     * 后续按账号名做的巡检和交接都会失效；被污染的取值还可能绕过 {@link BootstrapConfiguration}
+     * 在构造阶段做过的用户名协议校验。用例固定"逐字返回"和"返回值本身仍满足协议"两条可观察结果。</p>
+     */
+    @Test
+    void adminUsernameIsReturnedVerbatimFromValidatedEnvironment() {
+        Map<String, String> environment = environment();
+        environment.put("BOOTSTRAP_ADMIN_USERNAME", "OpsAdmin99");
+
+        BootstrapConfiguration configuration = BootstrapConfiguration.fromEnvironment(environment);
+
+        assertThat(configuration.adminUsername()).as("初始化账号名必须逐字返回环境声明值")
+                .isEqualTo("OpsAdmin99");
+        assertThat(ValidationUtils.isUsername(configuration.adminUsername()))
+                .as("返回的初始化账号名必须仍然满足用户名协议").isTrue();
     }
 
     /** 用随机数据库凭据构造有效边界样本，测试从不连接这个虚构目标。 */

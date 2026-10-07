@@ -1,6 +1,7 @@
 package com.basicframework.module.system.controller.admin.permission;
 
 import com.basicframework.framework.common.exception.ServiceException;
+import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RolePageReqVO;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -171,6 +173,44 @@ class RoleControllerTest {
                 .isEqualTo(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         assertThat(result.getData().getTotal()).isEqualTo(11L);
         assertThat(result.getData().getList()).extracting(RoleRespVO::getName).containsExactly("运营角色");
+    }
+
+    /**
+     * 精简角色列表必须限定当前登录平台，并按 sort 升序返回全部状态的角色。
+     *
+     * <p>该接口的唯一用途是前端下拉选项：查询口径若不带平台类型，另一个平台的角色会混进下拉，
+     * 用户随后把角色分配给本平台账号就构成跨平台越权授权；返回顺序若依赖数据库默认顺序，
+     * 下拉的展示顺序会随数据变化漂移。接口声明为"包含所有状态"，因此禁用角色也必须保留，
+     * 否则运维在下拉里看不到需要恢复的禁用角色。方法对服务返回的列表原地排序，
+     * 用例因此传入可变列表，与生产侧 MyBatis 返回的 ArrayList 形态一致。</p>
+     */
+    @Test
+    void getSimpleRoleListScopesPlatformSortsBySortAndKeepsDisabledRoles() {
+        RoleDO second = role(6L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        second.setName("审核角色");
+        second.setSort(2);
+        second.setStatus(CommonStatusEnum.DISABLE.getStatus());
+        RoleDO first = role(5L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        first.setName("运营角色");
+        first.setSort(1);
+        first.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        RoleDO third = role(7L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        third.setName("超级审核");
+        third.setSort(3);
+        third.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        // 服务返回顺序与 sort 无关，接口必须自行排序。
+        when(roleService.getRoleListByRoleType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenReturn(new ArrayList<>(List.of(third, first, second)));
+
+        CommonResult<List<RoleRespVO>> result = controller.getSimpleRoleList();
+
+        verify(roleService).getRoleListByRoleType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        assertThat(result.getData()).as("精简列表必须按 sort 升序")
+                .extracting(RoleRespVO::getName).containsExactly("运营角色", "审核角色", "超级审核");
+        assertThat(result.getData()).as("精简列表必须保留禁用角色")
+                .extracting(RoleRespVO::getId).containsExactly(5L, 6L, 7L);
+        assertThat(result.getData().get(1).getStatus()).as("禁用角色不得被精简列表过滤掉")
+                .isEqualTo(CommonStatusEnum.DISABLE.getStatus());
     }
 
     /**
