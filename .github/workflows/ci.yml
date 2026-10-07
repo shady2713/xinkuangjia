@@ -553,7 +553,7 @@ jobs:
           python -B -X utf8 "${{ github.workspace }}"/scripts/license/resolve_component_metadata.py \
             --jar "$SERVER_JAR" --allow-network \
             --cache-dir "${{ runner.temp }}/license-net-cache" \
-            --additional-evidence scripts/license/known_license_evidence.json \
+            --additional-evidence "${{ github.workspace }}"/scripts/license/known_license_evidence.json \
             --out "$METADATA"
           python -B -X utf8 "${{ github.workspace }}"/scripts/license/generate_third_party_notices.py \
             --metadata "$METADATA" --jar "$SERVER_JAR" --out-dir "$MATERIALS"
@@ -570,10 +570,10 @@ jobs:
         run: |
           mkdir -p "$EVIDENCE"
           python -B -X utf8 "${{ github.workspace }}"/scripts/license/verify_license_materials.py \
-            --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
+            --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
             --require-prepared
           python -B -X utf8 "${{ github.workspace }}"/scripts/license/verify_license_materials.py \
-            --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
+            --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
             --require-prepared --json > "$EVIDENCE/license-backend.json"
 
       - name: 校验真实集成测试证据
@@ -627,7 +627,7 @@ jobs:
                    "command": "python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared --json"},
                   # 该检查按交付 JAR 字节裁决，没有可与用例数比对的第二份声明，声明 null。
                   {"name": "backend-license-materials", "status": "passed", "checked": None,
-                   "command": "python -B -X utf8 "${{ github.workspace }}"/scripts/license/verify_license_materials.py --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
+                   "command": "python -B -X utf8 \"${{ github.workspace }}\"/scripts/license/verify_license_materials.py --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
               ],
               "coverage": {"kind": "backend", "evidence": "coverage-backend.json", "stage": "release",
                            "measured_files": coverage["measured_files"],
