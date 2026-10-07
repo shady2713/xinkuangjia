@@ -106,7 +106,9 @@ async function loadApplicationPlugins(
       condition: options.isBuild ?? false,
       // 装配横幅与第三方许可材料两个插件；横幅插件读不到包清单时返回 undefined，先过滤再展开。
       plugins: async () => {
-        const licensePlugin = await viteLicensePlugin(options.root ?? process.cwd());
+        const licensePlugin = await viteLicensePlugin(
+          options.root ?? process.cwd(),
+        );
         return [
           ...(licensePlugin ? [licensePlugin] : []),
           viteThirdPartyNotices(options.root ?? process.cwd()),

@@ -17,7 +17,7 @@ import type {
 import type { PluginOption } from 'vite';
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, sep } from 'node:path';
 
 import { workspaceLicensePath } from './license.ts';
@@ -28,24 +28,25 @@ const NOTICES_FILE = 'THIRD-PARTY-NOTICES';
 const LICENSES_DIR = 'licenses';
 /** 单份许可证正文的读取上限，避免异常大的包把产物撑爆。 */
 const MAX_TEXT_BYTES = 512 * 1024;
-const LICENSE_FILE_PATTERN = /^(licen[sc]e|copying|notice)/iu;
+/** 许可证正文文件名：匹配 LICENSE/LICENCE/COPYING/NOTICE 开头，不区分大小写。 */
+const LICENSE_FILE_PATTERN = /^(?:licen[sc]e|copying|notice)/iu;
 
 /** 一个第三方包在本次构建中的登记信息。 */
 interface PackageRecord {
-  /** 包名。 */
-  name: string;
-  /** 版本。 */
-  version: string;
-  /** `package.json` 声明的许可证；读不到时为空串。 */
-  license: string;
   /** 声明的作者或版权行。 */
   author: string;
-  /** 仓库或主页地址。 */
-  repository: string;
-  /** 包根目录绝对路径。 */
-  location: string;
+  /** `package.json` 声明的许可证；读不到时为空串。 */
+  license: string;
   /** 命中的许可证文本文件绝对路径。 */
   licenseFiles: string[];
+  /** 包根目录绝对路径。 */
+  location: string;
+  /** 包名。 */
+  name: string;
+  /** 仓库或主页地址。 */
+  repository: string;
+  /** 版本。 */
+  version: string;
 }
 
 /**
@@ -64,7 +65,7 @@ function packageOfModule(id: string): { location: string; name: string } {
   }
   const marker = 'node_modules/';
   const index = path.lastIndexOf(marker);
-  if (index < 0) {
+  if (index === -1) {
     return { location: '', name: '' };
   }
   const rest = path.slice(index + marker.length);
@@ -72,12 +73,38 @@ function packageOfModule(id: string): { location: string; name: string } {
   if (segments.length === 0) {
     return { location: '', name: '' };
   }
-  const name = segments[0]?.startsWith('@') && segments.length > 1
-    ? `${segments[0]}/${segments[1]}`
-    : (segments[0] ?? '');
+  const name =
+    segments[0]?.startsWith('@') && segments.length > 1
+      ? `${segments[0]}/${segments[1]}`
+      : (segments[0] ?? '');
   const depth = name.startsWith('@') ? 2 : 1;
-  const location = path.slice(0, index + marker.length + segments.slice(0, depth).join('/').length);
+  const location = path.slice(
+    0,
+    index + marker.length + segments.slice(0, depth).join('/').length,
+  );
   return { location, name };
+}
+
+/**
+ * 规范化包清单里"字符串或对象"两种写法的声明字段。
+ *
+ * `author`、`repository` 在 npm 清单里既可直接写成字符串，也可写成带 `name`/`url` 的对象；
+ * 其它字段只有字符串写法。取不到值时返回空串，登记信息因此如实反映"清单未声明"，
+ * 不会套用看似合理的默认值。
+ *
+ * @param value 清单里的原始字段值，类型未受约束。
+ * @param key 对象写法下要取的键；直接写字符串时不传。
+ * @returns 规范化后的文本；字段缺失或不是字符串/对象时为空串。
+ */
+function declaredText(value: unknown, key?: string): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (key !== undefined && typeof value === 'object' && value !== null) {
+    const nested = (value as Record<string, unknown>)[key];
+    return typeof nested === 'string' ? nested : '';
+  }
+  return '';
 }
 
 /**
@@ -96,26 +123,15 @@ function readManifest(location: string): {
     return { author: '', license: '', repository: '', version: '' };
   }
   try {
-    const document = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
-    const author = document['author'];
-    const repository = document['repository'];
-    const authorText
-      = typeof author === 'string'
-        ? author
-        : typeof author === 'object' && author !== null
-          ? String((author as Record<string, unknown>)['name'] ?? '')
-          : '';
-    const repositoryText
-      = typeof repository === 'string'
-        ? repository
-        : typeof repository === 'object' && repository !== null
-          ? String((repository as Record<string, unknown>)['url'] ?? '')
-          : '';
+    const document = JSON.parse(readFileSync(manifest, 'utf8')) as Record<
+      string,
+      unknown
+    >;
     return {
-      author: authorText,
-      license: typeof document['license'] === 'string' ? document['license'] : '',
-      repository: repositoryText,
-      version: typeof document['version'] === 'string' ? document['version'] : '',
+      author: declaredText(document.author, 'name'),
+      license: declaredText(document.license),
+      repository: declaredText(document.repository, 'url'),
+      version: declaredText(document.version),
     };
   } catch {
     return { author: '', license: '', repository: '', version: '' };
@@ -138,7 +154,7 @@ function licenseFilesOf(location: string): string[] {
           entry.isFile() && LICENSE_FILE_PATTERN.test(basename(entry.name)),
       )
       .map((entry) => join(location, entry.name))
-      .sort();
+      .toSorted();
   } catch {
     return [];
   }
@@ -197,20 +213,22 @@ function renderNotices(
     `适用产物：${applicationName}`,
     `本次构建实际包含的第三方包：${records.length} 个`,
     '',
-    '本文件只登记本次构建产物中实际出现的第三方包及其许可证声明与原文位置，'
-      + '不构成合规结论，也不代表任何许可选择已获批准；'
-      + '本项目自有代码的许可由有权者另行决定，本文件不构成对自有代码的许可授予。',
+    '本文件只登记本次构建产物中实际出现的第三方包及其许可证声明与原文位置，' +
+      '不构成合规结论，也不代表任何许可选择已获批准；' +
+      '本项目自有代码的许可由有权者另行决定，本文件不构成对自有代码的许可授予。',
     '',
-    '范围口径：清单来自本次 Rollup 产物的分块模块表，'
-      + '只有真正进入产物的第三方包才会登记；'
-      + '依赖锁文件登记的构建期与开发期依赖不在本文件范围内。',
+    '范围口径：清单来自本次 Rollup 产物的分块模块表，' +
+      '只有真正进入产物的第三方包才会登记；' +
+      '依赖锁文件登记的构建期与开发期依赖不在本文件范围内。',
     '',
     '一、第三方包',
     '',
   ];
   for (const record of records) {
-    lines.push(`--- ${record.name}@${record.version || '未知版本'} ---`);
-    lines.push(`许可证声明：${record.license || '包清单未声明'}`);
+    lines.push(
+      `--- ${record.name}@${record.version || '未知版本'} ---`,
+      `许可证声明：${record.license || '包清单未声明'}`,
+    );
     if (record.author !== '') {
       lines.push(`声明作者：${record.author}`);
     }
@@ -219,7 +237,9 @@ function renderNotices(
     }
     lines.push(`安装位置：${record.location.split(sep).slice(-4).join('/')}`);
     if (record.licenseFiles.length === 0) {
-      lines.push('许可证原文位置：包内未随附许可证文本文件；条款地址见包清单声明。');
+      lines.push(
+        '许可证原文位置：包内未随附许可证文本文件；条款地址见包清单声明。',
+      );
     } else {
       lines.push('许可证原文位置：');
       for (const file of record.licenseFiles) {
@@ -233,17 +253,18 @@ function renderNotices(
     }
     lines.push('');
   }
-  lines.push('二、工作区许可证原文', '');
   lines.push(
+    '二、工作区许可证原文',
+    '',
     licenseOrigin === ''
       ? '工作区根目录未找到 LICENSE 原文，产物不提供该文件。'
-      : '产物根目录的 LICENSE 逐字取自工作区根目录已有的同名文件，'
-        + '该文件是继承自上游工作区的许可证文本，只覆盖继承来的前端代码，不覆盖本项目新增代码。',
-  );
-  lines.push('', '三、生成方式', '');
-  lines.push(
-    '本文件由 internal/vite-config 的 viteThirdPartyNotices 插件在生产构建时生成，'
-      + '内容只来自本次产物实际引用的包目录与其包清单，不含任何人工补写的条款。',
+      : '产物根目录的 LICENSE 逐字取自工作区根目录已有的同名文件，' +
+          '该文件是继承自上游工作区的许可证文本，只覆盖继承来的前端代码，不覆盖本项目新增代码。',
+    '',
+    '三、生成方式',
+    '',
+    '本文件由 internal/vite-config 的 viteThirdPartyNotices 插件在生产构建时生成，' +
+      '内容只来自本次产物实际引用的包目录与其包清单，不含任何人工补写的条款。',
     '',
   );
   return lines.join('\n');
@@ -270,7 +291,7 @@ function viteThirdPartyNotices(root = process.cwd()): PluginOption {
         _options: NormalizedOutputOptions,
         bundle: OutputBundle,
       ) {
-        const records = [...collectPackages(bundle).values()].sort(
+        const records = [...collectPackages(bundle).values()].toSorted(
           /**
            * 按包名升序排列，使同一批依赖每次构建都产出同样顺序的材料。
            * @param left - 左侧包记录。
@@ -333,5 +354,11 @@ function digestOfFile(file: string): string {
   }
 }
 
-export { viteThirdPartyNotices, NOTICES_FILE, LICENSES_DIR, packageOfModule, collectPackages };
+export {
+  collectPackages,
+  LICENSES_DIR,
+  NOTICES_FILE,
+  packageOfModule,
+  viteThirdPartyNotices,
+};
 export type { PackageRecord };

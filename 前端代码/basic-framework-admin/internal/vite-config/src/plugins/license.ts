@@ -106,4 +106,4 @@ function workspaceLicensePath(root: string): string {
   return existsSync(candidate) ? candidate : '';
 }
 
-export { viteLicensePlugin, workspaceLicensePath, WORKSPACE_LICENSE };
+export { viteLicensePlugin, WORKSPACE_LICENSE, workspaceLicensePath };

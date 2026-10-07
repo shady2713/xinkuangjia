@@ -1,6 +1,6 @@
 /** 用真实 Rollup 输出验证第三方许可材料插件：只按产物真正引用的包登记，不写入工程产物。 */
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';

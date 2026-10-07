@@ -25,7 +25,6 @@ const boundary = vi.hoisted(
   }),
 );
 
-
 vi.mock(
   '@vben/node-utils',
   /** 只替换包清单读取与日期格式化边界，插件自身的拼装与遍历逻辑保持真实实现。 */ () => ({
@@ -141,7 +140,7 @@ function toLicensePlugin(plugin: unknown) {
  * @param licenseText 工作区 LICENSE 原文；传 null 表示该文件不存在。
  * @returns 应用根目录与清理函数。
  */
-function createWorkspace(licenseText: string | null) {
+function createWorkspace(licenseText: null | string) {
   const root = mkdtempSync(join(tmpdir(), 'vite-license-'));
   const appRoot = join(root, 'apps', 'app');
   mkdirSync(appRoot, { recursive: true });
@@ -223,17 +222,21 @@ describe('许可证头写入', /** 版权头只应写入入口 chunk，且字段
     expect((bundle['index.js'] as { code: string }).code).toBe(
       `${expectedCopyright()}${EOL}console.log(1);`,
     );
-    expect((bundle['index.js'] as { code: string }).code).not.toContain(
-      'MIT',
-    );
+    expect((bundle['index.js'] as { code: string }).code).not.toContain('MIT');
   });
 
   it('工作区存在 LICENSE 时把原文逐字输出为静态资源', /** 交付物要自带许可证文本，缺失上游原文就等于没有随包声明。 */ async () => {
     const source = 'MIT License\n\nCopyright (c) 2024-present, Vben\n';
     const workspace = createWorkspace(source);
     try {
-      boundary.packageJSON = { license: 'MIT', name: '演示应用', version: '1.0.0' };
-      const plugin = toLicensePlugin(await viteLicensePlugin(workspace.appRoot));
+      boundary.packageJSON = {
+        license: 'MIT',
+        name: '演示应用',
+        version: '1.0.0',
+      };
+      const plugin = toLicensePlugin(
+        await viteLicensePlugin(workspace.appRoot),
+      );
       const bundle = createBundle();
       const { context, emitted } = createContext();
 
@@ -248,8 +251,14 @@ describe('许可证头写入', /** 版权头只应写入入口 chunk，且字段
   it('工作区没有 LICENSE 时不产出该静态资源', /** 凭空生成许可证原文会造出不存在的声明。 */ async () => {
     const workspace = createWorkspace(null);
     try {
-      boundary.packageJSON = { license: 'MIT', name: '演示应用', version: '1.0.0' };
-      const plugin = toLicensePlugin(await viteLicensePlugin(workspace.appRoot));
+      boundary.packageJSON = {
+        license: 'MIT',
+        name: '演示应用',
+        version: '1.0.0',
+      };
+      const plugin = toLicensePlugin(
+        await viteLicensePlugin(workspace.appRoot),
+      );
       const bundle = createBundle();
       const { context, emitted } = createContext();
 
