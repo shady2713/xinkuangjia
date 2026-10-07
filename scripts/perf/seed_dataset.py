@@ -38,7 +38,8 @@ def _client() -> str:
     return client
 
 
-def _execute(client: str, host: str, port: str, database: str, statement: str) -> None:
+def _execute(client: str, host: str, port: str, database: str, statement: str,
+             credentials: tuple[str, str] | None = None) -> None:
     """在已确认的目标库执行一条语句，失败时保留数据库返回的真实原因。
 
     Args:
@@ -47,12 +48,17 @@ def _execute(client: str, host: str, port: str, database: str, statement: str) -
         port: 数据库端口。
         database: 已确认的单库名。
         statement: 待执行语句；不包含凭据。
+        credentials: 调用方已持有的账号与口令；为空时从进程环境读取，
+            便于同一编排进程把已解析的隔离凭据直接传下来，而不必改写环境。
     Raises:
         SeedFailure: 客户端缺失凭据或执行失败。
     """
 
-    password = os.environ.get("BF_PERF_MYSQL_PASSWORD", "")
-    user = os.environ.get("BF_PERF_MYSQL_USERNAME", "")
+    if credentials is None:
+        password = os.environ.get("BF_PERF_MYSQL_PASSWORD", "")
+        user = os.environ.get("BF_PERF_MYSQL_USERNAME", "")
+    else:
+        user, password = credentials
     if not user or not password:
         raise SeedFailure("缺少数据库凭据：请注入 BF_PERF_MYSQL_USERNAME 与 BF_PERF_MYSQL_PASSWORD")
     environment = dict(os.environ)
@@ -108,7 +114,7 @@ def _insert_dict_types(count: int, chunk: int) -> list[str]:
 
 
 def seed(client: str, host: str, port: str, database: str, users: int, dicts: int, chunk: int,
-         user_type: str) -> tuple[int, int]:
+         user_type: str, credentials: tuple[str, str] | None = None) -> tuple[int, int]:
     """重建合成数据集并返回实际写入的行数。
 
     Args:
@@ -120,6 +126,7 @@ def seed(client: str, host: str, port: str, database: str, users: int, dicts: in
         dicts: 合成字典类型行数。
         chunk: 单条插入语句的行数。
         user_type: 合成用户的平台类型。
+        credentials: 调用方已持有的账号与口令；为空时从进程环境读取。
     Returns:
         实际写入的用户行数与字典类型行数。
     Raises:
@@ -130,14 +137,14 @@ def seed(client: str, host: str, port: str, database: str, users: int, dicts: in
     # 用户名与字典编码受唯一约束约束（软删除行仍占用），重建前必须清除上一轮探针行。
     _execute(client, host, port, database,
              f"DELETE FROM system_users WHERE username LIKE '{USER_PREFIX}%'"
-             " OR username LIKE 'w7probe%'")
+             " OR username LIKE 'w7probe%'", credentials)
     _execute(client, host, port, database,
              f"DELETE FROM system_dict_type WHERE type LIKE '{DICT_PREFIX}%'"
-             " OR type LIKE 'w7\\_perf\\_%'")
+             " OR type LIKE 'w7\\_perf\\_%'", credentials)
     for statement in _insert_users(users, chunk, user_type):
-        _execute(client, host, port, database, statement)
+        _execute(client, host, port, database, statement, credentials)
     for statement in _insert_dict_types(dicts, chunk):
-        _execute(client, host, port, database, statement)
+        _execute(client, host, port, database, statement, credentials)
     return users, dicts
 
 

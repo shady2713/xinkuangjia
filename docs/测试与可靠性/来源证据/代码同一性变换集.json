@@ -1,0 +1,178 @@
+{
+ "schema": "d16-code-identity-transforms/v1",
+ "branch": "E1-code-identity",
+ "route": "路线 2",
+ "rules_version": "d16-strict-compare/v1",
+ "serialization": "d16-token-major/v1",
+ "description": "裁决 D16 §变换集：E1-code-identity 分支获准的确定性规范化与变换集。规则实现按整文件 SHA-256 与本文件自述的 transforms_sha256 / normalizations_sha256 三重复算，任一条定义被改动而未同步重算即拒绝。比较按 comparison_order 执行：先对双方做登记的 N1 空白规范化，再按 transforms 的登记顺序只对上游→本地方向施加 T1–T4、双方施加 T5，最后按 serialization 做逐字节比较。本清单**不**包含也不授权删除 import、折叠字面量内空白或无边界全文替换；未登记的变换一律不执行，因此不可能凭清单外的变换把不同代码补成全等。",
+ "execution_order": [
+  "T1",
+  "T2",
+  "T3",
+  "T4",
+  "T5"
+ ],
+ "transforms": [
+  {
+   "id": "T1",
+   "name": "命名空间映射",
+   "direction": "upstream-to-local",
+   "operation": "qualified-name-prefix-map",
+   "definition": "把代码流中「点号限定名」token 的前导完整路径段 cn.iocoder.yudao 改写为 com.basicframework。只在标识符与「.」紧邻构成的限定名 token 上按**完整路径段**匹配；cn.iocoder.yudaoauth、foo.cn.iocoder.yudao 等更长的无关标识符或不构成前导段的情形一律不匹配。",
+   "scope": "仅代码流中的限定名 token（package 声明、import 语句与代码里的全限定引用）；注释、字符串/字符/文本块字面量一律不改写。",
+   "pairs": [
+    [
+     "cn.iocoder.yudao",
+     "com.basicframework"
+    ]
+   ]
+  },
+  {
+   "id": "T2",
+   "name": "Jakarta EE 平台适配",
+   "direction": "upstream-to-local",
+   "operation": "exact-name-map",
+   "definition": "对**逐条登记**的 Java EE 类型限定名做 javax→jakarta 精确对应改写。表外的 javax.* 一律保留原样，不做无条件前缀替换；非迁移包与未知类型不得视为合法适配。",
+   "scope": "仅代码流中与登记键完全相等的限定名 token；注释与字面量不改写。",
+   "pairs": [
+    [
+     "javax.annotation.Resource",
+     "jakarta.annotation.Resource"
+    ],
+    [
+     "javax.servlet.Filter",
+     "jakarta.servlet.Filter"
+    ],
+    [
+     "javax.validation.Constraint",
+     "jakarta.validation.Constraint"
+    ],
+    [
+     "javax.validation.ConstraintValidator",
+     "jakarta.validation.ConstraintValidator"
+    ],
+    [
+     "javax.validation.ConstraintValidatorContext",
+     "jakarta.validation.ConstraintValidatorContext"
+    ],
+    [
+     "javax.validation.Payload",
+     "jakarta.validation.Payload"
+    ],
+    [
+     "javax.validation.Valid",
+     "jakarta.validation.Valid"
+    ],
+    [
+     "javax.validation.constraints.NotEmpty",
+     "jakarta.validation.constraints.NotEmpty"
+    ],
+    [
+     "javax.validation.constraints.NotNull",
+     "jakarta.validation.constraints.NotNull"
+    ]
+   ]
+  },
+  {
+   "id": "T3",
+   "name": "类型名适配",
+   "direction": "upstream-to-local",
+   "operation": "exact-simple-name-map",
+   "definition": "对**逐条登记**的类型标识符做 Yudao…→BasicFramework… 精确对应改写：作用对象是独立标识符 token，或限定名 token 的最后一段（简单名）。表外的同名标识符、其他类型与字符串内容一律不改写。",
+   "scope": "仅代码流中的标识符 token 与限定名 token 的简单名；注释与字面量不改写。",
+   "pairs": [
+    [
+     "YudaoApiEncryptAutoConfiguration",
+     "BasicFrameworkApiEncryptAutoConfiguration"
+    ],
+    [
+     "YudaoApiLogAutoConfiguration",
+     "BasicFrameworkApiLogAutoConfiguration"
+    ],
+    [
+     "YudaoIdempotentConfiguration",
+     "BasicFrameworkIdempotentConfiguration"
+    ],
+    [
+     "YudaoJacksonAutoConfiguration",
+     "BasicFrameworkJacksonAutoConfiguration"
+    ],
+    [
+     "YudaoLock4jConfiguration",
+     "BasicFrameworkLock4jConfiguration"
+    ],
+    [
+     "YudaoRateLimiterConfiguration",
+     "BasicFrameworkRateLimiterConfiguration"
+    ],
+    [
+     "YudaoRedisAutoConfiguration",
+     "BasicFrameworkRedisAutoConfiguration"
+    ],
+    [
+     "YudaoWebAutoConfiguration",
+     "BasicFrameworkWebAutoConfiguration"
+    ],
+    [
+     "YudaoXssAutoConfiguration",
+     "BasicFrameworkXssAutoConfiguration"
+    ]
+   ]
+  },
+  {
+   "id": "T4",
+   "name": "配置名称适配",
+   "direction": "upstream-to-local",
+   "operation": "exact-string-literal-map",
+   "definition": "对**逐条登记**的配置前缀字面量做精确整体改写（含引号逐字匹配）。只改写整条字面量与之完全相等的 token；不做全局字符串内子串替换，业务值、协议内容、URL 与其他未登记字面量差异一律保留为残差。原始字面量由上游固定输入原字节留证。",
+   "scope": "仅代码流中与登记键逐字相等的字符串字面量 token；字面量内部空白原样保留。",
+   "pairs": [
+    [
+     "\"yudao.access-log\"",
+     "\"basic-framework.access-log\""
+    ],
+    [
+     "\"yudao.api-encrypt\"",
+     "\"basic-framework.api-encrypt\""
+    ],
+    [
+     "\"yudao.xss\"",
+     "\"basic-framework.xss\""
+    ],
+    [
+     "\"yudao.xss.enable\"",
+     "\"basic-framework.xss.enable\""
+    ]
+   ]
+  },
+  {
+   "id": "T5",
+   "name": "导入处理",
+   "direction": "both",
+   "operation": "import-group-canonical-sort",
+   "definition": "**保留双方全部 import 条目**，只在各自代码流内对连续的 import 语句组按其规范序列化结果做确定性排序。本分支没有任何删除 import 的操作：条目集合、静态属性导入与通配符形态都原样参与逐字节比较，wildcard 与显式导入集不相等即拒绝。",
+   "scope": "代码流中由 import 到分号（含）的语句组；不删除、不合并、不改写任何 import 条目。",
+   "pairs": []
+  }
+ ],
+ "transforms_sha256": "837154e4a06fd114252475bd3b122b53ab019c0599f243971b2dd27aada5cbae",
+ "ruling": "docs/测试与可靠性/裁决-D16-完整代码同一性与逐条来源验收.md（仓库外原件 .bf-local/d16/裁决-D16.md）",
+ "normalizations": [
+  {
+   "id": "N1",
+   "name": "代码 token 之间空白规范化",
+   "direction": "both",
+   "definition": "词法分析后删除代码流中的行注释、块注释、字符串之外的空白与换行 token，只保留代码 token。注释以整体 token 识别，删除注释不会把两个 token 粘连（例如 a/**/b 仍是两个 token）。本规范化**不**触碰字符串、字符与文本块字面量：字面量是整体 token，内部空白与转义逐字保留。",
+   "scope": "代码 token 之间的空白与换行；字面量内部空白一律保留。"
+  }
+ ],
+ "normalizations_sha256": "2dd201ee5773044ea9f0e93d925bcc5ec477221080c62d8c3c68511251faf6de",
+ "comparison_order": [
+  "N1",
+  "T1",
+  "T2",
+  "T3",
+  "T4",
+  "T5"
+ ]
+}

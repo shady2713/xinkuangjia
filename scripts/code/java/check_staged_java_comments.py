@@ -278,16 +278,30 @@ EVIDENCE_REQUIRED_FIELDS = (
 EVIDENCE_BRANCH_FIELD = "evidence_branch"
 EVIDENCE_BRANCH_AUTHOR_ONLY = "E1-author-only"
 EVIDENCE_BRANCH_CONTENT_INDEPENDENT = "C2-independent-content"
-EVIDENCE_BRANCHES = (EVIDENCE_BRANCH_AUTHOR_ONLY, EVIDENCE_BRANCH_CONTENT_INDEPENDENT)
+# 裁决 D16 §10：代码同一性新分支归入 D10 路线 2，标识 E1-code-identity。
+# 它**不是**绕过作者、历史、类型映射与发布门禁的通用第四路线：作者/来源仍按
+# D10/D12/D15 各自条件验收，代码同一只提供内容关系证据（§120）。
+EVIDENCE_BRANCH_CODE_IDENTITY = "E1-code-identity"
+EVIDENCE_BRANCHES = (
+    EVIDENCE_BRANCH_AUTHOR_ONLY,
+    EVIDENCE_BRANCH_CONTENT_INDEPENDENT,
+    EVIDENCE_BRANCH_CODE_IDENTITY,
+)
 AUTHOR_ONLY_SCHEMA = "d10-author-only/v1"
 CONTENT_INDEPENDENT_SCHEMA = "d10-content-independent/v1"
+CODE_IDENTITY_SCHEMA = "d16-code-identity/v1"
+CODE_IDENTITY_TRANSFORM_SET_SCHEMA = "d16-code-identity-transforms/v1"
+CODE_IDENTITY_RULES_VERSION = "d16-strict-compare/v1"
+CODE_IDENTITY_SERIALIZATION = "d16-token-major/v1"
 AUTHOR_ONLY_ROUTE = "路线 2"
 CONTENT_INDEPENDENT_ROUTE = "路线 3"
+CODE_IDENTITY_ROUTE = "路线 2"
 # 分支是版本化契约的启用开关，同时约束记录必须归属的证据路线；分支入口与
 # 来源说明入口都只认这一份映射，避免两处口径不一致（N1 覆盖缺口）。
 EVIDENCE_BRANCH_ROUTES = {
     EVIDENCE_BRANCH_AUTHOR_ONLY: AUTHOR_ONLY_ROUTE,
     EVIDENCE_BRANCH_CONTENT_INDEPENDENT: CONTENT_INDEPENDENT_ROUTE,
+    EVIDENCE_BRANCH_CODE_IDENTITY: CODE_IDENTITY_ROUTE,
 }
 # 比较契约只允许 D10 §0.3 原列的 R1–R4，且顺序固定；R5/R6 不得用于本分支。
 AUTHOR_ONLY_NORMALIZATION_ORDER = ("R1 LF 化", "R2 映射", "R3 行首尾空白", "R4 丢空行")
@@ -348,6 +362,73 @@ CONTENT_POINT_REQUIRED_FIELDS = (
     "discrimination_reason",
 )
 CONTENT_POINT_KINDS = ("内容点", "注释点")
+# ── 裁决 D16：E1-code-identity 严格代码同一性比较契约 ──
+# 变换集必须显式登记、版本化、可复算：清单是仓内受控文件，规则实现按整文件
+# SHA-256 与清单自述的 transforms 规范化指纹双重复算，任一处被改动都拒绝。
+CODE_IDENTITY_TRANSFORM_SET_ENV = "JAVA_COMMENT_CODE_IDENTITY_TRANSFORM_SET"
+# 比较执行顺序：先双方共用登记的空白规范化，再按登记顺序施加变换。
+CODE_IDENTITY_NORMALIZATION_ID = "N1"
+CODE_IDENTITY_NORMALIZATION_NAME = "代码 token 之间空白规范化"
+DEFAULT_CODE_IDENTITY_TRANSFORM_SET = "docs/测试与可靠性/来源证据/代码同一性变换集.json"
+# 规范序列化的边界字符：token 类别 + 分隔符 + 原文 + 终止符，不同 token 序列
+# 不可能拼成同一文本（D16 §64）。源码代码流里出现这两个控制字符即受控拒绝，
+# 因为那会让边界本身变得不可靠。
+CODE_IDENTITY_TOKEN_SEPARATOR = "\x1f"
+CODE_IDENTITY_TOKEN_TERMINATOR = "\x1e"
+CODE_IDENTITY_FORBIDDEN_SOURCE_CHARS = (CODE_IDENTITY_TOKEN_SEPARATOR, CODE_IDENTITY_TOKEN_TERMINATOR)
+# 只允许以下五种确定性变换操作；清单出现清单外的操作一律拒绝，绝不按失败残差
+# 临时生成替换表（D16 §63）。
+CODE_IDENTITY_OPERATIONS = (
+    "qualified-name-prefix-map",
+    "exact-name-map",
+    "exact-simple-name-map",
+    "exact-string-literal-map",
+    "import-group-canonical-sort",
+)
+# 变换方向：命名/类型/配置适配只在上游→本地方向生效；import 规范化双方共用。
+CODE_IDENTITY_DIRECTIONS = ("upstream-to-local", "both")
+# 双方原始差异的可接受归因；任何未解释的差异继续阻断（D16 §65）。
+CODE_IDENTITY_ATTRIBUTION_CAUSES = (
+    "registered-transform",
+    "code-outside-whitespace",
+    "comment-difference",
+    "local-responsibility-javadoc",
+    "d12-source-note",
+    "d15-inplace-marker",
+    "license-or-copyright",
+)
+# 注释/署名必须被单独校验的角色（“代码同一”不覆盖注释与署名，D16 §86）。
+CODE_IDENTITY_COMMENT_ROLES = (
+    "responsibility-javadoc",
+    "d12-source-note",
+    "d15-inplace-marker",
+    "license-or-copyright",
+)
+# 比较结果必须逐项登记的双方读数（D16 §64：双方代码流 SHA-256、字节数与 token 数）。
+CODE_IDENTITY_COMPARISON_FIELDS = (
+    "local_code_stream_sha256",
+    "upstream_code_stream_sha256",
+    "local_code_bytes",
+    "upstream_code_bytes",
+    "local_token_count",
+    "upstream_token_count",
+    "import_count_local",
+    "import_count_upstream",
+)
+# Java 运算符/标点，按最长匹配排序；用于切出与原文字节一致的 token 边界。
+CODE_IDENTITY_PUNCTUATION = tuple(
+    sorted(
+        (
+            ">>>=", "<<=", ">>=", ">>>", "...", "->", "::",
+            "==", "!=", "<=", ">=", "&&", "||", "++", "--",
+            "+=", "-=", "*=", "/=", "&=", "|=", "^=", "%=", "<<", ">>",
+            "+", "-", "*", "/", "%", "=", "<", ">", "!", "~", "?", ":",
+            ";", ",", ".", "(", ")", "[", "]", "{", "}", "&", "|", "^", "@", "#",
+        ),
+        key=len,
+        reverse=True,
+    )
+)
 # 无区分力的内容形状：同类名/方法名、标准协议串、通用 CRUD、惯用校验、自动生成描述与常见示例值。
 CONTENT_POINT_GENERIC_PATTERNS = (
     re.compile(r"^(?:校验|验证)?(?:不能为空|必须|长度不能超过|格式不正确|已存在|不存在|不正确)"),
@@ -2726,6 +2807,971 @@ def _content_independent_reasons(record: dict[str, object]) -> list[str]:
     return reasons
 
 
+def _code_identity_tokenize(source: str) -> tuple[list[list[str]], list[str]]:
+    """按 Java 词法把源码分解为带边界的代码 token。
+
+    只按 Java 的真实词法边界切分：行注释、块注释、字符串、字符与文本块分别
+    整体成 token，去注释**不会**把两个 token 粘连（D16 §62）。Unicode 转义
+    （``\\uXXXX``）出现在代码位置会先于词法被编译器改写，无法可靠解析时受控
+    拒绝，绝不退回正则全文剥离。
+
+    Args:
+        source: 原始 Java 源码。
+
+    Returns:
+        ``(token 列表, 受控拒绝原因列表)``。token 元素为
+        ``[类别, 原文, 起始行号]``；类别取 ``ident``/``number``/``string``/
+        ``char``/``textblock``/``op``/``nl``/``ws``/``comment``，其中
+        ``ws`` 与 ``comment`` 只是词法屏障，不进入代码流。
+    """
+
+    tokens: list[list[str]] = []
+    errors: list[str] = []
+    index = 0
+    total = len(source)
+    line = 1
+
+    while index < total:
+        char = source[index]
+        if char == "\n":
+            tokens.append(["nl", "\n", str(line)])
+            index += 1
+            line += 1
+            continue
+        if char.isspace():
+            end = index
+            while end < total and source[end] != "\n" and source[end].isspace():
+                end += 1
+            tokens.append(["ws", source[index:end], str(line)])
+            line += source.count("\n", index, end)
+            index = end
+            continue
+        if source.startswith("//", index):
+            end = source.find("\n", index)
+            end = total if end < 0 else end
+            tokens.append(["comment", source[index:end], str(line)])
+            index = end
+            continue
+        if source.startswith("/*", index):
+            end = source.find("*/", index + 2)
+            if end < 0:
+                errors.append(f"第 {line} 行的块注释未闭合，不能可靠识别词法边界")
+                tokens.append(["comment", source[index:total], str(line)])
+                index = total
+                break
+            end += 2
+            tokens.append(["comment", source[index:end], str(line)])
+            line += source.count("\n", index, end)
+            index = end
+            continue
+        if source.startswith('"""', index):
+            cursor = index + 3
+            closed = False
+            while cursor < total:
+                if source[cursor] == "\\":
+                    cursor += 2
+                    continue
+                if source.startswith('"""', cursor):
+                    cursor += 3
+                    closed = True
+                    break
+                cursor += 1
+            if not closed:
+                errors.append(f"第 {line} 行的文本块未闭合，不能可靠识别词法边界")
+                cursor = total
+            tokens.append(["textblock", source[index:cursor], str(line)])
+            line += source.count("\n", index, cursor)
+            index = cursor
+            continue
+        if char in {'"', "'"}:
+            kind = "string" if char == '"' else "char"
+            cursor = index + 1
+            closed = False
+            while cursor < total:
+                current = source[cursor]
+                if current == "\\":
+                    if cursor + 1 >= total:
+                        errors.append(f"第 {line} 行的{kind}字面量以悬空转义结束")
+                        break
+                    if kind == "string" and current == "\\" and source[cursor + 1] == "u":
+                        # 字符串/字符内部的 \u 转义按原文保留：它不改变本比较器
+                        # 的 token 边界，双方逐字节不同仍会被严格比较捕获。
+                        pass
+                    cursor += 2
+                    continue
+                if current == "\n":
+                    errors.append(f"第 {line} 行的{kind}字面量未闭合")
+                    break
+                if current == char:
+                    cursor += 1
+                    closed = True
+                    break
+                cursor += 1
+            if not closed and not errors:
+                errors.append(f"第 {line} 行的{kind}字面量未闭合")
+            tokens.append([kind, source[index:cursor], str(line)])
+            line += source.count("\n", index, cursor)
+            index = cursor
+            continue
+        if char.isdigit() or (char == "." and index + 1 < total and source[index + 1].isdigit()):
+            cursor = index
+            while cursor < total and (
+                source[cursor].isalnum() or source[cursor] in "._+-"
+            ):
+                # 指数符号只在 e/E 之后才算数字的一部分。
+                if source[cursor] in "+-" and source[cursor - 1] not in "eE":
+                    break
+                cursor += 1
+            tokens.append(["number", source[index:cursor], str(line)])
+            index = cursor
+            continue
+        if char == "\\":
+            # 代码位置的 Unicode 转义会在词法之前被编译器改写，token 边界不再可靠；
+            # 字面量内部已经整体成 token 并按原文保留，不会走到这里。
+            if re.match(r"\\u[0-9a-fA-F]{4}", source[index : index + 6]):
+                errors.append(f"第 {line} 行的 Unicode 转义影响词法边界，不能可靠解析")
+            else:
+                errors.append(f"第 {line} 行出现代码位置的裸反斜杠，不能可靠识别词法边界")
+            tokens.append(["op", char, str(line)])
+            index += 1
+            continue
+        if char.isalpha() or char in "_$" or ord(char) > 127:
+            cursor = index
+            while cursor < total and (
+                source[cursor].isalnum() or source[cursor] in "_$" or ord(source[cursor]) > 127
+            ):
+                cursor += 1
+            tokens.append(["ident", source[index:cursor], str(line)])
+            index = cursor
+            continue
+        operator = next(
+            (item for item in CODE_IDENTITY_PUNCTUATION if source.startswith(item, index)),
+            None,
+        )
+        if operator is None:
+            errors.append(f"第 {line} 行出现未登记的词法字符 {char!r}，不能可靠解析")
+            tokens.append(["op", char, str(line)])
+            index += 1
+            continue
+        tokens.append(["op", operator, str(line)])
+        index += len(operator)
+    for control in CODE_IDENTITY_FORBIDDEN_SOURCE_CHARS:
+        if control in source:
+            errors.append(
+                f"源码含规范序列化保留的控制字符 U+{ord(control):04X}，token 边界不可靠"
+            )
+            break
+    return tokens, errors
+
+
+def _code_identity_code_tokens(source: str) -> tuple[list[list[str]], list[str]]:
+    """返回去掉注释与空白、合并点号限定名后的代码 token 流。
+
+    ``ws``、``nl`` 与 ``comment`` 只作词法屏障，不进入代码流：它们是变换集登记的
+    N1「代码 token 之间空白规范化」的作用对象，删除注释不会把两个 token 粘连。
+    字符串/字符/文本块字面量是整体 token，其内部空白逐字保留，不受 N1 影响。
+
+    Args:
+        source: 原始 Java 源码。
+
+    Returns:
+        ``(代码 token 流, 受控拒绝原因列表)``。
+    """
+
+    tokens, errors = _code_identity_tokenize(source)
+    merged: list[list[str]] = []
+    index = 0
+    total = len(tokens)
+    while index < total:
+        kind, text, line = tokens[index]
+        if kind in {"ws", "comment", "nl"}:
+            index += 1
+            continue
+        if kind == "ident":
+            cursor = index + 1
+            segments = [text]
+            while cursor + 1 < total and tokens[cursor][0] == "op" and tokens[cursor][1] == ".":
+                segments.append(tokens[cursor + 1][1])
+                cursor += 2
+            if len(segments) > 1:
+                merged.append(["name", ".".join(segments), line])
+            else:
+                merged.append(["ident", text, line])
+            index = cursor
+            continue
+        merged.append([kind, text, line])
+        index += 1
+    return merged, errors
+
+
+def _code_identity_serialize(tokens: list[list[str]]) -> bytes:
+    """把代码 token 流序列化为带明确编码与边界的规范字节串。
+
+    每个 token 贡献 ``类别 + U+001F + 原文 + U+001E``，不同 token 序列不可能
+    拼成同一文本（D16 §64）。
+    """
+
+    parts: list[str] = []
+    for kind, text, _ in tokens:
+        parts.append(kind)
+        parts.append(CODE_IDENTITY_TOKEN_SEPARATOR)
+        parts.append(text)
+        parts.append(CODE_IDENTITY_TOKEN_TERMINATOR)
+    return "".join(parts).encode("utf-8")
+
+
+def _code_identity_import_spans(tokens: list[list[str]]) -> list[tuple[int, int]]:
+    """返回 import 语句在代码 token 流中的半开区间。
+
+    ``import`` 之后到分号（含）为一个语句；**不做任何删除**，T5 只允许在
+    双方各自流内做确定性排序（D16 变换集 T5）。
+    """
+
+    spans: list[tuple[int, int]] = []
+    index = 0
+    total = len(tokens)
+    while index < total:
+        kind, text, _ = tokens[index]
+        previous_is_dot = index > 0 and tokens[index - 1][0] == "op" and tokens[index - 1][1] == "."
+        if kind == "ident" and text == "import" and not previous_is_dot:
+            cursor = index
+            while cursor < total and not (tokens[cursor][0] == "op" and tokens[cursor][1] == ";"):
+                cursor += 1
+            end = cursor + 1 if cursor < total else total
+            spans.append((index, end))
+            index = end
+            continue
+        index += 1
+    return spans
+
+
+def _code_identity_sort_imports(tokens: list[list[str]]) -> list[list[str]]:
+    """在双方代码流内对 import 语句组做确定性排序（保留全部 import 条目）。"""
+
+    spans = _code_identity_import_spans(tokens)
+    if not spans:
+        return tokens
+    groups: list[list[tuple[int, int]]] = [[spans[0]]]
+    for span in spans[1:]:
+        previous = groups[-1][-1]
+        between = tokens[previous[1] : span[0]]
+        if all(item[0] in {"ws", "nl"} for item in between):
+            groups[-1].append(span)
+        else:
+            groups.append([span])
+    result: list[list[str]] = []
+    cursor = 0
+    for group in groups:
+        result.extend(tokens[cursor : group[0][0]])
+        statements = []
+        for start, end in group:
+            statement = tokens[start:end]
+            statements.append((_code_identity_serialize(statement), statement))
+        statements.sort(key=lambda item: item[0])
+        cursor = group[-1][1]
+        for _, statement in statements:
+            result.extend(statement)
+    result.extend(tokens[cursor:])
+    return result
+
+
+def _code_identity_apply_transform(
+    tokens: list[list[str]], transform: dict[str, object]
+) -> list[list[str]]:
+    """按登记操作对**代码流**执行一次确定性变换。
+
+    变换只作用于代码 token：注释早已排除在代码流之外，字符串/文本块/字符
+    字面量保留逐字原文，只有显式登记为 ``exact-string-literal-map`` 的整条
+    字面量才会被改写——绝不做无边界全文替换，也绝不折叠字面量内空白。
+
+    Args:
+        tokens: 代码 token 流。
+        transform: 变换集清单中的单条变换。
+
+    Returns:
+        变换后的代码 token 流。
+    """
+
+    operation = str(transform.get("operation"))
+    pairs = [
+        (str(item[0]), str(item[1]))
+        for item in transform.get("pairs") or []
+        if isinstance(item, list) and len(item) == 2 and all(isinstance(part, str) and part for part in item)
+    ]
+    if operation == "import-group-canonical-sort":
+        return _code_identity_sort_imports(tokens)
+    if not pairs:
+        return tokens
+    mapping = dict(pairs)
+    result: list[list[str]] = []
+    for kind, text, line in tokens:
+        if operation == "qualified-name-prefix-map":
+            segments = text.split(".")
+            replaced = False
+            for source, target in pairs:
+                key = source.split(".")
+                if len(segments) > len(key) and segments[: len(key)] == key:
+                    result.append([kind, ".".join(target.split(".") + segments[len(key) :]), line])
+                    replaced = True
+                    break
+            if not replaced:
+                result.append([kind, text, line])
+        elif operation == "exact-name-map":
+            result.append([kind, mapping.get(text, text), line])
+        elif operation == "exact-simple-name-map":
+            # 只改写与登记键**逐段完全相等**的那一段：限定名的任意一段都可能是被
+            # 登记的类型标识符，但绝不做子串匹配，也不改动更长的无关标识符。
+            if kind == "ident":
+                result.append([kind, mapping.get(text, text), line])
+            elif kind == "name":
+                segments = [mapping.get(item, item) for item in text.split(".")]
+                result.append([kind, ".".join(segments), line])
+            else:
+                result.append([kind, text, line])
+        elif operation == "exact-string-literal-map":
+            result.append([kind, mapping.get(text, text), line])
+        else:
+            result.append([kind, text, line])
+    return result
+
+
+def _code_identity_stream(
+    source: str, transforms: list[dict[str, object]], side: str
+) -> dict[str, object]:
+    """产出单侧代码流读数；解析不可靠时以受控拒绝结束，不退回宽松比较。
+
+    Args:
+        source: 单侧原文。
+        transforms: 已按执行顺序排列的变换。
+        side: ``local`` 或 ``upstream``，决定变换方向是否适用。
+
+    Returns:
+        含 ``tokens``/``serialized``/``sha256``/``bytes``/``token_count``/
+        ``import_count`` 与 ``errors`` 的结果字典。
+    """
+
+    tokens, errors = _code_identity_code_tokens(source)
+    for transform in transforms:
+        direction = str(transform.get("direction"))
+        if direction == "both" or side == "upstream":
+            tokens = _code_identity_apply_transform(tokens, transform)
+    serialized = _code_identity_serialize(tokens)
+    return {
+        "tokens": tokens,
+        "serialized": serialized,
+        "sha256": hashlib.sha256(serialized).hexdigest(),
+        "bytes": len(serialized),
+        "token_count": len(tokens),
+        "import_count": len(_code_identity_import_spans(tokens)),
+        "errors": errors,
+    }
+
+
+def _code_identity_first_difference(
+    left: list[list[str]], right: list[list[str]]
+) -> str:
+    """返回两侧代码流的第一处差异（按 token 序号）。"""
+
+    for position in range(max(len(left), len(right))):
+        lhs = left[position] if position < len(left) else ["<缺失>", "<缺失>", "0"]
+        rhs = right[position] if position < len(right) else ["<缺失>", "<缺失>", "0"]
+        if lhs[0] != rhs[0] or lhs[1] != rhs[1]:
+            return (
+                f"代码流第 {position + 1} 个 token 不同：本地 {lhs[0]}:{lhs[1]!r}（第 {lhs[2]} 行），"
+                f"上游 {rhs[0]}:{rhs[1]!r}（第 {rhs[2]} 行）"
+            )
+    return ""
+
+
+def _code_identity_diff_lines(local_text: str, upstream_text: str) -> tuple[int, int]:
+    """统计双方原始行序列中不相等的行数（用于逐处差异归因的完整性核对）。"""
+
+    left_changed = right_changed = 0
+    for block in difflib.SequenceMatcher(
+        None, local_text.split("\n"), upstream_text.split("\n"), autojunk=False
+    ).get_opcodes():
+        tag, i1, i2, j1, j2 = block
+        if tag == "equal":
+            continue
+        left_changed += i2 - i1
+        right_changed += j2 - j1
+    return left_changed, right_changed
+
+
+def _code_identity_implementation_root() -> Path:
+    """返回本规则实现所在仓库的根目录（变换集与本地对象的默认解析基准）。"""
+
+    return Path(__file__).resolve().parents[3]
+
+
+@lru_cache(maxsize=4)
+def _load_code_identity_transform_set(path: str) -> dict[str, object] | None:
+    """加载并逐项校验仓内受控的代码同一性变换集清单。
+
+    清单不可读、schema 不符、变换条目不自洽、``transforms_sha256`` 与实测
+    规范化指纹不符、执行顺序与登记顺序不符、出现清单外操作或方向时，都返回
+    原因而不放行。
+
+    Args:
+        path: 变换集清单路径。
+
+    Returns:
+        ``(校验通过的清单内容, None)`` 或 ``(None, 拒绝原因)``。
+    """
+
+    target = Path(path)
+    try:
+        raw = target.read_bytes()
+    except OSError as error:
+        return None, f"代码同一性变换集不可读：{target}（{error.strerror or error}）"
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        return None, f"代码同一性变换集不是有效 UTF-8 JSON：{target}（{error}）"
+    if not isinstance(document, dict):
+        return None, "代码同一性变换集必须是结构化对象"
+    if document.get("schema") != CODE_IDENTITY_TRANSFORM_SET_SCHEMA:
+        return None, f"代码同一性变换集 schema 不是 {CODE_IDENTITY_TRANSFORM_SET_SCHEMA}"
+    if document.get("branch") != EVIDENCE_BRANCH_CODE_IDENTITY:
+        return None, f"代码同一性变换集的 branch 不是 {EVIDENCE_BRANCH_CODE_IDENTITY}"
+    if document.get("route") != CODE_IDENTITY_ROUTE:
+        return None, f"代码同一性变换集的 route 不是 {CODE_IDENTITY_ROUTE}"
+    if document.get("rules_version") != CODE_IDENTITY_RULES_VERSION:
+        return None, f"代码同一性变换集的 rules_version 不是 {CODE_IDENTITY_RULES_VERSION}"
+    if document.get("serialization") != CODE_IDENTITY_SERIALIZATION:
+        return None, f"代码同一性变换集的 serialization 不是 {CODE_IDENTITY_SERIALIZATION}"
+    transforms = document.get("transforms")
+    if not isinstance(transforms, list) or not transforms:
+        return None, "代码同一性变换集缺少 transforms 数组"
+    declared = hashlib.sha256(
+        json.dumps(transforms, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    if document.get("transforms_sha256") != declared:
+        return None, (
+            "代码同一性变换集自述的 transforms_sha256 与实测规范化指纹不符："
+            f"清单 {_text(document, 'transforms_sha256') or '空'}，实测 {declared}"
+        )
+    normalizations = document.get("normalizations")
+    if not isinstance(normalizations, list) or len(normalizations) != 1:
+        return None, "代码同一性变换集必须逐条登记 normalizations（当前只允许一条空白规范化）"
+    normalization = normalizations[0]
+    if not isinstance(normalization, dict) or _text(normalization, "id") != CODE_IDENTITY_NORMALIZATION_ID:
+        return None, f"代码同一性变换集的规范化标识必须是 {CODE_IDENTITY_NORMALIZATION_ID}"
+    if _text(normalization, "name") != CODE_IDENTITY_NORMALIZATION_NAME:
+        return None, f"代码同一性变换集的规范化名称必须是 {CODE_IDENTITY_NORMALIZATION_NAME}"
+    if not _text(normalization, "definition") or not _text(normalization, "scope"):
+        return None, f"{CODE_IDENTITY_NORMALIZATION_ID} 必须同时给出精确定义 definition 与适用范围 scope"
+    declared_norm = hashlib.sha256(
+        json.dumps(normalizations, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    if document.get("normalizations_sha256") != declared_norm:
+        return None, (
+            "代码同一性变换集自述的 normalizations_sha256 与实测规范化指纹不符："
+            f"清单 {_text(document, 'normalizations_sha256') or '空'}，实测 {declared_norm}"
+        )
+    comparison_order = [str(item) for item in document.get("comparison_order") or []]
+    if comparison_order != [CODE_IDENTITY_NORMALIZATION_ID, *(
+        [str(item) for item in document.get("execution_order") or []]
+    )]:
+        return None, (
+            "代码同一性变换集的 comparison_order 必须是"
+            f" [{CODE_IDENTITY_NORMALIZATION_ID}, …execution_order]"
+        )
+    order = [str(item) for item in document.get("execution_order") or []]
+    identifiers = [str(_text(item, "id")) for item in transforms if isinstance(item, dict)]
+    if order != identifiers:
+        return None, (
+            "代码同一性变换集的 execution_order 必须与 transforms 的登记顺序逐项一致："
+            f"登记 {order}，清单 {identifiers}"
+        )
+    if len(set(order)) != len(order):
+        return None, "代码同一性变换集存在重复的变换标识"
+    for transform in transforms:
+        identifier = _text(transform, "id")
+        if str(transform.get("operation")) not in CODE_IDENTITY_OPERATIONS:
+            return None, f"变换 {identifier} 的操作不在已登记范围内：{transform.get('operation')!r}"
+        if str(transform.get("direction")) not in CODE_IDENTITY_DIRECTIONS:
+            return None, f"变换 {identifier} 的方向不受支持：{transform.get('direction')!r}"
+        if not _text(transform, "scope"):
+            return None, f"变换 {identifier} 缺少适用范围 scope"
+        if not _text(transform, "definition"):
+            return None, f"变换 {identifier} 缺少精确定义 definition"
+        if str(transform.get("operation")) != "import-group-canonical-sort":
+            pairs = transform.get("pairs")
+            if not isinstance(pairs, list) or not pairs:
+                return None, f"变换 {identifier} 必须逐条登记确切对应关系 pairs"
+            for pair in pairs:
+                if (
+                    not isinstance(pair, list)
+                    or len(pair) != 2
+                    or not all(isinstance(part, str) and part for part in pair)
+                ):
+                    return None, f"变换 {identifier} 的对应关系不是“源→目标”字面对：{pair!r}"
+    document["file_sha256"] = hashlib.sha256(raw).hexdigest()
+    return document, None
+
+
+# 入口显式指定的变换集位置（由 --code-identity-transform-set 写入，进程内共享）。
+_CODE_IDENTITY_TRANSFORM_SET_OVERRIDE: str | None = None
+
+
+def set_code_identity_transform_set(path: str | Path | None) -> None:
+    """登记本次运行显式采用的代码同一性变换集清单路径。
+
+    全部真实消费者（分支入口、暂存、工作区、全量、run_checks 子检查）必须消费
+    **同一份**显式变换集契约；清单不存在或不可复算时抛 ``EvidenceError`` 受控失败，
+    绝不静默回落到「没有变换」把该分支变成永假。
+
+    Args:
+        path: 显式指定的清单路径；``None`` 表示按环境变量与仓内默认位置解析。
+
+    Raises:
+        EvidenceError: 显式位置不可读或清单结构/指纹不受支持。
+    """
+
+    global _CODE_IDENTITY_TRANSFORM_SET_OVERRIDE
+    _CODE_IDENTITY_TRANSFORM_SET_OVERRIDE = str(path) if path is not None else None
+    _load_code_identity_transform_set.cache_clear()
+
+
+def _code_identity_resolve_transform_set(path: str | Path | None = None) -> dict[str, object] | None:
+    """按“命令行参数 > 环境变量 > 仓内受控默认清单”解析并校验变换集。
+
+    Args:
+        path: ``--code-identity-transform-set`` 指定的清单路径。
+
+    Returns:
+        ``(清单内容或 None, 拒绝原因)``。
+    """
+
+    if path is not None:
+        candidate = Path(path)
+    elif _CODE_IDENTITY_TRANSFORM_SET_OVERRIDE:
+        candidate = Path(_CODE_IDENTITY_TRANSFORM_SET_OVERRIDE)
+    else:
+        configured = os.environ.get(CODE_IDENTITY_TRANSFORM_SET_ENV, "").strip()
+        candidate = (
+            Path(configured)
+            if configured
+            else _code_identity_implementation_root() / DEFAULT_CODE_IDENTITY_TRANSFORM_SET
+        )
+    return _load_code_identity_transform_set(str(candidate))
+
+
+def _code_identity_contract_reasons(
+    record: dict[str, object],
+    local_path: str,
+    local_source: str | None,
+    local_sha256: str,
+    registry: EvidenceRegistry,
+    *,
+    root: Path | None = None,
+    transform_set_path: Path | None = None,
+) -> list[str]:
+    """核验 ``E1-code-identity`` 分支：完整非空代码流在登记变换后逐字节相同。
+
+    本函数落实裁决 D16 的严格比较：显式登记的版本化变换集 → 可靠词法 →
+    仅作用于代码流 → 保留 import 与字符串内空白的逐字节比较 → 非空且含实际
+    声明 → 全部原始差异可归因 → 注释与署名另行校验。**不采信**旧测量口径
+    （删除 import、折叠字面量内空白、全文替换），**也不**替代作者/来源验收。
+
+    Args:
+        record: 清单记录。
+        local_path: 被检查的本地对象路径。
+        local_source: 本地对象当前原文；``None`` 时按 ``root`` 读取工作树。
+        local_sha256: 当前对象原始字节 SHA-256。
+        registry: 受控证据清单。
+        root: 读取本地对象与默认变换集的仓库根；默认取本规则实现所在仓库根。
+        transform_set_path: 显式指定的变换集清单路径。
+
+    Returns:
+        逐项拒绝原因；为空表示代码同一性分支的契约与实测结果全部成立。
+    """
+
+    reasons: list[str] = []
+    if _text(record, "evidence_route") != CODE_IDENTITY_ROUTE:
+        reasons.append(
+            f"{EVIDENCE_BRANCH_CODE_IDENTITY} 分支归属路线 2，"
+            f"当前 evidence_route={_text(record, 'evidence_route') or '空'}"
+        )
+    value, error = _json_field(record, "code_identity_contract")
+    if value is None:
+        return reasons + [f"{EVIDENCE_BRANCH_CODE_IDENTITY} 分支缺少比较契约：{error}"]
+    if not isinstance(value, dict):
+        return reasons + [f"{EVIDENCE_BRANCH_CODE_IDENTITY} 比较契约必须是结构化对象"]
+    contract = value
+    if contract.get("schema") != CODE_IDENTITY_SCHEMA:
+        reasons.append(f"代码同一性比较契约 schema 不是 {CODE_IDENTITY_SCHEMA}")
+    if contract.get("branch") != EVIDENCE_BRANCH_CODE_IDENTITY:
+        reasons.append(f"代码同一性比较契约 branch 不是 {EVIDENCE_BRANCH_CODE_IDENTITY}")
+    if contract.get("route") != CODE_IDENTITY_ROUTE:
+        reasons.append(f"代码同一性比较契约 route 不是 {CODE_IDENTITY_ROUTE}")
+    if contract.get("rules_version") != CODE_IDENTITY_RULES_VERSION:
+        reasons.append(f"代码同一性比较契约 rules_version 不是 {CODE_IDENTITY_RULES_VERSION}")
+    serialization = contract.get("serialization")
+    if not isinstance(serialization, dict):
+        reasons.append("代码同一性比较契约缺少规范序列化契约 serialization")
+    else:
+        if serialization.get("version") != CODE_IDENTITY_SERIALIZATION:
+            reasons.append(
+                f"代码同一性比较契约的 serialization.version 不是 {CODE_IDENTITY_SERIALIZATION}"
+            )
+        if serialization.get("encoding") != "utf-8":
+            reasons.append("代码同一性比较契约的 serialization.encoding 必须是 utf-8")
+        if serialization.get("token_separator") != "U+001F":
+            reasons.append("代码同一性比较契约的 serialization.token_separator 必须是 U+001F")
+        if serialization.get("token_terminator") != "U+001E":
+            reasons.append("代码同一性比较契约的 serialization.token_terminator 必须是 U+001E")
+
+    # 变换集：整文件指纹与清单自述指纹双重绑定，任一处被篡改都拒绝。
+    transform_set, set_error = _code_identity_resolve_transform_set(transform_set_path)
+    if transform_set is None:
+        return reasons + [f"代码同一性变换集不可用：{set_error}"]
+    declared_set = contract.get("transform_set")
+    if not isinstance(declared_set, dict):
+        reasons.append("代码同一性比较契约缺少变换集绑定 transform_set")
+    else:
+        if _text(declared_set, "path") != DEFAULT_CODE_IDENTITY_TRANSFORM_SET:
+            reasons.append(
+                "代码同一性比较契约的 transform_set.path 必须是仓内受控清单 "
+                f"{DEFAULT_CODE_IDENTITY_TRANSFORM_SET}"
+            )
+        if _text(declared_set, "sha256").lower() != transform_set["file_sha256"]:
+            reasons.append(
+                "代码同一性变换集被篡改或与记录登记不符："
+                f"记录 {_text(declared_set, 'sha256').lower() or '空'}，"
+                f"实测 {transform_set['file_sha256']}"
+            )
+        if _text(declared_set, "transforms_sha256").lower() != _text(transform_set, "transforms_sha256").lower():
+            reasons.append(
+                "代码同一性变换集登记的 transforms_sha256 与清单自述不符："
+                f"记录 {_text(declared_set, 'transforms_sha256').lower() or '空'}，"
+                f"清单 {_text(transform_set, 'transforms_sha256').lower() or '空'}"
+            )
+        if _text(declared_set, "normalizations_sha256").lower() != _text(
+            transform_set, "normalizations_sha256"
+        ).lower():
+            reasons.append(
+                "代码同一性变换集登记的 normalizations_sha256 与清单自述不符："
+                f"记录 {_text(declared_set, 'normalizations_sha256').lower() or '空'}，"
+                f"清单 {_text(transform_set, 'normalizations_sha256').lower() or '空'}"
+            )
+    registered_order = [str(item) for item in transform_set.get("execution_order") or []]
+    applied = [str(item) for item in contract.get("applied_transforms") or []]
+    if applied != registered_order:
+        reasons.append(
+            "代码同一性比较契约的 applied_transforms 必须与受控变换集登记的执行顺序逐项一致："
+            f"记录 {applied}，清单 {registered_order}"
+        )
+    by_id = {str(_text(item, "id")): item for item in transform_set["transforms"]}  # type: ignore[index]
+    transforms: list[dict[str, object]] = []
+    for identifier in registered_order:
+        transform = by_id.get(identifier)
+        if transform is None:
+            reasons.append(f"代码同一性变换集缺少已登记的变换 {identifier}")
+            continue
+        transforms.append(transform)
+    reasons.extend(_code_identity_attribution_reasons(contract))
+    comment_binding_reasons = _code_identity_comment_binding_reasons(contract)
+    reasons.extend(comment_binding_reasons)
+    reasons.extend(_code_identity_author_handling_reasons(contract, record))
+
+    # 固定输入：本地对象当前原始字节与上游固定提交内容。
+    inputs = contract.get("inputs")
+    if not isinstance(inputs, dict):
+        return reasons + ["代码同一性比较契约缺少固定输入 inputs"]
+    local_input = inputs.get("local")
+    if not isinstance(local_input, dict):
+        reasons.append("代码同一性比较契约缺少本地固定输入 inputs.local")
+    else:
+        if _text(local_input, "path") != local_path:
+            reasons.append("代码同一性比较契约的 inputs.local.path 与被检查对象不一致")
+        if _text(local_input, "sha256").lower() != local_sha256:
+            reasons.append(
+                "代码同一性比较的本地最终指纹不符："
+                f"记录 {_text(local_input, 'sha256').lower() or '空'}，实测 {local_sha256}"
+            )
+    if local_source is None:
+        base = root or _code_identity_implementation_root()
+        candidate = base / local_path
+        try:
+            local_text = candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            return reasons + [f"代码同一性比较的本地对象不可读：{candidate}（{error}）"]
+    else:
+        local_text = local_source
+    reasons.extend(
+        _code_identity_comment_unchanged_reasons(contract, local_text)
+    )
+    upstream_input = inputs.get("upstream")
+    if not isinstance(upstream_input, dict):
+        return reasons + ["代码同一性比较契约缺少上游固定输入 inputs.upstream"]
+    for key, record_key in (
+        ("repo_url", "upstream_repo_url"),
+        ("commit", "upstream_commit"),
+        ("path", "upstream_path"),
+        ("sha256", "upstream_sha256"),
+        ("file_url", "upstream_file_url"),
+    ):
+        if _text(upstream_input, key) != _text(record, record_key):
+            reasons.append(f"代码同一性比较契约的 inputs.upstream.{key} 与记录登记不一致")
+    upstream_sha = _text(record, "upstream_sha256").lower()
+    if not SHA256_PATTERN.match(upstream_sha):
+        reasons.append(f"{EVIDENCE_BRANCH_CODE_IDENTITY} 分支缺少有效的上游内容 SHA-256")
+    upstream_raw, upstream_error = _upstream_bytes_for_contract(registry, record)
+    if upstream_error:
+        reasons.append(f"代码同一性上游比较输入未通过核验：{upstream_error}")
+        return reasons
+    assert upstream_raw is not None
+    if hashlib.sha256(upstream_raw).hexdigest() != upstream_sha:
+        reasons.append("代码同一性上游比较输入的实测指纹与记录登记不符")
+        return reasons
+    upstream_text = upstream_raw.decode("utf-8-sig", errors="replace")
+
+    local_stream = _code_identity_stream(local_text, transforms, "local")
+    upstream_stream = _code_identity_stream(upstream_text, transforms, "upstream")
+    for side, stream in (("本地", local_stream), ("上游", upstream_stream)):
+        for message in stream["errors"]:  # type: ignore[union-attr]
+            reasons.append(f"{side}代码流无法可靠解析，受控拒绝：{message}")
+    if local_stream["errors"] or upstream_stream["errors"]:  # type: ignore[index]
+        return reasons
+    # 完整且非空：代码序列不得为空、不得只剩注释或空白。
+    if not local_stream["token_count"]:  # type: ignore[index]
+        reasons.append("代码同一性比较的本地代码序列为空（只剩注释或空白），不能据此判派生")
+    if not upstream_stream["token_count"]:  # type: ignore[index]
+        reasons.append("代码同一性比较的上游代码序列为空（只剩注释或空白），不能据此判派生")
+    if not local_stream["serialized"] == upstream_stream["serialized"]:  # type: ignore[index]
+        reasons.append(
+            "代码同一性比较不成立（变换后逐字节不相等）："
+            + _code_identity_first_difference(
+                local_stream["tokens"], upstream_stream["tokens"]  # type: ignore[arg-type]
+            )
+        )
+    if local_stream["import_count"] != upstream_stream["import_count"]:  # type: ignore[index]
+        reasons.append(
+            "代码同一性比较双方 import 条目数不同："
+            f"本地 {local_stream['import_count']}，上游 {upstream_stream['import_count']}；"
+            "本分支不批准剥离 import（D16 §变换集 T5）"
+        )
+    comparison = contract.get("comparison")
+    if not isinstance(comparison, dict):
+        reasons.append("代码同一性比较契约缺少逐项登记的 comparison 读数")
+    else:
+        if comparison.get("equal") is not True:
+            reasons.append("代码同一性比较契约的 comparison.equal 必须为 true")
+        if comparison.get("diff_count") != 0:
+            reasons.append("代码同一性比较契约的 comparison.diff_count 必须为 0")
+        measured = {
+            "local_code_stream_sha256": local_stream["sha256"],
+            "upstream_code_stream_sha256": upstream_stream["sha256"],
+            "local_code_bytes": local_stream["bytes"],
+            "upstream_code_bytes": upstream_stream["bytes"],
+            "local_token_count": local_stream["token_count"],
+            "upstream_token_count": upstream_stream["token_count"],
+            "import_count_local": local_stream["import_count"],
+            "import_count_upstream": upstream_stream["import_count"],
+        }
+        for field in CODE_IDENTITY_COMPARISON_FIELDS:
+            if comparison.get(field) != measured[field]:
+                reasons.append(
+                    f"代码同一性比较契约的 comparison.{field} 与实测不符："
+                    f"记录 {comparison.get(field)!r}，实测 {measured[field]!r}"
+                )
+    left_changed, right_changed = _code_identity_diff_lines(local_text, upstream_text)
+    if left_changed or right_changed:
+        if not _code_identity_attribution_covers(contract, left_changed, right_changed):
+            reasons.append(
+                "代码同一性的原始差异归因没有覆盖全部实际差异："
+                f"实测本地 {left_changed} 行 / 上游 {right_changed} 行"
+            )
+    tool = contract.get("tool")
+    if not isinstance(tool, dict) or not _text(tool, "name"):
+        reasons.append("代码同一性比较契约缺少工具名 tool.name")
+    else:
+        if _text(tool, "version") != CODE_IDENTITY_SCHEMA:
+            reasons.append(f"代码同一性比较契约的 tool.version 不是 {CODE_IDENTITY_SCHEMA}")
+        checker_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+        if _text(tool, "sha256").lower() != checker_sha:
+            reasons.append(
+                "代码同一性比较契约的 tool.sha256 与当前规则实现不符："
+                f"记录 {_text(tool, 'sha256').lower() or '空'}，实测 {checker_sha}"
+            )
+    review = contract.get("review")
+    if not isinstance(review, dict):
+        reasons.append("代码同一性比较契约缺少复核记录 review")
+    else:
+        for field in ("implementer", "reviewer", "date"):
+            if not _text(review, field):
+                reasons.append(f"代码同一性比较契约缺少 review.{field}")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", _text(review, "date")):
+            reasons.append("代码同一性比较契约的 review.date 必须是 YYYY-MM-DD")
+        if not _text(review, "conclusion"):
+            reasons.append("代码同一性比较契约缺少 review.conclusion")
+    if not _text(contract, "counter_evidence_conclusion"):
+        reasons.append("代码同一性比较契约缺少反证结论 counter_evidence_conclusion")
+    return reasons
+
+
+def _code_identity_attribution_covers(
+    contract: dict[str, object], left_changed: int, right_changed: int
+) -> bool:
+    """判断逐处归因是否恰好覆盖全部原始差异行数。"""
+
+    attribution = contract.get("difference_attribution")
+    if not isinstance(attribution, list) or not attribution:
+        return False
+    total_local = total_upstream = 0
+    for entry in attribution:
+        if not isinstance(entry, dict):
+            return False
+        changed = entry.get("changed_lines")
+        if (
+            not isinstance(changed, dict)
+            or not isinstance(changed.get("local"), int)
+            or not isinstance(changed.get("upstream"), int)
+        ):
+            return False
+        total_local += int(changed["local"])
+        total_upstream += int(changed["upstream"])
+    return (total_local, total_upstream) == (left_changed, right_changed)
+
+
+def _code_identity_comment_unchanged_reasons(
+    contract: dict[str, object], local_text: str
+) -> list[str]:
+    """实测核对本地职责 JavaDoc / D12 来源说明 / D15 标注**保持不变**。
+
+    “代码同一”只覆盖代码流；注释与署名不因此获得豁免（D16 §86）。本函数按
+    契约登记的行区间取本地真实注释原文逐字比对，指纹或原文不符即拒绝。
+
+    Args:
+        contract: 记录声明的代码同一性比较契约。
+        local_text: 本地对象当前原文。
+
+    Returns:
+        逐项拒绝原因；为空表示全部登记注释与本地实际注释逐字一致。
+    """
+
+    reasons: list[str] = []
+    bindings = contract.get("comment_bindings")
+    if not isinstance(bindings, list):
+        return reasons
+    lines = local_text.split("\n")
+    for entry in bindings:
+        if not isinstance(entry, dict):
+            continue
+        span = entry.get("lines")
+        if (
+            not isinstance(span, list)
+            or len(span) != 2
+            or not all(isinstance(item, int) and item > 0 for item in span)
+            or span[0] > span[1]
+        ):
+            continue
+        start, end = int(span[0]), int(span[1])
+        if end > len(lines):
+            reasons.append(
+                f"代码同一性注释绑定 {entry.get('role')!r} 的行区间 {start}-{end} 超出本地对象范围"
+            )
+            continue
+        verbatim = "\n".join(lines[start - 1 : end])
+        # 逐字原文必须按原字符序列比较，不能先 strip 再比（D13 同一口径）。
+        recorded = _raw_text(entry, "text")
+        measured = hashlib.sha256(verbatim.encode("utf-8")).hexdigest()
+        if _text(entry, "sha256").lower() != measured:
+            reasons.append(
+                f"代码同一性注释绑定 {entry.get('role')!r}（第 {start}-{end} 行）"
+                f"与本地实际注释不符：记录 {_text(entry, 'sha256').lower() or '空'}，实测 {measured}"
+            )
+        if recorded and recorded != verbatim:
+            reasons.append(
+                f"代码同一性注释绑定 {entry.get('role')!r}（第 {start}-{end} 行）"
+                f"登记的逐字原文与本地实际注释不符：记录 {recorded!r}，实测 {verbatim!r}"
+            )
+    return reasons
+
+
+def _code_identity_attribution_reasons(contract: dict[str, object]) -> list[str]:
+    """校验逐处原始差异归因的形状（覆盖计数在比较后按实测核对）。"""
+
+    reasons: list[str] = []
+    attribution = contract.get("difference_attribution")
+    if not isinstance(attribution, list) or not attribution:
+        return ["代码同一性比较契约必须逐处登记原始差异归因 difference_attribution"]
+    for entry in attribution:
+        if not isinstance(entry, dict):
+            reasons.append(f"代码同一性归因记录不是结构化对象：{entry!r}")
+            continue
+        cause = _text(entry, "cause")
+        if cause not in CODE_IDENTITY_ATTRIBUTION_CAUSES:
+            reasons.append(f"代码同一性归因记录的 cause 不受支持：{cause!r}")
+        if cause == "registered-transform" and not _text(entry, "rule"):
+            reasons.append("代码同一性归因为获准变换时必须指明具体规则 rule（变换标识）")
+        changed = entry.get("changed_lines")
+        if (
+            not isinstance(changed, dict)
+            or not isinstance(changed.get("local"), int)
+            or not isinstance(changed.get("upstream"), int)
+            or int(changed["local"]) < 0
+            or int(changed["upstream"]) < 0
+        ):
+            reasons.append(f"代码同一性归因记录缺少 changed_lines.local/upstream：{entry!r}")
+    return reasons
+
+
+def _code_identity_comment_binding_reasons(contract: dict[str, object]) -> list[str]:
+    """要求“代码同一”不覆盖注释与署名：注释角色必须逐条登记且保持不变。
+
+    登记本身只是形状校验；逐条“保持不变”的实测比对在
+    ``_code_identity_contract_reasons`` 中按本地对象真实注释文本完成。
+
+    """
+
+    reasons: list[str] = []
+    bindings = contract.get("comment_bindings")
+    if not isinstance(bindings, list) or not bindings:
+        return ["代码同一性比较契约必须单独登记 comment_bindings（职责 JavaDoc/D12 来源说明/D15 标注）"]
+    for entry in bindings:
+        if not isinstance(entry, dict):
+            reasons.append(f"代码同一性注释绑定不是结构化对象：{entry!r}")
+            continue
+        if _text(entry, "role") not in CODE_IDENTITY_COMMENT_ROLES:
+            reasons.append(f"代码同一性注释绑定的 role 不受支持：{_text(entry, 'role')!r}")
+        if not SHA256_PATTERN.match(_text(entry, "sha256").lower()):
+            reasons.append(f"代码同一性注释绑定缺少有效 SHA-256：{entry!r}")
+        lines = entry.get("lines")
+        if (
+            not isinstance(lines, list)
+            or len(lines) != 2
+            or not all(isinstance(item, int) and item > 0 for item in lines)
+            or lines[0] > lines[1]
+        ):
+            reasons.append(f"代码同一性注释绑定的 lines 必须是递增的正整数行区间：{entry!r}")
+        if not _text(entry, "text"):
+            reasons.append(f"代码同一性注释绑定缺少逐字原文 text：{entry!r}")
+    return reasons
+
+
+def _code_identity_author_handling_reasons(
+    contract: dict[str, object], record: dict[str, object]
+) -> list[str]:
+    """要求作者/来源另行验收：代码同一性不得当作署名通过依据。"""
+
+    reasons: list[str] = []
+    handling = contract.get("author_handling")
+    if not isinstance(handling, dict):
+        return ["代码同一性比较契约缺少 author_handling（代码同一不覆盖作者与来源验收）"]
+    if handling.get("code_identity_accepts_signature") is not False:
+        reasons.append("代码同一性比较契约必须显式登记 code_identity_accepts_signature=false")
+    if not _text(handling, "declared_author_status"):
+        reasons.append("代码同一性比较契约缺少现存署名形态声明 declared_author_status")
+    if not _text(handling, "author_route"):
+        reasons.append("代码同一性比较契约缺少作者/来源各自的验收路径 author_route")
+    if not _text(record, "author_status"):
+        reasons.append("清单缺少 author_status，代码同一性不替代作者判断")
+    return reasons
+
+
 def _type_evidence_value(
     record: dict[str, object],
 ) -> tuple[dict[str, object] | None, str | None]:
@@ -2890,6 +3936,10 @@ def _route_reasons(record: dict[str, object]) -> list[str]:
         return branch_route_reasons
     branch, _ = _evidence_branch(record)
     if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
+        return []
+    if branch == EVIDENCE_BRANCH_CODE_IDENTITY:
+        # 裁决 D16 §120：代码同一性作为 D10 路线 2 的局部补充分支，完整比较
+        # 契约由 _code_identity_contract_reasons 复算；不改变 C2 的路线 3 门槛。
         return []
     if branch == EVIDENCE_BRANCH_CONTENT_INDEPENDENT:
         return _content_independent_reasons(record)
@@ -3346,6 +4396,7 @@ def _acceptance_state(
     local_sha256: str | None,
     line: int,
     finding_reasons: list[str],
+    local_source: str | None = None,
 ) -> AcceptanceState:
     """计算单条索引记录的逐项验收状态（裁决 D15 §65/§66/§72/§128）。
 
@@ -3366,6 +4417,8 @@ def _acceptance_state(
         local_sha256: 当前对象原始字节的 SHA-256。
         line: 当前源码中的声明行号。
         finding_reasons: 该类型在既有消费者中已产生的拒绝原因。
+        local_source: 当前对象原文；声明 ``E1-code-identity`` 时用于严格代码比较，
+            省略时按规则实现所在仓库根读取工作树。
 
     Returns:
         该记录的逐项验收状态。
@@ -3400,10 +4453,26 @@ def _acceptance_state(
             branch, branch_error = _evidence_branch(record)
             if branch_error:
                 reasons.append(branch_error)
-            elif branch != EVIDENCE_BRANCH_AUTHOR_ONLY:
+            elif branch not in {EVIDENCE_BRANCH_AUTHOR_ONLY, EVIDENCE_BRANCH_CODE_IDENTITY}:
                 reasons.append(
                     "作者标签形态的已验收记录必须显式声明 "
                     f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支与比较契约"
+                )
+            elif branch == EVIDENCE_BRANCH_CODE_IDENTITY:
+                # 裁决 D16 §86/§101：代码同一性不覆盖署名。作者标签形态仍须按
+                # D10/D12 的作者条件独立验收，不能借代码相同放行未核实的署名。
+                reasons.extend(
+                    _code_identity_contract_reasons(
+                        record,
+                        path,
+                        local_source,
+                        local_sha256 or "",
+                        registry,
+                    )
+                )
+                reasons.append(
+                    "代码同一性不覆盖作者与署名验收：作者标签形态仍须声明 "
+                    f"{EVIDENCE_BRANCH_AUTHOR_ONLY} 分支并按 D10/D12 各自条件验收"
                 )
             else:
                 reasons.extend(
@@ -3521,6 +4590,7 @@ def _verify_single_note(
     enclosing_type: str | None,
     registry: EvidenceRegistry,
     local_sha256: str,
+    local_source: str | None = None,
 ) -> list[str]:
     """核验单条来源说明的逐项证据，返回全部拒绝原因。"""
 
@@ -3552,6 +4622,14 @@ def _verify_single_note(
         # 声明了作者排除分支就必须能复算比较：输入、排除记录与一致结果都不得手填。
         reasons.extend(
             _author_only_contract_reasons(record, path, local_sha256, registry)
+        )
+    elif _text(record, EVIDENCE_BRANCH_FIELD) == EVIDENCE_BRANCH_CODE_IDENTITY:
+        # 裁决 D16 §120：声明代码同一性分支就必须能按登记变换集复算严格比较；
+        # 该分支只覆盖代码流，注释与署名仍按 D12/D15 各自规则核验。
+        reasons.extend(
+            _code_identity_contract_reasons(
+                record, path, local_source, local_sha256, registry
+            )
         )
     reasons.extend(_history_reasons(record, note, registry))
     sources, sources_error = _record_sources(record)
@@ -3597,6 +4675,8 @@ def _verify_source_notes(
     enclosing_type: str | None,
     registry: EvidenceRegistry | None,
     local_sha256: str | None,
+    *,
+    local_source: str | None = None,
 ) -> list[str]:
     """核验 public 类型全部来源说明的逐项证据。
 
@@ -3609,6 +4689,8 @@ def _verify_source_notes(
         enclosing_type: 外层类型限定名；顶层类型为 ``None``。
         registry: 受控证据清单；未配置时为 ``None``。
         local_sha256: 当前对象原始字节的 SHA-256。
+        local_source: 当前对象原文；声明 ``E1-code-identity`` 时用于严格代码比较，
+            省略时按规则实现所在仓库根读取工作树。
 
     Returns:
         逐条拒绝原因；为空表示该类型的来源例外成立。
@@ -3636,6 +4718,7 @@ def _verify_source_notes(
                 enclosing_type,
                 registry,
                 local_sha256,
+                local_source,
             )
         )
     if reasons:
@@ -3776,6 +4859,7 @@ def _scan_types(
                 enclosing,
                 evidence,
                 local_sha256,
+                local_source=source,
             )
             state = (
                 _acceptance_state(
@@ -3790,6 +4874,7 @@ def _scan_types(
                     local_sha256,
                     line,
                     reasons,
+                    local_source=source,
                 )
                 if record is not None
                 else None
@@ -3830,6 +4915,7 @@ def _scan_types(
                     local_sha256,
                     line,
                     [],
+                    local_source=source,
                 )
                 if record is not None
                 else None
@@ -4709,7 +5795,12 @@ def _rules(findings: list[Finding]) -> set[str]:
     return {finding.rule for finding in findings}
 
 
-def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[str]]:
+def _validate_declared_branches(
+    evidence: EvidenceRegistry,
+    *,
+    root: Path | None = None,
+    transform_set_path: Path | None = None,
+) -> tuple[int, list[str]]:
     """复算清单中所有显式声明证据分支的记录。
 
     记录的 ``evidence_branch`` 声明是版本化契约的启用开关：声明 ``E1-author-only``
@@ -4721,6 +5812,8 @@ def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[s
 
     Args:
         evidence: 已加载的受控证据清单。
+        root: 读取本地对象与默认变换集的仓库根；默认取本规则实现所在仓库根。
+        transform_set_path: 显式指定的代码同一性变换集清单路径。
 
     Returns:
         ``(检查的记录数, 拒绝原因列表)``。
@@ -4745,6 +5838,18 @@ def _validate_declared_branches(evidence: EvidenceRegistry) -> tuple[int, list[s
         if branch == EVIDENCE_BRANCH_AUTHOR_ONLY:
             local_sha = _text(record, "local_sha256_after").lower()
             for reason in _author_only_contract_reasons(record, path, local_sha, evidence):
+                reasons.append(f"{path}：[{reason}]")
+        elif branch == EVIDENCE_BRANCH_CODE_IDENTITY:
+            local_sha = _text(record, "local_sha256_after").lower()
+            for reason in _code_identity_contract_reasons(
+                record,
+                path,
+                None,
+                local_sha,
+                evidence,
+                root=root,
+                transform_set_path=transform_set_path,
+            ):
                 reasons.append(f"{path}：[{reason}]")
         else:
             for reason in _content_independent_reasons(record):
@@ -5004,7 +6109,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--validate-evidence-branches",
         action="store_true",
-        help="复算清单中所有显式声明证据分支（E1-author-only / C2-independent-content）的记录",
+        help=(
+            "复算清单中所有显式声明证据分支"
+            "（E1-author-only / C2-independent-content / E1-code-identity）的记录"
+        ),
     )
     parser.add_argument(
         "--evidence-registry",
@@ -5017,6 +6125,21 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=f"受控上游快照根目录；默认读取 {EVIDENCE_SNAPSHOTS_ENV}",
+    )
+    parser.add_argument(
+        "--code-identity-transform-set",
+        type=Path,
+        default=None,
+        help=(
+            "E1-code-identity 分支的受控变换集清单路径；"
+            f"默认读取 {CODE_IDENTITY_TRANSFORM_SET_ENV}，再退回 {DEFAULT_CODE_IDENTITY_TRANSFORM_SET}"
+        ),
+    )
+    parser.add_argument(
+        "--code-identity-root",
+        type=Path,
+        default=None,
+        help="E1-code-identity 分支读取本地对象与默认变换集的仓库根；默认取本规则实现所在仓库根",
     )
     parser.add_argument(
         "--maintenance",
@@ -5276,7 +6399,11 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        checked, reasons = _validate_declared_branches(evidence)
+        checked, reasons = _validate_declared_branches(
+            evidence,
+            root=args.code_identity_root,
+            transform_set_path=args.code_identity_transform_set,
+        )
         report = {
             "check": "Java 注释证据分支",
             "checked": checked,

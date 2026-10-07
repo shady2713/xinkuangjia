@@ -1,0 +1,193 @@
+{
+  "schema": "perf-budget/v1",
+  "status": "proposed-awaiting-authority",
+  "approved_by": null,
+  "supersedes": "baseline-w7.json",
+  "applies_to": {
+    "workload": "w7-baseline-v1",
+    "concurrency": 1,
+    "environment": "校准机：20 vCPU / 62 GiB RAM / MySQL 8.4.10 / Redis / MinIO（127.0.0.1）；应用与中间件同机；测量期间同机有其他并发任务（load average 4–8）",
+    "jvm": "-Xms512m -Xmx1024m；SPRING_PROFILES_ACTIVE=prod",
+    "build": {
+      "jar_sha256": "1765ba01d60a232521f996255508c2c72d071f109cf56289526bd5c6ed4f2f0a",
+      "app_version": "2026.01-SNAPSHOT",
+      "note": "以构件 SHA-256 绑定被测版本；该 JAR 由工作区在 2026-10-07 12:54 打包，源码含未提交改动且同期有并发编辑，因此不单独以 git 修订标识构建"
+    },
+    "dataset": {
+      "users": 5000,
+      "dict_types": 300,
+      "note": "scripts/perf/seed_dataset.py 生成的固定常量合成数据"
+    },
+    "preconditions": [
+      "BASIC_FRAMEWORK_CAPTCHA_ENABLE=false（登录链路不含图形验证码）",
+      "FILE_UPLOAD_DAILY_BYTES/FILE_UPLOAD_DAILY_REQUESTS 提高，使上传链路可重复测量",
+      "每场景先丢弃 10 次预热迭代，并在正式测量前丢弃一整轮遍历以消除冷 JIT"
+    ],
+    "comparability": "更换机器、运行时、JVM 参数、数据规模、并发模型或负载定义后，绝对值与参考基线都失效，必须重新校准后才能用于判定",
+    "measured_at": "2026-10-07 14:05–14:12 (+08:00)，三次完整遍历"
+  },
+  "noise_floor": {
+    "p95_relative": 0.55,
+    "rationale": "三次实测 p95 相对偏差最大 53.3%（file-upload-64k），dict-type-page 46.5%，file-upload-1m 23.8%，并发场景 26.2%；亚 10 ms 端点在共享机器上受调度与文件系统抖动影响明显。全局下限取实测最大值向上取整到 0.55，作为 p95 预算的硬下限；逐场景回归容差另按各自实测偏差单独给出。"
+  },
+  "resources": {
+    "peak_rss_kb": 2097152,
+    "threads": 300,
+    "fds": 300,
+    "max_thread_growth": 32,
+    "max_fd_growth": 4,
+    "rationale": "三次实测峰值 RSS 1.117–1.133 GiB（-Xmx1024m）、结束时线程 146–147、FD 恒为 131；单场景线程增长最大 3、FD 增长 0/1/2。原 baseline-w7.json 取 max_fd_growth=0，依据是单机安静环境下恒为 0；本次在同机有并发任务的真实条件下复测出现 1–2 的增长，故按实测上调到 4，并把该变更列为需批准的显式差异，不做静默放宽。"
+  },
+  "scenarios": {
+    "auth-login": {
+      "reference": {
+        "p50_ms": 51.654,
+        "p95_ms": 55.14,
+        "p99_ms": 57.03,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 155,
+      "p95_ms": 170,
+      "p99_ms": 230,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 12,
+      "sql_queries_p95": 12
+    },
+    "permission-info": {
+      "reference": {
+        "p50_ms": 4.795,
+        "p95_ms": 6.083,
+        "p99_ms": 6.608,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 12,
+      "sql_queries_p95": 13
+    },
+    "user-page-shallow": {
+      "reference": {
+        "p50_ms": 6.211,
+        "p95_ms": 7.789,
+        "p99_ms": 8.332,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 14,
+      "sql_queries_p95": 16
+    },
+    "user-page-deep": {
+      "reference": {
+        "p50_ms": 8.172,
+        "p95_ms": 9.912,
+        "p99_ms": 10.411,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 25,
+      "p95_ms": 30,
+      "p99_ms": 45,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 14,
+      "sql_queries_p95": 16
+    },
+    "dict-type-page": {
+      "reference": {
+        "p50_ms": 3.546,
+        "p95_ms": 5.93,
+        "p99_ms": 7.169,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.5,
+      "sql_queries_median": 10,
+      "sql_queries_p95": 12
+    },
+    "dict-type-crud": {
+      "reference": {
+        "p50_ms": 18.349,
+        "p95_ms": 22.088,
+        "p99_ms": 30.935,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 60,
+      "p95_ms": 70,
+      "p99_ms": 125,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 44,
+      "sql_queries_p95": 45
+    },
+    "user-crud": {
+      "reference": {
+        "p50_ms": 62.066,
+        "p95_ms": 65.892,
+        "p99_ms": 76.079,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 190,
+      "p95_ms": 200,
+      "p99_ms": 305,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 37,
+      "sql_queries_p95": 38
+    },
+    "file-upload-64k": {
+      "reference": {
+        "p50_ms": 3.147,
+        "p95_ms": 5.185,
+        "p99_ms": 6.059,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 20,
+      "p95_ms": 25,
+      "p99_ms": 40,
+      "relative_tolerance": 0.55,
+      "sql_queries_median": 3,
+      "sql_queries_p95": 5
+    },
+    "file-upload-1m": {
+      "reference": {
+        "p50_ms": 10.675,
+        "p95_ms": 13.431,
+        "p99_ms": 22.266,
+        "samples_per_scenario": 120,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 35,
+      "p95_ms": 45,
+      "p99_ms": 90,
+      "relative_tolerance": 0.35,
+      "sql_queries_median": 3,
+      "sql_queries_p95": 3
+    },
+    "user-page-shallow-concurrent-8": {
+      "reference": {
+        "p50_ms": 7.068,
+        "p95_ms": 9.569,
+        "p99_ms": 18.468,
+        "samples_per_scenario": 320,
+        "source": "2026-10-07 三次实测取最坏（pass1/2/3 merged.json）"
+      },
+      "p50_ms": 25,
+      "p95_ms": 30,
+      "p99_ms": 75,
+      "relative_tolerance": 0.6,
+      "min_throughput_per_second": 500,
+      "throughput_reference_per_second": 1069.37
+    }
+  }
+}

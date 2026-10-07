@@ -46,6 +46,8 @@ from scripts.code.java import check_staged_java_comments
 from scripts.code.java.check_staged_java_comments import (
     ACCEPTANCE_REPORT_SCHEMA,
     ACCEPTANCE_STATE_ACCEPTED,
+    CODE_IDENTITY_TRANSFORM_SET_ENV,
+    DEFAULT_CODE_IDENTITY_TRANSFORM_SET,
     ACCEPTANCE_STATE_HARD_FAILURE,
     ACCEPTANCE_STATE_REGISTERED_BLOCKER,
     AUTHOR_TAG_ACCEPTED_VERDICTS,
@@ -58,6 +60,7 @@ from scripts.code.java.check_staged_java_comments import (
     configured_evidence,
     describe_evidence,
     resolve_evidence,
+    set_code_identity_transform_set,
     scan_full_source,
     uncovered_acceptance_records,
 )
@@ -603,6 +606,15 @@ def main() -> int:
         help="受控上游快照根目录；未配置时按清单的固定地址取回",
     )
     arguments.add_argument(
+        "--code-identity-transform-set",
+        type=Path,
+        default=None,
+        help=(
+            "E1-code-identity 分支的受控变换集清单路径；默认读取 "
+            f"{CODE_IDENTITY_TRANSFORM_SET_ENV}，再退回 {DEFAULT_CODE_IDENTITY_TRANSFORM_SET}"
+        ),
+    )
+    arguments.add_argument(
         "--maintenance",
         action="store_true",
         help=(
@@ -619,6 +631,9 @@ def main() -> int:
     args = arguments.parse_args()
     repository = (args.root or Path(__file__).resolve().parents[3]).resolve()
     unavailable: list[dict[str, object]] = []
+    # 裁决 D16 §69：比较器、暂存、工作区与全量入口消费同一份显式变换集契约。
+    # 显式位置不可读时立即受控失败，不静默回落到「无变换」把分支当成永假。
+    set_code_identity_transform_set(args.code_identity_transform_set)
     try:
         registry = resolve_evidence(args.evidence_registry, args.evidence_snapshots, repository)
         ledger = AcceptanceLedger()
