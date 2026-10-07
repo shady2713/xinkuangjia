@@ -382,6 +382,20 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
         run: pnpm quality:prod-scan
 
+      # 第三方许可材料按产物字节实查：材料必须真的在产物里，条目数必须与本次构建
+      # 分块实际引用的包集合一致，任一不符都让作业失败。门禁不生成也不补写材料，
+      # 缺材料只能由上面的生产构建补齐，缺失时这里如实红灯。
+      - name: 发布阶段前端许可材料实查
+        if: inputs.stage == 'release'
+        env:
+          LICENSE_GATE: ${{ runner.temp }}/release-evidence/license-web.json
+        run: |
+          mkdir -p "$(dirname "$LICENSE_GATE")"
+          python -B -X utf8 \
+            前端代码/basic-framework-admin/scripts/quality/license_materials_gate.py \
+            --root 前端代码/basic-framework-admin --json > "$LICENSE_GATE"
+          cat "$LICENSE_GATE"
+
       # 发布阶段必须真实执行完整前端静态检查（ESLint、Prettier、Stylelint）并写出证据：
       # 下面的覆盖率裁决会复核该证据，缺失、跳过或任何违规都会让作业失败，不会静默通过。
       - name: 完整静态检查（发布阶段）
@@ -439,6 +453,12 @@ jobs:
           web_checked = web_comments.get("checked")
           if type(web_checked) is not int or web_checked <= 0:
               raise SystemExit("Web 全量注释没有正整数的实测对象数")
+          # 许可材料实查的读数同样取自上一步门禁真实写出的 JSON：只复核状态，
+          # 条数不在本步骤内重新计算，缺文件或状态非 passed 都让作业失败。
+          license_gate = json.loads(
+              (evidence / "license-web.json").read_text(encoding="utf-8"))
+          if license_gate.get("status") != "passed" or license_gate.get("checks") is None:
+              raise SystemExit("前端许可材料实查未真实通过")
           document = {
               "schema": "ci-release-evidence/v1",
               "job": "frontend",
@@ -457,6 +477,9 @@ jobs:
                    "command": "pnpm quality:prod-scan"},
                   {"name": "web-comments-full", "status": "passed", "checked": web_checked,
                    "command": "python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json"},
+                  # 该检查按产物字节裁决，没有可与用例数比对的第二份声明，声明 null。
+                  {"name": "frontend-license-materials", "status": "passed", "checked": None,
+                   "command": "python -B -X utf8 前端代码/basic-framework-admin/scripts/quality/license_materials_gate.py --root 前端代码/basic-framework-admin --json"},
               ],
               "coverage": {"kind": "web", "evidence": "coverage-web.json", "stage": "release",
                            "measured_files": coverage["measured_files"],
@@ -514,12 +537,44 @@ jobs:
         working-directory: 后端代码/basic-framework-boot
         run: mvn -B -ntp '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false test
 
-      # release 阶段必须采集覆盖率：quality-audit 在处理测试类时绑定本次输入摘要，
-      # 在 verify 生成 JaCoCo 报告与 PMD 审计，供后面的发布阶段裁决使用。
+      # 第三方许可材料必须在发布打包**之前**生成并打进 JAR：Maven 的 <resources> 在
+      # 目录缺失时静默跳过，构建照样成功，交付物却退回零份材料。因此发布阶段先打一次
+      # 不带材料的 JAR，按真实依赖闭包生成材料，再重新打包；随后由独立门禁按交付 JAR
+      # 的实际字节裁决，材料缺失或与闭包不一致都会让本作业失败。
+      - name: 生成第三方许可材料（发布阶段前置）
+        if: inputs.stage == 'release'
+        working-directory: 后端代码/basic-framework-boot
+        env:
+          SERVER_JAR: ${{ github.workspace }}/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar
+          MATERIALS: ${{ github.workspace }}/后端代码/basic-framework-boot/basic-framework-server/target/generated-license-materials
+          METADATA: ${{ runner.temp }}/release-evidence/license-metadata.json
+        run: |
+          mvn -B -ntp -DskipTests package
+          python -B -X utf8 scripts/license/resolve_component_metadata.py \
+            --jar "$SERVER_JAR" --allow-network \
+            --cache-dir "${{ runner.temp }}/license-net-cache" \
+            --additional-evidence scripts/license/known_license_evidence.json \
+            --out "$METADATA"
+          python -B -X utf8 scripts/license/generate_third_party_notices.py \
+            --metadata "$METADATA" --jar "$SERVER_JAR" --out-dir "$MATERIALS"
+
       - name: 运行后端测试并采集覆盖率（发布阶段）
         if: inputs.stage == 'release'
         working-directory: 后端代码/basic-framework-boot
         run: mvn -B -ntp -Pquality-audit '-Dtest=Test*,*Test,*Tests,*TestCase,*IT' -Dsurefire.failIfNoSpecifiedTests=false verify
+
+      - name: 发布阶段后端许可材料实查
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+        run: |
+          mkdir -p "$EVIDENCE"
+          python -B -X utf8 scripts/license/verify_license_materials.py \
+            --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
+            --require-prepared
+          python -B -X utf8 scripts/license/verify_license_materials.py \
+            --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
+            --require-prepared --json > "$EVIDENCE/license-backend.json"
 
       - name: 校验真实集成测试证据
         id: reports
@@ -553,6 +608,11 @@ jobs:
 
           evidence = Path(os.environ["EVIDENCE"])
           coverage = json.loads((evidence / "coverage-backend.json").read_text(encoding="utf-8"))
+          # 许可材料实查的读数取自上一步门禁真实写出的 JSON：这里只复核状态，
+          # 不在本步骤内重新编造条数；状态非 passed 会让作业在门禁那一步就已失败。
+          license_gate = json.loads((evidence / "license-backend.json").read_text(encoding="utf-8"))
+          if license_gate.get("status") != "passed" or license_gate.get("checks") is None:
+              raise SystemExit("后端许可材料实查未真实通过")
           document = {
               "schema": "ci-release-evidence/v1",
               "job": "backend",
@@ -565,6 +625,9 @@ jobs:
                   {"name": "backend-release-coverage", "status": "passed",
                    "checked": coverage["measured_files"],
                    "command": "python -B -X utf8 scripts/workflow/coverage_gate.py --kind backend --stage release --require-prepared --json"},
+                  # 该检查按交付 JAR 字节裁决，没有可与用例数比对的第二份声明，声明 null。
+                  {"name": "backend-license-materials", "status": "passed", "checked": None,
+                   "command": "python -B -X utf8 scripts/license/verify_license_materials.py --jar 后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
               ],
               "coverage": {"kind": "backend", "evidence": "coverage-backend.json", "stage": "release",
                            "measured_files": coverage["measured_files"],

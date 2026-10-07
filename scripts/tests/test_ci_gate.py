@@ -162,6 +162,9 @@ def manifest(job: str, cases: int, coverage_file: str, kind: str, measured: int,
              "command": "mvn -B -ntp -Pquality-audit -Dtest=<全部单测与集成测试命名> verify"},
             {"name": "backend-release-coverage", "status": "passed", "checked": measured,
              "command": "coverage_gate.py --kind backend --stage release --require-prepared"},
+            # 许可材料按交付 JAR 字节裁决，没有第二份可比计数，只能声明 null。
+            {"name": "backend-license-materials", "status": "passed", "checked": None,
+             "command": "verify_license_materials.py --jar <交付 JAR> --require-prepared"},
         ],
         "frontend": [
             {"name": "frontend-unit-tests", "status": "passed", "checked": cases,
@@ -175,6 +178,9 @@ def manifest(job: str, cases: int, coverage_file: str, kind: str, measured: int,
             # 全量 Web 注释的计数必须等于汇总独立复算出的受管文件数（own_count）。
             {"name": "web-comments-full", "status": "passed", "checked": managed_web_files(),
              "command": "python -B -X utf8 scripts/code/web/check_full_web_comments.py --root . --json"},
+            # 前端许可材料同样按产物字节裁决，只能声明 null。
+            {"name": "frontend-license-materials", "status": "passed", "checked": None,
+             "command": "license_materials_gate.py --root <前端工作区>"},
         ],
     }[job]
     document: dict[str, object] = {
@@ -850,8 +856,37 @@ class TestWebCommentsFullReleaseBinding:
 
     def test_missing_check_is_rejected(self, tmp_path: Path) -> None:
         """反例：缺项——docs_tools 作业跑过不算发布证据，前端证据里没有就拒绝。"""
-        directory = self.release_frontend(tmp_path, lambda checks: checks.pop())
+        def drop(checks: list[dict[str, object]]) -> None:
+            """移除全库 Web 注释那一项，其余必需检查保持完整。"""
+            checks[:] = [item for item in checks
+                         if item["name"] != "web-comments-full"]
+
+        directory = self.release_frontend(tmp_path, drop)
         with pytest.raises(ValueError, match="web-comments-full"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    def test_missing_license_material_check_is_rejected(self, tmp_path: Path) -> None:
+        """反例：缺许可材料实查证据时同样拒绝发布，漏一道门禁就不能出发布结论。"""
+        def drop(checks: list[dict[str, object]]) -> None:
+            """移除许可材料实查那一项，其余必需检查保持完整。"""
+            checks[:] = [item for item in checks
+                         if item["name"] != "frontend-license-materials"]
+
+        directory = self.release_frontend(tmp_path, drop)
+        with pytest.raises(ValueError, match="frontend-license-materials"):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    def test_missing_backend_license_material_check_is_rejected(self, tmp_path: Path) -> None:
+        """反例：后端发布证据缺许可材料实查时同样拒绝。"""
+        def drop(checks: list[dict[str, object]]) -> None:
+            """移除许可材料实查那一项，其余必需检查保持完整。"""
+            checks[:] = [item for item in checks
+                         if item["name"] != "backend-license-materials"]
+
+        document = manifest("backend", 5, "coverage-backend.json", "backend", 3)
+        drop(document["checks"])  # type: ignore[arg-type]
+        directory = evidence_directory(tmp_path, backend_manifest=document)
+        with pytest.raises(ValueError, match="backend-license-materials"):
             gate.release_evidence(directory, self.COUNTS, REVISION)
 
     @pytest.mark.parametrize("status", [

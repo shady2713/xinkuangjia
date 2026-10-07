@@ -14,11 +14,15 @@
  * 已知缺陷，测试侧不得触发。本插件的产物逻辑不依赖这两个函数，替身只用于满足导入链。
  */
 // @vitest-environment node
+import type { NormalizedOutputOptions } from 'rollup';
+
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -28,11 +32,14 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  CLOSURE_FILE,
+  CLOSURE_SCHEMA,
   collectPackages,
   LICENSES_DIR,
   NOTICES_FILE,
   packageOfModule,
   viteThirdPartyNotices,
+  writeClosureRecord,
 } from '../third-party-notices';
 
 vi.mock(
@@ -560,5 +567,84 @@ describe('材料生成', /** 材料是随包分发的第三方声明，唯一来
     expect(plugin.apply).toBe('build');
     expect(plugin.enforce).toBe('post');
     expect(plugin.generateBundle.order).toBe('post');
+  });
+});
+
+describe('分块模块表留痕', /** 压缩后的产物不再保留模块标识，门禁要复算闭包只能靠这份记录。 */ () => {
+  it('把每个分块的模块标识写进构建缓存目录且不把静态资源当成分块', /** 门禁要按分块核对"产物真正引用了哪些包"。 */ () => {
+    const root = createWorkspaceRoot();
+    const appRoot = join(root, 'apps/web-ele');
+    const first = createPackage(
+      root,
+      'trace-pkg',
+      JSON.stringify({ license: 'MIT', version: '1.0.0' }),
+    );
+
+    writeClosureRecord(
+      createBundle({
+        [moduleId(first.location, 'index.js')]: { renderedLength: 1 },
+      }) as never,
+      appRoot,
+      { dir: join(appRoot, 'dist') } as NormalizedOutputOptions,
+    );
+
+    const record = JSON.parse(
+      readFileSync(join(root, '.cache', 'build-record', CLOSURE_FILE), 'utf8'),
+    ) as { chunks: Record<string, string[]>; schema: string };
+    expect(record.schema).toBe(CLOSURE_SCHEMA);
+    expect(Object.keys(record.chunks).toSorted()).toEqual([
+      'index.js',
+      'vendor.js',
+    ]);
+    expect(record.chunks['index.js']).toEqual([
+      moduleId(first.location, 'index.js'),
+    ]);
+    expect(record.chunks['vendor.js']).toEqual([]);
+  });
+
+  it('重复构建覆盖旧记录而不是叠加', /** 叠加会让门禁读到上一次构建的模块，闭包核对就会失真。 */ () => {
+    const root = createWorkspaceRoot();
+    const appRoot = join(root, 'apps/web-ele');
+    const stale = createPackage(root, 'stale-pkg');
+    const fresh = createPackage(root, 'fresh-pkg');
+    const record = join(root, '.cache', 'build-record', CLOSURE_FILE);
+
+    writeClosureRecord(
+      createBundle({
+        [moduleId(stale.location, 'index.js')]: { renderedLength: 1 },
+      }) as never,
+      appRoot,
+      { dir: join(appRoot, 'dist') } as NormalizedOutputOptions,
+    );
+    writeClosureRecord(
+      createBundle({
+        [moduleId(fresh.location, 'index.js')]: { renderedLength: 1 },
+      }) as never,
+      appRoot,
+      { dir: join(appRoot, 'dist') } as NormalizedOutputOptions,
+    );
+
+    const document = JSON.parse(readFileSync(record, 'utf8')) as {
+      chunks: Record<string, string[]>;
+    };
+    expect(document.chunks['index.js']).toEqual([
+      moduleId(fresh.location, 'index.js'),
+    ]);
+  });
+
+  it('内存构建与非交付目录都不写记录', /** 一次内存构建覆盖记录，会让门禁把"材料与产物不是同一批"判成失败。 */ () => {
+    const root = createWorkspaceRoot();
+    const appRoot = join(root, 'apps/web-ele');
+    const pkg = createPackage(root, 'trace-pkg');
+    const record = join(root, '.cache', 'build-record', CLOSURE_FILE);
+    const bundle = createBundle({
+      [moduleId(pkg.location, 'index.js')]: { renderedLength: 1 },
+    }) as never;
+
+    writeClosureRecord(bundle, appRoot, {} as NormalizedOutputOptions);
+    writeClosureRecord(bundle, appRoot, {
+      dir: join(appRoot, '.analyze'),
+    } as NormalizedOutputOptions);
+    expect(existsSync(record)).toBe(false);
   });
 });

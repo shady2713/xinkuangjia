@@ -7,6 +7,10 @@
  * 内容摘要去重后写入 `licenses/` 目录，本文件按摘要引用，避免同一份 Apache 文本重复上百次。
  *
  * 插件不判断"是否合规"，也不为任何包补写声明：读不到 `license` 字段就如实写"未声明"。
+ *
+ * 除随包材料外，插件还把每个分块的原始模块标识写进构建缓存目录的 `license-closure.json`：
+ * 压缩后的产物不再保留模块标识，产物字节本身无法反推包闭包，留痕才能让交付物实查门禁
+ * 用**自己的**解析实现重算一遍。该文件不随交付包分发。
  */
 import type {
   NormalizedOutputOptions,
@@ -17,8 +21,14 @@ import type {
 import type { PluginOption } from 'vite';
 
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { basename, join, sep } from 'node:path';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, join, resolve, sep } from 'node:path';
 
 import { workspaceLicensePath } from './license.ts';
 
@@ -28,6 +38,14 @@ const NOTICES_FILE = 'THIRD-PARTY-NOTICES';
 const LICENSES_DIR = 'licenses';
 /** 单份许可证正文的读取上限，避免异常大的包把产物撑爆。 */
 const MAX_TEXT_BYTES = 512 * 1024;
+/** 闭包记录文件名：只写到构建缓存目录，不随交付包分发。 */
+const CLOSURE_FILE = 'license-closure.json';
+/** 闭包记录结构版本；交付物实查门禁按同一版本读取，结构变了就拒绝复用旧记录。 */
+const CLOSURE_SCHEMA = 'web-license-closure/v1';
+/** 闭包记录相对应用根目录的位置：`<前端工作区>/.cache/build-record`，该目录已在 Git 忽略内。 */
+const CLOSURE_DIRECTORY = ['..', '..', '.cache', 'build-record'];
+/** 交付产物目录名；只有写入该目录的构建才写闭包记录。 */
+const DELIVERABLE_DIRECTORY = 'dist';
 /** 许可证正文文件名：匹配 LICENSE/LICENCE/COPYING/NOTICE 开头，不区分大小写。 */
 const LICENSE_FILE_PATTERN = /^(?:licen[sc]e|copying|notice)/iu;
 
@@ -271,6 +289,49 @@ function renderNotices(
 }
 
 /**
+ * 把本次产物每个分块实际包含的模块标识留痕到构建缓存目录。
+ *
+ * 压缩后的静态产物不再保留模块标识，产物字节本身无法反推"哪些包真的进入了产物"，
+ * 因此这里按分块原样写出 Rollup 的模块标识；交付物实查门禁用自己的解析实现重算包集合，
+ * 再与随包材料比对。记录写在 `.cache` 下，不进入交付包，也不携带任何人工补写内容。
+ *
+ * **只记录真正写入交付目录的那次构建**：`bundle.generate()` 的内存构建没有输出目录，
+ * 分析或测试用的临时输出目录也不是交付物。若不区分，一次内存构建就会把记录覆盖成别的
+ * 分块集合，交付物实查门禁随即把"材料与产物不是同一批"判成失败。
+ *
+ * @param bundle 本次构建的产物集合。
+ * @param root 应用根目录。
+ * @param options Rollup 归一化后的输出选项，用于判断本次构建是否写入交付目录。
+ */
+function writeClosureRecord(
+  bundle: OutputBundle,
+  root: string,
+  options: NormalizedOutputOptions,
+): void {
+  if (
+    options.dir === undefined ||
+    resolve(options.dir) !== resolve(root, DELIVERABLE_DIRECTORY)
+  ) {
+    return;
+  }
+  const chunks: Record<string, string[]> = {};
+  for (const output of Object.values(bundle)) {
+    if (output.type !== 'chunk') {
+      continue;
+    }
+    const chunk = output as OutputChunk;
+    chunks[chunk.fileName] = Object.keys(chunk.modules);
+  }
+  const directory = join(root, ...CLOSURE_DIRECTORY);
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(
+    join(directory, CLOSURE_FILE),
+    `${JSON.stringify({ schema: CLOSURE_SCHEMA, chunks }, null, 2)}\n`,
+    'utf8',
+  );
+}
+
+/**
  * 构造第三方许可材料插件。
  * @param root 应用根目录。
  * @returns 生产构建使用的 Vite 插件。
@@ -282,13 +343,13 @@ function viteThirdPartyNotices(root = process.cwd()): PluginOption {
     generateBundle: {
       /**
        * 按产物模块汇总第三方包并输出许可材料。
-       * @param _options - Rollup 传入的输出选项，本插件不使用。
+       * @param options - Rollup 传入的输出选项；仅用于判断本次构建是否写入交付目录。
        * @param bundle - 本次构建的产物集合。
        * @this - Rollup 插件上下文，用于把材料输出为静态资源。
        */
       handler(
         this: PluginContext,
-        _options: NormalizedOutputOptions,
+        options: NormalizedOutputOptions,
         bundle: OutputBundle,
       ) {
         const records = [...collectPackages(bundle).values()].toSorted(
@@ -331,6 +392,7 @@ function viteThirdPartyNotices(root = process.cwd()): PluginOption {
           ),
           type: 'asset',
         });
+        writeClosureRecord(bundle, root, options);
       },
       order: 'post',
     },
@@ -355,10 +417,13 @@ function digestOfFile(file: string): string {
 }
 
 export {
+  CLOSURE_FILE,
+  CLOSURE_SCHEMA,
   collectPackages,
   LICENSES_DIR,
   NOTICES_FILE,
   packageOfModule,
   viteThirdPartyNotices,
+  writeClosureRecord,
 };
 export type { PackageRecord };

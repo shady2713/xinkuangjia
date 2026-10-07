@@ -63,12 +63,18 @@ RELEASE_JOBS = {
 # 范围复算（见 release_evidence），no_count 表示该检查没有机器可读对象计数，只能声明 null。
 RELEASE_CHECKS = {
     "backend": {"backend-tests-and-integration": "job_count",
-                "backend-release-coverage": "coverage_count"},
+                "backend-release-coverage": "coverage_count",
+                # 第三方许可材料必须随 JAR 分发且与实际依赖闭包一致。门禁按交付 JAR 的字节
+                # 裁决，没有可与作业用例数比对的第二份声明，因此只能声明 null；缺少这一项
+                # 会让发布汇总直接拒绝发布证据，"漏生成许可材料"不再可能发布出去。
+                "backend-license-materials": "no_count"},
     "frontend": {"frontend-unit-tests": "job_count",
                  "frontend-release-coverage": "coverage_count",
                  "frontend-typecheck": "no_count",
                  "frontend-production-build": "no_count",
                  "frontend-production-scan": "no_count",
+                 # 前端同样按产物字节实查：材料条目数必须与产物分块实际引用的包集合一致。
+                 "frontend-license-materials": "no_count",
                  # 全库 Web 注释合格只有这一个依据：docs_tools 作业里那次执行不进入发布
                  # 制品，发布结论必须自己重新执行并把实测对象数写进证据。
                  "web-comments-full": "own_count"},
