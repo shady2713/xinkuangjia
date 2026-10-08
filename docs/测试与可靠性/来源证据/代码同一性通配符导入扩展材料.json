@@ -7,7 +7,7 @@
   "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
   "repository": {
     "root": "/home/weetion/桌面/kuangjia/repo",
-    "head": "7576c8b0dfa203f61f3863996e0d3d42c5d65196",
+    "head": "a1d0d14fd5496d2bb526813e1ea39ada779d2f57",
     "branch": "codex/framework-remediation"
   },
   "java_version_and_dependencies": {
