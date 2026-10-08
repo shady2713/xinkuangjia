@@ -4,6 +4,12 @@
 每个场景的一次“迭代”对应一个用户动作，可能包含多个 HTTP 请求（例如创建后删除的 CRUD 环），
 耗时覆盖该动作的全部请求；数据库查询数按应用日志中同线程的 MyBatis 执行行统计。
 
+报告的 `build` 段同时记录两类证据：被测构件的字节摘要与大小（说明这次跑的到底是哪个
+JAR），以及源码身份 `git_revision` 与 `source_sha256`（说明这份 JAR 对应哪份代码）。
+预算按源码身份判定：构件字节摘要不可复现，同一提交在不同环境重建即不同，用它绑定会让
+判定在任何干净检出的 CI 上恒定红灯。源码身份算不出来时本工具失败退出，不产出没有绑定
+的报告——没有绑定的读数不能用于判定。
+
 凭据只从进程环境读取，不进入命令行参数、报告或日志。缺少环境时明确失败，不跳过测量。
 
 @author 李杰
@@ -28,9 +34,16 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 from urllib.parse import urlencode, urlsplit
 
+if __package__ in (None, ""):  # 直接以脚本路径运行时补上仓库根，便于复用源码身份计算。
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.perf import source_identity  # noqa: E402
+
 ADMIN_PREFIX = "/admin-api"
 REPORT_SCHEMA = "perf-report/v1"
 TOKEN_HEADER = "Authorization"
+# 仓库根：源码身份按仓库内容计算，默认从这里开始枚举。
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 # 应用日志中的应用线程前缀；后台线程（定时任务、异步日志写入）不计入请求查询数。
 REQUEST_THREAD_PREFIX = "http-nio-"
 # MyBatis 在 DEBUG 级别输出的语句开始标记，出现一次代表一次真实数据库往返。
@@ -825,7 +838,14 @@ def build_report(arguments: argparse.Namespace, target: Target) -> dict[str, Any
             "jar_sha256": arguments.jar_sha256,
             "jar_bytes": arguments.jar_bytes,
             "app_version": arguments.app_version,
+            # 构件字节摘要只作为「这次跑的是哪个 JAR」的观测值，不作为判定依据；预算按
+            # 下面两项可复现的源码身份绑定被测版本。
+            "binding_method": arguments.binding_method,
+            "source_scope": arguments.source_scope,
             "git_revision": arguments.git_revision,
+            "source_sha256": arguments.source_sha256,
+            "source_files": arguments.source_files,
+            "source_worktree": arguments.source_worktree,
         },
         "workload": {"id": arguments.workload,
                      "samples_per_scenario": arguments.samples,
@@ -877,13 +897,58 @@ def sha256_of(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), path.stat().st_size
 
 
+def resolve_source_identity(root: Path, revision: str) -> dict[str, Any]:
+    """计算本次报告使用的源码身份；算不出来就让测量失败而不是产出没有绑定的读数。
+
+    修订可以由调用方显式给出（CI 从 checkout 取 `git rev-parse HEAD` 传入），但源码内容
+    摘要必须现场计算：它才覆盖未提交改动，也才在不同机器上可复现。
+
+    Args:
+        root: 仓库根目录。
+        revision: 调用方声明的提交标识；为空时现场读取 HEAD。
+    Returns:
+        含方法、范围、修订、摘要、文件数与工作区状态的记录。
+    Raises:
+        MeasurementFailure: Git 检出不可用或源码范围缺失。
+    """
+
+    try:
+        document = source_identity.identity(root)
+    except source_identity.IdentityFailure as error:
+        raise MeasurementFailure(f"源码身份无法计算：{error}") from error
+    if revision:
+        document["git_revision"] = revision
+    return document
+
+
+def warn_if_artifact_predates_source(jar: Path | None, root: Path) -> None:
+    """被测 JAR 早于源码最新修改时间时给出提示；该提示不改写结论，只避免误读绑定。
+
+    构件是否真的由这份源码构建无法从字节反推，这里只把「时间上对不上」这一事实说出来，
+    真正的处置（重新 `--build` 或换构件）由操作者与编排流程决定。
+
+    Args:
+        jar: 被测后端 JAR；为空表示本次没有登记构件。
+        root: 仓库根目录。
+    """
+
+    if jar is None:
+        return
+    try:
+        if jar.stat().st_mtime < source_identity.newest_source_mtime(root):
+            log(f"提示：被测 JAR {jar.name} 的修改时间早于源码范围内最新的修改时间，"
+                "报告登记的源码身份可能与该 JAR 不对应；请用同一份源码重新打包")
+    except (OSError, source_identity.IdentityFailure) as error:
+        log(f"提示：无法比较被测构件与源码的时间先后（{error}）；不影响本次测量")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """执行测量并写出报告；退出 0 表示测量完成，2 表示环境或证据准备失败。
 
     Args:
         argv: 命令行参数；省略时读取真实进程参数。
     Returns:
-        0 表示报告已生成；2 表示缺少凭据、目标不可达或任一场景失败。
+        0 表示报告已生成；2 表示缺少凭据、目标不可达、源码身份不可得或任一场景失败。
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
@@ -904,7 +969,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--workload", default="w7-baseline-v1")
     parser.add_argument("--profile", default="prod")
     parser.add_argument("--app-version", default="")
-    parser.add_argument("--git-revision", default="")
+    parser.add_argument("--git-revision", default="",
+                        help="被测提交标识；为空时按 --source-root 现场读取 HEAD")
+    parser.add_argument("--source-root", default=str(REPOSITORY_ROOT),
+                        help="计算源码内容摘要的仓库根目录")
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--scenarios", nargs="*", help="只测量指定场景名，便于定位单项")
     arguments = parser.parse_args(argv)
@@ -915,15 +983,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     arguments.password = password
 
+    source_root = Path(arguments.source_root).resolve()
+    try:
+        identity = resolve_source_identity(source_root, arguments.git_revision)
+    except MeasurementFailure as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    arguments.binding_method = identity["method"]
+    arguments.source_scope = identity["scope"]
+    arguments.git_revision = identity["git_revision"]
+    arguments.source_sha256 = identity["source_sha256"]
+    arguments.source_files = identity["source_files"]
+    arguments.source_worktree = identity["source_worktree"]
+    log(f"源码身份：修订 {arguments.git_revision}、工作区 {arguments.source_worktree}、"
+        f"摘要 {arguments.source_sha256}")
+
+    jar_path = Path(arguments.jar) if arguments.jar else None
     jar_sha256, jar_bytes = ("", 0)
-    if arguments.jar:
+    if jar_path is not None:
         try:
-            jar_sha256, jar_bytes = sha256_of(Path(arguments.jar))
+            jar_sha256, jar_bytes = sha256_of(jar_path)
         except MeasurementFailure as error:
             print(str(error), file=sys.stderr)
             return 2
     arguments.jar_sha256 = jar_sha256
     arguments.jar_bytes = jar_bytes
+    warn_if_artifact_predates_source(jar_path, source_root)
 
     target = Target(arguments.base_url, arguments.timeout)
     try:

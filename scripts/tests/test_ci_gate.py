@@ -71,7 +71,9 @@ def perf_verdict(**overrides: object) -> dict[str, object]:
     """构造一份「判定通过」的性能预算结论，结构与 perf_budget.py 的真实 JSON 输出一致。
 
     budget_status 取自门禁此刻读到的那份受控预算，不写死：真实测量产出的结论本来就
-    携带它判定时那份预算的权威状态，由门禁去核对两者是否同源。
+    携带它判定时那份预算的权威状态，由门禁去核对两者是否同源。binding 段同样取真实
+    结构：门禁要独立复核「这份读数是不是本次发布的提交量出来的」，夹具必须提供可核对
+    的实测修订，不能只靠一句 `passed`。
 
     Args:
         overrides: 覆盖单个字段，用于构造少报场景、仍有问题或换预算等受控反例。
@@ -80,9 +82,15 @@ def perf_verdict(**overrides: object) -> dict[str, object]:
     """
 
     document: dict[str, object] = {
-        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v1",
+        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v2",
         "budget_status": current_budget().get("status"), "workload": "w7-baseline-v1",
         "checked": perf_scenarios(), "status": "passed", "findings": [],
+        "binding": {
+            "method": gate.PERF_BINDING_METHOD, "scope": "backend-build-inputs/v1",
+            "matched": True,
+            "declared": {"git_revision": REVISION, "source_sha256": "a" * 64},
+            "observed": {"git_revision": REVISION, "source_sha256": "a" * 64},
+        },
     }
     document.update(overrides)
     return document
@@ -1076,6 +1084,33 @@ class TestPerformanceBudgetReleaseBinding:
         assert performance["checked"] == perf_scenarios()
         assert performance["budget"] == gate.PERF_BUDGET_FILE
         assert performance["approved_by"] == "CI 规则测试"
+        assert performance["source_revision"] == REVISION
+
+    @pytest.mark.parametrize("name,mutate,pattern", [
+        ("no_binding", lambda d: d.pop("binding"),
+         "性能预算证据没有构件绑定"),
+        ("method", lambda d: d["binding"].update(method="jar-sha256/v1"),
+         "性能预算证据的构件绑定不可用"),
+        ("not_matched", lambda d: d["binding"].update(matched=False),
+         "性能预算证据的构件绑定不可用"),
+        ("no_revision", lambda d: d["binding"]["observed"].update(git_revision=""),
+         "性能预算证据绑定的源码修订与本次发布提交不一致"),
+        ("other_revision", lambda d: d["binding"]["observed"].update(git_revision="f" * 40),
+         "性能预算证据绑定的源码修订与本次发布提交不一致"),
+    ])
+    def test_binding_to_another_commit_rejects_release_evidence(
+            self, tmp_path: Path, name: str,
+            mutate: Callable[[dict[str, object]], None], pattern: str) -> None:
+        """性能读数来自别的提交时必须拒绝：构件字节摘要不可复现，绑定只能按源码身份核对。
+
+        「判定通过」本身不构成发布依据：报告里没有构件绑定、绑定方法退回不可复现的
+        构件摘要、绑定自述不相符，或实测修订不等于本次发布提交，都在这里被拒绝。
+        """
+
+        document = perf_verdict()
+        mutate(document)
+        directory = evidence_directory(tmp_path, perf=document)
+        self.assert_rejected(directory, pattern)
 
     def test_missing_check_rejects_release_evidence(self, tmp_path: Path) -> None:
         """反例：证据清单里少这一项就拒绝，"没接"与"通过"从此可区分。"""
@@ -1165,6 +1200,22 @@ class TestPerformanceBudgetReleaseBinding:
         assert '"checked": perf_checked' in evidence
         assert "perf_gate.get(\"status\") != \"passed\"" in evidence
         assert f'"name": "{PERF_CHECK}"' in section
+
+    def test_perf_step_passes_the_git_revision_used_for_the_build_binding(self) -> None:
+        """真实编排：性能步骤必须把 checkout 后的提交修订传给测量工具。
+
+        构件绑定改为源码身份之后，修订是判定的必要输入；作业未提供时报告只能给出空
+        绑定，判定会以「报告没有给出 git_revision」失败，或者更糟——某次工具改动后
+        悄悄退回不核对。取不到修订时本步骤直接失败，不产出没有绑定的读数。
+        """
+
+        step = step_named("backend", "发布阶段后端性能预算实查")
+        assert "git -C \"${{ github.workspace }}\" rev-parse HEAD" in step
+        assert '--git-revision "$PERF_GIT_REVISION"' in step
+        assert '--source-root "${{ github.workspace }}"' in step
+        assert "性能预算的构件绑定无法成立" in step
+        # 不得用 || true 或 continue-on-error 掩盖绑定取不到的情况。
+        assert "|| true" not in step and "continue-on-error:" not in step
 
 
 class TestPerformanceVerdictIsRetrievable:

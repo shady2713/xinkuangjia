@@ -4,8 +4,10 @@
 MyBatis DEBUG 日志，才能逐条统计语句执行。两轮分开采集后在同一份报告中合并，
 判定逻辑只消费合并结果，不需要知道采集分了几轮。
 
-合并只允许两份报告描述同一负载、同一构件和同一并发度；任一不一致都拒绝合并，
-避免把不同条件下的数字拼成看似可用的证据。
+合并只允许两份报告描述同一负载、同一源码身份和同一并发度；任一不一致都拒绝合并，
+避免把不同条件下的数字拼成看似可用的证据。可比性按可复现的源码身份判定（绑定方法、
+范围、提交与内容摘要），构件字节摘要只作为观测值登记、不参与比较：同一提交在不同环境
+重建出的 JAR 字节本就不同，拿它比较会把两次同源测量误判成不可比。
 
 @author 李杰
 """
@@ -19,6 +21,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 REPORT_SCHEMA = "perf-report/v1"
+# 可比性标识的字段顺序固定：少一个字段就会让两轮测量被错判为同一份或不同份。
+BINDING_FIELDS = ("binding_method", "source_scope", "git_revision", "source_sha256")
 
 
 class MergeFailure(RuntimeError):
@@ -40,12 +44,12 @@ def _load(path: Path) -> dict[str, Any]:
 
 
 def _identity(document: Mapping[str, Any]) -> tuple[Any, ...]:
-    """提取可比性标识，用于拒绝把不同负载或不同构件的报告拼在一起。"""
+    """提取可比性标识，用于拒绝把不同负载或不同源码身份的报告拼在一起。"""
 
     workload = document.get("workload") or {}
     build = document.get("build") or {}
     return (workload.get("id"), document.get("concurrency"),
-            build.get("jar_sha256"), build.get("git_revision"))
+            *(build.get(field) for field in BINDING_FIELDS))
 
 
 def merge(latency: dict[str, Any], sql: dict[str, Any]) -> dict[str, Any]:
@@ -62,7 +66,7 @@ def merge(latency: dict[str, Any], sql: dict[str, Any]) -> dict[str, Any]:
 
     if _identity(latency) != _identity(sql):
         raise MergeFailure(
-            "两份报告的负载、并发度、构件摘要或修订不一致，数字不可比："
+            "两份报告的负载、并发度或源码身份不一致，数字不可比："
             f"{_identity(latency)} != {_identity(sql)}")
 
     merged = json.loads(json.dumps(latency))

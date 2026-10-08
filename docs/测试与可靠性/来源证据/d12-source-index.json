@@ -40,7 +40,7 @@
   },
   "upstream_content": "不复制上游文件正文；上游内容按 upstream_file_url 的固定提交地址取回，并以 upstream_sha256 复算校验。",
   "producer": "由 .bf-local/d10fix/derive_index_from_ledger.py 从 registry-d12b.tsv 派生；六类指纹与行号字段由 rebind_source_index.py 从当前工作树重绑。",
-  "records_sha256": "b8b9e63e8486fa894b1474b19dc9ce9869b1fcbb1da4eb151c75d911fbeb28cd",
+  "records_sha256": "e4605fcdbd5b35bd143ef2f6bd09c5cd2427e8ecafaa3de1368ee858087f21cb",
   "synthesized_type_evidence": [
    "后端代码/basic-framework-boot/basic-framework-core/basic-framework-common/src/main/java/com/basicframework/framework/common/biz/system/dict/DictDataCommonApi.java",
    "后端代码/basic-framework-boot/basic-framework-core/basic-framework-common/src/main/java/com/basicframework/framework/common/biz/system/dict/dto/DictDataRespDTO.java",
@@ -56,8 +56,8 @@
    "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/framework/sms/core/client/dto/SmsTemplateRespDTO.java"
   ],
   "field_rebinding": {
-   "rebind_date": "2026-10-06",
-   "rebind_by": "D10 闭环方向执行代理（会话 d10close）",
+   "rebind_date": "2026-10-08",
+   "rebind_by": "来源验收方向执行代理（会话 adjud3）",
    "fields": [
     "local_sha256_after",
     "type_evidence.file.local_sha256_final",
@@ -128,7 +128,8 @@
      "type_evidence.types[].javadoc_end_line": 0,
      "type_evidence.types[].javadoc_sha256": 0
     }
-   }
+   },
+   "note": "2026-10-08 三项裁决轮次只对 AuthLoginReqVO.java 与 BasicFrameworkTranslateAutoConfiguration.java 两条记录重绑六类字段，其余 184 条未触碰（重绑前后实测不符条数：2 → 0）。；2026-10-08 三项裁决轮次只对 AuthLoginReqVO.java 与 BasicFrameworkTranslateAutoConfiguration.java 两条记录重绑六类字段，其余 184 条未触碰（重绑前后实测不符条数：2 → 0）。；2026-10-08 三项裁决轮次只对 AuthLoginReqVO.java 与 BasicFrameworkTranslateAutoConfiguration.java 两条记录重绑六类字段，其余 184 条未触碰（重绑前后实测不符条数：2 → 0）。"
   },
   "relocalization": {
    "relocalize_date": "2026-10-06",
@@ -5835,6 +5836,29 @@
     "marker_backfill_prerebind": 5,
     "neither": 0
    }
+  },
+  "adjud3_authority_decisions": {
+   "date": "2026-10-08",
+   "executor": "来源验收方向执行代理（会话 adjud3）",
+   "scope": "本轮三项裁决：D12 对 AuthLoginReqVO 的 type-author 登记阻断关闭；D18 契约改动随测试同进同出；B-1 受控撤回署名",
+   "closed_by_authority_not_by_evidence": {
+    "record": "后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthLoginReqVO.java",
+    "status": "已作出关闭决定，本轮未执行",
+    "reason": "仓库没有可表达『有权者裁决关闭』的验收状态；改判为 accepted 需伪造 C2 内容点区分力与独立复核结论",
+    "verdict_kept": "证据不足，保持原状并登记阻断"
+   },
+   "controlled_retraction": {
+    "record": "后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-mybatis/src/main/java/com/basicframework/framework/translate/config/BasicFrameworkTranslateAutoConfiguration.java",
+    "status": "已执行",
+    "from": "@author 李杰",
+    "to": "D12 格式逐项来源说明（来源验收：尚未验收）",
+    "verdict_kept": "证据不足，保持原状并登记阻断"
+   },
+   "untouched": [
+    "AuthRegisterReqVO（注册侧 @Password 与 32 位摘要协议的冲突仍未裁决）",
+    "全部判据、阈值与词表",
+    "scripts/perf/**、.github/workflows/ci.yml 与性能预算 JSON"
+   ]
   }
  },
  "records": [
@@ -7764,9 +7788,9 @@
    "scope": "backend-prod",
    "baseline_commit": "f13229e05381563dce9bae877a67e4ce98182642",
    "local_sha256_before": "ccc3b1dd04b025d8249147a5dc3dfba94af07bfe7935ddccb8cb67fb83f3c98c",
-   "local_sha256_after": "6328ac1e2033601f4475aefa8186d37443cb8720167241380dc8a4766e12b584",
+   "local_sha256_after": "62425fa1855d6ac8ac2dade854ce6e6b6fa323ae0cad751c37111875a8007f09",
    "local_bytes_before": "863",
-   "local_bytes_after": "894",
+   "local_bytes_after": "1517",
    "author_lines_before": "L11: * @author 李杰",
    "author_line_after": "L11: * @author 李杰",
    "upstream_repo_url": "https://github.com/YunaiV/ruoyi-vue-pro.git",
@@ -7782,45 +7806,68 @@
    "normalization_rules": "R1 LF 化；R2 命名空间/模块名映射 com.basicframework->cn.iocoder.yudao、basic-framework-*->yudao-*；R3 行首尾空白；R4 丢空行；R5（仅结构）去注释与 package/import；R6（仅结构）行内空白折叠",
    "tool_versions": "Python 3.12.3；difflib.SequenceMatcher(autojunk=False)；git 2.43.0；tools/{enumerate,analyze,match,plan,review}.py（SHA-256 见 证据.md §0.4）",
    "evidence_route": "路线 3（证据不足，阻断）",
-   "evidence_points": "P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「InstantiationOfUtilityClass」（上游语料 df=4） 本地 L24 / 上游 L14",
+   "evidence_points": "P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「InstantiationOfUtilityClass」（上游语料 df=4） 本地 L28 / 上游 L14",
    "author_status": "已核实来源但作者未声明",
    "author_reason": "已核实派生（p_pair 结构块+内容/签名配对：连续 5 行、实现语句 1），但固定上游版本该文件**没有 @author 标签**；按裁决 §99/§109 不凭项目名或所有者补造作者，故不改署名。",
-   "local_modification_facts": "basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 1 行，上游代码 2 行在本地被移除或改写，例如 @SuppressWarnings({\"InstantiationOfUtilityClass\", \"SpringJavaInjectionPointsAutowiringInspection\"})；import 段调整（新增 1 行、移除 2 行）；本地补充注释 11 行。",
+   "local_modification_facts": "命名空间、模块名与类名前缀适配；本地改写/新增代码 1 行，上游代码 2 行被移除或改写；import 调整（新增 1 行、移除 2 行）；补充注释 11 行；按 D12 §62/§64 受控撤回无依据署名并改写为来源说明",
    "open_gap": "①上游该固定版本未声明作者，历史引入版本仍未核实；②独立复核者缺；③来源例外证据不足：路线 2 标签经 R1–R4 复算不成立（D10 标记：路线 3）；按 D10 路线 3 复核只有 1 个独立定位对应点（内容点 1、结构点 0、签名点 0），不足两个。现有依据为：P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「InstantiationOfUtilityClass」（上游语料 df=4） 本地 L24 / 上游 L14。缺：≥2 个相互独立且有区分力的对应点（独特注释/业务内容/非通用业务结构/稀有方法名序列）及其双方行号。",
    "license_path": "ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE",
    "license_sha256": "772daf1f82a50025a74e4066050490d875feba62a49cf0ecefa1b4cc824e9a07",
    "license_copyright": "Copyright (c) 2021 ruoyi-vue-pro",
    "license_url": "https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE",
-   "review_by": "D12-174 来源证据方向执行代理（会话 d12-174，子代理）",
-   "review_date": "2026-10-06",
-   "review_conclusion": "BasicFrameworkTranslateAutoConfiguration：逐项复核未通过，独立定位对应点不足两个（现有类型 P1），按裁决 D12 §54/§144 保持原状并登记阻断。",
+   "review_by": "有权者裁决（2026-10-08 三项裁决，来源验收方向）；执行登记：来源验收方向执行代理（会话 adjud3）",
+   "review_date": "2026-10-08",
+   "review_conclusion": "BasicFrameworkTranslateAutoConfiguration（B-1）：按 D19 B-1 提案与本轮有权者裁决执行受控撤回署名——移除无依据的 @author 李杰，改为 D12 格式逐项来源说明并写可追溯撤回记录；证据路线未变，来源一类仍未验收，d12_verdict 与 d12_blocker_reason 逐字未改。",
    "diff_path": "",
    "ledger_schema_version": "d12-registry/v3",
    "ledger_base_registry_sha256": "fc35fe1baa398a25b004e476ba01505b07035dc60bbf9e8f09afb2415ad36c1d",
    "ledger_change_reason": "按裁决 D12 在同一账本内扩展逐类型来源证据 schema：补最终指纹、逐类型映射、合规证据路线、现存署名处理理由与逐项复核；D10 原值以 *_d10 列留存。",
    "local_sha256_d10_after": "ccc3b1dd04b025d8249147a5dc3dfba94af07bfe7935ddccb8cb67fb83f3c98c",
-   "local_bytes_final": "894",
+   "local_bytes_final": "1517",
    "public_type_count": "1",
    "author_text_before": "L11: * @author 李杰",
-   "author_text_after": "L11: * @author 李杰",
+   "author_text_after": "已撤回全部 @author；改写为 D12 来源说明",
    "upstream_repo_id": "YunaiV/ruoyi-vue-pro",
    "upstream_commit_fixed": "ac022b15a094cf9cf82903d429b9729e72309da5",
    "upstream_author_scan": "该固定版本对应文件全文无 @author，也无“作者：/author:”等等价作者声明",
    "evidence_route_d10": "路线 3",
    "evidence_points_d10": "p_pair 结构块+内容/签名配对：连续 5 行、实现语句 1",
-   "d12_correspondence_points": "[{\"kind\":\"P1 内容点（共享有区分力字符串字面量）\",\"fragment\":\"InstantiationOfUtilityClass\",\"literal_df\":4,\"local_lines\":[24],\"upstream_lines\":[14]}]",
+   "d12_correspondence_points": "[{\"kind\": \"P1 内容点（共享有区分力字符串字面量）\", \"fragment\": \"InstantiationOfUtilityClass\", \"literal_df\": 4, \"local_lines\": [28], \"upstream_lines\": [14]}]",
    "d12_verdict": "证据不足，保持原状并登记阻断",
    "d12_blocker_reason": "路线 2 标签经 R1–R4 复算不成立（D10 标记：路线 3）；按 D10 路线 3 复核只有 1 个独立定位对应点（内容点 1、结构点 0、签名点 0），不足两个。现有依据为：P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「InstantiationOfUtilityClass」（上游语料 df=4） 本地 L24 / 上游 L14。缺：≥2 个相互独立且有区分力的对应点（独特注释/业务内容/非通用业务结构/稀有方法名序列）及其双方行号。",
-   "retraction_reason": "",
+   "retraction_reason": "B-1 受控撤回署名（裁决 D12 §62/§64，依据 D19 B-1 提案与本轮有权者裁决，2026-10-08）：本地该 public 类型原仅带 @author 李杰 一处归属；固定上游版本 ruoyi-vue-pro@ac022b15 对应文件全文实测 0 次 @author、也无『作者：/author:』等等价声明；本地历史只有一次 squash 导入（a42baea），该提交的 blob 已是改写后形态，@author 无可核验的引入版本依据。据此按 D12 §62/§64 受控撤回该署名，替换为逐项来源说明并标注来源验收尚未验收。撤回不认定该姓名对应的人未贡献代码、恶意署名或一定误填，也不认定该署名已被证伪；撤回就是如实记录『该署名无法被证实』。本次撤回**不解决来源一类**：路线 3 仍只有 1 个独立定位对应点（内容点 1、结构点 0、签名点 0），不足两个，d12_verdict 逐字未改，该条仍是已登记阻断，署名形态由『作者标签』变为『来源说明』。",
    "license_binding": "LICENSE@ac022b15a094cf9cf82903d429b9729e72309da5 sha256=772daf1f82a50025a74e4066050490d875feba62a49cf0ecefa1b4cc824e9a07 版权主体=Copyright (c) 2021 ruoyi-vue-pro (按裁决 D12 §114 仅作许可关联，未据此推导作者)",
    "independent_review": "缺：本会话无第二名独立复核者（裁决 D12 §115 的独立复核要求未满足，已登记为缺口）",
-   "type_evidence": "{\"schema\":\"d12-type-evidence/v1\",\"file\":{\"local_path\":\"后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-mybatis/src/main/java/com/basicframework/framework/translate/config/BasicFrameworkTranslateAutoConfiguration.java\",\"upstream_repo_url\":\"https://github.com/YunaiV/ruoyi-vue-pro.git\",\"upstream_repo_id\":\"YunaiV/ruoyi-vue-pro\",\"upstream_path\":\"yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/translate/config/YudaoTranslateAutoConfiguration.java\",\"upstream_commit\":\"ac022b15a094cf9cf82903d429b9729e72309da5\",\"upstream_file_url\":\"https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/translate/config/YudaoTranslateAutoConfiguration.java\",\"upstream_sha256\":\"30d0d8a217ce41994ad674edb28618360845546935417c57b0028d1b79cc0f00\",\"local_sha256_before\":\"ccc3b1dd04b025d8249147a5dc3dfba94af07bfe7935ddccb8cb67fb83f3c98c\",\"local_sha256_final\":\"6328ac1e2033601f4475aefa8186d37443cb8720167241380dc8a4766e12b584\",\"upstream_author_declared\":false,\"history_basis\":\"fixed-witness\"},\"types\":[{\"qualified_name\":\"com.basicframework.framework.translate.config.BasicFrameworkTranslateAutoConfiguration\",\"simple_name\":\"BasicFrameworkTranslateAutoConfiguration\",\"kind\":\"class\",\"nested\":false,\"enclosing_type\":null,\"declaration_line\":15,\"javadoc_start_line\":8,\"javadoc_end_line\":13,\"javadoc_sha256\":\"b53619e1822da29814a504402e39c250e368a4b198156e612118f70b89b5ca1a\",\"source_note_present\":false,\"upstream_type\":\"cn.iocoder.yudao.framework.translate.config.YudaoTranslateAutoConfiguration\",\"upstream_type_declaration_line\":10,\"upstream_author_declared\":false,\"upstream_javadoc_present\":false,\"mapping_basis\":\"限定名经 R2 命名空间/类名前缀映射后一致\",\"author_text_before\":[\" * @author 李杰\"],\"author_text_after\":[],\"retraction_reason\":\"未撤回：证据不足，署名保持原状。\",\"review_by\":\"D12-174 来源证据方向执行代理（会话 d12-174，子代理）\",\"review_date\":\"2026-10-06\",\"review_conclusion\":\"BasicFrameworkTranslateAutoConfiguration：逐项复核未通过，独立定位对应点不足两个（现有类型 P1），按裁决 D12 §54/§144 保持原状并登记阻断。\"}]}",
+   "type_evidence": "{\"schema\":\"d12-type-evidence/v1\",\"file\":{\"local_path\":\"后端代码/basic-framework-boot/basic-framework-core/basic-framework-spring-boot-starter-mybatis/src/main/java/com/basicframework/framework/translate/config/BasicFrameworkTranslateAutoConfiguration.java\",\"upstream_repo_url\":\"https://github.com/YunaiV/ruoyi-vue-pro.git\",\"upstream_repo_id\":\"YunaiV/ruoyi-vue-pro\",\"upstream_path\":\"yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/translate/config/YudaoTranslateAutoConfiguration.java\",\"upstream_commit\":\"ac022b15a094cf9cf82903d429b9729e72309da5\",\"upstream_file_url\":\"https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/translate/config/YudaoTranslateAutoConfiguration.java\",\"upstream_sha256\":\"30d0d8a217ce41994ad674edb28618360845546935417c57b0028d1b79cc0f00\",\"local_sha256_before\":\"ccc3b1dd04b025d8249147a5dc3dfba94af07bfe7935ddccb8cb67fb83f3c98c\",\"local_sha256_final\":\"62425fa1855d6ac8ac2dade854ce6e6b6fa323ae0cad751c37111875a8007f09\",\"upstream_author_declared\":false,\"history_basis\":\"fixed-witness\"},\"types\":[{\"qualified_name\":\"com.basicframework.framework.translate.config.BasicFrameworkTranslateAutoConfiguration\",\"simple_name\":\"BasicFrameworkTranslateAutoConfiguration\",\"kind\":\"class\",\"nested\":false,\"enclosing_type\":null,\"declaration_line\":19,\"javadoc_start_line\":8,\"javadoc_end_line\":17,\"javadoc_sha256\":\"be0648629cf730cb5a57ba5267d1152c3276dd437f96ee3ea75af43caacf3ef1\",\"source_note_present\":true,\"upstream_type\":\"cn.iocoder.yudao.framework.translate.config.YudaoTranslateAutoConfiguration\",\"upstream_type_declaration_line\":10,\"upstream_author_declared\":false,\"upstream_javadoc_present\":false,\"mapping_basis\":\"限定名经 R2 命名空间/类名前缀映射后一致\",\"author_text_before\":[\" * @author 李杰\"],\"author_text_after\":[],\"retraction_reason\":\"B-1 受控撤回署名（裁决 D12 §62/§64，依据 D19 B-1 提案与本轮有权者裁决，2026-10-08）：本地该 public 类型原仅带 @author 李杰 一处归属；固定上游版本 ruoyi-vue-pro@ac022b15 对应文件全文实测 0 次 @author、也无『作者：/author:』等等价声明；本地历史只有一次 squash 导入（a42baea），该提交的 blob 已是改写后形态，@author 无可核验的引入版本依据。据此按 D12 §62/§64 受控撤回该署名，替换为逐项来源说明并标注来源验收尚未验收。撤回不认定该姓名对应的人未贡献代码、恶意署名或一定误填，也不认定该署名已被证伪；撤回就是如实记录『该署名无法被证实』。本次撤回**不解决来源一类**：路线 3 仍只有 1 个独立定位对应点（内容点 1、结构点 0、签名点 0），不足两个，d12_verdict 逐字未改，该条仍是已登记阻断，署名形态由『作者标签』变为『来源说明』。\",\"review_by\":\"有权者裁决（2026-10-08 三项裁决，来源验收方向）；执行登记：来源验收方向执行代理（会话 adjud3）\",\"review_date\":\"2026-10-08\",\"review_conclusion\":\"BasicFrameworkTranslateAutoConfiguration（B-1）：按 D19 B-1 提案与本轮有权者裁决执行受控撤回署名——移除无依据的 @author 李杰，改为 D12 格式逐项来源说明并写可追溯撤回记录；证据路线未变，来源一类仍未验收，d12_verdict 与 d12_blocker_reason 逐字未改。\"}]}",
    "evidence_branch": "",
    "author_only_contract": "",
    "content_points": "",
    "independence_reason": "",
    "counter_evidence_conclusion": "",
-   "b1_review": ""
+   "b1_review": "",
+   "retraction_decision": {
+    "date": "2026-10-08",
+    "item": "B-1",
+    "action": "受控撤回署名（D12 §62/§64）",
+    "decided_by": "有权者（本轮三项裁决）",
+    "basis_documents": [
+     "docs/测试与可靠性/裁决-D12-已核实来源但上游未声明作者.md §62/§64",
+     "docs/测试与可靠性/裁决-D19-B类五条固定基线路线3提案.md（B-1 行）",
+     "docs/测试与可靠性/待有权者决定事项.md D19 第 1 问"
+    ],
+    "executed_by": "来源验收方向执行代理（会话 adjud3）",
+    "facts": [
+     "上游固定版本对应文件 @author 实测 0 次，且无等价作者声明",
+     "本地历史只有一次 squash 导入（a42baea，2026-10-02），blob 已是改写后形态",
+     "本仓库 5 条 B 类中唯一仍带 @author 李杰 且 retraction_reason 为空的记录"
+    ],
+    "not_claimed": [
+     "不认定该姓名对应的人未贡献代码",
+     "不以任何其它姓名替换",
+     "不因撤回而认定来源关系已成立"
+    ],
+    "effect": "署名形态由『作者标签』变为『来源说明』；仍为已登记阻断，计数不变。"
+   }
   },
   {
    "record_kind": "derived-upstream-author-undeclared",
@@ -10260,9 +10307,9 @@
    "scope": "backend-prod",
    "baseline_commit": "f13229e05381563dce9bae877a67e4ce98182642",
    "local_sha256_before": "3806b0ae6d3e850604d58f84decf7c2ddd8dd192306d683607968e6137112a97",
-   "local_sha256_after": "ec24afed0e20a6d1469a06297aaccfc6ef408d9f4ea59542d609f141ec13e2f1",
+   "local_sha256_after": "1b5f86447cc51255447770022910eb4683fa6e77eb40b5a173b785f3f7f762c5",
    "local_bytes_before": "1136",
-   "local_bytes_after": "1678",
+   "local_bytes_after": "2280",
    "author_lines_before": "L16: * @author 李杰",
    "author_line_after": "L16: * @author 李杰",
    "upstream_repo_url": "https://github.com/YunaiV/ruoyi-vue-pro.git",
@@ -10278,24 +10325,24 @@
    "normalization_rules": "R1 LF 化；R2 命名空间/模块名映射 com.basicframework->cn.iocoder.yudao、basic-framework-*->yudao-*；R3 行首尾空白；R4 丢空行；R5（仅结构）去注释与 package/import；R6（仅结构）行内空白折叠",
    "tool_versions": "Python 3.12.3；difflib.SequenceMatcher(autojunk=False)；git 2.43.0；tools/{enumerate,analyze,match,plan,review}.py（SHA-256 见 证据.md §0.4）",
    "evidence_route": "路线 3",
-   "evidence_points": "P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「登录账号不能为空」（上游语料 df=1） 本地 L34 / 上游 L25；P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「密码不能为空」（上游语料 df=11） 本地 L42 / 上游 L31",
+   "evidence_points": "P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「登录账号不能为空」（上游语料 df=1） 本地 L35 / 上游 L25；P1 内容点（共享有区分力字符串字面量）：共享有区分力字面量「密码不能为空」（上游语料 df=11） 本地 L47 / 上游 L31",
    "author_status": "已核实来源但作者未声明",
    "author_reason": "已核实派生（p_content 区分性业务内容对应：共享稀有字面量 2 个/分布 2 行；样例 ['密码不能为空', '登录账号不能为空']），但固定上游版本该文件**没有 @author 标签**；按裁决 §99/§109 不凭项目名或所有者补造作者，故不改署名。",
-   "local_modification_facts": "basic-framework 命名空间、模块名与类名前缀适配；本地改写/新增代码 5 行，上游代码 19 行在本地被移除或改写，例如 @Schema(description = \"管理后台 - 账号密码登录 Request VO\")；@EqualsAndHashCode(callSuper = false)；import 段调整（新增 3 行、移除 7 行）；本地补充注释 11 行，上游注释 1 行未保留。",
+   "local_modification_facts": "basic-framework 命名空间、模块名与类名前缀适配；改写/新增 5 行，移除或改写上游 19 行；import 新增 4 行、移除 7 行；补充注释 16 行，上游注释 1 行未保留；新增@Pattern约束",
    "open_gap": "①上游该固定版本未声明作者，历史引入版本仍未核实；②独立复核者缺：本会话无第二名独立复核者；③D4 许可材料与分发覆盖由 D4 方向单独验收。 ④B1/C2 逐项重判（会话 d10close）：C2 不成立，按 D14 §120 回退阻断；已写入的来源说明保留但标记为尚未验收，不得进入“证据充分”的交付范围。",
    "license_path": "ruoyi-vue-pro@ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE",
    "license_sha256": "772daf1f82a50025a74e4066050490d875feba62a49cf0ecefa1b4cc824e9a07",
    "license_copyright": "Copyright (c) 2021 ruoyi-vue-pro",
    "license_url": "https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/LICENSE",
-   "review_by": "D10 闭环方向执行代理（会话 d10close）（B1/C2 逐项重判）",
-   "review_date": "2026-10-06",
-   "review_conclusion": "AuthLoginReqVO：D12-174 曾按「内容点≥2」更宽读法通过；D10close 按 D14 §106–§108 逐项重判，C2 不成立，按 D14 §120 回退阻断并登记。判定依据：D14 §114 明列：只有「登录账号不能为空」「密码不能为空」两个惯用校验，不能仅凭 df 与行距获得 C2 批准。",
+   "review_by": "来源验收方向执行代理（会话 adjud3）",
+   "review_date": "2026-10-08",
+   "review_conclusion": "AuthLoginReqVO：本轮按有权者裁决刷新该记录随 D18 生产字节变化而失效的事实指纹（local_sha256_after / local_bytes_after / local_bytes_final / type_evidence 内绑定 JavaDoc 指纹与三个行号 / d12_correspondence_points 的本地行号）。d12_verdict、d12_blocker_reason、blocker_reason、open_gap、evidence_route、independent_review 与全部证据判词字段逐字未改，证据缺口原样保留。",
    "diff_path": "",
    "ledger_schema_version": "d12-registry/v3",
    "ledger_base_registry_sha256": "fc35fe1baa398a25b004e476ba01505b07035dc60bbf9e8f09afb2415ad36c1d",
    "ledger_change_reason": "按裁决 D12 在同一账本内扩展逐类型来源证据 schema：补最终指纹、逐类型映射、合规证据路线、现存署名处理理由与逐项复核；D10 原值以 *_d10 列留存。",
    "local_sha256_d10_after": "3806b0ae6d3e850604d58f84decf7c2ddd8dd192306d683607968e6137112a97",
-   "local_bytes_final": "1678",
+   "local_bytes_final": "2280",
    "public_type_count": "1",
    "author_text_before": "L16: * @author 李杰",
    "author_text_after": "已撤回全部 @author；改写为 D12 来源说明",
@@ -10304,19 +10351,37 @@
    "upstream_author_scan": "该固定版本对应文件全文无 @author，也无“作者：/author:”等等价作者声明",
    "evidence_route_d10": "路线 3",
    "evidence_points_d10": "p_content 区分性业务内容对应：共享稀有字面量 2 个/分布 2 行；样例 ['密码不能为空', '登录账号不能为空']",
-   "d12_correspondence_points": "[{\"kind\":\"P1 内容点（共享有区分力字符串字面量）\",\"fragment\":\"登录账号不能为空\",\"literal_df\":1,\"local_lines\":[34],\"upstream_lines\":[25]},{\"kind\":\"P1 内容点（共享有区分力字符串字面量）\",\"fragment\":\"密码不能为空\",\"literal_df\":11,\"local_lines\":[42],\"upstream_lines\":[31]}]",
+   "d12_correspondence_points": "[{\"kind\": \"P1 内容点（共享有区分力字符串字面量）\", \"fragment\": \"登录账号不能为空\", \"literal_df\": 1, \"local_lines\": [35], \"upstream_lines\": [25]}, {\"kind\": \"P1 内容点（共享有区分力字符串字面量）\", \"fragment\": \"密码不能为空\", \"literal_df\": 11, \"local_lines\": [47], \"upstream_lines\": [31]}]",
    "d12_verdict": "证据不足，保持原状并登记阻断",
    "d12_blocker_reason": "按 D14 §106–§108 逐项重判：现有对应点不构成两个相互独立且有区分力的非通用事实。D14 §114 明列：只有「登录账号不能为空」「密码不能为空」两个惯用校验，不能仅凭 df 与行距获得 C2 批准。",
    "retraction_reason": "本地该 public 类型仅有 `@author 李杰` 一处归属，无本地创建/共同贡献记录；固定上游版本对应文件与对应类型均无作者声明，该归属无可核验依据。按裁决 D12 §62/§64 作受控撤回，替换为逐项来源说明；不认定该姓名对应的人未贡献代码。",
    "license_binding": "LICENSE@ac022b15a094cf9cf82903d429b9729e72309da5 sha256=772daf1f82a50025a74e4066050490d875feba62a49cf0ecefa1b4cc824e9a07 版权主体=Copyright (c) 2021 ruoyi-vue-pro (按裁决 D12 §114 仅作许可关联，未据此推导作者)",
    "independent_review": "缺：本会话无第二名独立复核者（裁决 D12 §115 的独立复核要求未满足，已登记为缺口）",
-   "type_evidence": "{\"schema\":\"d12-type-evidence/v1\",\"file\":{\"local_path\":\"后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_repo_url\":\"https://github.com/YunaiV/ruoyi-vue-pro.git\",\"upstream_repo_id\":\"YunaiV/ruoyi-vue-pro\",\"upstream_path\":\"yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_commit\":\"ac022b15a094cf9cf82903d429b9729e72309da5\",\"upstream_file_url\":\"https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_sha256\":\"3d40491b3f5587dc392d9d40cde9d27b8108019086d767084e8463b8461b462a\",\"local_sha256_before\":\"3806b0ae6d3e850604d58f84decf7c2ddd8dd192306d683607968e6137112a97\",\"local_sha256_final\":\"ec24afed0e20a6d1469a06297aaccfc6ef408d9f4ea59542d609f141ec13e2f1\",\"upstream_author_declared\":false,\"history_basis\":\"fixed-witness\"},\"types\":[{\"qualified_name\":\"com.basicframework.module.system.controller.admin.auth.vo.AuthLoginReqVO\",\"simple_name\":\"AuthLoginReqVO\",\"kind\":\"class\",\"nested\":false,\"enclosing_type\":null,\"declaration_line\":28,\"javadoc_start_line\":13,\"javadoc_end_line\":21,\"javadoc_sha256\":\"45a2104379aaba5782082abca0e9c145f51abf1092f627e92b361c46a05ff658\",\"source_note_present\":true,\"upstream_type\":\"cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthLoginReqVO\",\"upstream_type_declaration_line\":22,\"upstream_author_declared\":false,\"upstream_javadoc_present\":false,\"mapping_basis\":\"限定名经 R2 命名空间/类名前缀映射后一致\",\"author_text_before\":[\" * @author 李杰\"],\"author_text_after\":[],\"retraction_reason\":\"本地该 public 类型仅有 `@author 李杰` 一处归属，无本地创建/共同贡献记录；固定上游版本对应文件与对应类型均无作者声明，该归属无可核验依据。按裁决 D12 §62/§64 作受控撤回，替换为逐项来源说明；不认定该姓名对应的人未贡献代码。\",\"review_by\":\"D12-174 来源证据方向执行代理（会话 d12-174，子代理）\",\"review_date\":\"2026-10-06\",\"review_conclusion\":\"AuthLoginReqVO：逐项复核通过。定位到 2 个相互独立且有区分力的对应点（类型 P1），双方行号已登记；固定上游版本该类型无作者声明，最终指纹已复算一致，来源说明与逐类型映射绑定后成立。\"}]}",
+   "type_evidence": "{\"schema\":\"d12-type-evidence/v1\",\"file\":{\"local_path\":\"后端代码/basic-framework-boot/basic-framework-module-system/src/main/java/com/basicframework/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_repo_url\":\"https://github.com/YunaiV/ruoyi-vue-pro.git\",\"upstream_repo_id\":\"YunaiV/ruoyi-vue-pro\",\"upstream_path\":\"yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_commit\":\"ac022b15a094cf9cf82903d429b9729e72309da5\",\"upstream_file_url\":\"https://github.com/YunaiV/ruoyi-vue-pro/blob/ac022b15a094cf9cf82903d429b9729e72309da5/yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/controller/admin/auth/vo/AuthLoginReqVO.java\",\"upstream_sha256\":\"3d40491b3f5587dc392d9d40cde9d27b8108019086d767084e8463b8461b462a\",\"local_sha256_before\":\"3806b0ae6d3e850604d58f84decf7c2ddd8dd192306d683607968e6137112a97\",\"local_sha256_final\":\"1b5f86447cc51255447770022910eb4683fa6e77eb40b5a173b785f3f7f762c5\",\"upstream_author_declared\":false,\"history_basis\":\"fixed-witness\"},\"types\":[{\"qualified_name\":\"com.basicframework.module.system.controller.admin.auth.vo.AuthLoginReqVO\",\"simple_name\":\"AuthLoginReqVO\",\"kind\":\"class\",\"nested\":false,\"enclosing_type\":null,\"declaration_line\":29,\"javadoc_start_line\":14,\"javadoc_end_line\":22,\"javadoc_sha256\":\"4565ab251aced856554e26b7050e0d5f650e813c00fcaa1cdabee1fa21ffcaf7\",\"source_note_present\":true,\"upstream_type\":\"cn.iocoder.yudao.module.system.controller.admin.auth.vo.AuthLoginReqVO\",\"upstream_type_declaration_line\":22,\"upstream_author_declared\":false,\"upstream_javadoc_present\":false,\"mapping_basis\":\"限定名经 R2 命名空间/类名前缀映射后一致\",\"author_text_before\":[\" * @author 李杰\"],\"author_text_after\":[],\"retraction_reason\":\"本地该 public 类型仅有 `@author 李杰` 一处归属，无本地创建/共同贡献记录；固定上游版本对应文件与对应类型均无作者声明，该归属无可核验依据。按裁决 D12 §62/§64 作受控撤回，替换为逐项来源说明；不认定该姓名对应的人未贡献代码。\",\"review_by\":\"D12-174 来源证据方向执行代理（会话 d12-174，子代理）\",\"review_date\":\"2026-10-06\",\"review_conclusion\":\"AuthLoginReqVO：逐项复核通过。定位到 2 个相互独立且有区分力的对应点（类型 P1），双方行号已登记；固定上游版本该类型无作者声明，最终指纹已复算一致，来源说明与逐类型映射绑定后成立。\"}]}",
    "evidence_branch": "",
    "author_only_contract": "",
    "content_points": "",
    "independence_reason": "",
    "counter_evidence_conclusion": "",
-   "b1_review": "{\"standard\":\"裁决 D14 §101–§110（C2-independent-content）与 §118（两项仅结构点）\",\"reviewer\":\"D10 闭环方向执行代理（会话 d10close）\",\"review_date\":\"2026-10-06\",\"verdict\":\"blocked\",\"points\":{\"1\":{\"code\":\"N\",\"reason\":\"惯用校验消息（不能为空 / 长度上限 / 必须为枚举值），D14 §106 排除\"},\"2\":{\"code\":\"N\",\"reason\":\"惯用校验消息（不能为空 / 长度上限 / 必须为枚举值），D14 §106 排除\"}},\"reason\":\"D14 §114 明列：只有「登录账号不能为空」「密码不能为空」两个惯用校验，不能仅凭 df 与行距获得 C2 批准。\",\"fallback\":\"证据不足，保持原状并登记阻断\"}"
+   "b1_review": "{\"standard\":\"裁决 D14 §101–§110（C2-independent-content）与 §118（两项仅结构点）\",\"reviewer\":\"D10 闭环方向执行代理（会话 d10close）\",\"review_date\":\"2026-10-06\",\"verdict\":\"blocked\",\"points\":{\"1\":{\"code\":\"N\",\"reason\":\"惯用校验消息（不能为空 / 长度上限 / 必须为枚举值），D14 §106 排除\"},\"2\":{\"code\":\"N\",\"reason\":\"惯用校验消息（不能为空 / 长度上限 / 必须为枚举值），D14 §106 排除\"}},\"reason\":\"D14 §114 明列：只有「登录账号不能为空」「密码不能为空」两个惯用校验，不能仅凭 df 与行距获得 C2 批准。\",\"fallback\":\"证据不足，保持原状并登记阻断\"}",
+   "authority_closure_decision": {
+    "date": "2026-10-08",
+    "scope": "仅本条记录的 type-author 已登记阻断；该文件其它 finding 按实际处理",
+    "decided_by": "有权者（本轮三项裁决）",
+    "basis": "有权者裁决；**不是**证据补齐",
+    "evidence_recomputed_before_decision": [
+     "本地与上游 SHA-256 逐条复算一致",
+     "绑定 JavaDoc 指纹 javadoc_sha256 与索引登记一致",
+     "两个 C2 内容点的双方行号与索引登记一致",
+     "固定上游文件 @author 实测 0 次",
+     "受控快照为 --depth 1 产物且无 .git，不存在历史引入版本路径"
+    ],
+    "conclusion_of_recomputation": "没有任何可合法补刷的字段；证据本来就补不齐。",
+    "execution_status": "未执行——见 execution_blocked_reason",
+    "execution_blocked_reason": "本仓库没有『有权者裁决关闭』这一机器可表达的验收状态：判词词表只有 5 个已定义取值，不在其中的取值按 D15 §115 硬失败。让本条不再报 finding 的唯一既有路径是把 d12_verdict 改成SOURCE_NOTE_ACCEPTED_VERDICTS 之一并让文件内『来源验收：』标注与之一致。scripts/tests/test_java_author_evidence.py::test_repository_source_index_covers_applied_objects 对每条已验收来源说明记录强制要求：independent_review 以『复核方：』开头、b1_review 含『D14 §118/§132 逐项判断』、每个 P1/P2 内容点带 discrimination_reason 与含固定提交与 df= 的 corpus_binding。本记录的 D14 §114 重判已逐条否证 C2（只有两个惯用校验消息），且本会话无第二名独立复核者；补齐上述字段等于编造内容点区分力与独立复核结论，违反『不得编造证据』。因此本轮不改判词、不伪造字段。",
+    "measured_gate_impact": "实测：AuthLoginReqVO.java 一旦进入暂存区，check_staged_quality.py 必然退出 1 并报出该 type-author finding，即使显式传 --maintenance 也一样——scripts/code/java/check_staged_java_comments.py 的 _new_documentation_findings 内部以严格模式（maintenance 默认 False）重扫，且对 evidence_bound=True 的 finding 无条件保留；该函数签名不接受 maintenance 参数。因此『提交路径属于裁决 D15 所说的维护检查，允许以执行完成+存在已登记阻断结束』这一契约在增量入口上未被实现。同一缺陷同样使 B-1 的受控撤回署名无法通过暂存检查。本轮未改检查器：该改动会改变全部 162 条已登记阻断的提交门禁语义，超出本轮三项裁决授权范围。scripts/tests 下没有任何用例钉住该行为（test_staged_checkers.py 与 test_staged_quality.py 中检索不到 blocker/registered）。",
+    "not_done_because": "编造证据的成本高于如实保留阻断"
+   }
   },
   {
    "record_kind": "derived-upstream-author-undeclared",

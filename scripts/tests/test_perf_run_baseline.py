@@ -557,15 +557,20 @@ def test_verdict_findings_are_echoed_to_stdout(tmp_path: Path, capsys: pytest.Ca
     """
 
     path = write_verdict(tmp_path / "verdict.json", {
-        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v1",
+        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v2",
         "status": "failed", "checked": 9, "workload": "w7-baseline-v1",
+        "binding": {"method": "git-source-id/v1", "scope": "backend-build-inputs/v1",
+                    "matched": False,
+                    "declared": {"git_revision": "a" * 40, "source_sha256": "b" * 64},
+                    "observed": {"git_revision": "c" * 40, "source_sha256": "d" * 64}},
         "findings": [
             {"kind": "over-budget", "scenario": "auth-login", "metric": "p95_ms",
              "observed": 900.0, "allowed": 170.0, "message": "p95 900.0 ms 超过预算 170.0 ms"},
             {"kind": "scenario-missing", "scenario": "dict-type-page", "metric": "samples",
              "observed": None, "allowed": None, "message": "报告中没有该场景的测量结果"},
-            {"kind": "build-mismatch", "scenario": "*", "metric": "jar_sha256",
-             "observed": None, "allowed": None, "message": "报告构件与预算声明的摘要不一致"},
+            {"kind": "build-mismatch", "scenario": "*", "metric": "source_sha256",
+             "observed": None, "allowed": None,
+             "message": "报告源码摘要与预算声明不一致，测的不是被校准的那份代码"},
         ],
     })
 
@@ -575,7 +580,11 @@ def test_verdict_findings_are_echoed_to_stdout(tmp_path: Path, capsys: pytest.Ca
     assert "[over-budget]" in out and "auth-login" in out and "p95_ms" in out
     assert "900.0" in out and "170.0" in out
     assert "[scenario-missing]" in out and "dict-type-page" in out
-    assert "[build-mismatch]" in out and "jar_sha256" in out
+    assert "[build-mismatch]" in out and "source_sha256" in out
+    # 绑定结论必须单独回显：换了绑定方式之后，「测的是不是被校准的那份代码」不能只
+    # 藏在某个 finding 文字里。
+    assert "构件绑定 git-source-id/v1：不相符" in out
+    assert "c" * 40 in out and "a" * 40 in out
     assert "状态 failed" in out and "实际核对场景 9 个" in out
 
 
@@ -613,7 +622,11 @@ def test_failed_verdict_without_findings_is_still_reported(tmp_path: Path,
 
 def test_orchestrate_maps_verdict_exit_code_without_swallowing(tmp_path: Path,
                                                               monkeypatch: pytest.MonkeyPatch) -> None:
-    """退出码仍按判定进程的真实结果传递：0 → 0，非 0 → 1，2 也不会被当成通过。"""
+    """退出码仍按判定进程的真实结果传递：0 → 0、1 → 1、2 → 2。
+
+    2 表示「报告或预算本身不可用」（例如预算未回填可复现的源码身份），与「测了但没
+    达标」是两类问题；把它折叠成 1 会让预算不可用看起来像一次普通超标。
+    """
 
     arguments = harness.parse_arguments(["--out-dir", str(tmp_path / "out")])
     resources = harness.Resources(workspace=tmp_path)
@@ -668,4 +681,50 @@ def test_orchestrate_maps_verdict_exit_code_without_swallowing(tmp_path: Path,
                                harness.DEFAULT_JAR) == 1
     install_verdict(2)
     assert harness.orchestrate(arguments, resources, mysql_target, S3, "java",
-                               harness.DEFAULT_JAR) == 1
+                               harness.DEFAULT_JAR) == 2
+
+
+def test_measurement_rounds_receive_the_reproducible_binding_arguments(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """两轮测量都必须带上构件绑定所需的两项参数：修订与源码根。
+
+    绑定退化成空值等于关掉构件核对，因此这里钉住参数确实出现在真实命令行里，而不是
+    依赖测量工具的默认值在某个环境下恰好可用。
+    """
+
+    recorded: list[list[str]] = []
+    arguments = harness.parse_arguments(["--out-dir", str(tmp_path / "out"),
+                                        "--git-revision", "0" * 40,
+                                        "--source-root", str(tmp_path / "source")])
+    resources = harness.Resources(workspace=tmp_path)
+    resources.database = ISOLATED_DATABASE
+    resources.redis = REDIS
+    monkeypatch.setattr(harness, "create_database", lambda *_: None)
+    monkeypatch.setattr(harness, "import_schema", lambda *_: None)
+    monkeypatch.setattr(harness, "seed_dataset", lambda *_: None)
+    monkeypatch.setattr(harness.isolation, "bootstrap_admin", lambda *_: None)
+    monkeypatch.setattr(harness.isolation, "wait_for_http", lambda *_: True)
+    monkeypatch.setattr(harness, "start_backend", lambda *_: PopenRecorder())
+    monkeypatch.setattr(harness, "stop_backend", lambda *_: None)
+    monkeypatch.setattr(harness.seeder, "seed", lambda *_, **__: None)
+    monkeypatch.setattr(harness, "log", lambda message: None)
+
+    def recording_run_tool(module: str, arguments_: list[str], environment: dict[str, str],
+                           capture: Path | None = None) -> int:
+        """记录测量轮的真实命令行，并让判定写出空结论以便流程走完。"""
+
+        if module == "scripts.perf.measure_endpoints":
+            recorded.append(list(arguments_))
+            return 0
+        if capture is not None:
+            write_verdict(capture, {"status": "failed", "checked": 0,
+                                    "workload": "w7-baseline-v1", "findings": []})
+        return 0
+
+    monkeypatch.setattr(harness, "run_tool", recording_run_tool)
+    harness.orchestrate(arguments, resources, target(), S3, "java", harness.DEFAULT_JAR)
+
+    assert len(recorded) == 2, recorded
+    for command in recorded:
+        assert command[command.index("--git-revision") + 1] == "0" * 40
+        assert command[command.index("--source-root") + 1] == str(tmp_path / "source")

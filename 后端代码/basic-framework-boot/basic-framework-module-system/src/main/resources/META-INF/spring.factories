@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  com.basicframework.module.system.framework.sms.config.SmsCodeDeprecatedKeyReporter

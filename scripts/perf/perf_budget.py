@@ -7,10 +7,18 @@
 报告结构（perf-report/v1）中的 samples_ms 必须保留全部原始样本，判定只用报告内的
 统计量，但保留原始样本使判定可被复核。
 
-预算文件结构（perf-budget/v1）同时表达两类依据：
+预算文件结构（perf-budget/v2）同时表达三类依据：
 
 * 绝对预算：响应分位数与单次请求数据库查询数的上限。
 * 回归预算：相对同一负载参考基线的允许增量比例，避免只回答“比上次快”。
+* 构件绑定：`applies_to.build` 声明本次校准对应的源码身份，被测报告必须给出同一身份。
+
+构件绑定为什么是 Git 修订加源码内容摘要、而不是构件字节摘要：Maven 重建出来的 JAR
+不可复现，同一提交在不同机器或不同时刻重建即得到不同 SHA-256，用它绑定会让
+`build-mismatch` 在任何一次干净检出的 CI 上必现（同一提交实测 `c0a94da8…` 与
+`71371e1b…`）。`perf-budget/v1` 以 `jar_sha256` 绑定的方式因此退役：绑定方式换了不等于
+问题消失，本模块对该字段给出配置错误（退出码 2），并在预算未绑定可复现源码身份时同样
+拒绝判定，绝不退化为“不再核对构件”。
 
 @author 李杰
 """
@@ -25,9 +33,32 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+if __package__ in (None, ""):  # 直接以脚本路径运行时补上仓库根，便于复用同包绑定常量。
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.perf import source_identity  # noqa: E402
+
 REPORT_SCHEMA = "perf-report/v1"
-BUDGET_SCHEMA = "perf-budget/v1"
+BUDGET_SCHEMA = "perf-budget/v2"
 CHECK_NAME = "性能预算"
+
+# 上一版结构以构件字节摘要绑定被测版本；该依据不可复现，已退役。仍然按 v1 提交的预算
+# 文件必须被明确拒绝并给出迁移指引，不能被当成“没有绑定要求”而静默放行。
+RETIRED_BUDGET_SCHEMA = "perf-budget/v1"
+RETIRED_BINDING_FIELD = "jar_sha256"
+RETIRED_BUDGET_REASON = (
+    "以构件字节摘要绑定被测版本的方式已退役：Maven 重建的 JAR 摘要不可复现，"
+    "同一提交在不同环境重建即不同（例如同一提交实测 c0a94da8… 与 71371e1b…），"
+    f"用它绑定会让 build-mismatch 在任何一次干净检出的 CI 上必现。请迁移到 {BUDGET_SCHEMA}，"
+    f"在 applies_to.build 声明 binding_method={source_identity.METHOD}、source_scope="
+    f"{source_identity.SCOPE} 与 git_revision、source_sha256，并在目标环境重新校准。"
+)
+
+# 构件绑定的可比字段：方法与范围决定两次测量是否同一口径，提交与内容摘要决定测的是不是
+# 被校准的那份代码。四项都只由 `source_identity` 定义，不在本模块另写一份字面量。
+BINDING_METHOD = source_identity.METHOD
+BINDING_SCOPE = source_identity.SCOPE
+BINDING_FIELDS = {"git_revision": 40, "source_sha256": 64}
 
 # 判定使用的分位数与对应预算字段。p99 与 p95 分别核对，任一超限即失败。
 PERCENTILES = ((50, "p50_ms"), (95, "p95_ms"), (99, "p99_ms"))
@@ -102,12 +133,15 @@ def summarize(samples_ms: Sequence[float]) -> dict[str, float]:
     }
 
 
-def load_document(path: Path, expected_schema: str) -> dict[str, Any]:
+def load_document(path: Path, expected_schema: str,
+                  retired: Mapping[str, str] | None = None) -> dict[str, Any]:
     """读取并校验结构版本，缺失、非 JSON 或结构不符都作为配置错误拒绝。
 
     Args:
         path: 报告或预算文件位置。
         expected_schema: 期望的顶层 schema 标识。
+        retired: 已退役结构版本到退役原因的映射；命中时给出可执行的迁移说明而不是
+            只说「版本不对」，让操作者能直接知道旧依据为什么不可用。
     Returns:
         解析后的顶层对象。
     Raises:
@@ -122,9 +156,144 @@ def load_document(path: Path, expected_schema: str) -> dict[str, Any]:
         raise ValueError(f"{path} 不是合法 JSON：{error}") from error
     if not isinstance(document, dict):
         raise ValueError(f"{path} 的顶层必须是 JSON 对象")
-    if document.get("schema") != expected_schema:
+    declared = document.get("schema")
+    if declared != expected_schema:
+        reason = (retired or {}).get(str(declared))
+        if reason:
+            raise ValueError(f"{path} 仍是 {declared}：{reason}")
         raise ValueError(f"{path} 的 schema 必须是 {expected_schema}")
     return document
+
+
+def _hex_text(value: object, length: int) -> str | None:
+    """校验十六进制定长文本；不是定长文本时返回 ``None``，布尔等类型自然被排除。"""
+
+    if not isinstance(value, str) or len(value) != length:
+        return None
+    if any(character not in "0123456789abcdef" for character in value):
+        return None
+    return value
+
+
+def binding_expectation(budget: Mapping[str, Any]) -> dict[str, str]:
+    """取出预算声明的构件绑定；声明本身不可用时按配置错误拒绝而不是默认放行。
+
+    预算必须声明受支持的绑定方法、范围与两项可复现身份。缺任何一项都意味着「这份预算
+    无法证明读数来自被校准的那份代码」，此时若放行等于把绑定判定整体关掉，因此这里一律
+    抛配置错误，由入口转成退出码 2。
+
+    Args:
+        budget: 已解析的 perf-budget/v2 对象。
+    Returns:
+        绑定方法、范围与两项身份字段。
+    Raises:
+        ValueError: 仍按退役的构件字节摘要绑定、方法或范围不支持、或缺少/填错身份字段。
+    """
+
+    applies = budget.get("applies_to") or {}
+    build = applies.get("build")
+    if not isinstance(build, dict):
+        raise ValueError("预算文件必须在 applies_to.build 中声明构件绑定")
+    if RETIRED_BINDING_FIELD in build:
+        raise ValueError(
+            f"预算文件仍以 {RETIRED_BINDING_FIELD} 绑定被测版本：{RETIRED_BUDGET_REASON}"
+        )
+    state = build.get("binding_state")
+    method = build.get("binding_method")
+    if method != BINDING_METHOD:
+        raise ValueError(
+            f"预算文件的 binding_method 必须声明为 {BINDING_METHOD}"
+            f"（当前 {method!r}，binding_state={state!r}）"
+        )
+    scope = build.get("source_scope")
+    if scope != BINDING_SCOPE:
+        raise ValueError(
+            f"预算文件的 source_scope 必须声明为 {BINDING_SCOPE}"
+            f"（当前 {scope!r}，binding_state={state!r}）"
+        )
+    expected = {"binding_method": str(method), "source_scope": str(scope)}
+    for field, length in BINDING_FIELDS.items():
+        value = _hex_text(build.get(field), length)
+        if value is None:
+            raise ValueError(
+                f"预算文件的构件绑定缺少可用的 {field}（binding_state={state!r}）："
+                f"必须回填 {length} 位小写十六进制；绑定未回填前本预算不能作为判定依据，"
+                "需要在目标环境重新校准"
+            )
+        expected[field] = value
+    return expected
+
+
+def binding_findings(report: Mapping[str, Any], expected: Mapping[str, str]) -> list[Finding]:
+    """核对实测报告是否就是预算所绑定的那份代码，并区分「不符」与「根本没给证据」。
+
+    两类问题的处置不同，因此分成两种 kind：口径不同或身份不符判 ``build-mismatch`` /
+    ``build-binding-mismatch``（测的不是被校准的那份代码，数字不可用于判定）；报告完全
+    没有给出绑定证据判 ``build-binding-missing``（证据缺口，同样不能算通过）。两者都让
+    判定失败，绝不因为换了绑定方式就消失。
+
+    Args:
+        report: 已解析的 perf-report/v1 对象。
+        expected: 预算声明的绑定。
+    Returns:
+        绑定不一致或绑定证据缺失的问题；空列表表示实测报告与被校准代码同源。
+    """
+
+    build = report.get("build")
+    build = build if isinstance(build, dict) else {}
+    findings: list[Finding] = []
+    for field in ("binding_method", "source_scope"):
+        observed = build.get(field)
+        if observed != expected[field]:
+            findings.append(Finding(
+                "build-binding-mismatch", "*", field, None, None,
+                f"报告 {field}={observed!r} 与预算声明的 {expected[field]!r} 不一致，"
+                "两次测量的绑定口径不可比",
+            ))
+    for field in BINDING_FIELDS:
+        observed = build.get(field)
+        if not isinstance(observed, str) or not observed:
+            findings.append(Finding(
+                "build-binding-missing", "*", field, None, None,
+                f"报告没有给出 {field}，无法证明读数来自预算所绑定的源码",
+            ))
+        elif observed != expected[field]:
+            findings.append(Finding(
+                "build-mismatch", "*", field, None, None,
+                f"报告 {field}={observed} 与预算声明的 {expected[field]} 不一致，"
+                "测的不是被校准的那份代码",
+            ))
+    return findings
+
+
+def binding_summary(report: Mapping[str, Any], budget: Mapping[str, Any],
+                    findings: Sequence[Finding]) -> dict[str, Any]:
+    """汇总判定实际使用的绑定，供日志、制品与发布证据核对。
+
+    Args:
+        report: 已解析的 perf-report/v1 对象。
+        budget: 已解析的 perf-budget/v2 对象。
+        findings: 本次判定产生的问题；用于给出绑定是否成立的结论。
+    Returns:
+        含方法、范围、预算声明值、实测值与是否一致的记录。
+    """
+
+    declared_build = (budget.get("applies_to") or {}).get("build")
+    declared_build = declared_build if isinstance(declared_build, dict) else {}
+    build = report.get("build")
+    build = build if isinstance(build, dict) else {}
+    observed = {field: build.get(field) for field in ("binding_method", "source_scope",
+                                                      *BINDING_FIELDS)}
+    matched = not any(item.kind.startswith("build-") for item in findings)
+    return {
+        "method": BINDING_METHOD,
+        "scope": BINDING_SCOPE,
+        "declared": {field: declared_build.get(field) for field in ("binding_method",
+                                                                     "source_scope",
+                                                                     *BINDING_FIELDS)},
+        "observed": observed,
+        "matched": matched,
+    }
 
 
 def _scenario_samples(scenario: Mapping[str, Any]) -> list[float]:
@@ -237,7 +406,7 @@ def evaluate(report: Mapping[str, Any], budget: Mapping[str, Any]) -> list[Findi
 
     Args:
         report: 已解析的 perf-report/v1 对象。
-        budget: 已解析的 perf-budget/v1 对象。
+        budget: 已解析的 perf-budget/v2 对象。
     Returns:
         所有证据缺口与超预算问题，空列表表示全部满足。
     Raises:
@@ -268,16 +437,10 @@ def evaluate(report: Mapping[str, Any], budget: Mapping[str, Any]) -> list[Findi
             float(applies.get("concurrency")), "报告并发度与预算适用并发度不一致",
         ))
 
-    # 结果必须对应预算声明的实际构建；构件摘要不同说明报告来自别的版本，数字不可用于判定。
-    expected_build = applies.get("build") or {}
-    report_build = report.get("build") or {}
-    for field in ("jar_sha256", "git_revision"):
-        expected = expected_build.get(field)
-        if expected and expected != report_build.get(field):
-            findings.append(Finding(
-                "build-mismatch", "*", field, None, None,
-                f"报告构件 {field}={report_build.get(field)!r} 与预算声明的 {expected!r} 不一致",
-            ))
+    # 结果必须对应预算声明的那份源码：读数只对被校准的代码成立，绑定不符时下面各项
+    # 指标即使达标也不能算通过。绑定先单独核对，使「测的不是被校准的提交」与「该提交
+    # 的某项指标超限」在结论里分列为不同 kind，不混为一类。
+    findings.extend(binding_findings(report, binding_expectation(budget)))
 
     findings.extend(_resource_findings(report, budget))
 
@@ -389,7 +552,18 @@ def evaluate(report: Mapping[str, Any], budget: Mapping[str, Any]) -> list[Findi
 
 
 def payload(report: Mapping[str, Any], budget: Mapping[str, Any], findings: Sequence[Finding]) -> dict[str, object]:
-    """生成结构化结果；checked 取实际参与判定的场景数，不用计划数量代替。"""
+    """生成结构化结果；checked 取实际参与判定的场景数，不用计划数量代替。
+
+    结论必须自带构件绑定的期望值与实测值：绑定是否成立是发布证据链要独立复核的一项，
+    只留一个 `build-mismatch` 文字结论会让复核方无从判断「测的是哪份代码」。
+
+    Args:
+        report: 已解析的 perf-report/v1 对象。
+        budget: 已解析的 perf-budget/v2 对象。
+        findings: 本次判定产生的问题。
+    Returns:
+        可直接写成发布证据的结构化结论。
+    """
 
     budget_scenarios = budget.get("scenarios") or {}
     report_scenarios = report.get("scenarios") or {}
@@ -401,6 +575,7 @@ def payload(report: Mapping[str, Any], budget: Mapping[str, Any], findings: Sequ
         "budget_status": budget.get("status"),
         "workload": (report.get("workload") or {}).get("id"),
         "checked": checked,
+        "binding": binding_summary(report, budget, findings),
         "status": "failed" if findings else "passed",
         "findings": [
             {
@@ -413,22 +588,25 @@ def payload(report: Mapping[str, Any], budget: Mapping[str, Any], findings: Sequ
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """执行预算核对并按结果返回退出码：0 通过、1 超预算、2 输入不可用。
+    """执行预算核对并按结果返回退出码：0 通过、1 超预算或绑定不符、2 输入不可用。
 
     Args:
         argv: 命令行参数；省略时读取真实进程参数。
     Returns:
-        0 表示全部满足；1 表示存在超预算或证据不足；2 表示报告或预算本身不可用。
+        0 表示全部满足；1 表示存在超预算、证据不足或构件绑定不符；2 表示报告、预算或
+        预算声明的构件绑定本身不可用。
     """
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", required=True, help="本次实测生成的 perf-report/v1 文件")
-    parser.add_argument("--budgets", required=True, help="受版本控制的 perf-budget/v1 文件")
+    parser.add_argument("--budgets", required=True,
+                        help=f"受版本控制的 {BUDGET_SCHEMA} 文件")
     parser.add_argument("--json", action="store_true", help="输出结构化结果")
     args = parser.parse_args(argv)
     try:
         report = load_document(Path(args.report), REPORT_SCHEMA)
-        budget = load_document(Path(args.budgets), BUDGET_SCHEMA)
+        budget = load_document(Path(args.budgets), BUDGET_SCHEMA,
+                               retired={RETIRED_BUDGET_SCHEMA: RETIRED_BUDGET_REASON})
         findings = evaluate(report, budget)
     except ValueError as error:
         print(f"性能预算核对无法执行：{error}", file=sys.stderr)
@@ -437,7 +615,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False))
     else:
-        print(f"性能预算核对：检查 {result['checked']} 个场景，{len(findings)} 项问题")
+        binding = result["binding"]
+        print(f"性能预算核对：检查 {result['checked']} 个场景，{len(findings)} 项问题；"
+              f"构件绑定 {binding['method']} {'相符' if binding['matched'] else '不相符'}"
+              f"（实测修订 {binding['observed']['git_revision']}、"
+              f"预算修订 {binding['declared']['git_revision']}）")
         for item in findings:
             print(f"  [{item.kind}] {item.scenario} {item.metric}：{item.message}")
     return 1 if findings else 0

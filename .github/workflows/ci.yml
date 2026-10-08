@@ -601,8 +601,14 @@ jobs:
       # 最后把**原退出码**交给作业判定：诊断可得，失败也不会被改写。
       #
       # 结论 verdict.json 原样复制为发布证据，汇总门禁随后独立复核——包括预算是否
-      # 已获有权者批准。当前 baseline-2026-10-07.json 仍是 proposed-awaiting-authority，
-      # 汇总会因此拒绝发布证据：这是正确行为，本步骤不改写预算状态，也不提供豁免。
+      # 已获有权者批准、读数是否绑定本次发布的提交。当前 baseline-2026-10-07.json 仍是
+      # proposed-awaiting-authority，汇总会因此拒绝发布证据：这是正确行为，本步骤不改写
+      # 预算状态，也不提供豁免。
+      #
+      # 构件绑定：预算按 git_revision + source_sha256 绑定被测版本（perf-budget/v2），
+      # 构件字节摘要不可复现、不能当绑定依据。作业已完成 checkout，因此显式取 HEAD 传入
+      # 测量工具，让报告里的源码修订与本次构建同源；取不到修订就意味着绑定无法成立，
+      # 此时直接失败而不是产出一份没有绑定的读数。
       - name: 发布阶段后端性能预算实查
         if: inputs.stage == 'release'
         env:
@@ -610,11 +616,18 @@ jobs:
           PERF_OUT: ${{ runner.temp }}/perf-baseline
         run: |
           mkdir -p "$EVIDENCE"
+          if ! PERF_GIT_REVISION="$(git -C "${{ github.workspace }}" rev-parse HEAD)"; then
+            echo "无法取得被测提交的 git 修订，性能预算的构件绑定无法成立" >&2
+            exit 2
+          fi
+          echo "性能测量源码修订：$PERF_GIT_REVISION"
           set +e
           python -B -X utf8 "${{ github.workspace }}"/scripts/perf/run_baseline.py \
             --out-dir "$PERF_OUT" \
             --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
-            --budgets "${{ github.workspace }}"/scripts/perf/budgets/baseline-2026-10-07.json
+            --budgets "${{ github.workspace }}"/scripts/perf/budgets/baseline-2026-10-07.json \
+            --git-revision "$PERF_GIT_REVISION" \
+            --source-root "${{ github.workspace }}"
           status=$?
           set -e
           # 判定结论只要存在就归档并整份回显到日志：日志与制品读到的是同一份字节。

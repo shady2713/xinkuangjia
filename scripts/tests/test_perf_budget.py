@@ -1,8 +1,9 @@
 """验证性能预算判定：正常通过，以及超预算、证据不足、版本不符等受控反例必须失败。
 
-反例覆盖两类容易“看起来通过”的情形：一类是把预算调紧后仍返回通过，说明阈值比较没有真的生效；
-另一类是报告缺少样本、请求失败或没有查询数证据时被判为通过，等于把未执行测量当成合规。
-这些反例同时是 A12 变异对照的判定侧依据。
+从「看起来通过」的两类情形切进去：把预算调紧后仍返回通过，说明阈值比较没有真的生效；
+报告缺少样本、请求失败或没有查询数证据时被判为通过，等于把未执行测量当成合规。
+构件绑定单独成组：换成可复现的源码身份之后，**测的不是被校准的那份代码仍然必须失败**，
+而绑定成立时又不能把别的指标超限混进绑定结论。这些反例同时是 A12 变异对照的判定侧依据。
 
 @author 李杰
 """
@@ -15,11 +16,37 @@ from pathlib import Path
 
 import pytest
 
-from scripts.perf import perf_budget, merge_reports
+from scripts.perf import perf_budget, merge_reports, source_identity
 
 ROOT = Path(__file__).resolve().parents[2]
-BUDGET_FILE = ROOT / "scripts" / "perf" / "budgets" / "baseline-w7.json"
+BUDGET_FILE = ROOT / "scripts" / "perf" / "budgets" / "baseline-2026-10-07.json"
 BUILD = "a" * 64
+REVISION = "0123456789abcdef0123456789abcdef01234567"
+
+
+def binding_block(**overrides: object) -> dict[str, object]:
+    """构造预算侧的可复现绑定声明；预算不得再出现构件字节摘要。"""
+
+    document: dict[str, object] = {
+        "binding_method": perf_budget.BINDING_METHOD,
+        "source_scope": perf_budget.BINDING_SCOPE,
+        "git_revision": REVISION,
+        "source_sha256": BUILD,
+    }
+    document.update(overrides)
+    return document
+
+
+def build_block(**overrides: object) -> dict[str, object]:
+    """构造报告侧的构件段：绑定证据加一条**不同**的构件字节摘要观测值。
+
+    ``jar_sha256`` 只作「这次跑的到底是哪个 JAR」的记录：与预算不同也不改变判定结果，
+    用来钉住绑定依据确实换了，而不是把同一个不可复现的摘要换了个字段名继续用。
+    """
+
+    document = binding_block(jar_sha256="f" * 64)
+    document.update(overrides)
+    return document
 
 
 def report(**overrides: object) -> dict[str, object]:
@@ -29,7 +56,7 @@ def report(**overrides: object) -> dict[str, object]:
         "schema": perf_budget.REPORT_SCHEMA,
         "workload": {"id": "w7-baseline-v1", "samples_per_scenario": 5},
         "concurrency": 1,
-        "build": {"jar_sha256": BUILD, "git_revision": "0123456789abcdef0123456789abcdef01234567"},
+        "build": build_block(),
         "resources": {"before": {"threads": 100, "fds": 50, "rss_kb": 1000},
                       "after": {"threads": 105, "fds": 50, "rss_kb": 1200},
                       "peak_rss_kb": 1500},
@@ -49,8 +76,7 @@ def budget(**overrides: object) -> dict[str, object]:
         "schema": perf_budget.BUDGET_SCHEMA,
         "status": "test",
         "applies_to": {"workload": "w7-baseline-v1", "concurrency": 1,
-                       "build": {"jar_sha256": BUILD,
-                                 "git_revision": "0123456789abcdef0123456789abcdef01234567"}},
+                       "build": binding_block()},
         "resources": {"peak_rss_kb": 4096, "threads": 300, "fds": 300,
                       "max_thread_growth": 32, "max_fd_growth": 0},
         "scenarios": {"auth-login": {"p50_ms": 100.0, "p95_ms": 100.0, "p99_ms": 100.0,
@@ -144,14 +170,13 @@ def test_rejects_sql_query_regression() -> None:
     assert "over-budget" in kinds(perf_budget.evaluate(document, budget()))
 
 
-def test_rejects_mismatched_build_and_workload() -> None:
-    """构件摘要、修订、负载或并发度不一致时数字不可比，必须失败。"""
+def test_rejects_mismatched_workload_and_concurrency() -> None:
+    """负载或并发度不一致时数字不可比，必须失败。"""
 
-    other = report(build={"jar_sha256": "b" * 64, "git_revision": "f" * 40})
+    other = report()
     other["workload"] = {"id": "another"}
     other["concurrency"] = 8
-    findings = kinds(perf_budget.evaluate(other, budget()))
-    assert {"build-mismatch", "workload-mismatch", "concurrency-mismatch"} <= findings
+    assert {"workload-mismatch", "concurrency-mismatch"} <= kinds(perf_budget.evaluate(other, budget()))
 
 
 def test_rejects_resource_excess_and_growth() -> None:
@@ -183,7 +208,7 @@ def test_rejects_missing_throughput_evidence() -> None:
 
 
 def test_shipped_budget_file_parses_and_matches_its_declared_schema() -> None:
-    """仓库内提交的预算文件必须可解析、结构完整且标注待授权状态。"""
+    """仓库内提交的受控预算必须可解析、结构完整且标注待授权状态。"""
 
     document = perf_budget.load_document(BUDGET_FILE, perf_budget.BUDGET_SCHEMA)
     assert document["status"] == "proposed-awaiting-authority"
@@ -193,6 +218,26 @@ def test_shipped_budget_file_parses_and_matches_its_declared_schema() -> None:
     for name, limits in document["scenarios"].items():
         assert limits["p95_ms"] >= limits["p50_ms"], f"{name} 的 p95 预算不能低于 p50"
         assert limits["p99_ms"] >= limits["p95_ms"], f"{name} 的 p99 预算不能低于 p95"
+
+
+def test_controlled_budget_never_claims_an_unverified_binding() -> None:
+    """受控预算要么声明完整的可复现源码身份，要么显式声明绑定尚未回填。
+
+    两种状态都不得被当作「无需核对构件」：绑定未回填时 perf_budget 以退出码 2 拒绝
+    判定，等于强制重新校准，而不是把绑定判定悄悄关掉。
+    """
+
+    document = perf_budget.load_document(BUDGET_FILE, perf_budget.BUDGET_SCHEMA)
+    build = document["applies_to"]["build"]
+    assert build["binding_method"] == perf_budget.BINDING_METHOD
+    assert build["source_scope"] == perf_budget.BINDING_SCOPE
+    bound = all(perf_budget._hex_text(build.get(field), length)
+                for field, length in perf_budget.BINDING_FIELDS.items())
+    assert bound or build.get("binding_state") == "unbound-pending-recalibration"
+    assert "retired_binding" in build, "旧绑定方式必须留档，不得无声消失"
+    if not bound:
+        with pytest.raises(ValueError, match="构件绑定缺少可用的 git_revision"):
+            perf_budget.binding_expectation(document)
 
 
 def test_percentile_matches_linear_interpolation() -> None:
@@ -211,10 +256,102 @@ def test_merge_requires_comparable_reports() -> None:
     merged = merge_reports.merge(latency, sql)
     assert merged["scenarios"]["auth-login"]["sql"]["sql_queries_median"] == 8.0
 
+    # 源码身份不同才不可比：同一份源码重建出的 JAR 字节不同，合并仍然成立。
+    rebuilt = copy.deepcopy(sql)
+    rebuilt["build"]["jar_sha256"] = "c" * 64
+    assert merge_reports.merge(latency, rebuilt)["scenarios"]["auth-login"]["sql"]
+
     divergent = copy.deepcopy(sql)
-    divergent["build"]["jar_sha256"] = "c" * 64
+    divergent["build"]["source_sha256"] = "e" * 64
     with pytest.raises(merge_reports.MergeFailure):
         merge_reports.merge(latency, divergent)
+
+
+def test_binding_mismatch_still_fails_and_is_reported_as_binding() -> None:
+    """核心回归：绑定方式换过之后，「测的不是被校准的那份代码」仍然是失败项。
+
+    提交或源码摘要任一不同都必须报 ``build-mismatch``；只改构件字节摘要则不影响判定，
+    证明它确实不再是绑定依据而不是被换了个名字。
+    """
+
+    other_revision = report(build=build_block(git_revision="f" * 40))
+    other_source = report(build=build_block(source_sha256="b" * 64))
+    other_scope = report(build=build_block(source_scope="other-scope/v1"))
+    for document in (other_revision, other_source, other_scope):
+        found = kinds(perf_budget.evaluate(document, budget()))
+        assert found & {"build-mismatch", "build-binding-mismatch"}, found
+
+    rebuilt = report(build=build_block(jar_sha256="c" * 64))
+    assert perf_budget.evaluate(rebuilt, budget()) == []
+
+
+def test_missing_binding_evidence_fails_as_evidence_gap() -> None:
+    """报告没有给出绑定证据时判证据缺口，不得因为「没说不符」而算通过。"""
+
+    for field in ("git_revision", "source_sha256"):
+        block = build_block()
+        block.pop(field)
+        findings = perf_budget.evaluate(report(build=block), budget())
+        assert [item.kind for item in findings] == ["build-binding-missing"]
+        assert findings[0].metric == field
+
+
+def test_binding_ok_with_over_budget_metric_reports_only_that_metric() -> None:
+    """绑定成立但别的指标超限时，只报那条指标，不把结论混成绑定问题。"""
+
+    tight = budget()
+    tight["scenarios"]["auth-login"].update({"p50_ms": 11.0, "p95_ms": 12.0, "p99_ms": 12.0})
+    findings = perf_budget.evaluate(report(), tight)
+    assert kinds(findings) == {"over-budget"}
+    assert {item.metric for item in findings} == {"p50_ms", "p95_ms", "p99_ms"}
+
+
+@pytest.mark.parametrize("mutation,pattern", [
+    ("jar_sha256", "仍以 jar_sha256 绑定被测版本"),
+    ("missing_binding", "binding_method 必须声明为 git-source-id/v1"),
+    ("blank_revision", "构件绑定缺少可用的 git_revision"),
+    ("short_revision", "构件绑定缺少可用的 git_revision"),
+])
+def test_unusable_budget_binding_is_a_configuration_error(mutation: str,
+                                                           pattern: str) -> None:
+    """预算自身声明不出可复现的绑定时按配置错误拒绝，绝不放行成「无需核对构件」。"""
+
+    document = budget()
+    build = document["applies_to"]["build"]
+    if mutation == "jar_sha256":
+        build["jar_sha256"] = "c" * 64
+    elif mutation == "missing_binding":
+        build["binding_method"] = "jar-sha256/v1"
+    elif mutation == "blank_revision":
+        build["git_revision"] = ""
+    else:
+        build["git_revision"] = "abc"
+    with pytest.raises(ValueError, match=pattern):
+        perf_budget.binding_expectation(document)
+
+
+def test_verdict_reports_declared_and_observed_binding(tmp_path: Path,
+                                                        capsys: pytest.CaptureFixture[str]) -> None:
+    """结论必须自带绑定期望值与实测值，供日志、制品与发布证据链独立复核。"""
+
+    report_path = tmp_path / "report.json"
+    budget_path = tmp_path / "budget.json"
+    report_path.write_text(json.dumps(report()), encoding="utf-8")
+    budget_path.write_text(json.dumps(budget()), encoding="utf-8")
+    assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path),
+                             "--json"]) == 0
+    verdict = json.loads(capsys.readouterr().out)
+    assert verdict["binding"]["method"] == perf_budget.BINDING_METHOD
+    assert verdict["binding"]["observed"]["git_revision"] == REVISION
+    assert verdict["binding"]["matched"] is True
+
+    report_path.write_text(json.dumps(report(build=build_block(git_revision="f" * 40))),
+                           encoding="utf-8")
+    assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path),
+                             "--json"]) == 1
+    verdict = json.loads(capsys.readouterr().out)
+    assert verdict["binding"]["matched"] is False
+    assert {item["kind"] for item in verdict["findings"]} == {"build-mismatch"}
 
 
 def test_cli_exit_codes_distinguish_violation_from_unusable_input(tmp_path: Path) -> None:
@@ -236,3 +373,85 @@ def test_cli_exit_codes_distinguish_violation_from_unusable_input(tmp_path: Path
 
     budget_path.write_text("{not json", encoding="utf-8")
     assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path)]) == 2
+
+
+def test_retired_schema_budget_is_rejected_with_migration_reason(tmp_path: Path) -> None:
+    """仍按 perf-budget/v1 提交的文件必须被拒绝，并说明旧绑定为什么不可用。"""
+
+    legacy = budget()
+    legacy["schema"] = perf_budget.RETIRED_BUDGET_SCHEMA
+    legacy["applies_to"]["build"] = {"jar_sha256": BUILD}
+    budget_path = tmp_path / "legacy.json"
+    budget_path.write_text(json.dumps(legacy), encoding="utf-8")
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report()), encoding="utf-8")
+    assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path)]) == 2
+
+
+def test_controlled_budget_file_is_not_usable_as_a_gate_until_recalibrated(
+        tmp_path: Path) -> None:
+    """真实受控预算当前未回填绑定：判定必须失败，且原因指向绑定而不是任何阈值。"""
+
+    report_path = tmp_path / "report.json"
+    report_path.write_text(json.dumps(report()), encoding="utf-8")
+    assert perf_budget.main(["--report", str(report_path), "--budgets", str(BUDGET_FILE)]) == 2
+
+
+def source_tree(root: Path) -> Path:
+    """在被测范围内的仓库里准备一棵最小源码树，返回一个源文件路径。
+
+    Args:
+        root: 临时仓库根目录。
+    Returns:
+        被写入内容的源文件路径。
+    """
+
+    directory = root / source_identity.SOURCE_ROOTS[0] / "module" / "src"
+    directory.mkdir(parents=True)
+    target = directory / "Sample.java"
+    target.write_text("class Sample {}\n", encoding="utf-8")
+    return target
+
+
+def test_source_digest_is_reproducible_and_changes_with_content(tmp_path: Path) -> None:
+    """绑定必须是真绑定：同一内容两次计算相同，改一个字节立即不同。
+
+    这条性质是「可复现绑定」的全部含义——重建产物、打乱遍历顺序都不得改变结果，
+    而任何源码改动都必须改变结果，否则绑定就退化成常量。
+    """
+
+    target = source_tree(tmp_path)
+    digest, count = source_identity.source_digest(tmp_path)
+    assert count == 1
+    assert source_identity.source_digest(tmp_path)[0] == digest
+
+    target.write_text("class Sample { }\n", encoding="utf-8")
+    assert source_identity.source_digest(tmp_path)[0] != digest
+
+    target.write_text("class Sample {}\n", encoding="utf-8")
+    assert source_identity.source_digest(tmp_path)[0] == digest
+
+
+def test_source_digest_ignores_build_output_and_logs(tmp_path: Path) -> None:
+    """构建产物与日志不参与摘要：重新打包不得让绑定失效。"""
+
+    source_tree(tmp_path)
+    digest, _ = source_identity.source_digest(tmp_path)
+    output = tmp_path / source_identity.SOURCE_ROOTS[0] / "module" / "target" / "classes"
+    output.mkdir(parents=True)
+    (output / "Sample.class").write_bytes(b"\x00\x01\x02")
+    logs = tmp_path / source_identity.SOURCE_ROOTS[0] / "logs"
+    logs.mkdir()
+    (logs / "app.log").write_text("启动一次\n", encoding="utf-8")
+
+    assert source_identity.source_digest(tmp_path)[0] == digest
+
+
+def test_source_digest_follows_file_renames(tmp_path: Path) -> None:
+    """同内容改名也是构建输入变化，摘要必须跟着变。"""
+
+    source = source_tree(tmp_path)
+    digest, _ = source_identity.source_digest(tmp_path)
+    source.rename(source.with_name("Renamed.java"))
+
+    assert source_identity.source_digest(tmp_path)[0] != digest

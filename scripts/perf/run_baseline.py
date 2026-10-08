@@ -6,11 +6,17 @@
 
 测量分两轮，与《性能预算与基线》一致：延迟轮在常规日志级别下运行，查询数轮重启后端并把
 MyBatis 日志调到 DEBUG 后按迭代时间窗统计请求线程的语句执行。两轮报告由 `merge_reports.py`
-合并，再由 `perf_budget.py` 对照受版本控制的预算文件判定。预算文件里的构件摘要与本次
-被测 JAR 不一致时，判定如实返回 `build-mismatch`，本工具不修改预算去迁就结果。
+合并，再由 `perf_budget.py` 对照受版本控制的预算文件判定。报告按**源码身份**（Git 修订 +
+源码内容摘要）绑定被测版本，而不是按构件字节摘要：Maven 重建的 JAR 摘要不可复现，用它绑定
+会让 `build-mismatch` 在任何一次干净检出的 CI 上必现。实测源码与预算所绑定的源码不同时，
+判定如实返回 `build-mismatch`（或 `build-binding-missing`：报告根本没给绑定证据），本工具
+不修改预算去迁就结果。提交的修订可由 `--git-revision` 显式传入（CI 在 checkout 之后用
+`git rev-parse HEAD` 取得），源码内容摘要始终按 `--source-root` 现场计算，因此未提交改动
+同样落在绑定范围内。
 
-退出码：0 表示测量与判定都完成且未超预算；1 表示超预算或证据不足；2 表示环境编排失败或
-资源回收不完整。
+退出码：0 表示测量与判定都完成且未超预算；1 表示超预算、证据不足或构件绑定不符；2 表示
+环境编排失败、判定输入不可用或资源回收不完整。判定子进程返回 2 时本工具原样返回 2，
+不把它折叠成「证据不足的 1」：两者的处置完全不同。
 
 运行（仓库根）：
 
@@ -52,7 +58,9 @@ BACKEND_ROOT = REPOSITORY_ROOT / "后端代码" / "basic-framework-boot"
 PERF_ROOT = Path(__file__).resolve().parent
 DEFAULT_JAR = BACKEND_ROOT / "basic-framework-server" / "target" / "basic-framework-server.jar"
 SCHEMA_FILE = REPOSITORY_ROOT / "数据库文件" / "basic_framework.sql"
-DEFAULT_BUDGETS = PERF_ROOT / "budgets" / "baseline-w7.json"
+# 默认用仓库内受控候选（当前状态为 proposed-awaiting-authority，尚未获有权者批准）；
+# 更早的 baseline-w7.json 只作为历史记录保留，不再是默认判定依据。
+DEFAULT_BUDGETS = PERF_ROOT / "budgets" / "baseline-2026-10-07.json"
 DATABASE_PREFIX = "bf_perf_"
 DATABASE_PATTERN = re.compile(r"bf_perf_[0-9a-f]{12}")
 ADMIN_USERNAME = "perfadmin"
@@ -103,6 +111,13 @@ def print_verdict(verdict_path: Path, verdict: int) -> None:
     if not isinstance(findings, list):
         log(f"判定结论 {verdict_path} 缺少 findings 列表；判定退出码 {verdict} 原样保留")
         return
+    binding = document.get("binding")
+    if isinstance(binding, dict):
+        declared = binding.get("declared") or {}
+        observed = binding.get("observed") or {}
+        log(f"构件绑定 {binding.get('method')}：{'相符' if binding.get('matched') else '不相符'}"
+            f"（实测修订 {observed.get('git_revision')}、实测摘要 {observed.get('source_sha256')}；"
+            f"预算修订 {declared.get('git_revision')}、预算摘要 {declared.get('source_sha256')}）")
     log(f"判定结论：状态 {document.get('status')}、实际核对场景 {document.get('checked')} 个、"
         f"问题 {len(findings)} 项、负载 {document.get('workload')!r}")
     for item in findings:
@@ -415,7 +430,13 @@ def parse_arguments(arguments: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--concurrency-samples", type=int, default=40,
                         help="并发场景每线程样本数")
     parser.add_argument("--heap", default="-Xms512m -Xmx1024m", help="被测后端 JVM 堆参数")
-    parser.add_argument("--budgets", type=Path, default=DEFAULT_BUDGETS, help="受版本控制的预算文件")
+    parser.add_argument("--budgets", type=Path, default=DEFAULT_BUDGETS,
+                        help="受版本控制的预算文件；仓库内受控候选为 "
+                             "scripts/perf/budgets/baseline-2026-10-07.json")
+    parser.add_argument("--git-revision", default="",
+                        help="被测提交标识；为空时测量工具按 --source-root 现场读取 HEAD")
+    parser.add_argument("--source-root", default=str(REPOSITORY_ROOT),
+                        help="计算源码内容摘要的仓库根目录；必须是被测 JAR 的来源树")
     parser.add_argument("--workload", default="w7-baseline-v1", help="负载标识")
     parser.add_argument("--ready-timeout", type=int, default=300, help="后端就绪等待秒数上限")
     parser.add_argument("--ready-path", default="/admin-api/system/auth/get-permission-info",
@@ -471,7 +492,7 @@ def orchestrate(arguments: argparse.Namespace, resources: Resources, target: MyS
         java: 本次使用的 java 路径。
         jar: 被测后端 JAR。
     Returns:
-        0 表示未超预算；1 表示超预算或证据不足；2 表示测量本身不可用。
+        0 表示未超预算；1 表示超预算、证据不足或构件绑定不符；2 表示判定输入不可用。
     Raises:
         isolation.EnvironmentFailure: 环境或测量失败，由 main 统一转为退出码 2。
     """
@@ -502,7 +523,10 @@ def orchestrate(arguments: argparse.Namespace, resources: Resources, target: MyS
     if arguments.fault_delay_ms is not None:
         measured_url = f"http://127.0.0.1:{arguments.fault_port}"
     identity = ["--base-url", measured_url, "--username", ADMIN_USERNAME, "--jar", str(jar),
-                "--workload", arguments.workload, "--profile", "prod"]
+                "--workload", arguments.workload, "--profile", "prod",
+                # 构件绑定所需的两项证据：修订可由调用方给出，源码内容摘要现场计算。
+                "--git-revision", arguments.git_revision,
+                "--source-root", str(arguments.source_root)]
 
     def start(tag: str, debug_sql: bool) -> int:
         """启动一次被测后端并返回其 PID；就绪失败如实抛错。"""
@@ -579,7 +603,9 @@ def orchestrate(arguments: argparse.Namespace, resources: Resources, target: MyS
         # 目录才找得到。回显不改变判定，退出码仍按判定进程的真实结果传递。
         print_verdict(verdict_path, verdict)
         log(f"判定退出码 {verdict}；报告目录 {output}")
-        return 0 if verdict == 0 else 1
+        # 判定子进程的 2 表示「报告或预算本身不可用」，与「测了但没达标」是两类问题：
+        # 折叠成 1 会让预算文件不可用看起来像一次普通的超标。真实退出码原样上抛。
+        return 0 if verdict == 0 else verdict
     finally:
         stop_backend(resources)
         stop_fault_proxy(resources)

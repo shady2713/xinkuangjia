@@ -12,8 +12,9 @@ release 汇总就退出 1 且 `release_verified=false`，不得因为“已登�
 
 发布汇总还必须消费性能预算的实测结论：判定由 scripts/perf/perf_budget.py 完成，
 本模块按受版本控制的预算文件独立复核「用的是哪一份预算、是否已获有权者批准、实测
-覆盖多少场景」。**未获批准的预算不是门槛而是提案**，缺项、未通过、换预算或未批准
-都直接拒绝发布证据；本模块不提供豁免开关，也不代替有权者批准任何预算。
+覆盖多少场景、读数是否绑定本次发布的提交」。**未获批准的预算不是门槛而是提案**，
+缺项、未通过、换预算、未批准或绑定到别的提交都直接拒绝发布证据；本模块不提供豁免
+开关，也不代替有权者批准任何预算。
 
 @author OpenAI Codex
 """
@@ -100,16 +101,21 @@ SOURCE_ACCEPTED_VERDICTS = (
 )
 
 # 性能预算门禁：判定本身由 scripts/perf/perf_budget.py 消费「实测报告 + 受控预算文件」
-# 完成，汇总这一侧不读报告，只复核结论，并独立回答三个问题——用的是哪一份受控预算、
-# 这份预算是否已获有权者批准、实测实际覆盖了多少场景。三项都不采信证据自述。
+# 完成，汇总这一侧不读报告，只复核结论，并独立回答四个问题——用的是哪一份受控预算、
+# 这份预算是否已获有权者批准、实测实际覆盖了多少场景、这次读数是不是本次发布的那个提交
+# 量出来的。四项都不采信证据自述。
 # 预算在获批准前必须让发布红灯：「还没批准」不是「通过」的理由，汇总也不提供豁免开关；
 # 批准只能由人改受控预算文件本身，这里只如实读它的状态。
 PERF_EVIDENCE = "perf-budget.json"
 PERF_BUDGET_FILE = "scripts/perf/budgets/baseline-2026-10-07.json"
-PERF_SCHEMA = "perf-budget/v1"
+PERF_SCHEMA = "perf-budget/v2"
 PERF_PROTOCOL = "quality-check/v1"
 PERF_CHECK = "性能预算"
 PERF_APPROVED = "approved"
+# 构件绑定方法由 scripts/perf/source_identity.py 单点定义，这里只固定期望值核对结论：
+# 构件字节摘要不可复现，按它绑定会让 build-mismatch 在任何干净检出的 CI 上必现，因此
+# 性能读数只认「Git 修订 + 源码内容摘要」，并要求它等于本次发布的提交。
+PERF_BINDING_METHOD = "git-source-id/v1"
 # 声明了性能预算检查项的作业及其固定证据文件名；表外作业不参与性能复核。
 RELEASE_PERF_EVIDENCE = {"backend": PERF_EVIDENCE}
 
@@ -322,22 +328,27 @@ def perf_budget_source() -> dict[str, object]:
     return document
 
 
-def perf_budget_document(directory: Path, job: str) -> dict[str, object]:
-    """复核发布证据里的性能预算结论：判定、权威状态与实测范围缺一不可。
+def perf_budget_document(directory: Path, job: str, revision: str) -> dict[str, object]:
+    """复核发布证据里的性能预算结论：判定、权威状态、实测范围与构件绑定缺一不可。
 
     结论由 ``scripts/perf/perf_budget.py`` 在真实测量后写出，本函数不读报告本身，
     只核对结论并把「用的是哪一份预算」独立重算一遍。**未获有权者批准的预算一律拒绝**：
     ``proposed-awaiting-authority`` 只是提案，不是门槛，本模块不提供默认放行、豁免开关，
     也不代替任何人把状态改成 ``approved``。
 
+    构件绑定独立复核：结论必须带 ``binding`` 段，绑定方法为 ``git-source-id/v1``，且实测
+    提交的源码修订等于本次发布的提交。少了这一项，「性能通过」可能来自别的提交甚至别的
+    工作区，发布结论不能签发；结论里只写一句 ``build-mismatch`` 文字也不算数。
+
     Args:
         directory: 发布检查写入证据的目录。
         job: 期望声明该检查的作业名，用于错误定位。
+        revision: 本次验证的提交标识，性能读数必须绑定到同一提交。
     Returns:
-        含预算文件、实测场景数、批准人与负载标识的摘要。
+        含预算文件、实测场景数、批准人、负载标识与构件绑定的摘要。
     Raises:
-        ValueError: 证据缺失、结构不符、判定未通过、预算未获批准，或实测范围与受控
-            预算声明的场景数、适用范围不一致。
+        ValueError: 证据缺失、结构不符、判定未通过、预算未获批准、构件绑定不符或缺失，
+            或实测范围与受控预算声明的场景数、适用范围不一致。
     """
 
     document = json_document(directory, PERF_EVIDENCE)
@@ -353,6 +364,21 @@ def perf_budget_document(directory: Path, job: str) -> dict[str, object]:
     # 布尔值是 int 的子类，必须先按精确类型拒绝，避免 True 冒充实测场景数。
     if type(checked) is not int or checked <= 0:
         raise ValueError(f"性能预算核对没有正整数的实测场景数：{job}")
+    binding = document.get("binding")
+    if not isinstance(binding, dict):
+        raise ValueError(f"性能预算证据没有构件绑定，无法确认读数来自哪个提交：{job}")
+    if binding.get("method") != PERF_BINDING_METHOD or binding.get("matched") is not True:
+        raise ValueError(
+            f"性能预算证据的构件绑定不可用：{job}"
+            f"（方法 {binding.get('method')!r}，相符 {binding.get('matched')!r}）"
+        )
+    observed = binding.get("observed")
+    if not isinstance(observed, dict) or observed.get("git_revision") != revision:
+        raise ValueError(
+            f"性能预算证据绑定的源码修订与本次发布提交不一致：{job}"
+            f"（证据 {observed.get('git_revision') if isinstance(observed, dict) else None!r}，"
+            f"发布 {revision}）"
+        )
     budget = perf_budget_source()
     if document.get("budget_status") != budget.get("status"):
         raise ValueError(f"性能预算证据采用的预算状态与仓库内受控预算不一致：{job}")
@@ -375,6 +401,8 @@ def perf_budget_document(directory: Path, job: str) -> dict[str, object]:
         "checked": checked,
         "approved_by": budget.get("approved_by"),
         "workload": document.get("workload"),
+        "binding_method": binding.get("method"),
+        "source_revision": observed.get("git_revision"),
     }
 
 
@@ -481,7 +509,8 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
     一致，避免用标签或空报告冒充发布；没有第二份声明可比的自有计数（Web 全量注释）
     则由本模块独立枚举受管源码范围复算，缩范围或编造数字同样被拒绝。
     性能预算另按受控预算文件复核：结论未通过、采用的预算不是仓库内那一份、实测场景数
-    与受控预算对不上，或**预算尚未获有权者批准**，都在这里直接拒绝发布证据。
+    与受控预算对不上、构件绑定不是本次发布的提交，或**预算尚未获有权者批准**，都在这里
+    直接拒绝发布证据。
 
     Args:
         directory: 发布检查写入证据的目录，缺失即拒绝。
@@ -503,9 +532,11 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
         checks, declared = release_manifest(directory, spec["evidence"], job, revision)
         coverage_declaration(declared, job, spec, coverage)
         # 性能预算：结论已由 perf_budget.py 在真实测量后给出，这里只复核，不重测。
-        # 复核包含「这份预算是否已获批准」，因此预算处于提案状态时本函数直接拒绝，
-        # 不会因为作业成功或检查项存在就签发发布结论。
-        performance = perf_budget_document(directory, job) if job in RELEASE_PERF_EVIDENCE else None
+        # 复核包含「这份预算是否已获批准」与「读数是否绑定本次发布的提交」，因此预算
+        # 处于提案状态、或证据来自别的提交时本函数直接拒绝，不会因为作业成功或检查项
+        # 存在就签发发布结论。
+        performance = (perf_budget_document(directory, job, revision)
+                       if job in RELEASE_PERF_EVIDENCE else None)
         # 自有计数没有第二份声明可比（既不是作业用例数，也不是覆盖率实测文件数）：
         # 这里独立枚举受管范围复算一次，声明值与真实范围不符一律拒绝。
         own_checks = [check for check, mode in RELEASE_CHECKS[job].items() if mode == "own_count"]

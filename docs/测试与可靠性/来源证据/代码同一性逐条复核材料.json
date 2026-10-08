@@ -12,7 +12,7 @@
   "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
   "repository": {
     "root": "/home/weetion/桌面/kuangjia/repo",
-    "head": "a1d0d14fd5496d2bb526813e1ea39ada779d2f57",
+    "head": "d69a40946caac8237b2427a940ddf24c21ac0f6b",
     "branch": "codex/framework-remediation",
     "python": "3.12.3"
   },
@@ -23,8 +23,8 @@
     },
     "source_index": {
       "path": "docs/测试与可靠性/来源证据/d12-source-index.json",
-      "sha256": "889082c77e33a929a7771fb11d1a9d6ff8821bd123eb800f0de237f8a935c6aa",
-      "records_sha256": "b8b9e63e8486fa894b1474b19dc9ce9869b1fcbb1da4eb151c75d911fbeb28cd"
+      "sha256": "dfbe17fbc8c54ff94984f03a20542ef3c6e59e4508f413a78b1ef7d9d4207f47",
+      "records_sha256": "e4605fcdbd5b35bd143ef2f6bd09c5cd2427e8ecafaa3de1368ee858087f21cb"
     },
     "transform_set": {
       "path": "docs/测试与可靠性/来源证据/代码同一性变换集.json",

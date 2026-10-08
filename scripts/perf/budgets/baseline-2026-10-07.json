@@ -1,17 +1,39 @@
 {
-  "schema": "perf-budget/v1",
+  "schema": "perf-budget/v2",
   "status": "proposed-awaiting-authority",
   "approved_by": null,
   "supersedes": "baseline-w7.json",
+  "binding_migration": {
+    "migrated_at": "2026-10-08",
+    "from_schema": "perf-budget/v1",
+    "from_field": "applies_to.build.jar_sha256",
+    "to_method": "git-source-id/v1",
+    "to_fields": ["applies_to.build.git_revision", "applies_to.build.source_sha256",
+                  "applies_to.build.source_scope"],
+    "reason": "构件字节摘要不可复现：Maven 在不同环境或不同时间重建同一提交就得到不同 JAR，用它绑定被测版本会让 build-mismatch 在任何一次干净检出的 CI 上必现（同一提交实测 c0a94da8…（云端运行器）与 71371e1b…（本机））。改为按 Git 修订加源码内容摘要绑定后，同一份内容在任何干净检出上都得到同一个摘要，改一个字节即改变摘要，未提交改动也落在绑定范围内。",
+    "retired_value": "1765ba01d60a232521f996255508c2c72d071f109cf56289526bd5c6ed4f2f0a",
+    "retired_note": "该 JAR 由工作区在 2026-10-07 12:54 打包，源码含未提交改动；只作历史留档，不再参与任何判定。",
+    "effect": "绑定方式变更不等于绑定问题消失：本文件的构件绑定已置为 unbound-pending-recalibration，perf_budget.py 对它以退出码 2 拒绝判定（预算未声明可复现的源码身份），既不构成通过，也不允许被当成“不再核对构件”。重新校准与批准是下一步，需要目标环境，本轮不代为决定。"
+  },
   "applies_to": {
     "workload": "w7-baseline-v1",
     "concurrency": 1,
     "environment": "校准机：20 vCPU / 62 GiB RAM / MySQL 8.4.10 / Redis / MinIO（127.0.0.1）；应用与中间件同机；测量期间同机有其他并发任务（load average 4–8）",
     "jvm": "-Xms512m -Xmx1024m；SPRING_PROFILES_ACTIVE=prod",
     "build": {
-      "jar_sha256": "1765ba01d60a232521f996255508c2c72d071f109cf56289526bd5c6ed4f2f0a",
       "app_version": "2026.01-SNAPSHOT",
-      "note": "以构件 SHA-256 绑定被测版本；该 JAR 由工作区在 2026-10-07 12:54 打包，源码含未提交改动且同期有并发编辑，因此不单独以 git 修订标识构建"
+      "binding_method": "git-source-id/v1",
+      "source_scope": "backend-build-inputs/v1",
+      "binding_state": "unbound-pending-recalibration",
+      "git_revision": null,
+      "source_sha256": null,
+      "note": "本轮校准发生在含未提交改动的工作区，且当时未登记 HEAD：按提交历史，2026-10-07 12:54 之前最后一个提交是 9ca041aeefa1c27588413c65c6e60da6e9589e73（2026-10-06 22:01:42），但它不能代表被测源码的实际内容。因此本文件无法回填可复现的源码身份，必须在目标环境重新测量并把 git_revision 与 source_sha256 写回本文件后才能作为判定依据。",
+      "retired_binding": {
+        "field": "jar_sha256",
+        "value": "1765ba01d60a232521f996255508c2c72d071f109cf56289526bd5c6ed4f2f0a",
+        "retired_at": "2026-10-08",
+        "reason": "见顶层 binding_migration：Maven 重建的 JAR 字节摘要不可复现，不能作为绑定依据"
+      }
     },
     "dataset": {
       "users": 5000,

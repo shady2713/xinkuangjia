@@ -1,16 +1,35 @@
 {
-  "schema": "perf-budget/v1",
+  "schema": "perf-budget/v2",
   "status": "proposed-awaiting-authority",
   "approved_by": null,
+  "superseded_by": "baseline-2026-10-07.json",
+  "binding_migration": {
+    "migrated_at": "2026-10-08",
+    "from_schema": "perf-budget/v1",
+    "from_field": "applies_to.build.jar_sha256",
+    "to_method": "git-source-id/v1",
+    "reason": "本文件是 2026-10-05 的历史校准记录，同样以构件字节摘要绑定被测版本。该依据不可复现（同一提交在不同环境重建即不同），已随 perf-budget/v2 退役；本文件保留为历史记录，绑定置为 unbound-pending-recalibration，不再用于判定。",
+    "retired_value": "673f1623d2ca0dc6d9e1033e22ddec8a54955f95bccd77f51f960ffa5a4d4138"
+  },
   "applies_to": {
     "workload": "w7-baseline-v1",
     "concurrency": 1,
     "environment": "w7-local-linux-x86_64：20 vCPU / 62 GiB RAM / MySQL 8.4.10 / Redis 7 / MinIO（127.0.0.1）；应用与中间件同机",
     "jvm": "-Xms512m -Xmx1024m；SPRING_PROFILES_ACTIVE=prod",
     "build": {
-      "jar_sha256": "673f1623d2ca0dc6d9e1033e22ddec8a54955f95bccd77f51f960ffa5a4d4138",
       "app_version": "2026.01-SNAPSHOT",
-      "note": "以构件 SHA-256 绑定被测版本；测量时工作区含未提交改动（server 资源 logback-spring.xml 的 prod 日志模板修复 + 本轮新增 scripts/perf 工具），因此不单独以 git 修订标识构建"
+      "binding_method": "git-source-id/v1",
+      "source_scope": "backend-build-inputs/v1",
+      "binding_state": "unbound-pending-recalibration",
+      "git_revision": null,
+      "source_sha256": null,
+      "note": "2026-10-05 测量时工作区含未提交改动（server 资源 logback-spring.xml 的 prod 日志模板修复 + 当轮新增 scripts/perf 工具），且未登记 HEAD，因此无法回填可复现的源码身份；该轮读数只作历史留档。",
+      "retired_binding": {
+        "field": "jar_sha256",
+        "value": "673f1623d2ca0dc6d9e1033e22ddec8a54955f95bccd77f51f960ffa5a4d4138",
+        "retired_at": "2026-10-08",
+        "reason": "见顶层 binding_migration：Maven 重建的 JAR 字节摘要不可复现，不能作为绑定依据"
+      }
     },
     "dataset": {
       "users": 5000,
