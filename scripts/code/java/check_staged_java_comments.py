@@ -7921,8 +7921,15 @@ def _new_documentation_findings(
     *,
     evidence: EvidenceRegistry | None = None,
     local_sha256: str | None = None,
+    maintenance: bool = False,
 ) -> list[Finding]:
     """识别注释删除或改坏后新出现的问题，不追查未修改的历史欠账。
+
+    本函数是全量重扫再与旧版本求差，所以必须与调用它的增量入口 ``_scan_source``
+    使用**同一个**维护模式取值：早期这里固定走严格模式，导致已登记阻断在重扫里
+    重新变成 ``evidence_bound`` 诊断并被无条件保留，使增量入口与全量入口
+    ``scan_full_source`` 的维护语义相反。透传后已登记阻断在维护模式下不再产生诊断，
+    缺标注、指纹不符、范围不符等硬失败仍照常产生诊断。
 
     Args:
         path: 当前暂存文件路径。
@@ -7930,9 +7937,11 @@ def _new_documentation_findings(
         previous_source: 差异对应的旧源码；新增文件传 None。
         evidence: 受控来源证据清单；未配置时为 ``None``。
         local_sha256: 当前对象原始字节的 SHA-256。
+        maintenance: 是否处于显式维护模式；默认 ``False`` 保持严格拒绝。
     Returns:
         旧版本同一声明行没有的注释问题；同名重载按行映射分别判断。
         来源证据主张类诊断按当前证据重新成立，不因旧版本同样失败而豁免。
+        硬失败在维护模式下依然无条件保留，只有已登记阻断被显式维护模式豁免。
     """
     if previous_source is None:
         return []
@@ -7944,6 +7953,7 @@ def _new_documentation_findings(
         set(range(1, len(current_lines) + 1)),
         evidence=evidence,
         local_sha256=local_sha256,
+        maintenance=maintenance,
     )
     if not current:
         return []
@@ -7955,6 +7965,7 @@ def _new_documentation_findings(
             set(range(1, len(previous_lines) + 1)),
             evidence=evidence,
             local_sha256=local_sha256,
+            maintenance=maintenance,
         )
     }
     # 删除整个方法会让后续声明行号前移；映射未改文本而非标记删除邻接行，
@@ -8051,6 +8062,7 @@ def _scan_staged_java_comments(
                 _previous_source(path),
                 evidence=evidence,
                 local_sha256=local_sha256,
+                maintenance=maintenance,
             )
         )
     return sorted(set(findings), key=lambda finding: (finding.path, finding.line, finding.rule))
