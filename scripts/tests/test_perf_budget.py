@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
+import io
 import json
 from pathlib import Path
 
@@ -395,6 +397,160 @@ def test_controlled_budget_file_is_not_usable_as_a_gate_until_recalibrated(
     report_path = tmp_path / "report.json"
     report_path.write_text(json.dumps(report()), encoding="utf-8")
     assert perf_budget.main(["--report", str(report_path), "--budgets", str(BUDGET_FILE)]) == 2
+
+
+def unavailable_verdict(tmp_path: Path, report_document: object,
+                        budget_document: object) -> tuple[int, dict[str, object], str]:
+    """真实跑一次 CLI，把退出码、写入标准输出的结论文档与标准错误话术一起取回。
+
+    Args:
+        tmp_path: 本次用例的临时目录。
+        report_document: 报告文件内容；不是字符串时按 JSON 写出。
+        budget_document: 预算文件内容；不是字符串时按 JSON 写出。
+    Returns:
+        真实退出码、解析后的结论文档与标准错误输出。
+    """
+
+    report_path = tmp_path / "report.json"
+    budget_path = tmp_path / "budget.json"
+    for path, document in ((report_path, report_document), (budget_path, budget_document)):
+        if isinstance(document, str):
+            path.write_text(document, encoding="utf-8")
+        else:
+            path.write_text(json.dumps(document), encoding="utf-8")
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path),
+                                 "--json"])
+    return code, json.loads(out.getvalue()), err.getvalue()
+
+
+def unbound_budget() -> dict[str, object]:
+    """构造一份声明不出可复现绑定的预算：正是受控文件当前的状态。"""
+
+    document = budget()
+    block = binding_block(git_revision=None, source_sha256=None)
+    block["binding_state"] = "unbound-pending-recalibration"
+    document["applies_to"]["build"] = block
+    return document
+
+
+def test_exit_two_still_writes_a_verdict_document(tmp_path: Path) -> None:
+    """核心回归（run 37777276336）：退出码 2 必须产出结论文档，不能只留一个退出码。
+
+    真实缺陷是判定以 2 结束时标准输出为空，被 capture 成 verdict.json 后得到 0 字节
+    文件：上传的制品里没有判定结论，日志里只剩「无法读取」和退出码。
+    """
+
+    code, verdict, noise = unavailable_verdict(tmp_path, report(), unbound_budget())
+
+    assert code == 2, "退出码 2 不得被改写成 0 或 1"
+    assert verdict["status"] == "unavailable"
+    assert verdict["protocol"] == "quality-check/v1"
+    assert verdict["check"] == perf_budget.CHECK_NAME
+    assert verdict["schema"] == perf_budget.BUDGET_SCHEMA
+    assert verdict["exit_code"] == 2
+    # 一次也没有判定：实际核对场景数必须是 0，不能拿预算声明的场景数充数。
+    assert verdict["checked"] == 0
+    assert verdict["findings"] == []
+    assert verdict["unavailable"]["action"]
+    # 绑定从未比较过，不得凭空写成「相符」。
+    assert verdict["binding"]["matched"] is None
+    assert verdict["binding"]["compared"] is False
+    assert noise, "标准错误必须写明原因，不能只有退出码"
+
+
+def test_unavailable_verdicts_separate_the_three_causes(tmp_path: Path) -> None:
+    """三类输入不可用必须各有各的类别与说法，不能合成一句「无法读取」。"""
+
+    unsupported = budget()
+    unsupported["schema"] = "perf-budget/v9"
+
+    cases = {
+        perf_budget.CATEGORY_BINDING_UNBOUND: (report(), unbound_budget(),
+                                               "unbound-pending-recalibration", "重新校准"),
+        perf_budget.CATEGORY_REPORT_INVALID: ("{不是 JSON", budget(), None, "不是合法 JSON"),
+        perf_budget.CATEGORY_BUDGET_INVALID: (report(), unsupported, None, "perf-budget/v9"),
+    }
+
+    for category, (report_document, budget_document, state, expected) in cases.items():
+        directory = tmp_path / category
+        directory.mkdir()
+        code, verdict, noise = unavailable_verdict(directory, report_document, budget_document)
+        assert code == 2, category
+        assert verdict["unavailable"]["category"] == category, verdict["unavailable"]
+        assert verdict["unavailable"]["kind"] in perf_budget.UNAVAILABLE_GUIDE
+        assert expected in noise, f"{category} 的标准错误必须写明原因：{noise}"
+        assert verdict["unavailable"]["binding_state"] == state
+
+
+def test_unsupported_budget_schema_names_the_offending_schema(tmp_path: Path) -> None:
+    """预算 schema 不受支持时，结论必须写明具体是哪个 schema 以及迁移方向。"""
+
+    document = budget()
+    document["schema"] = "perf-budget/v9"
+    code, verdict, _ = unavailable_verdict(tmp_path, report(), document)
+
+    assert code == 2
+    assert verdict["unavailable"]["kind"] == "budget-schema-unsupported"
+    assert verdict["unavailable"]["subject"] == "budget"
+    assert "perf-budget/v9" in verdict["unavailable"]["detail"]
+    assert perf_budget.BUDGET_SCHEMA in verdict["unavailable"]["action"]
+
+
+def test_retired_schema_budget_verdict_keeps_the_migration_reason(tmp_path: Path) -> None:
+    """退役 schema 的迁移说明必须进结论文件，不能只留在已经滚走的日志里。"""
+
+    legacy = budget()
+    legacy["schema"] = perf_budget.RETIRED_BUDGET_SCHEMA
+    legacy["applies_to"]["build"] = {"jar_sha256": BUILD}
+    code, verdict, _ = unavailable_verdict(tmp_path, report(), legacy)
+
+    assert code == 2
+    assert verdict["unavailable"]["category"] == perf_budget.CATEGORY_BUDGET_INVALID
+    assert verdict["unavailable"]["kind"] == "budget-schema-unsupported"
+    assert perf_budget.RETIRED_BUDGET_SCHEMA in verdict["unavailable"]["detail"]
+    assert "已退役" in verdict["unavailable"]["detail"]
+
+
+def test_passing_and_failing_verdicts_keep_their_original_shape(tmp_path: Path) -> None:
+    """退出码 0 与 1 的结论必须逐字保持原样：不得混进 unavailable 段或 exit_code。"""
+
+    report_path = tmp_path / "report.json"
+    budget_path = tmp_path / "budget.json"
+    report_path.write_text(json.dumps(report()), encoding="utf-8")
+    budget_path.write_text(json.dumps(budget()), encoding="utf-8")
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+        assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path),
+                                 "--json"]) == 0
+    passed = json.loads(captured.getvalue())
+    assert set(passed) == {"protocol", "check", "schema", "budget_status", "workload",
+                           "checked", "binding", "status", "findings"}
+    assert passed["status"] == "passed" and passed["findings"] == []
+
+    tight = budget()
+    tight["scenarios"]["auth-login"].update({"p50_ms": 11.0, "p95_ms": 12.0, "p99_ms": 12.0})
+    budget_path.write_text(json.dumps(tight), encoding="utf-8")
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+        assert perf_budget.main(["--report", str(report_path), "--budgets", str(budget_path),
+                                 "--json"]) == 1
+    failed = json.loads(captured.getvalue())
+    assert set(failed) == set(passed)
+    assert failed["status"] == "failed"
+    assert {item["kind"] for item in failed["findings"]} == {"over-budget"}
+
+
+def test_unavailable_verdict_is_not_accepted_as_release_evidence(tmp_path: Path) -> None:
+    """退出码 2 的结论绝不能被当成发布证据：状态与场景数都必须挡住。"""
+
+    code, verdict, _ = unavailable_verdict(tmp_path, report(), unbound_budget())
+
+    assert code == 2
+    assert verdict["status"] != "passed"
+    assert type(verdict["checked"]) is int and verdict["checked"] <= 0
 
 
 def source_tree(root: Path) -> Path:

@@ -18,6 +18,17 @@ MyBatis 日志调到 DEBUG 后按迭代时间窗统计请求线程的语句执�
 环境编排失败、判定输入不可用或资源回收不完整。判定子进程返回 2 时本工具原样返回 2，
 不把它折叠成「证据不足的 1」：两者的处置完全不同。
 
+判定结论文件在退出码 2 时同样存在。真实缺陷（run 37777276336）：判定子进程以退出码 2
+结束时只往标准错误写一行字，标准输出为空，被 capture 成结论文件后得到 0 字节文件；上传的
+制品里没有判定结论，日志里那句「无法读取」又掩盖了真正的原因（当时预算是
+`binding_state: unbound-pending-recalibration`，即尚未在目标环境重新校准这一合法状态）。
+现在 `perf_budget.py` 在退出码 2 时同样写出结构化结论，`print_verdict` 再把它整段回显，
+制品与日志读到的是同一份字节。
+
+`print_verdict` 自身也曾有第二个可观测性缺陷：文件不存在、文件存在但不是合法 JSON、
+文件可解析但结构不是判定结论三件事都打印同一句「无法读取」，排查只能回到源码猜。现在
+逐类分开，并且结论带 `unavailable` 段时直接回显类别、具体原因、绑定状态与处置。
+
 运行（仓库根）：
 
     python -B -X utf8 scripts/perf/run_baseline.py --out-dir <仓库外目录> --password-env <口令变量名>
@@ -94,32 +105,71 @@ def print_verdict(verdict_path: Path, verdict: int) -> None:
     因此 stdout 上的每一条与随后作为 artifact 上传的字节完全同源，不会出现两套口径。
     读取失败只如实报告，绝不改动调用方按真实退出码得出的结论。
 
+    第二个可观测性缺陷（run 37777276336）：读不到结论时过去一律打印「无法读取」，
+    文件不存在、文件存在但内容不是合法 JSON、文件可解析但结构不是判定结论三件事被
+    合成同一句话。CI 日志里因此看不出是判定脚本没写文件、写坏了，还是本工具读错了，
+    排查只能回到源码猜。这里逐类分开，并在结论里带 `unavailable` 段时把真实原因
+    （类别、具体情形、预算自己声明的绑定状态、可执行处置）整段回显。
+
     Args:
         verdict_path: perf_budget.py 以 --json 写出的结论文件。
         verdict: 判定进程的真实退出码，仅用于提示语。
     """
 
     try:
-        document = json.loads(verdict_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        log(f"判定结论 {verdict_path} 无法读取（{error}）；判定退出码 {verdict} 原样保留")
+        raw = verdict_path.read_bytes()
+    except FileNotFoundError:
+        log(f"判定结论文件不存在：判定进程没有在该路径产出结论（{verdict_path}）；"
+            f"判定退出码 {verdict} 原样保留；请按判定进程自身的标准错误输出定位原因")
+        return
+    except OSError as error:
+        log(f"判定结论文件无法读取（{error.strerror or error}，{verdict_path}）；"
+            f"判定退出码 {verdict} 原样保留")
+        return
+    if not raw.strip():
+        log(f"判定结论文件为空（0 字节内容，{verdict_path}）：判定进程打开了文件但没有写出"
+            f"结论；判定退出码 {verdict} 原样保留；请按判定进程自身的标准错误输出定位原因")
+        return
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        log(f"判定结论文件存在但不是合法 JSON（{error}，{verdict_path}）："
+            f"文件已损坏或被截断，不是「文件缺失」；判定退出码 {verdict} 原样保留")
         return
     if not isinstance(document, dict):
-        log(f"判定结论 {verdict_path} 顶层不是对象；判定退出码 {verdict} 原样保留")
+        log(f"判定结论文件可解析但顶层不是对象（{verdict_path}）："
+            f"结论结构与 perf_budget.py 的约定不符；判定退出码 {verdict} 原样保留")
         return
     findings = document.get("findings")
     if not isinstance(findings, list):
-        log(f"判定结论 {verdict_path} 缺少 findings 列表；判定退出码 {verdict} 原样保留")
+        log(f"判定结论文件可解析但缺少 findings 列表（{verdict_path}）："
+            f"结论结构与 perf_budget.py 的约定不符；判定退出码 {verdict} 原样保留")
         return
+    unavailable = document.get("unavailable")
     binding = document.get("binding")
     if isinstance(binding, dict):
         declared = binding.get("declared") or {}
         observed = binding.get("observed") or {}
-        log(f"构件绑定 {binding.get('method')}：{'相符' if binding.get('matched') else '不相符'}"
+        # matched 为 null 表示这一次根本没有比较过：写成「不相符」等于把「没判定」说成
+        # 「判为不符」，属于凭空结论，这里如实写成「未比较」。
+        matched = binding.get("matched")
+        relation = "未比较" if matched is None else ("相符" if matched else "不相符")
+        log(f"构件绑定 {binding.get('method')}：{relation}"
             f"（实测修订 {observed.get('git_revision')}、实测摘要 {observed.get('source_sha256')}；"
             f"预算修订 {declared.get('git_revision')}、预算摘要 {declared.get('source_sha256')}）")
     log(f"判定结论：状态 {document.get('status')}、实际核对场景 {document.get('checked')} 个、"
         f"问题 {len(findings)} 项、负载 {document.get('workload')!r}")
+    if isinstance(unavailable, dict):
+        # 退出码 2 的结论不是「没有 finding」，而是「一次也没有判定」：必须把原因整段
+        # 回显，否则日志里只剩一个 2，读日志的人无从区分预算待校准、报告损坏与预算不可用。
+        log(f"判定未执行（退出码 {document.get('exit_code', verdict)}）："
+            f"类别 {unavailable.get('category')}、情形 {unavailable.get('kind')}、"
+            f"受影响输入 {unavailable.get('subject')}")
+        log(f"具体原因：{unavailable.get('detail')}")
+        log(f"绑定状态：{unavailable.get('binding_state')!r}；处置：{unavailable.get('action')}")
+        log(f"处置提示：本次没有任何场景被核对（checked={document.get('checked')}），"
+            f"结论不等于通过；判定退出码 {verdict} 原样保留")
+        return
     for item in findings:
         if not isinstance(item, dict):
             log(f"  结论条目不是对象：{item!r}")
@@ -605,6 +655,7 @@ def orchestrate(arguments: argparse.Namespace, resources: Resources, target: MyS
         log(f"判定退出码 {verdict}；报告目录 {output}")
         # 判定子进程的 2 表示「报告或预算本身不可用」，与「测了但没达标」是两类问题：
         # 折叠成 1 会让预算文件不可用看起来像一次普通的超标。真实退出码原样上抛。
+        # 判定输入不可用时 perf_budget.py 同样写出结论文件，因此这里读得到真实原因。
         return 0 if verdict == 0 else verdict
     finally:
         stop_backend(resources)

@@ -589,7 +589,11 @@ def test_verdict_findings_are_echoed_to_stdout(tmp_path: Path, capsys: pytest.Ca
 
 
 def test_verdict_echo_never_changes_the_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """回显只是展示：结论文件缺失或损坏时如实报告，不抛错也不替换判定进程的退出码。"""
+    """回显只是展示：结论文件缺失或损坏时如实报告，不抛错也不替换判定进程的退出码。
+
+    第二个可观测性缺陷（run 37777276336）：缺失与损坏过去都打印同一句「无法读取」，
+    日志里因此分不清是判定脚本没写文件还是文件被截断。本用例钉住三种情形各自的说法。
+    """
 
     missing = tmp_path / "not-exists.json"
     broken = write_verdict(tmp_path / "broken.json", {"status": "failed"})
@@ -602,10 +606,71 @@ def test_verdict_echo_never_changes_the_verdict(tmp_path: Path, capsys: pytest.C
     harness.print_verdict(item_broken, 1)
 
     out = capsys.readouterr().out
-    assert "无法读取" in out and "原样保留" in out
-    assert "缺少 findings 列表" in out
+    assert "原样保留" in out
+    # 文件不存在、文件存在但结构不是判定结论，两者必须各有各的说法；
+    # 非法 JSON 与 0 字节文件由下一条用例单独钉住。
+    assert "判定结论文件不存在" in out
     assert "顶层不是对象" in out
+    assert "缺少 findings 列表" in out
     assert "结论条目不是对象" in out
+
+
+def test_empty_and_corrupted_verdicts_are_told_apart(tmp_path: Path,
+                                                      capsys: pytest.CaptureFixture[str]) -> None:
+    """0 字节文件与非法 JSON 必须分开报告：前者是「没写出结论」，后者是「写坏了」。"""
+
+    empty = tmp_path / "empty.json"
+    empty.write_bytes(b"")
+    truncated = tmp_path / "truncated.json"
+    truncated.write_text('{"status": "fai', encoding="utf-8")
+
+    harness.print_verdict(empty, 2)
+    harness.print_verdict(truncated, 2)
+
+    out = capsys.readouterr().out
+    assert "判定结论文件为空" in out
+    assert "判定进程打开了文件但没有写出结论" in out
+    assert "判定结论文件存在但不是合法 JSON" in out
+    assert "文件已损坏或被截断" in out
+
+
+def test_unavailable_verdict_is_echoed_with_its_real_reason(tmp_path: Path,
+                                                            capsys: pytest.CaptureFixture[str]) -> None:
+    """核心回归（run 37777276336）：退出码 2 的结论必须回显真实原因与可执行处置。
+
+    真实缺陷是判定以 2 结束时没有写出结论，日志只剩「无法读取」和退出码，读日志的人
+    分不清是预算还没在目标环境重新校准、是报告坏了还是预算文件不可用。
+    """
+
+    path = write_verdict(tmp_path / "verdict.json", {
+        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v2",
+        "status": "unavailable", "exit_code": 2, "checked": 0,
+        "workload": "w7-baseline-v1", "findings": [],
+        "binding": {"method": "git-source-id/v1", "scope": "backend-build-inputs/v1",
+                    "matched": None, "compared": False,
+                    "declared": {"git_revision": None, "source_sha256": None},
+                    "observed": {"git_revision": "a" * 40, "source_sha256": "b" * 64}},
+        "unavailable": {"category": "budget-binding-unbound",
+                        "kind": "budget-binding-unbound", "subject": "budget",
+                        "detail": "预算文件的构件绑定缺少可用的 git_revision",
+                        "binding_state": "unbound-pending-recalibration",
+                        "action": "需要在目标环境重新校准，并把实测的 git_revision 与 source_sha256 回填"},
+    })
+
+    harness.print_verdict(path, 2)
+
+    out = capsys.readouterr().out
+    assert "判定未执行（退出码 2）" in out
+    assert "budget-binding-unbound" in out
+    assert "预算文件的构件绑定缺少可用的 git_revision" in out
+    assert "unbound-pending-recalibration" in out
+    assert "需要在目标环境重新校准" in out
+    # 绑定从未比较过：不得把「没判定」说成「判为不符」。
+    assert "构件绑定 git-source-id/v1：未比较" in out
+    assert "不相符" not in out
+    # 「没有 finding」不等于通过：回显必须写明一次也没有核对。
+    assert "本次没有任何场景被核对" in out and "checked=0" in out
+    assert "结论不等于通过" in out
 
 
 def test_failed_verdict_without_findings_is_still_reported(tmp_path: Path,

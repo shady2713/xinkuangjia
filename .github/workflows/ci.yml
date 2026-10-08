@@ -644,6 +644,14 @@ jobs:
       # 逐条 findings 此前只存在于会被清理的临时目录，作业判红时又跳过了发布证据上传，
       # 事后无从定位。这里无论成败都取回本次真实写出的判定结论；未产出时用 warn 记录，
       # 缺文件不改变作业结论，也不把失败包装成通过。
+      #
+      # 真实缺陷（run 37777276336）：判定子进程以退出码 2 结束时标准输出为空，
+      # verdict.json 落到 0 字节，上面的 `-s` 判据因此落空、两个制品里也没有任何结论；
+      # 日志里那句「无法读取」又掩盖了真正的原因（受控预算处于
+      # binding_state=unbound-pending-recalibration，尚未在目标环境重新校准）。
+      # perf_budget.py 现在在退出码 2 时同样写出结论文档，本步骤因此总能拿到内容：
+      # 退出码 2 仍原样传出，制品上传沿用既有的 if: always() 与 if-no-files-found: warn，
+      # 不新增任何跳过或豁免。
       - name: 上传性能预算判定结论
         if: always()
         uses: actions/upload-artifact@v4
