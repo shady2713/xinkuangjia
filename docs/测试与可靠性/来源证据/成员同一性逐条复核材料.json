@@ -141,15 +141,15 @@
   "generation_note": "本 JSON 不写入生成时间戳：材料必须能按整文件 SHA-256 逐次复算；生成时间记录在同名 Markdown 的首段。",
   "repository": {
     "root": "/home/weetion/桌面/kuangjia/repo",
-    "head": "d69a40946caac8237b2427a940ddf24c21ac0f6b",
+    "head": "c921146e0d0c30d715fb5d961e2050ae146ff21b",
     "branch": "codex/framework-remediation",
     "python": "3.12.3"
   },
   "inputs": {
     "source_index": {
       "path": "docs/测试与可靠性/来源证据/d12-source-index.json",
-      "sha256": "dfbe17fbc8c54ff94984f03a20542ef3c6e59e4508f413a78b1ef7d9d4207f47",
-      "records_sha256": "e4605fcdbd5b35bd143ef2f6bd09c5cd2427e8ecafaa3de1368ee858087f21cb",
+      "sha256": "45981e83061f9632b4b2a69784bcc6ce7b1676ff1d5f5e200f757d4551bd7323",
+      "records_sha256": "02673716b737efa9757c7316a00edefefd986545059b9df82b189089a385388f",
       "records": 186
     },
     "d16_queue": {
@@ -578,7 +578,7 @@
     },
     "rule_implementation": {
       "path": "scripts/code/java/check_staged_java_comments.py",
-      "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+      "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
     },
     "shared_generator": {
       "path": "scripts/tools/build_d16_review_package.py",
@@ -4133,7 +4133,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -6033,7 +6033,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -7353,7 +7353,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -9253,7 +9253,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -10527,7 +10527,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -12395,7 +12395,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -14139,7 +14139,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -15454,7 +15454,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -16685,7 +16685,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -18240,7 +18240,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -23194,7 +23194,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -25482,7 +25482,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -28681,7 +28681,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -31462,7 +31462,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -36826,7 +36826,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -39357,7 +39357,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -41465,7 +41465,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -43504,7 +43504,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -46061,7 +46061,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -48225,7 +48225,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -54238,7 +54238,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -57381,7 +57381,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -59443,7 +59443,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -63222,7 +63222,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -66147,7 +66147,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -68780,7 +68780,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -72747,7 +72747,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -76875,7 +76875,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -84094,7 +84094,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -90758,7 +90758,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -97422,7 +97422,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -104086,7 +104086,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -105936,7 +105936,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -107253,7 +107253,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -110866,7 +110866,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -114337,7 +114337,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -118967,7 +118967,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -120271,7 +120271,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -123325,7 +123325,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -126181,7 +126181,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -127782,7 +127782,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -129316,7 +129316,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -131800,7 +131800,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -134487,7 +134487,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -139151,7 +139151,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -143732,7 +143732,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -145458,7 +145458,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -148894,7 +148894,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -151968,7 +151968,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -153898,7 +153898,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -156306,7 +156306,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -157803,7 +157803,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -160771,7 +160771,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -163838,7 +163838,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -165712,7 +165712,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -169301,7 +169301,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -172222,7 +172222,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -177399,7 +177399,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -182550,7 +182550,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -188455,7 +188455,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -193224,7 +193224,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -197993,7 +197993,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -202762,7 +202762,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -204816,7 +204816,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -208687,7 +208687,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -212854,7 +212854,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -217319,7 +217319,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -218845,7 +218845,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -224339,7 +224339,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -229110,7 +229110,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -231378,7 +231378,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -233474,7 +233474,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -237341,7 +237341,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -240447,7 +240447,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -241970,7 +241970,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -245438,7 +245438,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -250379,7 +250379,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -252202,7 +252202,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -255113,7 +255113,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -257955,7 +257955,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -259552,7 +259552,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -262424,7 +262424,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -266712,7 +266712,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -269843,7 +269843,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -271805,7 +271805,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -278729,7 +278729,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -282593,7 +282593,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -284102,7 +284102,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -286311,7 +286311,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -289079,7 +289079,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -291732,7 +291732,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -296550,7 +296550,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -300882,7 +300882,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -303002,7 +303002,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -304595,7 +304595,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -307131,7 +307131,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -310126,7 +310126,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -312688,7 +312688,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -315679,7 +315679,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -318079,7 +318079,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -320226,7 +320226,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -322797,7 +322797,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -324113,7 +324113,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -326287,7 +326287,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -330273,7 +330273,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -331555,7 +331555,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -333307,7 +333307,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
@@ -335912,7 +335912,7 @@
         "tool": {
           "name": "check_staged_java_comments.py",
           "version": "d17-member-identity/v1",
-          "sha256": "1bb4ea7d74901c9745c9a16ef2fb4ae50b22db4e17c9223a5ecfbd3aa33ac292"
+          "sha256": "1798081732cd7b8df1770d156581b5772a46b547001e4e62febd89311690e035"
         },
         "review": {
           "implementer": "D17 成员级复核材料实施方（scripts/tools/build_d17_member_review_package.py）",
