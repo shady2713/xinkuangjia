@@ -52,6 +52,12 @@
 #      目录下的 verdict.json；作业判红后发布证据上传被跳过，该目录也不再保留 ⇒ 事后无法
 #      判断失败类别。现在 run_baseline.py 自身把逐条 findings 回显到 stdout，性能实查步骤
 #      无论成败都归档并回显 verdict.json、再以 `if: always()` 上传，退出码仍按原始退出码。
+#  10. run 37745930988 之后仍有第二个缺口：下载该次运行的全部 9 个 artifact 后，
+#      `merged.json` / `latency.json` / `sql.json` 命中数为 0——原始报告从未作为制品上传。
+#      verdict.json 只给出逐条 findings，判定只用报告里的统计量；没有原始报告，事后对
+#      **未触发 finding** 的指标只能按判定式严格反推成**右删失上界**，拿不到 CI 侧真实的
+#      分位数分布与 samples_ms 原始样本。现在原始报告目录同样以 `if: always()` 上传，
+#      退出码、阈值与判定逻辑一律未动。
 name: ci-gate
 
 on:
@@ -631,6 +637,30 @@ jobs:
         with:
           name: perf-budget-verdict
           path: ${{ runner.temp }}/perf-baseline/verdict.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      # 真实缺陷（run 37745930988）：下载该次运行全部 9 个 artifact 后，merged.json /
+      # latency.json / sql.json 命中数为 0，原始报告从未上传。verdict.json 只回答「哪几条
+      # 超了」，对**没有触发 finding** 的指标只能按判定式反推成右删失上界，CI 侧真实的
+      # 分位数分布与原始样本全部丢失，事后无法复核判定。
+      #
+      # perf_budget.py 的文档字符串要求报告保留全部原始样本：判定只用统计量，但保留
+      # samples_ms 才能被独立复算。因此这里逐个列出本次运行真实写出的四个报告文件，
+      # 而不是直接打包 $RUNNER_TEMP/perf-baseline —— 同一父目录旁边的应用日志、
+      # bootstrap 日志与被测 JAR 都不是判定证据，打包进去只会撑大制品并带出运行细节。
+      # verdict.json 与上一个 artifact 是同一份字节，重复收录只为让本制品自身完整：
+      # 判定失败时可以在同一个 artifact 里同时取到逐条 findings 与支撑它的原始样本。
+      - name: 上传性能测量原始报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-baseline-raw-reports
+          path: |
+            ${{ runner.temp }}/perf-baseline/merged.json
+            ${{ runner.temp }}/perf-baseline/latency.json
+            ${{ runner.temp }}/perf-baseline/sql.json
+            ${{ runner.temp }}/perf-baseline/verdict.json
           if-no-files-found: warn
           retention-days: 7
 

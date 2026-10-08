@@ -1230,6 +1230,82 @@ class TestPerformanceVerdictIsRetrievable:
             assert f"item.get('{fragment}')" in source or f'item.get("{fragment}")' in source
 
 
+class TestPerformanceRawReportsAreRetrievable:
+    """性能测量的原始报告必须在失败时也作为制品上传（run 37745930988）。
+
+    真实缺陷：该次运行下载全部 9 个 artifact 后，merged.json / latency.json / sql.json
+    命中数为 0——工作流只上传 verdict.json。verdict 只回答「哪几条超了」，对没有触发
+    finding 的指标只能按判定式反推成右删失上界，CI 侧真实的分位数分布与原始样本全部
+    丢失。本组用例钉住：原始报告以 `if: always()` 上传、上传的是编排真实写出的全部报告
+    文件、逐个文件列举而不打包日志与 JAR、缺文件不改变作业结论。
+    """
+
+    GATE = "发布阶段后端性能预算实查"
+    UPLOAD = "上传性能测量原始报告"
+
+    def upload(self) -> str:
+        """取回原始报告上传步骤的真实文本块。"""
+
+        return step_named("backend", self.UPLOAD)
+
+    def written_reports(self) -> set[str]:
+        """从编排脚本里取回本次运行真实写出到报告目录的文件名。
+
+        Returns:
+            报告目录下的 JSON 文件名集合。
+        """
+
+        source = (ROOT / "scripts" / "perf" / "run_baseline.py").read_text(encoding="utf-8")
+        return set(re.findall(r'output / "([a-z_]+\.json)"', source))
+
+    def test_raw_reports_are_uploaded_even_when_the_job_fails(self) -> None:
+        """原始报告必须以 artifact 在失败时也上传，缺文件不得改变作业结论。"""
+
+        upload = self.upload()
+        assert "if: always()" in upload
+        assert "actions/upload-artifact@v4" in upload
+        assert "${{ runner.temp }}" in upload
+        assert "if-no-files-found: warn" in upload
+
+    def test_upload_runs_after_the_gate_it_reports_on(self) -> None:
+        """上传步骤必须排在性能实查之后：排到前面就取不到本次运行写出的报告。"""
+
+        steps = re.split(r"\n      - ", job_section("backend"))
+        names = [part.split("\n", 1)[0].removeprefix("name: ") for part in steps[1:]]
+        assert names.index(self.GATE) < names.index(self.UPLOAD)
+
+    def test_every_report_the_orchestration_writes_is_uploaded(self) -> None:
+        """编排写出哪几个报告文件，上传路径就必须逐个列出哪几个，不允许漏。"""
+
+        written = self.written_reports()
+        assert {"merged.json", "latency.json", "sql.json", "verdict.json"} == written
+        listed = set(re.findall(r"perf-baseline/([a-z_]+\.json)", self.upload()))
+        assert written == listed
+
+    def test_upload_lists_files_instead_of_packing_the_workspace(self) -> None:
+        """只逐个上传报告文件：通配整目录会把应用日志、bootstrap 日志与被测 JAR 一起打包。"""
+
+        block = self.upload().split("path: |", 1)[1].split("if-no-files-found", 1)[0]
+        lines = [line.strip() for line in block.strip().splitlines() if line.strip()]
+        assert lines, "上传路径必须逐行列出报告文件"
+        for line in lines:
+            assert re.fullmatch(r"\$\{\{ runner\.temp \}\}/perf-baseline/[a-z_]+\.json", line), line
+        # 日志、工作区与构件都不是判定证据；出现通配或目录就说明范围被放大。
+        assert not re.search(r"\*|\.log|\.jar|perf-baseline/?$", block)
+
+    def test_uploaded_reports_are_the_ones_carrying_the_raw_samples(self) -> None:
+        """perf_budget 要求保留全部原始样本：被上传的报告必须真的带 samples_ms。"""
+
+        budget = (ROOT / "scripts" / "perf" / "perf_budget.py").read_text(encoding="utf-8")
+        assert "samples_ms 必须保留全部原始样本" in budget
+        measure = (ROOT / "scripts" / "perf" / "measure_endpoints.py").read_text(encoding="utf-8")
+        # 两轮原始报告由 measure_endpoints 写出，合并报告只是两者的并集；只传 merged.json
+        # 会丢掉合并前的原始读数，因此两轮原始报告必须各自出现在上传路径里。
+        assert '"samples_ms"' in measure
+        for name in ("latency.json", "sql.json", "merged.json"):
+            assert name in self.upload()
+
+
 class TestReleaseStaticAnalysis:
     """发布证据必须包含真实静态检查结论：跳过、零对象、违规、范围缩水与旧配置都拒绝。"""
 
