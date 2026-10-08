@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -531,3 +532,140 @@ def test_cli_help_exits_zero() -> None:
         harness.parse_arguments(["--help"])
 
     assert captured.value.code == 0
+
+
+def write_verdict(path: Path, document: object) -> Path:
+    """把一份 perf_budget.py 真实结构的结论写进指定文件，供回显用例消费。
+
+    Args:
+        path: 结论文件路径。
+        document: 顶层对象；允许非对象以覆盖结构损坏的情形。
+    Returns:
+        写入后的结论文件路径。
+    """
+
+    path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_verdict_findings_are_echoed_to_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """核心回归（run 37739234202）：逐条 findings 必须回到 stdout，不能只留在临时目录。
+
+    真实缺陷是判定子进程的 stdout 被 capture 进 verdict.json，而父进程只打印
+    「判定退出码 1」；作业判红后临时目录不再保留，事后无法判断失败类别。本用例钉住
+    kind、场景、实测值与预算值四处都能在进程标准输出里读到。
+    """
+
+    path = write_verdict(tmp_path / "verdict.json", {
+        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v1",
+        "status": "failed", "checked": 9, "workload": "w7-baseline-v1",
+        "findings": [
+            {"kind": "over-budget", "scenario": "auth-login", "metric": "p95_ms",
+             "observed": 900.0, "allowed": 170.0, "message": "p95 900.0 ms 超过预算 170.0 ms"},
+            {"kind": "scenario-missing", "scenario": "dict-type-page", "metric": "samples",
+             "observed": None, "allowed": None, "message": "报告中没有该场景的测量结果"},
+            {"kind": "build-mismatch", "scenario": "*", "metric": "jar_sha256",
+             "observed": None, "allowed": None, "message": "报告构件与预算声明的摘要不一致"},
+        ],
+    })
+
+    harness.print_verdict(path, 1)
+
+    out = capsys.readouterr().out
+    assert "[over-budget]" in out and "auth-login" in out and "p95_ms" in out
+    assert "900.0" in out and "170.0" in out
+    assert "[scenario-missing]" in out and "dict-type-page" in out
+    assert "[build-mismatch]" in out and "jar_sha256" in out
+    assert "状态 failed" in out and "实际核对场景 9 个" in out
+
+
+def test_verdict_echo_never_changes_the_verdict(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """回显只是展示：结论文件缺失或损坏时如实报告，不抛错也不替换判定进程的退出码。"""
+
+    missing = tmp_path / "not-exists.json"
+    broken = write_verdict(tmp_path / "broken.json", {"status": "failed"})
+    not_object = write_verdict(tmp_path / "list.json", ["不是对象"])
+    item_broken = write_verdict(tmp_path / "item.json", {"status": "failed", "findings": ["裸字符串"]})
+
+    harness.print_verdict(missing, 1)
+    harness.print_verdict(broken, 1)
+    harness.print_verdict(not_object, 2)
+    harness.print_verdict(item_broken, 1)
+
+    out = capsys.readouterr().out
+    assert "无法读取" in out and "原样保留" in out
+    assert "缺少 findings 列表" in out
+    assert "顶层不是对象" in out
+    assert "结论条目不是对象" in out
+
+
+def test_failed_verdict_without_findings_is_still_reported(tmp_path: Path,
+                                                           capsys: pytest.CaptureFixture[str]) -> None:
+    """判定未通过却没有任何 finding 时必须说出来，不能让失败在日志里静默。"""
+
+    path = write_verdict(tmp_path / "verdict.json", {
+        "status": "failed", "checked": 10, "workload": "w7-baseline-v1", "findings": []})
+
+    harness.print_verdict(path, 1)
+
+    assert "没有任何 finding" in capsys.readouterr().out
+
+
+def test_orchestrate_maps_verdict_exit_code_without_swallowing(tmp_path: Path,
+                                                              monkeypatch: pytest.MonkeyPatch) -> None:
+    """退出码仍按判定进程的真实结果传递：0 → 0，非 0 → 1，2 也不会被当成通过。"""
+
+    arguments = harness.parse_arguments(["--out-dir", str(tmp_path / "out")])
+    resources = harness.Resources(workspace=tmp_path)
+    resources.database = ISOLATED_DATABASE
+    resources.redis = REDIS
+    monkeypatch.setattr(harness, "create_database", lambda *_: None)
+    monkeypatch.setattr(harness, "import_schema", lambda *_: None)
+    monkeypatch.setattr(harness, "seed_dataset", lambda *_: None)
+    monkeypatch.setattr(harness.isolation, "bootstrap_admin", lambda *_: None)
+    monkeypatch.setattr(harness.isolation, "wait_for_http", lambda *_: True)
+    monkeypatch.setattr(harness, "start_backend", lambda *_: PopenRecorder())
+    monkeypatch.setattr(harness, "stop_backend", lambda *_: None)
+    monkeypatch.setattr(harness.seeder, "seed", lambda *_, **__: None)
+    monkeypatch.setattr(harness, "log", lambda message: None)
+
+    def install_verdict(code: int) -> None:
+        """让编排走到判定并返回指定退出码，同时写出与真实结构一致的结论文件。"""
+
+        def fake_run_tool(module: str, arguments_: list[str], environment: dict[str, str],
+                          capture: Path | None = None) -> int:
+            """只让判定这一步返回指定退出码，其余测量步骤始终成功。
+
+            Args:
+                module: 被调用的工具模块名。
+                arguments_: 该次调用的真实命令行参数。
+                environment: 该次调用的子进程环境。
+                capture: 需要写出的结论文件；为空表示不落盘。
+            Returns:
+                判定步骤返回给定退出码，测量与合并返回 0。
+            """
+
+            # 只有判定这一步返回指定退出码；测量与合并始终成功，让用例能走到判定。
+            if module != "scripts.perf.perf_budget":
+                return 0
+            if capture is not None:
+                write_verdict(capture, {"status": "failed" if code else "passed", "checked": 10,
+                                        "workload": "w7-baseline-v1",
+                                        "findings": [] if code == 0 else
+                                        [{"kind": "over-budget", "scenario": "auth-login",
+                                          "metric": "p95_ms", "observed": 1.0, "allowed": 2.0,
+                                          "message": "超预算"}]})
+            return code
+
+        monkeypatch.setattr(harness, "run_tool", fake_run_tool)
+
+    mysql_target = target()
+    install_verdict(0)
+    assert harness.orchestrate(arguments, resources, mysql_target, S3, "java",
+                               harness.DEFAULT_JAR) == 0
+    install_verdict(1)
+    assert harness.orchestrate(arguments, resources, mysql_target, S3, "java",
+                               harness.DEFAULT_JAR) == 1
+    install_verdict(2)
+    assert harness.orchestrate(arguments, resources, mysql_target, S3, "java",
+                               harness.DEFAULT_JAR) == 1

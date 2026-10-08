@@ -47,6 +47,11 @@
 #     source-acceptance-report/v1）：报告缺失、未知 schema、旧提交、规则实现指纹或受控账本
 #     指纹不符、扫描范围漏项、计数与逐项清单不符、或存在适用来源阻断（含合规登记的阻断）
 #     时，汇总退出 1 且 release_verified=false；四个必需作业全绿不能代替本次来源验收。
+#   9. run 37739234202（SHA 64eedb7）首次真实跑起性能门禁：耗时 402.1s、10 个场景全部实测，
+#      但日志只留下「判定退出码 1；报告目录 …/perf-baseline」，逐条 findings 只写在该临时
+#      目录下的 verdict.json；作业判红后发布证据上传被跳过，该目录也不再保留 ⇒ 事后无法
+#      判断失败类别。现在 run_baseline.py 自身把逐条 findings 回显到 stdout，性能实查步骤
+#      无论成败都归档并回显 verdict.json、再以 `if: always()` 上传，退出码仍按原始退出码。
 name: ci-gate
 
 on:
@@ -581,6 +586,14 @@ jobs:
       # GITHUB_ENV），自建隔离库、按两轮重启后端真实测量，合并报告后调用
       # perf_budget.py 裁决；退出码原样传递，报告目录必须位于仓库之外。超预算退出 1、
       # 环境失败退出 2，两者都让本作业失败；没有任何跳过、降级或 `|| true` 分支。
+      #
+      # 真实缺陷（run 37739234202）：判定子进程的 stdout 被写进 $PERF_OUT/verdict.json，
+      # run_baseline.py 当时只打印「判定退出码 1」，逐条 findings 只存在于
+      # $RUNNER_TEMP/perf-baseline 下的结论文件，而该目录在作业结束后不再保留；
+      # 性能预算作业随后被判红，制品上传也被跳过，事后无法判断到底哪一类失败。
+      # 因此这里先如实取回 run_baseline.py 的退出码，再无条件回显并归档结论文件，
+      # 最后把**原退出码**交给作业判定：诊断可得，失败也不会被改写。
+      #
       # 结论 verdict.json 原样复制为发布证据，汇总门禁随后独立复核——包括预算是否
       # 已获有权者批准。当前 baseline-2026-10-07.json 仍是 proposed-awaiting-authority，
       # 汇总会因此拒绝发布证据：这是正确行为，本步骤不改写预算状态，也不提供豁免。
@@ -591,12 +604,35 @@ jobs:
           PERF_OUT: ${{ runner.temp }}/perf-baseline
         run: |
           mkdir -p "$EVIDENCE"
+          set +e
           python -B -X utf8 "${{ github.workspace }}"/scripts/perf/run_baseline.py \
             --out-dir "$PERF_OUT" \
             --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
             --budgets "${{ github.workspace }}"/scripts/perf/budgets/baseline-2026-10-07.json
-          cp "$PERF_OUT/verdict.json" "$EVIDENCE/perf-budget.json"
-          cat "$EVIDENCE/perf-budget.json"
+          status=$?
+          set -e
+          # 判定结论只要存在就归档并整份回显到日志：日志与制品读到的是同一份字节。
+          # 结论缺失时只如实记录，不据此改写退出码——环境失败仍然是 2，判定失败仍然是 1。
+          if [ -s "$PERF_OUT/verdict.json" ]; then
+            cp "$PERF_OUT/verdict.json" "$EVIDENCE/perf-budget.json"
+            echo "性能预算判定结论（逐条 findings）："
+            cat "$EVIDENCE/perf-budget.json"
+          else
+            echo "本次没有产出判定结论文件，run_baseline.py 退出码 $status；不据此改写结论" >&2
+          fi
+          exit $status
+
+      # 逐条 findings 此前只存在于会被清理的临时目录，作业判红时又跳过了发布证据上传，
+      # 事后无从定位。这里无论成败都取回本次真实写出的判定结论；未产出时用 warn 记录，
+      # 缺文件不改变作业结论，也不把失败包装成通过。
+      - name: 上传性能预算判定结论
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-budget-verdict
+          path: ${{ runner.temp }}/perf-baseline/verdict.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: 校验真实集成测试证据
         id: reports

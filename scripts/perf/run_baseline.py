@@ -27,6 +27,7 @@ BF_TEST_S3_ACCESS_KEY、BF_TEST_S3_SECRET_KEY；可选 BF_TEST_MYSQL_CLIENT 指�
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import secrets
@@ -76,6 +77,45 @@ def log(message: str) -> None:
     """
 
     print(f"[性能基线环境] {message}", flush=True)
+
+
+def print_verdict(verdict_path: Path, verdict: int) -> None:
+    """把判定结论里的逐条 finding 打到 stdout，使失败类别不依赖事后翻临时目录。
+
+    结论文件由 `perf_budget.py --json` 真实写出，本函数只做展示：它读回同一份文件，
+    因此 stdout 上的每一条与随后作为 artifact 上传的字节完全同源，不会出现两套口径。
+    读取失败只如实报告，绝不改动调用方按真实退出码得出的结论。
+
+    Args:
+        verdict_path: perf_budget.py 以 --json 写出的结论文件。
+        verdict: 判定进程的真实退出码，仅用于提示语。
+    """
+
+    try:
+        document = json.loads(verdict_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        log(f"判定结论 {verdict_path} 无法读取（{error}）；判定退出码 {verdict} 原样保留")
+        return
+    if not isinstance(document, dict):
+        log(f"判定结论 {verdict_path} 顶层不是对象；判定退出码 {verdict} 原样保留")
+        return
+    findings = document.get("findings")
+    if not isinstance(findings, list):
+        log(f"判定结论 {verdict_path} 缺少 findings 列表；判定退出码 {verdict} 原样保留")
+        return
+    log(f"判定结论：状态 {document.get('status')}、实际核对场景 {document.get('checked')} 个、"
+        f"问题 {len(findings)} 项、负载 {document.get('workload')!r}")
+    for item in findings:
+        if not isinstance(item, dict):
+            log(f"  结论条目不是对象：{item!r}")
+            continue
+        observed = item.get("observed")
+        allowed = item.get("allowed")
+        log(f"  [{item.get('kind')}] 场景 {item.get('scenario')} 指标 {item.get('metric')}："
+            f"实测 {observed} 对预算 {allowed}；{item.get('message')}")
+    if verdict != 0 and not findings:
+        # 判定失败却没有逐条 finding 说明结论文件本身不可用：如实说出来，不让失败静默。
+        log(f"判定未通过（退出码 {verdict}）但结论里没有任何 finding；请以判定进程输出为准")
 
 
 @dataclass
@@ -530,9 +570,14 @@ def orchestrate(arguments: argparse.Namespace, resources: Resources, target: MyS
         if arguments.skip_budget:
             log(f"按 --skip-budget 跳过判定；合并报告在 {merged}")
             return 0
+        verdict_path = output / "verdict.json"
         verdict = run_tool("scripts.perf.perf_budget",
                            ["--report", str(merged), "--budgets", str(arguments.budgets),
-                            "--json"], measurement, capture=output / "verdict.json")
+                            "--json"], measurement, capture=verdict_path)
+        # 判定子进程的 stdout 被写进结论文件，因此这里必须把逐条 finding 回显到本进程
+        # stdout：CI 日志里只留「判定退出码 1」时，失败类别只能靠事后翻已被清理的临时
+        # 目录才找得到。回显不改变判定，退出码仍按判定进程的真实结果传递。
+        print_verdict(verdict_path, verdict)
         log(f"判定退出码 {verdict}；报告目录 {output}")
         return 0 if verdict == 0 else 1
     finally:

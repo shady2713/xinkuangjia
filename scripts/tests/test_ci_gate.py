@@ -1167,6 +1167,69 @@ class TestPerformanceBudgetReleaseBinding:
         assert f'"name": "{PERF_CHECK}"' in section
 
 
+class TestPerformanceVerdictIsRetrievable:
+    """性能预算的逐条判定必须既在 CI 日志里，也在上传的制品里（run 37739234202）。
+
+    真实缺陷：那次判定真实失败，日志只留下「判定退出码 1；报告目录 …/perf-baseline」，
+    逐条 findings 只写在该临时目录下的 verdict.json；作业判红后随后的发布证据上传被
+    跳过，目录也不再保留，事后无法判断失败类别。本组用例钉住三件事：结论无条件归档
+    并回显、退出码仍是原始退出码、结论文件作为 artifact 在失败时也上传。
+    """
+
+    STEP = "发布阶段后端性能预算实查"
+    UPLOAD = "上传性能预算判定结论"
+
+    def step(self) -> str:
+        """取回性能实查步骤的真实文本块。"""
+
+        return step_named("backend", self.STEP)
+
+    def test_verdict_is_archived_and_echoed_before_the_step_exits(self) -> None:
+        """结论文件存在时必须先复制成发布证据并整份回显，再把退出码交给作业判定。"""
+
+        step = self.step()
+        archive = step.index('cp "$PERF_OUT/verdict.json" "$EVIDENCE/perf-budget.json"')
+        echo = step.index('cat "$EVIDENCE/perf-budget.json"')
+        assert archive < echo < step.index("exit $status")
+
+    def test_original_exit_code_is_passed_through(self) -> None:
+        """判定失败与环境失败都必须按原始退出码失败：1 仍是 1，2 仍是 2。"""
+
+        step = self.step()
+        assert "status=$?" in step
+        assert re.search(r"^\s*exit \$status\s*$", step, re.MULTILINE)
+        # 环境失败不得被结论缺失改写成 1，判定失败也不得被改写成 0。
+        assert "exit 0" not in step and "exit 1" not in step
+        assert "set -e" in step
+
+    def test_missing_verdict_does_not_change_the_conclusion(self) -> None:
+        """结论文件缺失时只如实记录，不得据此改写退出码或把失败包装成通过。"""
+
+        step = self.step()
+        assert '-s "$PERF_OUT/verdict.json"' in step
+        assert "不据此改写结论" in step.split("exit $status")[0]
+
+    def test_verdict_is_uploaded_even_when_the_job_fails(self) -> None:
+        """逐条判定必须作为 artifact 在失败时也上传，缺文件不得改变作业结论。"""
+
+        upload = step_named("backend", self.UPLOAD)
+        assert "if: always()" in upload
+        assert "actions/upload-artifact@v4" in upload
+        assert "${{ runner.temp }}/perf-baseline/verdict.json" in upload
+        assert "if-no-files-found: warn" in upload
+
+    def test_harness_echoes_findings_before_reporting_the_exit_code(self) -> None:
+        """编排脚本自身必须回显 findings：CI 日志不依赖事后翻临时目录即可定位失败类别。"""
+
+        source = (ROOT / "scripts" / "perf" / "run_baseline.py").read_text(encoding="utf-8")
+        echo = source.index("print_verdict(verdict_path, verdict)")
+        report = source.index('log(f"判定退出码 {verdict}')
+        assert echo < report
+        # 逐条 kind、场景、实测值与预算值都必须出现在回显里，而不是只打印结论路径。
+        for fragment in ("kind", "scenario", "observed", "allowed", "message"):
+            assert f"item.get('{fragment}')" in source or f'item.get("{fragment}")' in source
+
+
 class TestReleaseStaticAnalysis:
     """发布证据必须包含真实静态检查结论：跳过、零对象、违规、范围缩水与旧配置都拒绝。"""
 
