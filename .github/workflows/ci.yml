@@ -576,6 +576,28 @@ jobs:
             --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
             --require-prepared --json > "$EVIDENCE/license-backend.json"
 
+      # 性能预算：本步骤是**实查**，不是登记标签。它复用本作业已启动的真实
+      # MySQL/Redis/MinIO（ci_services.py start 已把连接变量与 mysql 客户端包装器写入
+      # GITHUB_ENV），自建隔离库、按两轮重启后端真实测量，合并报告后调用
+      # perf_budget.py 裁决；退出码原样传递，报告目录必须位于仓库之外。超预算退出 1、
+      # 环境失败退出 2，两者都让本作业失败；没有任何跳过、降级或 `|| true` 分支。
+      # 结论 verdict.json 原样复制为发布证据，汇总门禁随后独立复核——包括预算是否
+      # 已获有权者批准。当前 baseline-2026-10-07.json 仍是 proposed-awaiting-authority，
+      # 汇总会因此拒绝发布证据：这是正确行为，本步骤不改写预算状态，也不提供豁免。
+      - name: 发布阶段后端性能预算实查
+        if: inputs.stage == 'release'
+        env:
+          EVIDENCE: ${{ runner.temp }}/release-evidence
+          PERF_OUT: ${{ runner.temp }}/perf-baseline
+        run: |
+          mkdir -p "$EVIDENCE"
+          python -B -X utf8 "${{ github.workspace }}"/scripts/perf/run_baseline.py \
+            --out-dir "$PERF_OUT" \
+            --jar "${{ github.workspace }}"/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar \
+            --budgets "${{ github.workspace }}"/scripts/perf/budgets/baseline-2026-10-07.json
+          cp "$PERF_OUT/verdict.json" "$EVIDENCE/perf-budget.json"
+          cat "$EVIDENCE/perf-budget.json"
+
       - name: 校验真实集成测试证据
         id: reports
         run: |
@@ -613,6 +635,16 @@ jobs:
           license_gate = json.loads((evidence / "license-backend.json").read_text(encoding="utf-8"))
           if license_gate.get("status") != "passed" or license_gate.get("checks") is None:
               raise SystemExit("后端许可材料实查未真实通过")
+          # 性能预算的读数同样取自上一步真实测量写出的 verdict.json：这里只复核判定
+          # 结论与实测场景数，不在本步骤内重算任何数字。缺文件、仍有 finding 或没有
+          # 正整数场景数都让本作业失败。预算的**权威状态**不在这里裁决——那是门禁的
+          # 职责：ci_gate 按受控预算文件独立复核，未获有权者批准一律拒绝发布证据。
+          perf_gate = json.loads((evidence / "perf-budget.json").read_text(encoding="utf-8"))
+          if perf_gate.get("status") != "passed" or perf_gate.get("findings"):
+              raise SystemExit("后端性能预算核对未真实通过")
+          perf_checked = perf_gate.get("checked")
+          if type(perf_checked) is not int or perf_checked <= 0:
+              raise SystemExit("后端性能预算核对没有正整数的实测场景数")
           document = {
               "schema": "ci-release-evidence/v1",
               "job": "backend",
@@ -628,6 +660,10 @@ jobs:
                   # 该检查按交付 JAR 字节裁决，没有可与用例数比对的第二份声明，声明 null。
                   {"name": "backend-license-materials", "status": "passed", "checked": None,
                    "command": "python -B -X utf8 ${GITHUB_WORKSPACE}/scripts/license/verify_license_materials.py --jar ${GITHUB_WORKSPACE}/后端代码/basic-framework-boot/basic-framework-server/target/basic-framework-server.jar --require-prepared --json"},
+                  # 实测场景数取自上一步真实测量写出的 verdict.json；门禁随后按受控预算
+                  # 文件独立复算场景数，并复核该预算是否已获有权者批准。
+                  {"name": "backend-performance-budget", "status": "passed", "checked": perf_checked,
+                   "command": "python -B -X utf8 ${GITHUB_WORKSPACE}/scripts/perf/run_baseline.py --out-dir <仓库外目录> --jar <本次构建 JAR> --budgets scripts/perf/budgets/baseline-2026-10-07.json"},
               ],
               "coverage": {"kind": "backend", "evidence": "coverage-backend.json", "stage": "release",
                            "measured_files": coverage["measured_files"],

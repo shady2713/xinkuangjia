@@ -10,6 +10,11 @@ scripts/workflow/static_gate.py 在作业内从真实 PMD/lint 报告生成，�
 旧提交、计数不符、范围漏项或仍有适用阻断时，来源验收不通过；只要存在未解决阻断，
 release 汇总就退出 1 且 `release_verified=false`，不得因为“已登记”而转绿。
 
+发布汇总还必须消费性能预算的实测结论：判定由 scripts/perf/perf_budget.py 完成，
+本模块按受版本控制的预算文件独立复核「用的是哪一份预算、是否已获有权者批准、实测
+覆盖多少场景」。**未获批准的预算不是门槛而是提案**，缺项、未通过、换预算或未批准
+都直接拒绝发布证据；本模块不提供豁免开关，也不代替有权者批准任何预算。
+
 @author OpenAI Codex
 """
 
@@ -67,7 +72,11 @@ RELEASE_CHECKS = {
                 # 第三方许可材料必须随 JAR 分发且与实际依赖闭包一致。门禁按交付 JAR 的字节
                 # 裁决，没有可与作业用例数比对的第二份声明，因此只能声明 null；缺少这一项
                 # 会让发布汇总直接拒绝发布证据，"漏生成许可材料"不再可能发布出去。
-                "backend-license-materials": "no_count"},
+                "backend-license-materials": "no_count",
+                # 性能预算：判定由 scripts/perf/perf_budget.py 在真实测量后给出，门禁这一侧
+                # 不读报告、只复核结论，并按受控预算文件独立复算实测场景数（perf_count），
+                # 换一份预算、少测一个场景或漏写这一项都会让发布汇总直接拒绝。
+                "backend-performance-budget": "perf_count"},
     "frontend": {"frontend-unit-tests": "job_count",
                  "frontend-release-coverage": "coverage_count",
                  "frontend-typecheck": "no_count",
@@ -89,6 +98,20 @@ SOURCE_ACCEPTED_VERDICTS = (
     "已按 D12 格式写入来源说明（D10b 改判）",
     "A1（E1-author-only）成立，恢复上游证据支持的作者",
 )
+
+# 性能预算门禁：判定本身由 scripts/perf/perf_budget.py 消费「实测报告 + 受控预算文件」
+# 完成，汇总这一侧不读报告，只复核结论，并独立回答三个问题——用的是哪一份受控预算、
+# 这份预算是否已获有权者批准、实测实际覆盖了多少场景。三项都不采信证据自述。
+# 预算在获批准前必须让发布红灯：「还没批准」不是「通过」的理由，汇总也不提供豁免开关；
+# 批准只能由人改受控预算文件本身，这里只如实读它的状态。
+PERF_EVIDENCE = "perf-budget.json"
+PERF_BUDGET_FILE = "scripts/perf/budgets/baseline-2026-10-07.json"
+PERF_SCHEMA = "perf-budget/v1"
+PERF_PROTOCOL = "quality-check/v1"
+PERF_CHECK = "性能预算"
+PERF_APPROVED = "approved"
+# 声明了性能预算检查项的作业及其固定证据文件名；表外作业不参与性能复核。
+RELEASE_PERF_EVIDENCE = {"backend": PERF_EVIDENCE}
 
 
 def known_source_verdicts() -> tuple[str, ...]:
@@ -274,6 +297,87 @@ def coverage_document(directory: Path, name: str, kind: str) -> dict[str, object
     return document
 
 
+def perf_budget_source() -> dict[str, object]:
+    """独立读取受版本控制的性能预算文件；权威状态与场景范围都不采信证据自述。
+
+    门禁固定复核同一份预算文件，因此「换一份宽松预算再发一份证据」在这里就会被发现：
+    证据声明的状态必须与本文件一致，场景数也按本文件复算。
+
+    Returns:
+        解析后的 perf-budget/v1 预算对象。
+    Raises:
+        ValueError: 文件缺失、不是可读 JSON 对象、schema 不符或场景预算为空。
+    """
+
+    path = ROOT / PERF_BUDGET_FILE
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"无法读取受控性能预算文件：{PERF_BUDGET_FILE}") from error
+    if not isinstance(document, dict) or document.get("schema") != PERF_SCHEMA:
+        raise ValueError(f"受控性能预算文件不是 {PERF_SCHEMA}：{PERF_BUDGET_FILE}")
+    scenarios = document.get("scenarios")
+    if not isinstance(scenarios, dict) or not scenarios:
+        raise ValueError(f"受控性能预算文件没有场景预算：{PERF_BUDGET_FILE}")
+    return document
+
+
+def perf_budget_document(directory: Path, job: str) -> dict[str, object]:
+    """复核发布证据里的性能预算结论：判定、权威状态与实测范围缺一不可。
+
+    结论由 ``scripts/perf/perf_budget.py`` 在真实测量后写出，本函数不读报告本身，
+    只核对结论并把「用的是哪一份预算」独立重算一遍。**未获有权者批准的预算一律拒绝**：
+    ``proposed-awaiting-authority`` 只是提案，不是门槛，本模块不提供默认放行、豁免开关，
+    也不代替任何人把状态改成 ``approved``。
+
+    Args:
+        directory: 发布检查写入证据的目录。
+        job: 期望声明该检查的作业名，用于错误定位。
+    Returns:
+        含预算文件、实测场景数、批准人与负载标识的摘要。
+    Raises:
+        ValueError: 证据缺失、结构不符、判定未通过、预算未获批准，或实测范围与受控
+            预算声明的场景数、适用范围不一致。
+    """
+
+    document = json_document(directory, PERF_EVIDENCE)
+    if document.get("protocol") != PERF_PROTOCOL or document.get("check") != PERF_CHECK:
+        raise ValueError(f"性能预算证据不是预算核对的结构化结果：{job}")
+    if document.get("schema") != PERF_SCHEMA:
+        raise ValueError(f"性能预算证据的结构版本不正确：{job}")
+    # 判定未通过或仍有任何问题时都不构成发布证据；超预算、未测量、证据不可比在
+    # 结论里已经分列，这里不再按「问题种类」放行任何一种。
+    if document.get("status") != "passed" or document.get("findings") != []:
+        raise ValueError(f"性能预算核对未通过：{job}")
+    checked = document.get("checked")
+    # 布尔值是 int 的子类，必须先按精确类型拒绝，避免 True 冒充实测场景数。
+    if type(checked) is not int or checked <= 0:
+        raise ValueError(f"性能预算核对没有正整数的实测场景数：{job}")
+    budget = perf_budget_source()
+    if document.get("budget_status") != budget.get("status"):
+        raise ValueError(f"性能预算证据采用的预算状态与仓库内受控预算不一致：{job}")
+    if budget.get("status") != PERF_APPROVED or not str(budget.get("approved_by") or "").strip():
+        raise ValueError(
+            f"性能预算未获有权者批准，不能作为发布门槛：{job}"
+            f"（{PERF_BUDGET_FILE} 状态 {budget.get('status')!r}，"
+            f"批准人 {budget.get('approved_by')!r}）"
+        )
+    if checked != len(budget["scenarios"]):
+        raise ValueError(
+            f"性能预算实测范围与受控预算的场景数不一致：{job}"
+            f"（声明 {checked}，受控预算 {len(budget['scenarios'])}）"
+        )
+    applies = budget.get("applies_to")
+    if not isinstance(applies, dict) or document.get("workload") != applies.get("workload"):
+        raise ValueError(f"性能预算证据的负载与受控预算声明的适用范围不一致：{job}")
+    return {
+        "budget": PERF_BUDGET_FILE,
+        "checked": checked,
+        "approved_by": budget.get("approved_by"),
+        "workload": document.get("workload"),
+    }
+
+
 def release_manifest(directory: Path, name: str, job: str,
                      revision: str) -> tuple[dict[str, dict[str, object]], object]:
     """核对单个作业写出的发布证据，要求提交绑定、检查集合和通过状态都真实完整。
@@ -376,15 +480,18 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
     真实执行检查的清单。计数必须与聚合门禁独立核对的作业计数、覆盖率裁决的实测文件数
     一致，避免用标签或空报告冒充发布；没有第二份声明可比的自有计数（Web 全量注释）
     则由本模块独立枚举受管源码范围复算，缩范围或编造数字同样被拒绝。
+    性能预算另按受控预算文件复核：结论未通过、采用的预算不是仓库内那一份、实测场景数
+    与受控预算对不上，或**预算尚未获有权者批准**，都在这里直接拒绝发布证据。
+
     Args:
         directory: 发布检查写入证据的目录，缺失即拒绝。
         counts: 四个必需作业上报的正整数用例数。
         revision: 本次验证的提交标识。
     Returns:
-        只包含文件名、提交标识、实测文件数和检查名的可公开发布证据摘要。
+        只包含文件名、提交标识、实测文件数、检查名与受控预算依据的可公开发布证据摘要。
     Raises:
         ValueError: 缺少证据目录或文件、阶段/范围/阈值不符、检查未通过、计数不一致、
-            受管范围无法复算或提交不匹配。
+            受管范围无法复算、性能预算未通过或未获批准，或提交不匹配。
     """
     if not isinstance(directory, Path) or not directory.is_dir():
         raise ValueError("发布阶段缺少真实发布证据目录")
@@ -395,6 +502,10 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
         coverage = coverage_document(directory, spec["coverage_file"], spec["coverage_kind"])
         checks, declared = release_manifest(directory, spec["evidence"], job, revision)
         coverage_declaration(declared, job, spec, coverage)
+        # 性能预算：结论已由 perf_budget.py 在真实测量后给出，这里只复核，不重测。
+        # 复核包含「这份预算是否已获批准」，因此预算处于提案状态时本函数直接拒绝，
+        # 不会因为作业成功或检查项存在就签发发布结论。
+        performance = perf_budget_document(directory, job) if job in RELEASE_PERF_EVIDENCE else None
         # 自有计数没有第二份声明可比（既不是作业用例数，也不是覆盖率实测文件数）：
         # 这里独立枚举受管范围复算一次，声明值与真实范围不符一律拒绝。
         own_checks = [check for check, mode in RELEASE_CHECKS[job].items() if mode == "own_count"]
@@ -413,6 +524,16 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
                         f"（声明 {checks[check]['checked']}，实测 {own_scope}）"
                     )
                 continue
+            if mode == "perf_count":
+                # 实测场景数同样没有第二份声明可比（既不是作业用例数，也不是覆盖率
+                # 实测文件数）：按受控预算文件复算，证据少报场景同样被拒绝。
+                if performance is None or checks[check]["checked"] != performance["checked"]:
+                    raise ValueError(
+                        f"发布检查计数与受控预算复算的实测场景数不一致：{job}/{check}"
+                        f"（声明 {checks[check]['checked']}，"
+                        f"复算 {performance['checked'] if performance else '无性能预算证据'}）"
+                    )
+                continue
             expected = counts[job] if mode == "job_count" else coverage["measured_files"]
             if checks[check]["checked"] != expected:
                 raise ValueError(f"发布检查计数与真实结果不一致：{job}/{check}")
@@ -420,6 +541,8 @@ def release_evidence(directory: Path | None, counts: dict[str, int], revision: s
                          "measured_files": coverage["measured_files"], "checks": sorted(RELEASE_CHECKS[job]),
                          "static": {"objects": coverage["static_analysis"]["objects"],
                                     "tools": sorted(item["name"] for item in coverage["static_analysis"]["tools"])}}
+        if performance is not None:
+            released[job]["performance"] = performance
     return {"directory": str(directory), "revision": revision, "jobs": released}
 
 

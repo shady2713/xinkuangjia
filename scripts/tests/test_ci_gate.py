@@ -33,6 +33,89 @@ WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 STAGES = ("functional", "audit", "release")
 REVISION = "0123456789abcdef0123456789abcdef01234567"
 EVIDENCE_FILES = ("coverage-backend.json", "coverage-web.json", "release-backend.json", "release-frontend.json")
+# 性能预算受控文件与它在仓库里的真实状态。门禁固定复核这一份文件，测试要同时覆盖
+# 「已获批准」与「仍是提案」两种权威状态，因此默认被夹具换成已批准的临时副本。
+PERF_BUDGET_SOURCE = ROOT / "scripts" / "perf" / "budgets" / "baseline-2026-10-07.json"
+PERF_CHECK = "backend-performance-budget"
+PERF_EVIDENCE = "perf-budget.json"
+
+
+def current_budget() -> dict[str, object]:
+    """取回门禁此刻实际会读的那份受控预算；夹具替换成临时副本时即那份副本。"""
+
+    path = Path(gate.PERF_BUDGET_FILE)
+    if not path.is_absolute():
+        path = ROOT / path
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def budget_approved() -> bool:
+    """读取仓库内受控性能预算此刻真实的批准状态。
+
+    CLI 用例以真实子进程执行 `ci_gate.py`，门禁读到的就是仓库里那一份预算文件。
+    预算获批准前后 release 的真实读数本来就不同，把其中一种写死会在批准时变成假失败，
+    也会在提案阶段把真实红灯藏起来。这里返回事实，由用例对两种事实分别严格断言。
+    """
+
+    document = json.loads(PERF_BUDGET_SOURCE.read_text(encoding="utf-8"))
+    return document.get("status") == "approved" and bool(str(document.get("approved_by") or "").strip())
+
+
+def perf_scenarios() -> int:
+    """取回受控性能预算的场景数，用作证据计数与门禁复算的共同基准。"""
+
+    return len(json.loads(PERF_BUDGET_SOURCE.read_text(encoding="utf-8"))["scenarios"])
+
+
+def perf_verdict(**overrides: object) -> dict[str, object]:
+    """构造一份「判定通过」的性能预算结论，结构与 perf_budget.py 的真实 JSON 输出一致。
+
+    budget_status 取自门禁此刻读到的那份受控预算，不写死：真实测量产出的结论本来就
+    携带它判定时那份预算的权威状态，由门禁去核对两者是否同源。
+
+    Args:
+        overrides: 覆盖单个字段，用于构造少报场景、仍有问题或换预算等受控反例。
+    Returns:
+        可直接写入发布证据目录的结论对象。
+    """
+
+    document: dict[str, object] = {
+        "protocol": "quality-check/v1", "check": "性能预算", "schema": "perf-budget/v1",
+        "budget_status": current_budget().get("status"), "workload": "w7-baseline-v1",
+        "checked": perf_scenarios(), "status": "passed", "findings": [],
+    }
+    document.update(overrides)
+    return document
+
+
+def cli_perf_verdict() -> dict[str, object]:
+    """CLI 用例专用的性能预算结论：子进程读到的永远是仓库内那一份预算，状态不得替换。
+
+    单元用例靠夹具把门禁指向「已批准」副本；真实子进程没有这层替换，证据里声明的
+    预算状态必须就是仓库内那一份的，否则会被"换预算"这条规则先一步拦下，测不到
+    「未获批准」这一条。
+    """
+
+    return perf_verdict(budget_status=json.loads(PERF_BUDGET_SOURCE.read_text(encoding="utf-8")).get("status"))
+
+
+@pytest.fixture(autouse=True)
+def approved_perf_budget(tmp_path_factory: pytest.TempPathFactory,
+                          monkeypatch: pytest.MonkeyPatch) -> Path:
+    """把门禁固定的受控预算临时换成「已批准」副本，让正例得以成立。
+
+    批准状态只由受控预算文件承载，门禁没有任何豁免开关；因此这里必须真实改写副本的
+    status 与 approved_by 才能让发布证据通过。未获批准的分支由专门的对照类还原仓库内
+    真实文件（当前为 proposed-awaiting-authority）单独验证。
+    """
+
+    document = json.loads(PERF_BUDGET_SOURCE.read_text(encoding="utf-8"))
+    document["status"] = "approved"
+    document["approved_by"] = "CI 规则测试"
+    path = tmp_path_factory.mktemp("perf-budget") / "approved.json"
+    path.write_text(json.dumps(document, ensure_ascii=False) + "\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "PERF_BUDGET_FILE", str(path))
+    return path
 
 
 def needs(stage: str = "audit", result: str = "success", **outputs: object) -> dict[str, object]:
@@ -165,6 +248,9 @@ def manifest(job: str, cases: int, coverage_file: str, kind: str, measured: int,
             # 许可材料按交付 JAR 字节裁决，没有第二份可比计数，只能声明 null。
             {"name": "backend-license-materials", "status": "passed", "checked": None,
              "command": "verify_license_materials.py --jar <交付 JAR> --require-prepared"},
+            # 实测场景数必须等于汇总按受控预算文件复算出的场景数（perf_count）。
+            {"name": PERF_CHECK, "status": "passed", "checked": perf_scenarios(),
+             "command": "run_baseline.py --out-dir <仓库外目录> --budgets scripts/perf/budgets/baseline-2026-10-07.json"},
         ],
         "frontend": [
             {"name": "frontend-unit-tests", "status": "passed", "checked": cases,
@@ -197,14 +283,16 @@ def evidence_directory(tmp_path: Path, *, cases: dict[str, int] | None = None,
                        backend_coverage: dict[str, object] | None = None,
                        web_coverage: dict[str, object] | None = None,
                        backend_manifest: dict[str, object] | None = None,
-                       frontend_manifest: dict[str, object] | None = None) -> Path:
-    """把两份覆盖率裁决与两份作业证据写入独立目录；覆盖项用于构造受控反例。"""
+                       frontend_manifest: dict[str, object] | None = None,
+                       perf: dict[str, object] | None = None) -> Path:
+    """把两份覆盖率裁决、两份作业证据与性能预算结论写入独立目录；覆盖项用于构造受控反例。"""
     counts = {"backend": 5, "frontend": 6, **(cases or {})}
     directory = tmp_path / "release-evidence"
     directory.mkdir(parents=True, exist_ok=True)
     documents = {
         "coverage-backend.json": coverage_document("backend", 3) if backend_coverage is None else backend_coverage,
         "coverage-web.json": coverage_document("web", 4) if web_coverage is None else web_coverage,
+        PERF_EVIDENCE: perf_verdict() if perf is None else perf,
         "release-backend.json": manifest("backend", counts["backend"], "coverage-backend.json", "backend", 3)
         if backend_manifest is None else backend_manifest,
         "release-frontend.json": manifest("frontend", counts["frontend"], "coverage-web.json", "web", 4)
@@ -959,6 +1047,126 @@ class TestWebCommentsFullReleaseBinding:
         assert gate.RELEASE_CHECKS["frontend"]["web-comments-full"] == "own_count"
 
 
+class TestPerformanceBudgetReleaseBinding:
+    """性能预算必须真正进入发布证据链：没接与通过必须可区分，未批准必须红。
+
+    本组用例钉住三件事：检查项缺失即拒绝发布证据；实测场景数由门禁按受控预算文件
+    独立复算；**预算未获有权者批准时一律拒绝**——门禁不提供豁免开关，也不因为
+    「还没批准」就默认放行。
+    """
+
+    COUNTS = {"backend": 5, "docs_tools": 7, "frontend": 6}
+
+    def assert_rejected(self, directory: Path, pattern: str) -> None:
+        """断言该发布证据目录不能签发发布结论，且拒绝原因指向指定规则。"""
+
+        with pytest.raises(ValueError, match=pattern):
+            gate.release_evidence(directory, self.COUNTS, REVISION)
+
+    def test_check_is_registered_for_backend_only(self) -> None:
+        """性能测量只覆盖后端 HTTP 链路，检查项只登记在后端作业上。"""
+        assert gate.RELEASE_CHECKS["backend"][PERF_CHECK] == "perf_count"
+        assert PERF_CHECK not in gate.RELEASE_CHECKS["frontend"]
+        assert gate.RELEASE_PERF_EVIDENCE == {"backend": PERF_EVIDENCE}
+
+    def test_approved_budget_takes_part_in_release_evidence(self, tmp_path: Path) -> None:
+        """正例：预算已获批准且判定通过时，性能结论进入发布证据摘要。"""
+        summary = gate.release_evidence(evidence_directory(tmp_path), self.COUNTS, REVISION)
+        performance = summary["jobs"]["backend"]["performance"]
+        assert performance["checked"] == perf_scenarios()
+        assert performance["budget"] == gate.PERF_BUDGET_FILE
+        assert performance["approved_by"] == "CI 规则测试"
+
+    def test_missing_check_rejects_release_evidence(self, tmp_path: Path) -> None:
+        """反例：证据清单里少这一项就拒绝，"没接"与"通过"从此可区分。"""
+        document = manifest("backend", 5, "coverage-backend.json", "backend", 3)
+        document["checks"] = [item for item in document["checks"] if item["name"] != PERF_CHECK]
+        directory = evidence_directory(tmp_path, backend_manifest=document)
+        self.assert_rejected(directory, f"缺少发布检查证据：backend/{PERF_CHECK}")
+
+    def test_missing_perf_evidence_file_rejects_release_evidence(self, tmp_path: Path) -> None:
+        """反例：只改检查名、不提供真实结论文件时同样拒绝。"""
+        directory = evidence_directory(tmp_path)
+        (directory / PERF_EVIDENCE).unlink()
+        self.assert_rejected(directory, f"缺少发布证据文件：{PERF_EVIDENCE}")
+
+    def test_unapproved_budget_rejects_release_evidence(self, tmp_path: Path,
+                                                       monkeypatch: pytest.MonkeyPatch) -> None:
+        """核心反例：仓库内受控预算仍是提案时，证据再齐备也必须拒绝发布。
+
+        这是负对照 (a)：正常测量、判定通过、计数一致，唯一缺的是「有权者批准」。
+        门禁必须在这里红灯，且不提供任何默认放行或豁免开关。
+        """
+        monkeypatch.setattr(gate, "PERF_BUDGET_FILE", str(PERF_BUDGET_SOURCE))
+        assert not budget_approved()
+        self.assert_rejected(evidence_directory(tmp_path), "性能预算未获有权者批准")
+
+    def test_approved_status_without_approver_is_still_rejected(self, tmp_path: Path,
+                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+        """反例：只把 status 改成 approved、批准人仍为空时不得放行。"""
+        document = json.loads(PERF_BUDGET_SOURCE.read_text(encoding="utf-8"))
+        document["status"] = "approved"
+        document["approved_by"] = None
+        path = tmp_path / "budget.json"
+        path.write_text(json.dumps(document, ensure_ascii=False) + "\n", encoding="utf-8")
+        monkeypatch.setattr(gate, "PERF_BUDGET_FILE", str(path))
+        self.assert_rejected(evidence_directory(tmp_path), "性能预算未获有权者批准")
+
+    @pytest.mark.parametrize("name,mutate,pattern", [
+        ("status", lambda d: d.update(status="failed"), "性能预算核对未通过"),
+        ("findings", lambda d: d.update(findings=[{"kind": "over-budget"}]), "性能预算核对未通过"),
+        ("checked", lambda d: d.update(checked=0), "没有正整数的实测场景数"),
+        ("shrunken", lambda d: d.update(checked=perf_scenarios() - 1), "实测范围与受控预算的场景数不一致"),
+        ("protocol", lambda d: d.update(protocol="quality-check/v9"), "不是预算核对的结构化结果"),
+        ("check", lambda d: d.update(check="其它检查"), "不是预算核对的结构化结果"),
+        ("schema", lambda d: d.update(schema="perf-budget/v9"), "结构版本不正确"),
+        ("swapped", lambda d: d.update(budget_status="proposed-awaiting-authority"), "与仓库内受控预算不一致"),
+        ("workload", lambda d: d.update(workload="other-workload"), "负载与受控预算声明的适用范围不一致"),
+    ])
+    def test_conclusion_is_re_checked_not_taken_on_trust(self, tmp_path: Path, name: str,
+                                                        mutate: Callable[[dict[str, object]], None],
+                                                        pattern: str) -> None:
+        """反例：结论被改写或换预算时，汇总必须自己发现而不是照单签发。"""
+
+        document = perf_verdict()
+        mutate(document)
+        directory = evidence_directory(tmp_path, perf=document)
+        self.assert_rejected(directory, pattern)
+
+    def test_manifest_count_must_match_recomputed_scope(self, tmp_path: Path) -> None:
+        """反例：证据清单少报实测场景数时，门禁按受控预算复算后拒绝。"""
+        document = manifest("backend", 5, "coverage-backend.json", "backend", 3)
+        for item in document["checks"]:
+            if item["name"] == PERF_CHECK:
+                item["checked"] = perf_scenarios() - 1
+        directory = evidence_directory(tmp_path, backend_manifest=document)
+        self.assert_rejected(directory, f"发布检查计数与受控预算复算的实测场景数不一致：backend/{PERF_CHECK}")
+
+    def test_controlled_budget_file_must_still_be_readable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """反例：受控预算本身读不到时受控失败，不得按"没有预算"降级为通过。"""
+
+        monkeypatch.setattr(gate, "PERF_BUDGET_FILE", "scripts/perf/budgets/not-exists.json")
+        with pytest.raises(ValueError, match="无法读取受控性能预算文件"):
+            gate.perf_budget_source()
+
+    def test_backend_job_really_runs_the_measurement_in_release(self) -> None:
+        """真实编排：release 阶段必须真实测量并把结论复制成发布证据。"""
+        section = job_section("backend")
+        step = step_named("backend", "发布阶段后端性能预算实查")
+        assert "inputs.stage == 'release'" in step
+        assert "scripts/perf/run_baseline.py" in step
+        assert "scripts/perf/budgets/baseline-2026-10-07.json" in step
+        assert "verdict.json" in step and PERF_EVIDENCE in step
+        # 不得用管道或 || true 吞掉真实退出码，也不得在证据里自行编造测量结论。
+        assert "continue-on-error:" not in step
+        assert "|| true" not in step
+        evidence = step_named("backend", "生成发布阶段后端证据")
+        assert f'"{PERF_CHECK}"' in evidence
+        assert '"checked": perf_checked' in evidence
+        assert "perf_gate.get(\"status\") != \"passed\"" in evidence
+        assert f'"name": "{PERF_CHECK}"' in section
+
+
 class TestReleaseStaticAnalysis:
     """发布证据必须包含真实静态检查结论：跳过、零对象、违规、范围缩水与旧配置都拒绝。"""
 
@@ -1438,21 +1646,32 @@ class TestCommandLine:
 
     def test_release_without_revision_exits_one(self, tmp_path: Path) -> None:
         """反例：没有本次提交标识时不能给出发布结论。"""
-        directory = evidence_directory(tmp_path)
+        directory = evidence_directory(tmp_path, perf=cli_perf_verdict())
         done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory)},
                         "aggregate", "--stage", "release")
         assert done.returncode == 1
         assert done.stdout == ""
         assert "Traceback" not in done.stderr
 
-    def test_release_with_real_evidence_exits_zero(self, tmp_path: Path) -> None:
-        """正例：发布证据与来源验收报告都齐备且零阻断时才输出发布结论并返回 0。"""
-        directory = evidence_directory(tmp_path)
+    def test_release_with_real_evidence_follows_budget_authority(self, tmp_path: Path) -> None:
+        """发布证据齐备能否签发，取决于仓库内受控预算此刻是否已获有权者批准。
+
+        门禁没有任何豁免：预算仍是提案时，即使四个作业全绿、来源零阻断、覆盖率与静态
+        检查证据齐备，release 也必须红。这不是本次改动制造的偶发红灯，而是「未批准的
+        预算不能当作发布门槛」这条规则的直接读数；预算获批准后本用例回到退出 0 的正例。
+        """
+        directory = evidence_directory(tmp_path, perf=cli_perf_verdict())
         root = source_tree(tmp_path / "clean-source")
         report = write_source_report(root, REVISION, directory=directory)
         done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
                          "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
                         "--source-root", str(root))
+        assert "Traceback" not in done.stderr
+        if not budget_approved():
+            assert done.returncode == 1, done.stdout
+            assert done.stdout == ""
+            assert "性能预算未获有权者批准" in done.stderr
+            return
         assert done.returncode == 0, done.stderr
         summary = json.loads(done.stdout)
         assert summary["release_verified"] is True
@@ -1461,37 +1680,52 @@ class TestCommandLine:
 
     def test_release_with_blockers_exits_one_and_outputs_false(self, tmp_path: Path) -> None:
         """反例：作业全绿、来源报告仍有已登记阻断时，汇总必须退出 1 并输出 false。"""
-        directory = evidence_directory(tmp_path)
+        directory = evidence_directory(tmp_path, perf=cli_perf_verdict())
         root = source_tree(tmp_path / "blocked-source", blocked=1)
         write_source_report(root, REVISION, directory=directory)
         done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
                          "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
                         "--source-root", str(root))
         assert done.returncode == 1
+        assert "Traceback" not in done.stderr
+        if not budget_approved():
+            # 预算未获批准时门禁先在发布证据处受控拒绝，同样不签发发布结论；
+            # 来源阻断路径的读数由 test_release_with_blockers_is_false_even_when_jobs_succeed 覆盖。
+            assert done.stdout == ""
+            assert "性能预算未获有权者批准" in done.stderr
+            return
         summary = json.loads(done.stdout)
         assert summary["status"] == "blocked" and summary["release_verified"] is False
         assert summary["source_acceptance"]["counts"]["hard_failures"] == 1
-        assert "Traceback" not in done.stderr
 
     def test_release_without_source_report_exits_one(self, tmp_path: Path) -> None:
         """反例：删除来源报告后发布汇总受控失败，不输出成功结论。"""
-        directory = evidence_directory(tmp_path)
+        directory = evidence_directory(tmp_path, perf=cli_perf_verdict())
         root = source_tree(tmp_path / "clean-source")
         done = self.run({"NEEDS_JSON": json.dumps(release_needs()), "RELEASE_EVIDENCE": str(directory),
                          "CI_REVISION": REVISION}, "aggregate", "--stage", "release",
                         "--source-root", str(root))
         assert done.returncode == 1
         assert done.stdout == ""
-        assert "来源验收报告" in done.stderr and "Traceback" not in done.stderr
+        assert "Traceback" not in done.stderr
+        # 两道门禁按固定顺序生效：预算未获批准时先在发布证据处拒绝，批准后才轮到来源报告。
+        expected = "来源验收报告" if budget_approved() else "性能预算未获有权者批准"
+        assert expected in done.stderr
 
     def test_release_flags_accepted_from_cli(self, tmp_path: Path) -> None:
         """正例：目录、提交标识与来源报告也可以由显式参数提供。"""
-        directory = evidence_directory(tmp_path)
+        directory = evidence_directory(tmp_path, perf=cli_perf_verdict())
         root = source_tree(tmp_path / "clean-source")
         report = write_source_report(root, REVISION)
         done = self.run({"NEEDS_JSON": json.dumps(release_needs())}, "aggregate", "--stage", "release",
                         "--release-evidence", str(directory), "--revision", REVISION,
                         "--source-report", str(report), "--source-root", str(root))
+        assert "Traceback" not in done.stderr
+        if not budget_approved():
+            # 显式参数已被正确解析（没有回落到环境变量、没有解析错误），拒绝来自预算未批准。
+            assert done.returncode == 1 and done.stdout == ""
+            assert "性能预算未获有权者批准" in done.stderr
+            return
         assert done.returncode == 0, done.stderr
         assert json.loads(done.stdout)["release_verified"] is True
 
