@@ -40,21 +40,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 运行期实测登录入参 {@link AuthLoginReqVO} 的密码长度约束在真实认证入口上的行为。
+ * 运行期实测登录入参 {@link AuthLoginReqVO} 的密码边界在真实认证入口上的行为。
  *
- * <p>本类回答一个只能靠运行期回答的问题：**一至三位的密码是否真的能通过参数校验并进入认证流程**。
+ * <p>本类锁定登录入口对**长度边界**的判定：哪些长度被接受、哪些被拒绝、拒绝发生在哪个阶段。
  * 为此它走完整链路：真实 {@link AuthController}、真实 {@code GlobalExceptionHandler}（生产异常契约）、
  * 真实 {@code LocalValidatorFactoryBean}（Hibernate Validator，Spring MVC 对 {@code @Valid @RequestBody}
  * 使用的同一校验器）、真实 Jackson 报文转换，唯一的替身是下游 {@link AdminAuthService}——把它换成替身
  * 正是为了观察「请求有没有进入认证流程」，而不是让数据库噪声掩盖边界判定。</p>
  *
- * <p>判别性由同文件内的**契约违反变体** {@link UpstreamShapedAuthController} 提供：它复刻固定上游
- * 版本 {@code ruoyi-vue-pro@ac022b15} 的密码约束 {@code @Length(min = 4, max = 16)} 与账号约束
- * {@code @Length(4,30) + @Pattern}，在同一探针下对同样的报文给出不同判定，从而证明本类读到的
- * 「接受 / 拒绝」确实来自生产入参类的真实约束面，而不是探针恒真。变体不参与任何生产路径。</p>
+ * <p>约束形态说明：本地版本不采用上游的明文口令长度边界 {@code @Length(4,16)}——现行协议里登录报文的
+ * {@code password} 恒为前端 MD5 后的 32 位十六进制摘要，上游边界会拒绝全部合法登录。本类因此以
+ * {@link AuthLoginReqVO} 上的摘要格式约束为判定基准，负对照变体仍保留上游形状。</p>
  *
- * <p>本类不改动任何生产代码，也不对「本地删除密码长度约束是否符合目标契约」下结论：该判断属于有权者
- * 处置范围，这里只固定当前实现的运行期读数与差异面。</p>
+ * <p>契约形态的完整读数（格式正确通过 / 非十六进制拒绝 / 长度不为 32 拒绝 / 空值处理 / HTTP 200 + 业务码 400）
+ * 见同包 {@link AuthLoginReqVOPasswordDigestFormatRuntimeTest}；本类只负责长度边界与账号侧的对照面。</p>
  *
  * @author 证据与契约方向执行代理
  */
@@ -72,14 +71,26 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
     /** 上游形状变体的登录入口路径，仅供负对照使用。 */
     private static final String UPSTREAM_SHAPED_LOGIN_PATH = "/upstream-shaped/auth/login";
 
+    /** 上游账号约束 + 生产口令约束变体的登录入口路径，仅供账号侧对照使用。 */
+    private static final String UPSTREAM_ACCOUNT_SHAPED_LOGIN_PATH = "/upstream-account-shaped/auth/login";
+
     /** 生产异常契约中参数错误的业务码，与 HTTP 状态码区分。 */
     private static final int PARAM_ERROR_CODE = 400;
+
+    /** 现行协议真正使用的口令取值：32 位十六进制摘要。 */
+    private static final String DIGEST = "21232f297a57a5a743894a0e4a801fc3";
+
+    /** 生产入参类上摘要格式约束的提示文案。 */
+    private static final String DIGEST_FORMAT_MESSAGE = "密码摘要必须为 32 位十六进制字符串";
 
     /** 被测的生产形状：真实控制器、真实异常处理、真实校验器。 */
     private MockMvc productionMvc;
 
     /** 契约违反变体形状：上游约束的控制器。 */
     private MockMvc upstreamShapedMvc;
+
+    /** 账号侧对照形状：上游账号约束 + 生产口令约束的控制器。 */
+    private MockMvc upstreamAccountShapedMvc;
 
     /** 认证服务替身，用于观察请求是否进入认证流程。 */
     private AdminAuthService authService;
@@ -142,76 +153,84 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
                 .setControllerAdvice(new GlobalExceptionHandler("basic-framework", null))
                 .setValidator(validator)
                 .build();
+
+        UpstreamAccountShapedAuthController accountVariantController = new UpstreamAccountShapedAuthController();
+        upstreamAccountShapedMvc = MockMvcBuilders.standaloneSetup(accountVariantController)
+                .setControllerAdvice(new GlobalExceptionHandler("basic-framework", null))
+                .setValidator(validator)
+                .build();
     }
 
     /**
-     * 一至三位密码通过真实登录入口的参数校验，并原样进入认证流程。
+     * 一至三位的口令不是协议值，必须在参数校验阶段被拒绝，不得进入认证流程。
      *
-     * <p>断言三件事同时成立：响应业务码为成功、认证服务被调用、进入服务的密码字符串与报文里完全一致
-     * （中间没有任何截断或补齐）。空串与缺省值不在本用例内，它们由 {@code @NotEmpty} 单独覆盖。</p>
+     * <p>断言三件事同时成立：响应业务码为参数错误、提示来自摘要格式约束、认证服务一次都没被调用
+     * （即拒绝发生在参数校验阶段而不是认证层）。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
-    void oneToThreeCharacterPasswordPassesValidationAndReachesAuthService() throws Exception {
+    void oneToThreeCharacterPasswordIsRejectedAndNeverReachesAuthService() throws Exception {
         for (String password : List.of("1", "ab", "abc")) {
             MvcResult result = post(productionMvc, LOGIN_PATH, loginBody("admin", password));
 
-            assertThat(bodyCode(result)).as("短密码 %s 必须通过参数校验", password).isZero();
-            assertThat(loginRequests).as("短密码 %s 必须真的进入认证流程", password)
-                    .extracting(AuthLoginReqVO::getPassword).contains(password);
+            assertThat(bodyCode(result)).as("短密码 %s 必须被拒绝", password).isEqualTo(PARAM_ERROR_CODE);
+            assertThat(bodyMessage(result)).as("拒绝原因来自摘要格式约束").isEqualTo(DIGEST_FORMAT_MESSAGE);
         }
 
-        assertThat(loginRequests).as("三次请求都进入认证流程").hasSize(3);
-        assertThat(loginRequests).extracting(AuthLoginReqVO::getPassword)
-                .as("进入认证流程的密码必须与报文逐字符一致").containsExactly("1", "ab", "abc");
+        assertThat(loginRequests).as("被拒绝的请求不得进入认证流程").isEmpty();
     }
 
     /**
-     * 同一入参类还服务于超级管理员登录入口，该入口的短密码行为必须与普通登录一致。
+     * 同一入参类还服务于超级管理员登录入口，该入口对同一口令必须给出相同判定。
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
-    void superAdminLoginEntryAcceptsTheSameShortPassword() throws Exception {
-        MvcResult result = post(productionMvc, SUPER_ADMIN_LOGIN_PATH, loginBody("admin", "1"));
+    void superAdminLoginEntryAppliesTheSameDigestFormatBoundary() throws Exception {
+        MvcResult rejected = post(productionMvc, SUPER_ADMIN_LOGIN_PATH, loginBody("admin", "1"));
+        assertThat(bodyCode(rejected)).as("第二个真实入口同样拒绝非摘要口令").isEqualTo(PARAM_ERROR_CODE);
+        assertThat(superAdminLoginRequests).as("被拒绝的请求不得进入认证流程").isEmpty();
 
-        assertThat(bodyCode(result)).isZero();
-        assertThat(superAdminLoginRequests).as("第二个真实入口同样放行短密码")
-                .extracting(AuthLoginReqVO::getPassword).containsExactly("1");
+        MvcResult accepted = post(productionMvc, SUPER_ADMIN_LOGIN_PATH,
+                loginBody("admin", "21232f297a57a5a743894a0e4a801fc3"));
+        assertThat(bodyCode(accepted)).as("第二个真实入口接受协议摘要").isZero();
+        assertThat(superAdminLoginRequests).extracting(AuthLoginReqVO::getPassword)
+                .containsExactly("21232f297a57a5a743894a0e4a801fc3");
     }
 
     /**
-     * 超过上游上限的密码同样通过参数校验并进入认证流程。
+     * 超过上游长度边界的口令同样不是协议值，必须在参数校验阶段被拒绝。
      *
-     * <p>长度覆盖上游上限 16 之上的若干档位，包括 32 位摘要长度与更长输入，用于回答「删除的约束里
-     * 上限一侧是否也有实际影响」。</p>
+     * <p>长度覆盖 32 位摘要长度两侧与更长输入，用于固定「缺少长度上限」这一缺口已被摘要格式约束关闭：
+     * 非 32 位的输入一律不再进入认证流程，也就不会到达 BCrypt 比对。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
-    void passwordLongerThanUpstreamMaximumAlsoReachesAuthService() throws Exception {
-        for (String password : List.of("a".repeat(17), "a".repeat(32), "a".repeat(64), "a".repeat(1024))) {
+    void passwordWhoseLengthIsNotThirtyTwoIsRejectedBeforeAuthentication() throws Exception {
+        for (String password : List.of("a".repeat(31), "a".repeat(33), "a".repeat(64), "a".repeat(1024))) {
             MvcResult result = post(productionMvc, LOGIN_PATH, loginBody("admin", password));
 
-            assertThat(bodyCode(result)).as("长度 %d 的密码必须通过参数校验", password.length()).isZero();
+            assertThat(bodyCode(result)).as("长度 %d 的口令必须被拒绝", password.length())
+                    .isEqualTo(PARAM_ERROR_CODE);
+            assertThat(bodyMessage(result)).isEqualTo(DIGEST_FORMAT_MESSAGE);
         }
 
-        assertThat(loginRequests).as("四次请求都进入认证流程").hasSize(4);
-        assertThat(loginRequests).as("超长密码原样进入认证流程，未被截断")
-                .allSatisfy(reqVO -> assertThat(reqVO.getPassword()).hasSizeGreaterThan(16));
+        assertThat(loginRequests).as("被拒绝的请求不得进入认证流程").isEmpty();
     }
 
     /**
-     * 负对照：同样的探针报文在上游形状约束下被拒绝，说明本类读到的放行确实来自生产约束面。
+     * 负对照：同一批报文在两侧都被拒绝，但拒绝理由不同，说明读数确实来自各自的约束面。
      *
-     * <p>变体被拒绝时其入参副本必须保持为空，这同时证明拒绝发生在参数校验阶段而不是控制器内部。</p>
+     * <p>生产侧以摘要格式约束拒绝，上游形状变体以明文长度边界拒绝；两侧业务码同为参数错误，只有提示
+     * 文案不同。变体被拒绝时其入参副本必须保持为空，这同时证明拒绝发生在参数校验阶段而不是控制器内部。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
-    void upstreamShapedBoundRejectsTheSameRequestsSoAssertionDiscriminates() throws Exception {
-        List<String> rejectedPasswords = List.of("" + "1", "a" + "b", "a" + "bc", "a".repeat(17), "a".repeat(32),
+    void upstreamShapedBoundRejectsTheSameRequestsWithADifferentReasonSoAssertionDiscriminates() throws Exception {
+        List<String> rejectedPasswords = List.of("1", "ab", "abc", "a".repeat(31), "z".repeat(32),
                 "a".repeat(1024));
         for (String candidate : rejectedPasswords) {
             MvcResult result = post(upstreamShapedMvc, UPSTREAM_SHAPED_LOGIN_PATH, loginBody("admin", candidate));
@@ -219,16 +238,21 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
             assertThat(bodyCode(result)).as("上游形状必须拒绝长度 %d 的密码", candidate.length())
                     .isEqualTo(PARAM_ERROR_CODE);
             assertThat(bodyMessage(result)).isEqualTo("密码长度为 4-16 位");
+
+            MvcResult production = post(productionMvc, LOGIN_PATH, loginBody("admin", candidate));
+            assertThat(bodyMessage(production)).as("生产侧对同一报文的拒绝理由必须不同")
+                    .isEqualTo(DIGEST_FORMAT_MESSAGE);
         }
 
         assertThat(upstreamShapedRequests).as("被拒绝的请求不得进入控制器方法体").isEmpty();
+        assertThat(loginRequests).as("被拒绝的请求不得进入认证流程").isEmpty();
     }
 
     /**
-     * 兼容性关键读数：现行协议真正使用的 32 位摘要通过本地校验，却会被上游边界全部拒绝。
-     *
-     * <p>本用例只比较两条链路的判定，不解释协议来源；它固定的事实是「把上游边界原样补回，会让当前
-     * 协议下的合法登录报文被拒绝」。</p>
+     * 兼容性关键读数：现行协议真正使用的 32 位摘要通过本地校验，却会被上游长度边界全部拒绝。
+ *
+     * <p>本用例只比较两条链路的判定，不解释协议来源；它固定的事实是「把上游明文长度边界原样补回，会让
+ * 当前协议下的合法登录报文被拒绝」。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
@@ -249,8 +273,9 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
     /**
      * 账号侧的判定与上游完全一致，说明净放松只发生在密码字段。
      *
-     * <p>账号矩阵同时覆盖长度上下界与字符集两侧；两侧链路必须给出逐档相同的判定，否则「账号侧没有
-     * 实际收紧」这一说法就不成立。</p>
+     * <p>两侧入参类的口令域在现行契约下**不相交**：生产侧只接受 32 位十六进制摘要，上游形状只接受
+     * 4-16 位明文。因此本用例改用第三个形状 —— 保留上游的账号约束、换上生产的口令格式约束 ——
+     * 让两侧面对同一份协议报文，比较的差异只可能来自账号约束本身。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
@@ -260,29 +285,37 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
                 "user_name", "user-name", "用户名", "admin ");
 
         for (String username : usernames) {
-            int productionCode = bodyCode(post(productionMvc, LOGIN_PATH, loginBody(username, "Abcd1234")));
-            int upstreamCode = bodyCode(post(upstreamShapedMvc, UPSTREAM_SHAPED_LOGIN_PATH,
-                    loginBody(username, "Abcd1234")));
+            int productionCode = bodyCode(post(productionMvc, LOGIN_PATH, loginBody(username, DIGEST)));
+            int upstreamAccountCode = bodyCode(post(upstreamAccountShapedMvc, UPSTREAM_ACCOUNT_SHAPED_LOGIN_PATH,
+                    loginBody(username, DIGEST)));
 
-            assertThat(productionCode).as("账号 %s 的两侧判定必须一致", username).isEqualTo(upstreamCode);
+            assertThat(productionCode).as("账号 %s 的两侧判定必须一致", username)
+                    .isEqualTo(upstreamAccountCode);
         }
+
+        assertThat(loginRequests).as("两侧都接受的账号才进入认证流程，且口令逐字符一致")
+                .isNotEmpty()
+                .allSatisfy(reqVO -> assertThat(reqVO.getPassword()).isEqualTo(DIGEST));
     }
 
     /**
      * 非空约束仍然生效：空串与缺省值在参数校验阶段被拒绝，且不进入认证流程。
-     *
-     * <p>该用例界定残留风险的真实边界：删除长度约束之后，密码字段**不是**完全无约束。</p>
+ *
+     * <p>该用例界定口令字段残留约束的真实边界。空串同时触发非空约束与摘要格式约束，真实响应只回传
+     * 首条字段错误，因此这里断言它出自非空约束的提示集合，而不是依赖两条约束的内部返回顺序。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
     void emptyPasswordIsStillRejectedAndNeverReachesAuthService() throws Exception {
-        assertThat(bodyCode(post(productionMvc, LOGIN_PATH, loginBody("admin", ""))))
-                .isEqualTo(PARAM_ERROR_CODE);
-        assertThat(bodyMessage(post(productionMvc, LOGIN_PATH, loginBody("admin", "")))).isEqualTo("密码不能为空");
+        MvcResult empty = post(productionMvc, LOGIN_PATH, loginBody("admin", ""));
+        MvcResult missing = post(productionMvc, LOGIN_PATH, loginBodyWithoutPassword("admin"));
 
-        assertThat(bodyCode(post(productionMvc, LOGIN_PATH, loginBodyWithoutPassword("admin"))))
-                .isEqualTo(PARAM_ERROR_CODE);
+        assertThat(bodyCode(empty)).isEqualTo(PARAM_ERROR_CODE);
+        assertThat(bodyCode(missing)).isEqualTo(PARAM_ERROR_CODE);
+        assertThat(bodyMessage(missing)).as("缺省口令的拒绝原因来自非空约束").isEqualTo("密码不能为空");
+        assertThat(bodyMessage(empty)).as("空串的拒绝原因来自非空约束或摘要格式约束")
+                .isIn("密码不能为空", DIGEST_FORMAT_MESSAGE);
         assertThat(loginRequests).as("被拒绝的请求不得进入认证流程").isEmpty();
     }
 
@@ -293,32 +326,51 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
      */
     @Test
     void invalidUsernameIsRejectedSoAcceptReadingsAreNotAlwaysPass() throws Exception {
-        MvcResult result = post(productionMvc, LOGIN_PATH, loginBody("ab", "Abcd1234"));
+        MvcResult result = post(productionMvc, LOGIN_PATH, loginBody("ab", DIGEST));
 
         assertThat(bodyCode(result)).isEqualTo(PARAM_ERROR_CODE);
         assertThat(loginRequests).as("账号非法时不得进入认证流程").isEmpty();
     }
 
     /**
-     * 接口面不一致的实测：登录接受的一至三位密码，在注册入口被同一条链路直接拒绝。
+     * 接口面不一致的实测：登录侧接受的协议值，在注册入口被同一条链路直接拒绝。
      *
-     * <p>同时测出注册侧约束在现行协议下的可满足性：32 位摘要同样被拒绝，只有明文强密码能通过。</p>
+     * <p>登录侧现在接受的是 32 位十六进制摘要，注册侧的明文强口令约束仍不接受该形态，只有明文强口令
+     * 能通过。这条不一致与本次契约决定无关（决定只覆盖登录入参），此处只固定其运行期读数。</p>
      *
      * @throws Exception 报文读写失败时向上抛出
      */
     @Test
-    void registerSideRejectsWhatLoginSideAcceptsSoInterfaceSurfaceIsInconsistent() throws Exception {
+    void registerSideStillRejectsTheLoginProtocolValueSoInterfaceSurfaceRemainsInconsistent() throws Exception {
         MvcResult shortPassword = postRegister("1");
         assertThat(bodyCode(shortPassword)).as("注册侧拒绝一至三位密码").isEqualTo(PARAM_ERROR_CODE);
         assertThat(bodyMessage(shortPassword))
                 .isEqualTo("密码必须为 6-16 位，且同时包含大写字母、小写字母和数字");
 
-        MvcResult digest = postRegister("21232f297a57a5a743894a0e4a801fc3");
+        MvcResult digest = postRegister(DIGEST);
         assertThat(bodyCode(digest)).as("32 位摘要在注册侧同样被拒绝").isEqualTo(PARAM_ERROR_CODE);
 
         MvcResult strongPlaintext = postRegister("Abcd1234");
         assertThat(bodyCode(strongPlaintext)).as("只有明文强密码能通过注册侧").isZero();
         assertThat(registerRequests).extracting(AuthRegisterReqVO::getPassword).containsExactly("Abcd1234");
+    }
+
+    /**
+     * 登录侧的口令格式契约已与注册侧不同：同一份 32 位摘要报文在两侧给出不同判定。
+     *
+     * <p>这是本次契约决定在接口面上的直接后果，用于锁定该差异是**已知且被断言的**，不是回归。</p>
+     *
+     * @throws Exception 报文读写失败时向上抛出
+     */
+    @Test
+    void loginAcceptsTheProtocolValueThatRegisterRejects() throws Exception {
+        assertThat(bodyCode(post(productionMvc, LOGIN_PATH, loginBody("admin", DIGEST))))
+                .as("登录侧接受协议值").isZero();
+        assertThat(bodyCode(postRegister(DIGEST)))
+                .as("注册侧拒绝同一协议值").isEqualTo(PARAM_ERROR_CODE);
+
+        assertThat(loginRequests).extracting(AuthLoginReqVO::getPassword).containsExactly(DIGEST);
+        assertThat(registerRequests).as("被拒绝的注册请求不得进入注册服务").isEmpty();
     }
 
     /**
@@ -470,6 +522,45 @@ class AuthLoginReqVOPasswordBoundaryRuntimeTest {
         /** 密码。 */
         @NotEmpty(message = "密码不能为空")
         @Length(min = 4, max = 16, message = "密码长度为 4-16 位")
+        private String password;
+    }
+
+    /**
+     * 账号侧对照变体：保留上游账号约束，口令换成生产的摘要格式约束。
+     *
+     * <p>两侧面对同一份协议报文时，业务码差异只可能来自账号约束本身。</p>
+     */
+    @RestController
+    @RequestMapping("/upstream-account-shaped/auth")
+    static class UpstreamAccountShapedAuthController {
+
+        /**
+         * 接收并丢弃入参：该形状只用于比较控制器边界上的业务码，不观察入参内容。
+         *
+         * @param reqVO 登录请求
+         * @return 成功响应
+         */
+        @PostMapping("/login")
+        public CommonResult<AuthLoginRespVO> login(@RequestBody @Valid UpstreamAccountShapedAuthLoginReqVO reqVO) {
+            return CommonResult.success(loginResp());
+        }
+    }
+
+    /**
+     * 账号侧对照变体入参：账号约束复刻固定上游版本，口令约束与生产入参类同形。
+     */
+    @Data
+    static class UpstreamAccountShapedAuthLoginReqVO {
+
+        /** 账号。 */
+        @NotEmpty(message = "登录账号不能为空")
+        @Length(min = 4, max = 30, message = "账号长度为 4-30 位")
+        @Pattern(regexp = "^[a-zA-Z0-9]{4,30}$", message = "账号格式为数字以及字母")
+        private String username;
+
+        /** 口令摘要。 */
+        @NotEmpty(message = "密码不能为空")
+        @Pattern(regexp = "^[a-fA-F0-9]{32}$", message = "密码摘要必须为 32 位十六进制字符串")
         private String password;
     }
 

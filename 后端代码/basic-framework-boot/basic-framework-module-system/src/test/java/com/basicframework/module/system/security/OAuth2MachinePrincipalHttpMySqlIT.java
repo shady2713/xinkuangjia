@@ -179,6 +179,13 @@ class OAuth2MachinePrincipalHttpMySqlIT {
     private String clientId;
     private String clientSecret;
     private String defaultClientSecret;
+    /**
+     * 真实用户口令在登录协议里的取值：32 位十六进制摘要。
+     *
+     * <p>管理前端提交前先做 MD5，服务端按摘要与 {@code BCrypt(摘要)} 存储值比对；登录入参的摘要格式约束
+     * 因此只接受 32 位十六进制。取值用去连字符的随机 UUID，与同模块
+     * {@code AuthenticationSessionMySqlIT} 的口令写法保持一致。</p>
+     */
     private String userPassword;
     private AdminUserDO user;
     private boolean schemaCreated;
@@ -292,7 +299,7 @@ class OAuth2MachinePrincipalHttpMySqlIT {
         defaultClient.setScopes(List.of("user.read"));
         clientMapper.insert(defaultClient);
 
-        userPassword = UUID.randomUUID().toString();
+        userPassword = UUID.randomUUID().toString().replace("-", "");
         user = AdminUserDO.builder().username("machineuser" + random.substring(0, 12)).nickname("真实管理员")
                 .userType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())
                 .status(CommonStatusEnum.ENABLE.getStatus())

@@ -19,26 +19,25 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 运行期实测口令类入参的**协议形态**与认证侧的最终判定，回答「短口令进入认证流程之后会发生什么」。
+ * 运行期实测口令类入参的**协议形态**与认证侧的最终判定，回答「非协议口令进入认证流程之后会发生什么」。
  *
- * <p>本类把问题①的另一半补齐：上一组用例证明一至三位密码能通过参数校验进入认证流程，本类进一步
- * 固定两件事：</p>
+ * <p>本类把问题①的另一半补齐：{@link AuthLoginReqVOPasswordBoundaryRuntimeTest} 固定入参边界的判定，
+ * 本类进一步固定两件事：</p>
  *
  * <ol>
  *   <li>六个口令承载入参类在真实 {@code jakarta.validation.Validator} 下对同一组取值的判定矩阵，
- *       用于回答「补回长度约束会影响哪些接口」「同一份数据在注册/登录/改密面上是否一致」；</li>
+ *       用于回答「登录侧的契约收紧会影响哪些接口」「同一份数据在注册/登录/改密面上是否一致」；</li>
  *   <li>在生产使用的 {@link BCryptPasswordEncoder}（复杂度读自真实绑定后的
  *       {@link SecurityProperties}）上，短口令、口令摘要、空串与超长输入的**真实比对结果**，
- *       用于回答「参数校验放宽是否等于可被认证」。</li>
+ *       用于回答「参数校验曾被放宽时是否等于可被认证」。</li>
  * </ol>
- *
- * <p>本类不改动任何生产代码，也不对处置方式下结论：这里只固定当前实现的运行期读数。</p>
  *
  * @author 证据与契约方向执行代理
  */
@@ -76,16 +75,22 @@ class PasswordWireProtocolAndEncoderRuntimeTest {
     /**
      * 判定矩阵：同一组取值在六个口令入参类上的真实违规集合。
      *
-     * <p>逐类固定当前实现的真实约束面：登录与两个管理端入参类对长度不设限，短信重置要求 32 位
-     * 十六进制摘要，注册要求 6-16 位且含大小写与数字。补回任何长度约束前，这张矩阵就是影响面清单
-     * 的运行期依据。</p>
+     * <p>逐类固定当前实现的真实约束面：登录与短信重置同形，都要求 32 位十六进制摘要；注册要求 6-16 位
+     * 且含大小写与数字；个人改密、管理员重置与新增用户三个管理端入参类不设口令格式约束。</p>
      */
     @Test
     void passwordVoConstraintMatrixIsMeasuredOnRealValidator() {
-        assertThat(messages(new AuthLoginReqVO(), "1", "admin")).as("登录：一至三位密码零违规").isEmpty();
-        assertThat(messages(new AuthLoginReqVO(), "a".repeat(1024), "admin")).as("登录：超长输入零违规").isEmpty();
+        assertThat(messages(new AuthLoginReqVO(), DIGEST, "admin")).as("登录：协议摘要零违规").isEmpty();
+        assertThat(messages(new AuthLoginReqVO(), "21232F297A57A5A743894A0E4A801FC3", "admin"))
+                .as("登录：大写十六进制摘要同样零违规").isEmpty();
+        assertThat(messages(new AuthLoginReqVO(), "1", "admin")).as("登录：一至三位口令被摘要格式约束拒绝")
+                .containsExactly("密码摘要必须为 32 位十六进制字符串");
+        assertThat(messages(new AuthLoginReqVO(), "a".repeat(1024), "admin")).as("登录：超长输入被拒绝")
+                .containsExactly("密码摘要必须为 32 位十六进制字符串");
+        assertThat(messages(new AuthLoginReqVO(), "z".repeat(32), "admin")).as("登录：32 位非十六进制被拒绝")
+                .containsExactly("密码摘要必须为 32 位十六进制字符串");
         assertThat(messages(new AuthLoginReqVO(), "", "admin")).as("登录：空串被非空约束拒绝")
-                .containsExactly("密码不能为空");
+                .contains("密码不能为空");
 
         assertThat(messages(new AuthRegisterReqVO(), "1", "basicframework", "basicframework"))
                 .as("注册：一至三位密码被强度约束拒绝")
@@ -108,6 +113,27 @@ class PasswordWireProtocolAndEncoderRuntimeTest {
                 .as("管理员重置：一至三位口令零违规（长度约束已被删除）").isEmpty();
         assertThat(messages(new UserSaveReqVO(), "1", "basicframework", "basicframework"))
                 .as("新增用户：一至三位口令零违规（长度约束已被删除）").isEmpty();
+    }
+
+    /**
+     * 登录侧与短信重置侧的摘要格式约束完全同形：同一组取值在两个入参类上给出逐条相同的判定。
+     *
+     * <p>该对照锁定「同一协议值、同一约束形态」，避免登录侧日后退回到明文口令长度边界。</p>
+     */
+    @Test
+    void loginAndResetPasswordEntriesShareTheSameDigestFormatBoundary() {
+        List<String> candidates = List.of(DIGEST, DIGEST.toUpperCase(Locale.ROOT),
+                "21232f297a57a5a743894a0e4a801fcg", "z".repeat(32), "a".repeat(31), "a".repeat(33), "1");
+
+        for (String candidate : candidates) {
+            assertThat(messages(new AuthLoginReqVO(), candidate, "admin"))
+                    .as("登录侧对 %s 的判定", candidate)
+                    .isEqualTo(messages(new AuthResetPasswordReqVO(), candidate, "13312341234", "123456"));
+        }
+
+        assertThat(messages(new AuthLoginReqVO(), DIGEST, "admin")).as("协议值两侧都零违规").isEmpty();
+        assertThat(messages(new AuthLoginReqVO(), "1", "admin")).as("非协议值两侧都只有格式违规")
+                .containsExactly("密码摘要必须为 32 位十六进制字符串");
     }
 
     /**
