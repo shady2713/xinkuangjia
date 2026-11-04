@@ -27,6 +27,7 @@ import {
   buildRequiredUsernameSchema,
   DEFAULT_DATE_FORMAT,
   DEFAULT_DATETIME_FORMAT,
+  getPasswordRuleMessage,
   isBankCardNoValue,
   isEmailValue,
   isIdCardValue,
@@ -100,22 +101,24 @@ const defineRules: Record<string, RuleHandler> = {
       isUsernameValue(String(value)) || `${ctx.label}必须为 4-30 位字母或数字`
     );
   },
+  /** 选填密码规则：为空放行，非空时校验等保二级复杂度。 */
   password: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return true;
     }
     return (
       isPasswordValue(String(value)) ||
-      `${ctx.label}必须为 6-16 位，且同时包含大写字母、小写字母和数字`
+      `${ctx.label}${getPasswordRuleMessage()}`
     );
   },
+  /** 必填密码规则：为空返回必填提示，非空时校验等保二级复杂度。 */
   passwordRequired: (value, _params, ctx) => {
     if (isEmpty(value)) {
       return $t('ui.formRules.required', [ctx.label]);
     }
     return (
       isPasswordValue(String(value)) ||
-      `${ctx.label}必须为 6-16 位，且同时包含大写字母、小写字母和数字`
+      `${ctx.label}${getPasswordRuleMessage()}`
     );
   },
   mobile: (value, _params, ctx) => {
@@ -217,6 +220,7 @@ export {
   buildRequiredUsernameSchema,
   DEFAULT_DATE_FORMAT,
   DEFAULT_DATETIME_FORMAT,
+  getPasswordRuleMessage,
   getRequiredFieldMessage,
   initSetupVbenForm,
   isBankCardNoValue,

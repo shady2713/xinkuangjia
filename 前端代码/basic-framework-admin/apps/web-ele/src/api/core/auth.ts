@@ -16,6 +16,16 @@ export namespace AuthApi {
     refreshToken: string;
     userId: number;
     expiresTime: number;
+    /** 首次登录或管理员重置密码后为 true，前端需先跳转修改密码。 */
+    passwordChangeRequired?: boolean;
+  }
+
+  /** SM2 密码传输公钥 */
+  export interface Sm2PublicKeyResult {
+    /** 带 04 前缀的未压缩公钥 */
+    publicKey: string;
+    /** 1 表示 C1C3C2 */
+    cipherMode: 1;
   }
 
   /** 手机验证码获取接口参数 */
@@ -45,7 +55,12 @@ export namespace AuthApi {
   }
 }
 
-/** 登录 */
+/**
+ * 使用账号密码登录新管理平台。
+ *
+ * @param data 登录参数，密码字段为 SM2 密文
+ * @returns 访问令牌和首次改密标志
+ */
 export async function loginApi(data: AuthApi.LoginParams) {
   // 新管理平台使用独立登录入口，后端会校验账号 user__type 必须为 super_admin。
   return requestClient.post<AuthApi.LoginResult>(
@@ -53,6 +68,7 @@ export async function loginApi(data: AuthApi.LoginParams) {
     data,
     {
       headers: {
+        // 密码字段已使用 SM2 单独加密，登录请求不叠加 API 整体加密。
         isEncrypt: false,
       },
     },
@@ -83,6 +99,17 @@ export async function logoutApi(accessToken: string) {
 export async function getAuthPermissionInfoApi() {
   return requestClient.get<AuthPermissionInfo>(
     '/system/auth/get-permission-info',
+  );
+}
+
+/**
+ * 获取密码传输 SM2 公钥。
+ *
+ * @returns 带 04 前缀的未压缩公钥和 C1C3C2 模式
+ */
+export async function getSm2PublicKey() {
+  return requestClient.get<AuthApi.Sm2PublicKeyResult>(
+    '/system/auth/sm2-public-key',
   );
 }
 

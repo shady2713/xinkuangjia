@@ -40,6 +40,7 @@
     "dayjs": "catalog:",
     "element-plus": "catalog:",
     "pinia": "catalog:",
+    "sm-crypto": "catalog:",
     "vue": "catalog:",
     "vue-dompurify-html": "catalog:",
     "vue-router": "catalog:"

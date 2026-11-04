@@ -133,15 +133,6 @@ export const AjCaptchaAES = {
 };
 
 /**
- * MD5 加密
- * @param data 要加密的数据
- * @returns MD5 加密后的字符串
- */
-export function md5(data: string): string {
-  return CryptoJS.MD5(data).toString();
-}
-
-/**
  * RSA 加密工具类
  */
 export const RSA = {

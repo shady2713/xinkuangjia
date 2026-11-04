@@ -129,6 +129,7 @@ catalog:
   jiti: ^2.6.1
   jsdom: 26.1.0
   jsencrypt: ^3.5.4
+  sm-crypto: ^0.5.8
   json-bigint: ^1.0.0
   jsonc-eslint-parser: ^2.4.2
   lefthook: ^2.1.0
