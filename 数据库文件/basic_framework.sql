@@ -128,7 +128,7 @@ CREATE TABLE `infra_config`  (
 -- ----------------------------
 -- Records of infra_config
 -- ----------------------------
-INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', 'Init password Abcd12', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0');
+INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', '首次部署后由管理员设置并通过受控流程下发', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0');
 INSERT INTO `infra_config` VALUES (3, '用户管理-账号初始密码', 2, '用户管理-注册开关', 'system.user.register-enabled', 'true', b'0', '', '1', '2025-04-26 17:23:41', '1', '2025-04-26 17:23:41', b'0');
 
 -- ----------------------------
@@ -984,6 +984,7 @@ CREATE TABLE `system_users`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '用户ID',
   `username` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户账号',
   `password` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '密码',
+  `password_change_required` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否要求下次登录后先修改密码（0否 1是）',
   `user_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'business_admin' COMMENT '后台类型',
   `nickname` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户昵称',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
@@ -1012,6 +1013,6 @@ CREATE TABLE `system_users`  (
 -- ----------------------------
 -- Records of system_users
 -- ----------------------------
-INSERT INTO `system_users` VALUES (1, 'admin', '', 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '18800000000', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0');
+INSERT INTO `system_users` VALUES (1, 'admin', '', 1, 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '18800000000', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0');
 
 SET FOREIGN_KEY_CHECKS = 1;

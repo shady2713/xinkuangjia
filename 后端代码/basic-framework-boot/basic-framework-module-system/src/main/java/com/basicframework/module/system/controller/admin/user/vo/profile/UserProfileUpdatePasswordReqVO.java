@@ -14,18 +14,17 @@ import lombok.Data;
 public class UserProfileUpdatePasswordReqVO {
 
     /**
-     * 旧密码的 MD5 摘要，与当前登录请求保持一致。
+     * 旧密码的 SM2 密文，与当前登录请求保持一致。
      */
-    @Schema(description = "旧密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "oldPassword")
+    @Schema(description = "旧密码的 SM2 密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
     @NotEmpty(message = "旧密码不能为空")
     private String oldPassword;
 
     /**
-     * 新密码的 MD5 摘要；原密码复杂度由前端校验，服务层继续使用 BCrypt 存储。
+     * 新密码的 SM2 密文；服务端解密后校验等保二级复杂度并使用 BCrypt 存储。
      */
-    @Schema(description = "新密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
+    @Schema(description = "新密码的 SM2 密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
     @NotEmpty(message = "新密码不能为空")
-    // 按当前接口约定接收 MD5 摘要，不对摘要执行原密码的长度和复杂度校验。
     private String newPassword;
 
 }

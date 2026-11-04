@@ -44,4 +44,10 @@ public class AuthLoginRespVO {
     @Schema(description = "过期时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime expiresTime;
 
+    /**
+     * 是否要求先修改密码；为 true 时前端应拦截到修改密码页。
+     */
+    @Schema(description = "是否要求先修改密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "false")
+    private Boolean passwordChangeRequired;
+
 }

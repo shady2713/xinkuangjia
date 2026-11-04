@@ -11,6 +11,7 @@ import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
 import com.basicframework.module.system.dal.dataobject.dept.PostDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
+import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
@@ -51,6 +52,8 @@ public class UserProfileController {
     private PermissionService permissionService;
     @Resource
     private RoleService roleService;
+    @Resource
+    private Sm2PasswordTransportService sm2PasswordTransportService;
 
     /**
      * 获取用户Profile。
@@ -98,6 +101,8 @@ public class UserProfileController {
     @PutMapping("/update-password")
     @Operation(summary = "修改用户个人密码")
     public CommonResult<Boolean> updateUserProfilePassword(@Valid @RequestBody UserProfileUpdatePasswordReqVO reqVO) {
+        reqVO.setOldPassword(sm2PasswordTransportService.decryptPassword(reqVO.getOldPassword()));
+        reqVO.setNewPassword(sm2PasswordTransportService.decryptPassword(reqVO.getNewPassword()));
         userService.updateUserPassword(getLoginUserId(), reqVO);
         return success(true);
     }

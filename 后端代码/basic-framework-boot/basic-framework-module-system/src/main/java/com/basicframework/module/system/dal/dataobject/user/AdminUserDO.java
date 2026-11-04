@@ -44,6 +44,13 @@ public class AdminUserDO extends BaseDO {
      */
     private String password;
     /**
+     * 是否要求下次登录后先修改密码。
+     *
+     * <p>管理员创建用户、管理员重置密码和导入初始密码时置为 true；
+     * 用户自行修改或短信重置后置为 false。</p>
+     */
+    private Boolean passwordChangeRequired;
+    /**
      * 所属后台类型，用于隔离当前业务平台与新管理平台账号。
      */
     private String userType;

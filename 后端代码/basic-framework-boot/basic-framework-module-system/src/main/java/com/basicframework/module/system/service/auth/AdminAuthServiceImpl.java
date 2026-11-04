@@ -3,6 +3,7 @@ package com.basicframework.module.system.service.auth;
 import cn.hutool.core.util.ObjectUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
+import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.util.monitor.TracerUtils;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.common.util.servlet.ServletUtils;
@@ -27,6 +28,7 @@ import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.enums.sms.SmsSceneEnum;
+import com.basicframework.module.system.framework.security.login.LoginFailureLockService;
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import com.basicframework.module.system.service.user.AdminUserService;
@@ -69,6 +71,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private CaptchaService captchaService;
     @Resource
     private SmsCodeApi smsCodeApi;
+    @Resource
+    private LoginFailureLockService loginFailureLockService;
 
     /**
      * 验证码的开关，默认为 true
@@ -100,16 +104,33 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Override
     public AdminUserDO authenticate(String username, String password, String userType) {
         final LoginLogTypeEnum logTypeEnum = LoginLogTypeEnum.LOGIN_USERNAME;
+        // 锁定检查放在账号查询之前，锁定提示和账号是否存在无关。
+        try {
+            loginFailureLockService.assertNotLocked(username);
+        } catch (ServiceException ex) {
+            createLoginLog(null, username, logTypeEnum, LoginResultEnum.USER_LOCKED);
+            throw ex;
+        }
         // 登录账号允许跨平台同名，认证时必须按入口平台类型精确查询。
         AdminUserDO user = userService.getUserByUsernameAndType(username, userType);
         if (user == null) {
+            loginFailureLockService.recordFailure(username);
             createLoginLog(null, username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
             throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         }
-        if (!userService.isPasswordMatch(password, user.getPassword())) {
+        boolean passwordMatched = userService.isPasswordMatch(password, user.getPassword());
+        if (!passwordMatched && userService.isPasswordMatchLegacy(password, user.getPassword())) {
+            // 历史 bcrypt(md5(明文)) 校验通过后立即升级为当前 BCrypt(明文) 格式。
+            userService.updatePasswordHash(user.getId(), password);
+            passwordMatched = true;
+        }
+        if (!passwordMatched) {
+            loginFailureLockService.recordFailure(username);
             createLoginLog(user.getId(), username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
             throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
         }
+        // 凭据正确后清除该账号的连续失败计数。
+        loginFailureLockService.clearFailures(username);
         // 校验是否禁用
         if (CommonStatusEnum.isDisable(user.getStatus())) {
             createLoginLog(user.getId(), username, logTypeEnum, LoginResultEnum.USER_DISABLED);
@@ -136,7 +157,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         validateLoginUserType(user, reqVO.getUsername(), expectedUserType);
 
         // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user.getId(), reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
+        return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**
@@ -154,7 +175,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword(), expectedUserType);
         validateLoginUserType(user, reqVO.getUsername(), expectedUserType);
 
-        return createTokenAfterLoginSuccess(user.getId(), reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
+        return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**
@@ -235,7 +256,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
                 LoginLogTypeEnum.LOGIN_MOBILE);
 
         // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user.getId(), reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
+        return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
     }
 
     /**
@@ -293,15 +314,22 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
     /**
      * 创建令牌After登录Success。
+     *
+     * @param user 已通过认证的用户
+     * @param username 登录日志中记录的账号
+     * @param logType 登录入口类型
+     * @return 令牌和首次改密标志
      */
-    private AuthLoginRespVO createTokenAfterLoginSuccess(Long userId, String username, LoginLogTypeEnum logType) {
+    private AuthLoginRespVO createTokenAfterLoginSuccess(AdminUserDO user, String username, LoginLogTypeEnum logType) {
         // 插入登陆日志
-        createLoginLog(userId, username, logType, LoginResultEnum.SUCCESS);
+        createLoginLog(user.getId(), username, logType, LoginResultEnum.SUCCESS);
         // 创建访问令牌
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(userId, getUserType().getValue(),
+        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(user.getId(), getUserType().getValue(),
                 OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
-        // 构建返回结果
-        return BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        // 构建返回结果；首次改密标志用于前端拦截，不能依赖前端自行判断。
+        AuthLoginRespVO response = BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        response.setPasswordChangeRequired(Boolean.TRUE.equals(user.getPasswordChangeRequired()));
+        return response;
     }
 
     /**
@@ -313,7 +341,13 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Override
     public AuthLoginRespVO refreshToken(String refreshToken) {
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
-        return BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        if (accessTokenDO == null) {
+            return null;
+        }
+        AuthLoginRespVO response = BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
+        AdminUserDO user = userService.getUser(accessTokenDO.getUserId());
+        response.setPasswordChangeRequired(user != null && Boolean.TRUE.equals(user.getPasswordChangeRequired()));
+        return response;
     }
 
     /**
@@ -384,7 +418,11 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         Long userId = userService.registerUser(registerReqVO);
 
         // 3. 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(userId, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
+        AdminUserDO user = userService.getUser(userId);
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
+        return createTokenAfterLoginSuccess(user, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**

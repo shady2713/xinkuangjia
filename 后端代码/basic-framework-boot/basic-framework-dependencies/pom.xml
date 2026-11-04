@@ -45,6 +45,7 @@
         <commons-lang3.version>3.20.0</commons-lang3.version>
         <tika-core.version>3.3.2</tika-core.version>
         <ip2region.version>2.7.0</ip2region.version>
+        <bcprov.version>1.86</bcprov.version>
         <bizlog-sdk.version>3.0.6</bizlog-sdk.version>
         <!-- 三方云服务相关 -->
         <awssdk.version>2.54.7</awssdk.version>
@@ -264,6 +265,13 @@
             </dependency>
 
             <!-- 工具类相关 -->
+            <dependency>
+                <!-- SM2 国密算法实现，仅由 system 模块的密码传输组件使用 -->
+                <groupId>org.bouncycastle</groupId>
+                <artifactId>bcprov-jdk18on</artifactId>
+                <version>${bcprov.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-common</artifactId>

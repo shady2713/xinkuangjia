@@ -1,11 +1,16 @@
 package com.basicframework.framework.security.config;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
-import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
@@ -53,4 +58,86 @@ public class SecurityProperties {
      * PasswordEncoder 加密复杂度，越高开销越大
      */
     private Integer passwordEncoderLength = 10;
+
+    /**
+     * SM2 密码传输配置。
+     *
+     * <p>私钥只允许通过环境变量或仓库外配置注入；缺失或格式错误时应用启动失败，
+     * 避免在未启用国密传输的情况下继续运行。</p>
+     */
+    @Valid
+    @NotNull(message = "SM2 密码传输配置不能为空")
+    private Sm2 sm2 = new Sm2();
+
+    /**
+     * 登录失败锁定配置。
+     */
+    @Valid
+    @NotNull(message = "登录失败锁定配置不能为空")
+    private LoginLock loginLock = new LoginLock();
+
+    /**
+     * SM2 密码传输配置项。
+     */
+    @Data
+    public static class Sm2 {
+
+        /**
+         * 服务端 SM2 私钥，32 字节（64 位十六进制），不得写入源码或提交的配置文件。
+         */
+        @NotBlank(message = "SM2 私钥未配置：请通过环境变量 SM2_PRIVATE_KEY 注入 64 位十六进制私钥")
+        @Pattern(regexp = "^[0-9a-fA-F]{64}$",
+                message = "SM2 私钥格式错误：必须为 64 位十六进制字符串")
+        private String privateKey = "";
+
+        /**
+         * 时间戳允许的偏差窗口，默认 5 分钟。
+         */
+        @NotNull(message = "SM2 时间戳窗口不能为空")
+        private Duration timestampWindow = Duration.ofMinutes(5);
+
+        /**
+         * 防重放 nonce 的 Redis 保留时长；小于时间戳窗口时按窗口的两倍兜底。
+         */
+        @NotNull(message = "SM2 nonce 保留时长不能为空")
+        private Duration nonceTtl = Duration.ofMinutes(10);
+
+        /**
+         * 是否校验 nonce 一次性；关闭后仅保留时间戳校验，供没有 Redis 的降级环境使用。
+         */
+        @NotNull(message = "SM2 防重放开关不能为空")
+        private Boolean replayCheckEnabled = true;
+    }
+
+    /**
+     * 登录失败锁定配置项。
+     */
+    @Data
+    public static class LoginLock {
+
+        /**
+         * 是否启用登录失败锁定。
+         */
+        @NotNull(message = "登录失败锁定开关不能为空")
+        private Boolean enabled = true;
+
+        /**
+         * 触发锁定所需的连续失败次数。
+         */
+        @NotNull(message = "登录失败锁定次数不能为空")
+        @Min(value = 1, message = "登录失败锁定次数必须大于 0")
+        private Integer maxFailures = 5;
+
+        /**
+         * 锁定时长。
+         */
+        @NotNull(message = "登录锁定时长不能为空")
+        private Duration lockDuration = Duration.ofMinutes(30);
+
+        /**
+         * 失败计数保留时长；从首次失败开始计算。
+         */
+        @NotNull(message = "登录失败计数窗口不能为空")
+        private Duration failureWindow = Duration.ofMinutes(30);
+    }
 }

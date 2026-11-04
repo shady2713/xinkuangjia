@@ -25,6 +25,11 @@ public interface ErrorCodeConstants {
     ErrorCode AUTH_MOBILE_NOT_EXISTS = new ErrorCode(1_002_000_007, "手机号不存在");
     ErrorCode AUTH_REGISTER_CAPTCHA_CODE_ERROR = new ErrorCode(1_002_000_008, "验证码不正确，原因：{}");
     ErrorCode AUTH_REFRESH_TOKEN_REQUIRED = new ErrorCode(1_002_000_009, "refreshToken 不能为空");
+    // 锁定提示只说明账号暂时不可登录，不暴露账号是否存在。
+    ErrorCode AUTH_LOGIN_ACCOUNT_LOCKED = new ErrorCode(1_002_000_017,
+            "登录失败次数过多，账号已临时锁定，请 {} 分钟后重试");
+    // 密文、时间戳、重放等传输校验失败统一按账号密码错误返回。
+    ErrorCode AUTH_PASSWORD_TRANSPORT_INVALID = new ErrorCode(1_002_000_018, "登录失败，账号密码不正确");
 
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");
@@ -58,6 +63,12 @@ public interface ErrorCodeConstants {
     ErrorCode USER_REGISTER_DISABLED = new ErrorCode(1_002_003_011, "注册功能已关闭");
     ErrorCode USER_EXPORT_SIZE_EXCEEDED = new ErrorCode(1_002_003_012,
             "单次最多导出 10000 条用户，请缩小筛选范围");
+    ErrorCode USER_PASSWORD_CHANGE_REQUIRED = new ErrorCode(1_002_003_013,
+            "首次登录或密码被重置，请先修改密码");
+    ErrorCode PASSWORD_POLICY_NOT_MATCH = new ErrorCode(1_002_003_014,
+            "密码必须为 8-32 位，且至少包含大写字母、小写字母、数字、特殊字符中的 3 类");
+    ErrorCode PASSWORD_TRANSPORT_INVALID = new ErrorCode(1_002_003_015,
+            "密码信息无效或已过期，请刷新页面后重试");
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");

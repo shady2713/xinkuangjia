@@ -139,6 +139,18 @@ basic-framework:
   security:
     mock-enable: false
     permit-all-urls: []
+    # 密码传输使用 SM2（C1C3C2）。私钥只从环境变量注入，缺失或格式错误时启动失败。
+    sm2:
+      private-key: ${SM2_PRIVATE_KEY:}
+      timestamp-window: ${SM2_TIMESTAMP_WINDOW:5m}
+      nonce-ttl: ${SM2_NONCE_TTL:10m}
+      replay-check-enabled: ${SM2_REPLAY_CHECK_ENABLED:true}
+    # 登录失败锁定：按账号计数，成功登录清零；锁定时返回通用提示。
+    login-lock:
+      enabled: ${LOGIN_LOCK_ENABLED:true}
+      max-failures: ${LOGIN_LOCK_MAX_FAILURES:5}
+      lock-duration: ${LOGIN_LOCK_DURATION:30m}
+      failure-window: ${LOGIN_LOCK_FAILURE_WINDOW:30m}
   captcha:
     enable: true
   access-log:

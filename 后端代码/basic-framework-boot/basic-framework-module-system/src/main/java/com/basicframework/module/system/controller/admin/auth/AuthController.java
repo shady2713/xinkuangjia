@@ -14,6 +14,8 @@ import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReq
 import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
+import com.basicframework.module.system.controller.admin.auth.vo.Sm2PublicKeyRespVO;
+import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.convert.auth.AuthConvert;
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
@@ -67,7 +69,24 @@ public class AuthController {
     private PermissionService permissionService;
     @Resource
     private SecurityProperties securityProperties;
+    @Resource
+    private Sm2PasswordTransportService sm2PasswordTransportService;
 
+
+    /**
+     * 查询 SM2 密码传输公钥。
+     *
+     * <p>公钥可以公开读取；私钥只在服务端配置中保存。前端在提交密码前调用本接口，
+     * 使用返回的 04 前缀公钥按 C1C3C2 模式加密。</p>
+     *
+     * @return SM2 公钥和密文模式
+     */
+    @GetMapping("/sm2-public-key")
+    @PermitAll
+    @Operation(summary = "获取密码传输 SM2 公钥")
+    public CommonResult<Sm2PublicKeyRespVO> getSm2PublicKey() {
+        return success(new Sm2PublicKeyRespVO(sm2PasswordTransportService.getPublicKeyHex(), 1));
+    }
 
     /**
      * 使用账号密码登录管理后台。
@@ -79,6 +98,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "使用账号密码登录")
     public CommonResult<AuthLoginRespVO> login(@RequestBody @Valid AuthLoginReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptLoginPassword(reqVO.getPassword()));
         return success(authService.login(reqVO));
     }
 
@@ -92,6 +112,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "新管理平台账号密码登录")
     public CommonResult<AuthLoginRespVO> superAdminLogin(@RequestBody @Valid AuthLoginReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptLoginPassword(reqVO.getPassword()));
         return success(authService.superAdminLogin(reqVO));
     }
 
@@ -175,6 +196,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "注册用户")
     public CommonResult<AuthLoginRespVO> register(@RequestBody @Valid AuthRegisterReqVO registerReqVO) {
+        registerReqVO.setPassword(sm2PasswordTransportService.decryptPassword(registerReqVO.getPassword()));
         return success(authService.register(registerReqVO));
     }
 
@@ -218,6 +240,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "重置密码")
     public CommonResult<Boolean> resetPassword(@RequestBody @Valid AuthResetPasswordReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptPassword(reqVO.getPassword()));
         authService.resetPassword(reqVO);
         return success(true);
     }

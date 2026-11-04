@@ -22,11 +22,10 @@ public class UserUpdatePasswordReqVO {
     private Long id;
 
     /**
-     * 前端完成复杂度校验后提交的密码 MD5 摘要，服务层使用 BCrypt 存储。
+     * 管理员重置密码的 SM2 密码密文，服务端解密后校验复杂度并使用 BCrypt 存储。
      */
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
+    @Schema(description = "SM2 密码密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
     @NotEmpty(message = "密码不能为空")
-    // 接口接收 MD5 摘要，不对摘要执行原密码的长度和复杂度校验。
     private String password;
 
 }
