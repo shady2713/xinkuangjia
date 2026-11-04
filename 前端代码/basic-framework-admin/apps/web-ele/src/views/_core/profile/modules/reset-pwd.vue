@@ -2,12 +2,20 @@
 import type { Recordable } from '@vben/types';
 
 import { $t } from '@vben/locales';
-import { logError, md5 } from '@vben/utils';
+import { logError } from '@vben/utils';
 
 import { ElMessage } from 'element-plus';
 
-import { buildLoginPasswordSchema, buildRequiredPasswordSchema, useVbenForm } from '#/adapter/form';
+import {
+  buildLoginPasswordSchema,
+  buildRequiredPasswordSchema,
+  useVbenForm,
+} from '#/adapter/form';
 import { updateUserPassword } from '#/api/system/user/profile';
+import { encryptPassword } from '#/utils/sm2';
+
+const props = defineProps<{ silentSuccess?: boolean }>();
+const emit = defineEmits(['success']);
 
 const [Form, formApi] = useVbenForm({
   commonConfig: {
@@ -71,14 +79,23 @@ const [Form, formApi] = useVbenForm({
   handleSubmit,
 });
 
+/**
+ * 加密旧密码和新密码后提交个人改密请求。
+ *
+ * @param values 表单值
+ * @returns 提交完成的 Promise
+ */
 async function handleSubmit(values: Recordable<any>) {
   try {
     formApi.setLoading(true);
     await updateUserPassword({
-      oldPassword: md5(values.oldPassword),
-      newPassword: md5(values.newPassword),
+      oldPassword: await encryptPassword(values.oldPassword),
+      newPassword: await encryptPassword(values.newPassword),
     });
-    ElMessage.success($t('ui.actionMessage.operationSuccess'));
+    if (!props.silentSuccess) {
+      ElMessage.success($t('ui.actionMessage.operationSuccess'));
+    }
+    emit('success');
   } catch (error) {
     logError('profile:reset-password:submit', error);
   } finally {

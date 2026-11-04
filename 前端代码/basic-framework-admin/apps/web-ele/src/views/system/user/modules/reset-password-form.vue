@@ -8,7 +8,7 @@ import { ElMessage } from 'element-plus';
 import { useVbenForm } from '#/adapter/form';
 import { resetUserPassword } from '#/api/system/user';
 import { $t } from '#/locales';
-import { md5 } from '@vben/utils';
+import { encryptPassword } from '#/utils/sm2';
 
 import { useResetPasswordFormSchema } from '../data';
 
@@ -27,6 +27,11 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 校验表单，加密新密码后提交管理员重置密码请求。
+   *
+   * @returns 提交完成的 Promise
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -36,7 +41,7 @@ const [Modal, modalApi] = useVbenModal({
     // 提交表单
     const data = await formApi.getValues();
     try {
-      await resetUserPassword(data.id, md5(data.newPassword));
+      await resetUserPassword(data.id, await encryptPassword(data.newPassword));
       // 关闭并提示
       await modalApi.close();
       emit('success');

@@ -10,13 +10,20 @@ import { ElCard, ElTabPane, ElTabs } from 'element-plus';
 
 import { getAuthPermissionInfoApi } from '#/api';
 import { getUserProfile } from '#/api/system/user/profile';
+import { useAuthStore } from '#/store';
 
 import BaseInfo from './modules/base-info.vue';
 import ProfileUser from './modules/profile-user.vue';
 import ResetPwd from './modules/reset-pwd.vue';
 
 const userStore = useUserStore();
+const authStore = useAuthStore();
 const activeName = ref('basicInfo');
+
+/** 个人中心修改密码成功后解除前端强制改密状态。 */
+function handlePasswordChanged() {
+  authStore.clearPasswordChangeRequired();
+}
 
 /** 加载个人信息 */
 const profile = ref<SystemUserProfileApi.UserProfileRespVO>();
@@ -53,9 +60,8 @@ onMounted(loadProfile);
             <BaseInfo :profile="profile" @success="refreshProfile" />
           </ElTabPane>
           <ElTabPane name="resetPwd" label="密码设置">
-            <ResetPwd />
+            <ResetPwd @success="handlePasswordChanged" />
           </ElTabPane>
-          
         </ElTabs>
       </ElCard>
     </div>

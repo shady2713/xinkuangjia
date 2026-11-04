@@ -7,7 +7,7 @@ import { getDictOptions } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { handleTree } from '@vben/utils';
 
-import { z } from '#/adapter/form';
+import { buildRequiredPasswordSchema, z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
 import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
@@ -142,7 +142,11 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 重置密码的表单 */
+/**
+ * 重置密码的表单。
+ *
+ * @returns 用户重置密码弹窗的字段和校验规则
+ */
 export function useResetPasswordFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -159,22 +163,9 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         passwordStrength: true,
         placeholder: '请输入新密码',
       },
-      dependencies: {
-        rules(values) {
-          return z
-            .string({ message: '请输入新密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
-            .refine(
-              (value) => value !== values.oldPassword,
-              '新旧密码不能相同',
-            );
-        },
-        triggerFields: ['newPassword', 'oldPassword'],
-      },
       fieldName: 'newPassword',
       label: '新密码',
-      rules: 'required',
+      rules: buildRequiredPasswordSchema('新密码'),
     },
     {
       component: 'VbenInputPassword',
@@ -183,17 +174,28 @@ export function useResetPasswordFormSchema(): VbenFormSchema[] {
         placeholder: $t('authentication.confirmPassword'),
       },
       dependencies: {
+        /**
+         * 校验确认密码与新密码一致。
+         *
+         * @param values 当前表单值
+         * @returns Zod 确认密码规则
+         */
         rules(values) {
-          return z
-            .string({ message: '请输入确认密码' })
-            .min(5, '密码长度不能少于 5 个字符')
-            .max(20, '密码长度不能超过 20 个字符')
-            .refine(
-              (value) => value === values.newPassword,
-              '新密码和确认密码不一致',
-            );
+          /**
+           * 判断确认密码是否等于新密码。
+           *
+           * @param value 确认密码
+           * @returns 一致返回 true
+           */
+          function isSamePassword(value: string) {
+            return value === values.newPassword;
+          }
+          return buildRequiredPasswordSchema('确认密码').refine(
+            isSamePassword,
+            '新密码和确认密码不一致',
+          );
         },
-        triggerFields: ['newPassword', 'confirmPassword'],
+        triggerFields: ['newPassword'],
       },
       fieldName: 'confirmPassword',
       label: '确认密码',
