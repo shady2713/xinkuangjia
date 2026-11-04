@@ -12,7 +12,6 @@ import com.basicframework.module.system.controller.admin.auth.vo.AuthPermissionI
 import com.basicframework.module.system.controller.admin.auth.vo.AuthRefreshTokenReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthShareLoginRespVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
 import com.basicframework.module.system.convert.auth.AuthConvert;
@@ -28,7 +27,6 @@ import com.basicframework.module.system.service.permission.PermissionService;
 import com.basicframework.module.system.service.permission.RoleService;
 import com.basicframework.module.system.service.user.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
@@ -95,20 +93,6 @@ public class AuthController {
     @Operation(summary = "新管理平台账号密码登录")
     public CommonResult<AuthLoginRespVO> superAdminLogin(@RequestBody @Valid AuthLoginReqVO reqVO) {
         return success(authService.superAdminLogin(reqVO));
-    }
-
-    /**
-     * 使用受控分享票据登录。
-     *
-     * @param ticket 分享票据
-     * @return 分享登录结果
-     */
-    @PostMapping("/share-login")
-    @PermitAll
-    @Operation(summary = "使用固定分享码自动登录")
-    @Parameter(name = "ticket", description = "固定分享码", required = true)
-    public CommonResult<AuthShareLoginRespVO> shareLogin(@RequestParam("ticket") String ticket) {
-        return success(authService.shareLogin(ticket));
     }
 
     /**

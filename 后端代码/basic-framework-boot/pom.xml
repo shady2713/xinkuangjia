@@ -32,8 +32,8 @@
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
-        <!-- 各模块按实测覆盖率覆盖该基线；父级先允许无源码或暂无测试的聚合/基础模块生成完整报告。 -->
-        <quality.coverage.minimum>0.00</quality.coverage.minimum>
+        <!-- 已有测试执行数据的模块至少达到 1%；各模块按实测覆盖率覆盖该基线，尚无执行数据的模块跳过检查。 -->
+        <quality.coverage.minimum>0.01</quality.coverage.minimum>
         <!-- maven-surefire-plugin 暂时无法通过 bom 的依赖查找（兼容老版本 IDEA 2024 及以前版本） -->
         <lombok.version>1.18.46</lombok.version>
         <spring.boot.version>3.5.16</spring.boot.version>

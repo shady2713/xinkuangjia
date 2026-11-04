@@ -1,6 +1,5 @@
 package com.basicframework.module.infra.controller.admin.file;
 
-import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.core.util.URLUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
@@ -15,6 +14,7 @@ import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadR
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.basicframework.module.infra.service.file.FileService;
+import com.google.common.annotations.VisibleForTesting;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -35,10 +35,15 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_TOO_LARGE;
 import static com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils.writeAttachment;
 
 /**
@@ -58,6 +63,12 @@ public class FileController {
     /** 管理端单次批量删除上限。 */
     private static final int MAX_BATCH_DELETE_SIZE = 100;
 
+    /** 单文件上限，与 application.yaml 的 multipart 及前端 nginx 上传上限对齐。 */
+    static final long MAX_UPLOAD_BYTES = 50L * 1024 * 1024;
+
+    /** 有界读取上传流时使用的缓冲区大小。 */
+    private static final int UPLOAD_READ_BUFFER_SIZE = 8 * 1024;
+
     /** 文件业务服务。 */
     @Resource
     private FileService fileService;
@@ -75,9 +86,45 @@ public class FileController {
             schema = @Schema(type = "string", format = "binary"))
     public CommonResult<String> uploadFile(@Valid FileUploadReqVO uploadReqVO) throws Exception {
         MultipartFile file = uploadReqVO.getFile();
-        byte[] content = IoUtil.readBytes(file.getInputStream());
+        // 先按容器声明的文件大小拒绝明显超限内容，避免为超大文件分配读取缓冲。
+        if (file.getSize() > MAX_UPLOAD_BYTES) {
+            throw exception(FILE_TOO_LARGE);
+        }
+        byte[] content;
+        // 流式读取仍按同一上限计数，不能只依赖可被调用方声明的 getSize()。
+        try (InputStream input = file.getInputStream()) {
+            content = readBytesWithLimit(input, MAX_UPLOAD_BYTES);
+        }
         return success(fileService.createFile(content, file.getOriginalFilename(),
                 uploadReqVO.getDirectory(), file.getContentType()));
+    }
+
+    /**
+     * 按上限读取上传内容，实际字节数超限时立即失败，避免整文件无界进入堆内存。
+     *
+     * @param input 上传内容流，由调用方负责关闭
+     * @param maxBytes 允许读取的最大字节数，必须为非负数
+     * @return 完整文件内容
+     * @throws IOException 读取输入流失败时抛出
+     * @throws com.basicframework.framework.common.exception.ServiceException 实际内容超过上限时抛出
+     */
+    @VisibleForTesting
+    static byte[] readBytesWithLimit(InputStream input, long maxBytes) throws IOException {
+        if (maxBytes < 0) {
+            throw new IllegalArgumentException("maxBytes 不能为负数");
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[UPLOAD_READ_BUFFER_SIZE];
+        long total = 0;
+        int read;
+        while ((read = input.read(buffer)) != -1) {
+            total += read;
+            if (total > maxBytes) {
+                throw exception(FILE_TOO_LARGE);
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     /**

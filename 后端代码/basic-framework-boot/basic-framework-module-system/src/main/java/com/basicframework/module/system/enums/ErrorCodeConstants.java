@@ -25,10 +25,6 @@ public interface ErrorCodeConstants {
     ErrorCode AUTH_MOBILE_NOT_EXISTS = new ErrorCode(1_002_000_007, "手机号不存在");
     ErrorCode AUTH_REGISTER_CAPTCHA_CODE_ERROR = new ErrorCode(1_002_000_008, "验证码不正确，原因：{}");
     ErrorCode AUTH_REFRESH_TOKEN_REQUIRED = new ErrorCode(1_002_000_009, "refreshToken 不能为空");
-    ErrorCode AUTH_SHARE_LOGIN_TICKET_REQUIRED = new ErrorCode(1_002_000_010, "分享码不能为空");
-    ErrorCode AUTH_SHARE_LOGIN_TICKET_INVALID = new ErrorCode(1_002_000_011, "分享链接不存在或已停用");
-    ErrorCode AUTH_SHARE_LOGIN_USER_INVALID = new ErrorCode(1_002_000_012, "分享链接绑定的用户不存在或已禁用");
-    ErrorCode AUTH_SHARE_LOGIN_MENU_EMPTY = new ErrorCode(1_002_000_013, "分享用户暂无可访问菜单");
 
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");

@@ -218,28 +218,8 @@ CREATE TABLE `infra_job_log`  (
 -- ----------------------------
 
 -- ----------------------------
--- Table structure for system_auto_login_ticket
--- ----------------------------
-DROP TABLE IF EXISTS `system_auto_login_ticket`;
-CREATE TABLE `system_auto_login_ticket`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `ticket` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '固定分享码，对应链接中的 ticket 参数',
-  `username` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '绑定的后台用户账号',
-  `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态（0正常 1停用）',
-  `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_auto_login_ticket`(`ticket` ASC) USING BTREE,
-  INDEX `idx_auto_login_username`(`username` ASC) USING BTREE,
-  INDEX `idx_auto_login_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '自动登录固定分享码表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_auto_login_ticket
+-- 固定分享码自动登录能力已移除，空库不再创建对应表；
+-- 已有库升级请执行 V202611041805__system_drop_auto_login_ticket.sql。
 -- ----------------------------
 
 -- ----------------------------
@@ -378,7 +358,6 @@ INSERT INTO `system_dict_data` VALUES (1531, 3, '月', '3', 'date_interval', 0, 
 INSERT INTO `system_dict_data` VALUES (1532, 4, '季度', '4', 'date_interval', 0, '', '', '', '1', '2024-03-29 22:51:01', '1', '2024-03-29 22:51:01', b'0');
 INSERT INTO `system_dict_data` VALUES (1533, 5, '年', '5', 'date_interval', 0, '', '', '', '1', '2024-03-29 22:51:07', '1', '2024-03-29 22:51:07', b'0');
 INSERT INTO `system_dict_data` VALUES (1586, 2, '腾讯云', 'TENCENT', 'system_sms_channel_code', 0, '', '', '', '1', '2024-07-22 22:23:16', '1', '2024-07-22 22:23:16', b'0');
-INSERT INTO `system_dict_data` VALUES (3036, 105, '分享码登录', '105', 'system_login_type', 0, 'default', '', '登录类型 - 分享码登录', '1', '2026-05-20 09:29:38', '1', '2026-05-20 09:29:38', b'0');
 
 -- ----------------------------
 -- Table structure for system_dict_type

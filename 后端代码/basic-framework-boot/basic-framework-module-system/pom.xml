@@ -17,6 +17,11 @@
         例如说：用户、部门、权限、数据字典等等
     </description>
 
+    <properties>
+        <!-- 认证回归测试落地后的保守基线；后续新增测试只能提高，不能回退。 -->
+        <quality.coverage.minimum>0.03</quality.coverage.minimum>
+    </properties>
+
     <dependencies>
         <!-- 业务组件 -->
         <dependency>

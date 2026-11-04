@@ -41,7 +41,7 @@ def load_mapping(source: str) -> dict:
     try:
         import yaml
     except ImportError as exc:
-        raise CheckError("缺少 PyYAML，请运行 python -m pip install PyYAML==6.0.3") from exc
+        raise CheckError("缺少 PyYAML，请运行 python -m pip install -r tools/quality/requirements.txt") from exc
 
     class UniqueLoader(yaml.SafeLoader):
         """为单次调用隔离映射构造器，不改变全局 YAML 加载行为。"""

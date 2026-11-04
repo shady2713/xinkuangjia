@@ -58,7 +58,7 @@ Web Starter 按 Controller 包匹配自动加前缀：`controller.admin` 为 `/a
 
 账号、令牌与操作权限由 system 提供；浏览器路由不是授权边界。
 
-- 账号密码界面调用 `/system/auth/super-admin-login`；普通 `/login`、共享票据与短信等入口仍在服务端。超级管理员入口与普通入口分别校验用户平台类型，权限信息也按角色、菜单平台类型过滤。新增用户、角色或菜单须保持这些契约一致。
+- 账号密码界面调用 `/system/auth/super-admin-login`；普通 `/login` 和短信 `/sms-login` 入口仍在服务端，二者按业务管理平台校验账号平台类型。超级管理员入口与普通入口分别校验用户平台类型，权限信息也按角色、菜单平台类型过滤。新增用户、角色或菜单须保持这些契约一致。
 - `TokenAuthenticationFilter` 在 Security 过滤链中读取令牌，通过 OAuth2 Token API 校验并设置当前身份。匿名路径由 `@PermitAll`、Security 配置与模块定制共同决定，其余请求要求认证。
 - 操作权限使用 `@PreAuthorize("@ss.hasPermission('域:资源:操作')")`，由权限服务计算角色和菜单关系；权限码须与菜单及前端按钮一致。数据范围是另一层约束，不能用按钮权限代替。
 - access/refresh Token 存入 MySQL，access Token 有 Redis 缓存。查询先读缓存，未命中读数据库并回填，校验检查有效期；刷新与撤销由令牌服务维护。不能只删除浏览器 Token 就声称服务端登录态已撤销。

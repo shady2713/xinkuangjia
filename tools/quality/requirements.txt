@@ -1,0 +1,5 @@
+# 仓库根文档检查与工具测试依赖，固定版本保证本地与 CI 解析口径一致。
+# 安装：python -m pip install -r tools/quality/requirements.txt
+markdown-it-py==3.0.0
+PyYAML==6.0.3
+pytest==8.4.2
