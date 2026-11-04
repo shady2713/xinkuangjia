@@ -27,7 +27,15 @@ public class ValidationUtils {
     private static final Pattern PATTERN_URL = Pattern.compile("^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]");
     private static final Pattern PATTERN_XML_NCNAME = Pattern.compile("[a-zA-Z_][\\-_.0-9_a-zA-Z$]*");
     private static final Pattern PATTERN_USERNAME = Pattern.compile("^[A-Za-z0-9]{4,30}$");
-    private static final Pattern PATTERN_PASSWORD = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{6,16}$");
+    /** 密码最小长度，对齐等保二级身份鉴别要求。 */
+    private static final int PASSWORD_MIN_LENGTH = 8;
+    /** 密码最大长度，限制异常长输入占用的校验和存储开销。 */
+    private static final int PASSWORD_MAX_LENGTH = 32;
+    /** 至少需要覆盖的字符类别数。 */
+    private static final int PASSWORD_MIN_CHARACTER_CLASSES = 3;
+    /** 允许的可见 ASCII 字符范围，排除空格、控制字符和非 ASCII 字符。 */
+    private static final int PASSWORD_PRINTABLE_MIN = 0x21;
+    private static final int PASSWORD_PRINTABLE_MAX = 0x7e;
     private static final Pattern PATTERN_EMAIL = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
     private static final Pattern PATTERN_ID_CARD = Pattern.compile("^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[0-9Xx]$");
     private static final Pattern PATTERN_REAL_NAME = Pattern.compile("^[A-Za-z\\u4e00-\\u9fa5·]{2,30}$");
@@ -78,13 +86,41 @@ public class ValidationUtils {
     }
 
     /**
-     * 校验密码是否为 6-16 位且同时包含大小写字母和数字。
+     * 校验密码是否符合等保二级复杂度：8-32 位可见 ASCII，且覆盖大小写字母、数字、特殊字符中的至少 3 类。
      *
      * @param password 密码
-     * @return 是否格式正确
+     * @return 是否满足复杂度
      */
     public static boolean isPassword(String password) {
-        return StringUtils.hasText(password) && PATTERN_PASSWORD.matcher(password).matches();
+        if (!StringUtils.hasText(password)) {
+            return false;
+        }
+        int length = password.length();
+        if (length < PASSWORD_MIN_LENGTH || length > PASSWORD_MAX_LENGTH) {
+            return false;
+        }
+        boolean hasLowercase = false;
+        boolean hasUppercase = false;
+        boolean hasDigit = false;
+        boolean hasSpecial = false;
+        for (int i = 0; i < length; i++) {
+            char value = password.charAt(i);
+            if (value < PASSWORD_PRINTABLE_MIN || value > PASSWORD_PRINTABLE_MAX) {
+                return false;
+            }
+            if (value >= 'a' && value <= 'z') {
+                hasLowercase = true;
+            } else if (value >= 'A' && value <= 'Z') {
+                hasUppercase = true;
+            } else if (value >= '0' && value <= '9') {
+                hasDigit = true;
+            } else {
+                hasSpecial = true;
+            }
+        }
+        int classes = (hasLowercase ? 1 : 0) + (hasUppercase ? 1 : 0)
+                + (hasDigit ? 1 : 0) + (hasSpecial ? 1 : 0);
+        return classes >= PASSWORD_MIN_CHARACTER_CLASSES;
     }
 
     /**

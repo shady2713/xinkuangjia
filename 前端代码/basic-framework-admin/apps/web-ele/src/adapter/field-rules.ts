@@ -1,14 +1,22 @@
 import { z } from '@vben/common-ui';
 
-const USERNAME_REGEX = /^[A-Za-z0-9]{4,30}$/;
-const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{6,16}$/;
+const USERNAME_REGEX = /^[A-Z0-9]{4,30}$/i;
+/** 密码长度下限，与后端等保二级规则保持一致。 */
+const PASSWORD_MIN_LENGTH = 8;
+/** 密码长度上限，避免异常长输入。 */
+const PASSWORD_MAX_LENGTH = 32;
+/** 允许的可见 ASCII 字符范围，排除空格和非 ASCII 字符。 */
+const PASSWORD_PRINTABLE_REGEX = /^[\u0021-\u007E]+$/;
+/** 密码规则提示，与后端 PASSWORD_POLICY_NOT_MATCH 文案保持一致。 */
+const PASSWORD_RULE_MESSAGE =
+  '必须为 8-32 位，且至少包含大写字母、小写字母、数字、特殊字符中的 3 类';
 const MOBILE_REGEX = /^1\d{10}$/;
-const EMAIL_REGEX = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+const EMAIL_REGEX = /^[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const ID_CARD_REGEX =
-  /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[0-9Xx]$/;
-const REAL_NAME_REGEX = /^[A-Za-z\u4e00-\u9fa5·]{2,30}$/;
+  /^[1-9]\d{5}(?:18|19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[0-9X]$/i;
+const REAL_NAME_REGEX = /^[A-Z\u4E00-\u9FA5·]{2,30}$/i;
 const BANK_CARD_NO_REGEX = /^\d{12,19}$/;
-const PERCENT_REGEX = /^(100(?:\.0{1,2})?|\d{1,2}(?:\.\d{1,2})?)$/;
+const PERCENT_REGEX = /^(?:100(?:\.0{1,2})?|\d{1,2}(?:\.\d{1,2})?)$/;
 const ID_CARD_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
 const ID_CARD_CHECK_CODES = [
   '1',
@@ -49,8 +57,35 @@ export function isUsernameValue(value: string) {
   return USERNAME_REGEX.test(value);
 }
 
+/**
+ * 校验密码是否符合等保二级复杂度。
+ *
+ * @param value 待校验的明文密码
+ * @returns 满足长度、字符范围和字符类别要求时返回 true
+ */
 export function isPasswordValue(value: string) {
-  return PASSWORD_REGEX.test(value);
+  if (
+    value.length < PASSWORD_MIN_LENGTH ||
+    value.length > PASSWORD_MAX_LENGTH ||
+    !PASSWORD_PRINTABLE_REGEX.test(value)
+  ) {
+    return false;
+  }
+  let classes = 0;
+  if (/[a-z]/.test(value)) classes += 1;
+  if (/[A-Z]/.test(value)) classes += 1;
+  if (/\d/.test(value)) classes += 1;
+  if (/[^A-Z0-9]/i.test(value)) classes += 1;
+  return classes >= 3;
+}
+
+/**
+ * 获取密码复杂度提示文案，供表单规则和页面提示复用。
+ *
+ * @returns 不含字段名前缀的规则说明
+ */
+export function getPasswordRuleMessage() {
+  return PASSWORD_RULE_MESSAGE;
 }
 
 export function isMobileValue(value: string) {
@@ -110,10 +145,22 @@ export function isBankCardNoValue(value: string) {
   return sum % 10 === 0;
 }
 
-export function isPercentValue(value: string | number) {
+/**
+ * 校验百分比字符串或数值是否在 0-100 之间且最多两位小数。
+ *
+ * @param value 百分比字符串或数值
+ * @returns 格式正确返回 true
+ */
+export function isPercentValue(value: number | string) {
   return PERCENT_REGEX.test(String(value));
 }
 
+/**
+ * 校验数量是否为非负整数。
+ *
+ * @param value 待校验数量
+ * @returns 非负整数返回 true
+ */
 export function isQuantityValue(value: number) {
   return Number.isInteger(value) && value >= 0;
 }
@@ -128,13 +175,19 @@ export function buildRequiredUsernameSchema(label = '用户名') {
     });
 }
 
+/**
+ * 构造必填密码校验规则，供表单在提交前拦截不合规密码。
+ *
+ * @param label 字段显示名称
+ * @returns Zod 密码校验规则
+ */
 export function buildRequiredPasswordSchema(label = '密码') {
   return z
     .string({ required_error: `请输入${label}` })
     .trim()
     .min(1, { message: `请输入${label}` })
     .refine(isPasswordValue, {
-      message: `${label}必须为 6-16 位，且同时包含大写字母、小写字母和数字`,
+      message: `${label}${PASSWORD_RULE_MESSAGE}`,
     });
 }
 

@@ -4,7 +4,6 @@ import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginRespVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthShareLoginRespVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
@@ -54,14 +53,6 @@ public interface AdminAuthService {
      * @return 登录结果
      */
     AuthLoginRespVO superAdminLogin(@Valid AuthLoginReqVO reqVO);
-
-    /**
-     * 固定分享码自动登录
-     *
-     * @param ticket 分享码
-     * @return 登录结果和首个可访问菜单地址
-     */
-    AuthShareLoginRespVO shareLogin(String ticket);
 
     /**
      * 基于 token 退出登录

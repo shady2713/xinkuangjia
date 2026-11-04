@@ -32,9 +32,9 @@ public class AuthLoginReqVO extends CaptchaVerificationReqVO {
     private String username;
 
     /**
-     * 密码。
+     * SM2 密码密文，明文载荷为 {@code {"p":密码,"t":时间戳,"n":随机串}}。
      */
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
+    @Schema(description = "SM2 密码密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
     @NotEmpty(message = "密码不能为空")
     private String password;
 

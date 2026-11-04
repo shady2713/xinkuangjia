@@ -4,13 +4,13 @@ import type { SystemUserApi } from '#/api/system/user';
 import { ref } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
-import { md5 } from '@vben/utils';
 
 import { ElMessage } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
 import { createUser, getUser, updateUser } from '#/api/system/user';
 import { $t } from '#/locales';
+import { encryptPassword } from '#/utils/sm2';
 
 import { useFormSchema } from '../data';
 
@@ -31,6 +31,11 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 校验表单，新增用户时加密密码后提交。
+   *
+   * @returns 提交完成的 Promise
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
@@ -39,9 +44,9 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     // 提交表单
     const data = (await formApi.getValues()) as SystemUserApi.User;
-    // 新增用户时对密码进行 MD5 加密
+    // 新增用户时对密码进行 SM2 加密；编辑用户不提交密码字段。
     if (!formData.value?.id && data.password) {
-      data.password = md5(data.password);
+      data.password = await encryptPassword(data.password);
     }
     try {
       await (formData.value?.id ? updateUser(data) : createUser(data));

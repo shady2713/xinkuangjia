@@ -7,12 +7,15 @@ import { useRouter } from 'vue-router';
 
 import { AuthenticationForgetPassword, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
-import { logError, md5 } from '@vben/utils';
+import { logError } from '@vben/utils';
 
-
-import { buildRequiredMobileSchema, buildRequiredPasswordSchema } from '#/adapter/form';
+import {
+  buildRequiredMobileSchema,
+  buildRequiredPasswordSchema,
+} from '#/adapter/form';
 import { sendSmsCode, smsResetPassword } from '#/api';
 import { showSuccessMessage } from '#/utils/feedback';
+import { encryptPassword } from '#/utils/sm2';
 
 defineOptions({ name: 'ForgetPassword' });
 
@@ -22,7 +25,12 @@ const loading = ref(false);
 const CODE_LENGTH = 4;
 const forgetPasswordRef = ref();
 
-const formSchema = computed((): VbenFormSchema[] => {
+/**
+ * 构建忘记密码表单字段。
+ *
+ * @returns 手机号、验证码、新密码和确认密码字段
+ */
+function buildFormSchema(): VbenFormSchema[] {
   return [
     {
       component: 'VbenInput',
@@ -91,14 +99,28 @@ const formSchema = computed((): VbenFormSchema[] => {
         placeholder: $t('authentication.confirmPassword'),
       },
       dependencies: {
+        /**
+         * 校验确认密码与新密码一致。
+         *
+         * @param values 当前表单值
+         * @returns Zod 确认密码规则
+         */
         rules(values) {
           const { password } = values;
-          return buildRequiredPasswordSchema($t('authentication.confirmPassword')).refine(
-            (value) => value === password,
-            {
-              message: $t('authentication.confirmPasswordTip'),
-            },
-          );
+          /**
+           * 判断确认密码是否等于新密码。
+           *
+           * @param value 确认密码
+           * @returns 一致返回 true
+           */
+          function isSamePassword(value: string) {
+            return value === password;
+          }
+          return buildRequiredPasswordSchema(
+            $t('authentication.confirmPassword'),
+          ).refine(isSamePassword, {
+            message: $t('authentication.confirmPasswordTip'),
+          });
         },
         triggerFields: ['password'],
       },
@@ -106,13 +128,25 @@ const formSchema = computed((): VbenFormSchema[] => {
       label: $t('authentication.confirmPassword'),
     },
   ];
-});
+}
 
+const formSchema = computed(buildFormSchema);
+
+/**
+ * 加密新密码后提交短信重置密码请求。
+ *
+ * @param values 表单值
+ * @returns 提交完成的 Promise
+ */
 async function handleSubmit(values: Recordable<any>) {
   loading.value = true;
   try {
     const { mobile, code, password } = values;
-    await smsResetPassword({ mobile, code, password: md5(password) });
+    await smsResetPassword({
+      mobile,
+      code,
+      password: await encryptPassword(password),
+    });
     showSuccessMessage($t('authentication.resetPasswordSuccess'));
     await router.push('/');
   } catch (error) {
@@ -131,6 +165,3 @@ async function handleSubmit(values: Recordable<any>) {
     @submit="handleSubmit"
   />
 </template>
-
-
-

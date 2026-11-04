@@ -118,7 +118,7 @@ def _yaml(path: Path, root: Path) -> dict[str, object]:
     try:
         import yaml
     except ImportError as exc:
-        raise InputError("缺少 PyYAML；请为当前 Python 安装 PyYAML==6.0.3") from exc
+        raise InputError("缺少 PyYAML；请安装仓库根 tools/quality/requirements.txt 中的 PyYAML==6.0.3") from exc
 
     class UniqueLoader(yaml.SafeLoader):
         """隔离映射构造规则，不修改 PyYAML 全局解析行为。"""

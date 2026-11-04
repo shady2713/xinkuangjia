@@ -262,12 +262,32 @@ public interface AdminUserService {
     List<AdminUserDO> getUserListByStatusAndType(Integer status, String userType);
 
     /**
-     * 判断密码是否匹配
+     * 判断密码是否匹配当前 BCrypt 格式。
      *
      * @param rawPassword 未加密的密码
      * @param encodedPassword 加密后的密码
      * @return 是否匹配
      */
     boolean isPasswordMatch(String rawPassword, String encodedPassword);
+
+    /**
+     * 判断密码是否匹配历史 bcrypt(md5(明文)) 格式。
+     *
+     * <p>仅用于前端 MD5 传输方案下线后的兼容迁移；登录成功后应立即调用
+     * {@link #updatePasswordHash(Long, String)} 升级为当前格式。</p>
+     *
+     * @param rawPassword 未加密的密码
+     * @param encodedPassword 历史加密后的密码
+     * @return 是否匹配
+     */
+    boolean isPasswordMatchLegacy(String rawPassword, String encodedPassword);
+
+    /**
+     * 用当前 BCrypt 格式重写指定用户的密码哈希，不改变首次改密标志。
+     *
+     * @param id 用户编号
+     * @param rawPassword 未加密的密码
+     */
+    void updatePasswordHash(Long id, String rawPassword);
 
 }

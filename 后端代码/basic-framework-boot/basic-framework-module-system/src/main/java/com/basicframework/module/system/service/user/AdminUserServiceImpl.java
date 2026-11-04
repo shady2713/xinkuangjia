@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.api.config.ConfigApi;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
@@ -109,7 +110,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 用户归属必须以可信的登录平台为准，不能使用 HTTP 请求体中的平台字段。
         user.setUserType(resolvedUserType);
         user.setStatus(ObjUtil.defaultIfNull(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())); // 默认开启
+        validatePasswordPolicy(createReqVO.getPassword());
         user.setPassword(encodePassword(createReqVO.getPassword())); // 加密密码
+        // 管理员设置初始密码后，用户首次登录必须先修改密码。
+        user.setPasswordChangeRequired(true);
         userMapper.insert(user);
         // 2.2 插入关联岗位
         if (CollectionUtil.isNotEmpty(user.getPostIds())) {
@@ -148,7 +152,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 注册入口只服务当前业务管理平台，不允许通过注册生成新管理平台账号。
         user.setUserType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
+        validatePasswordPolicy(registerReqVO.getPassword());
         user.setPassword(encodePassword(registerReqVO.getPassword())); // 加密密码
+        // 注册密码由用户自己设置，不触发首次改密。
+        user.setPasswordChangeRequired(false);
         userMapper.insert(user);
         return user.getId();
     }
@@ -247,20 +254,22 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验旧密码后更新个人密码，保留现有登录摘要与 BCrypt 存储口径。
+     * 校验旧密码后更新个人密码。
      *
      * @param id 当前登录用户编号
-     * @param reqVO 前端提交的新旧密码 MD5 摘要
+     * @param reqVO 已解密的旧密码和新密码
      */
     @Override
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
-        // 旧密码沿用当前登录协议的 MD5 摘要；校验失败时不得写入新密码。
+        // 旧密码允许历史 bcrypt(md5(明文)) 格式通过，保证存量账号可完成迁移。
         validateOldPassword(id, reqVO.getOldPassword());
+        validatePasswordPolicy(reqVO.getNewPassword());
         // 执行更新
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
-        // 新密码已由前端转换为 MD5，直接使用 BCrypt 存储，不能再次摘要导致与登录请求不一致。
         updateObj.setPassword(encodePassword(reqVO.getNewPassword()));
+        // 用户自行修改密码后不再要求强制改密。
+        updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
     }
 
@@ -274,13 +283,15 @@ public class AdminUserServiceImpl implements AdminUserService {
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password) {
-        // 1. 校验用户存在
+        // 1. 校验用户存在和密码复杂度
         AdminUserDO user = validateUserExists(id);
+        validatePasswordPolicy(password);
 
-        // 2. 更新密码
+        // 2. 更新密码；短信重置由用户自己设置新密码，不触发首次改密。
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password)); // 加密密码
+        updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
 
         // 3. 记录操作日志上下文
@@ -299,10 +310,13 @@ public class AdminUserServiceImpl implements AdminUserService {
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password, String userType) {
         AdminUserDO user = validateUserForPlatform(id, userType);
+        validatePasswordPolicy(password);
 
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
         updateObj.setPassword(encodePassword(password));
+        // 管理员重置密码后，用户首次登录必须先修改密码。
+        updateObj.setPasswordChangeRequired(true);
         userMapper.updateById(updateObj);
 
         LogRecordContext.putVariable("user", user);
@@ -756,7 +770,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (user == null) {
             throw exception(USER_NOT_EXISTS);
         }
-        if (!isPasswordMatch(oldPassword, user.getPassword())) {
+        if (!isPasswordMatch(oldPassword, user.getPassword())
+                && !isPasswordMatchLegacy(oldPassword, user.getPassword())) {
             throw exception(USER_PASSWORD_FAILED);
         }
     }
@@ -780,6 +795,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (StrUtil.isEmpty(initPassword)) {
             throw exception(USER_IMPORT_INIT_PASSWORD);
         }
+        // 初始密码同样必须满足等保二级复杂度，避免导入绕过密码策略。
+        validatePasswordPolicy(initPassword);
 
         // 2. 遍历，逐个创建 or 更新
         UserImportRespVO respVO = UserImportRespVO.builder().createUsernames(new ArrayList<>())
@@ -826,6 +843,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                 newUser.setUserType(importUserType);
                 newUser.setDeptId(deptId);
                 newUser.setPassword(encodePassword(initPassword));
+                // 导入生成的初始密码必须在首次登录后修改。
+                newUser.setPasswordChangeRequired(true);
                 newUser.setPostIds(new HashSet<>()); // 设置默认密码及空岗位编号数组
                 userMapper.insert(newUser);
                 respVO.getCreateUsernames().add(importUser.getUsername());
@@ -878,6 +897,52 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public boolean isPasswordMatch(String rawPassword, String encodedPassword) {
         return passwordEncoder.matches(rawPassword, encodedPassword);
+    }
+
+    /**
+     * 校验历史 bcrypt(md5(明文)) 格式密码。
+     *
+     * <p>兼容范围只覆盖前端 MD5 传输方案下线前的存量哈希。确认所有活跃账号
+     * 完成一次登录升级后，删除本方法和调用点。MD5 在这里只作为历史输入，
+     * 不作为新的存储或传输算法。</p>
+     *
+     * @param rawPassword 未加密的密码
+     * @param encodedPassword 历史加密后的密码
+     * @return 是否匹配
+     */
+    @Override
+    public boolean isPasswordMatchLegacy(String rawPassword, String encodedPassword) {
+        if (StrUtil.isEmpty(rawPassword) || StrUtil.isEmpty(encodedPassword)) {
+            return false;
+        }
+        String legacyRawPassword = DigestUtil.md5Hex(rawPassword);
+        return passwordEncoder.matches(legacyRawPassword, encodedPassword);
+    }
+
+    /**
+     * 登录成功后将历史哈希原地升级为当前 BCrypt(明文) 格式。
+     *
+     * @param id 用户编号
+     * @param rawPassword 未加密的密码
+     */
+    @Override
+    public void updatePasswordHash(Long id, String rawPassword) {
+        AdminUserDO updateObj = new AdminUserDO();
+        updateObj.setId(id);
+        updateObj.setPassword(encodePassword(rawPassword));
+        userMapper.updateById(updateObj);
+    }
+
+    /**
+     * 校验新密码是否符合等保二级复杂度。
+     *
+     * @param password 明文密码
+     * @throws ServiceException 不满足复杂度时抛出
+     */
+    private void validatePasswordPolicy(String password) {
+        if (!ValidationUtils.isPassword(password)) {
+            throw exception(PASSWORD_POLICY_NOT_MATCH);
+        }
     }
 
     /**

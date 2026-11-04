@@ -1,6 +1,5 @@
 package com.basicframework.module.system.controller.admin.auth.vo;
 
-import com.basicframework.framework.common.validation.Password;
 import com.basicframework.framework.common.validation.Username;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,10 +36,9 @@ public class AuthRegisterReqVO extends CaptchaVerificationReqVO {
     private String nickname;
 
     /**
-     * 密码。
+     * SM2 密码密文，明文载荷为 {@code {"p":密码,"t":时间戳,"n":随机串}}。
      */
-    @Schema(description = "密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
+    @Schema(description = "SM2 密码密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
     @NotEmpty(message = "密码不能为空")
-    @Password
     private String password;
 }

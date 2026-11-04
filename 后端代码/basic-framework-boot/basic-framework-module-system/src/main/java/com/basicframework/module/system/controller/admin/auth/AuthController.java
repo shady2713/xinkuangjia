@@ -12,9 +12,10 @@ import com.basicframework.module.system.controller.admin.auth.vo.AuthPermissionI
 import com.basicframework.module.system.controller.admin.auth.vo.AuthRefreshTokenReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthShareLoginRespVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
+import com.basicframework.module.system.controller.admin.auth.vo.Sm2PublicKeyRespVO;
+import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.convert.auth.AuthConvert;
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
@@ -28,7 +29,6 @@ import com.basicframework.module.system.service.permission.PermissionService;
 import com.basicframework.module.system.service.permission.RoleService;
 import com.basicframework.module.system.service.user.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
@@ -69,7 +69,24 @@ public class AuthController {
     private PermissionService permissionService;
     @Resource
     private SecurityProperties securityProperties;
+    @Resource
+    private Sm2PasswordTransportService sm2PasswordTransportService;
 
+
+    /**
+     * 查询 SM2 密码传输公钥。
+     *
+     * <p>公钥可以公开读取；私钥只在服务端配置中保存。前端在提交密码前调用本接口，
+     * 使用返回的 04 前缀公钥按 C1C3C2 模式加密。</p>
+     *
+     * @return SM2 公钥和密文模式
+     */
+    @GetMapping("/sm2-public-key")
+    @PermitAll
+    @Operation(summary = "获取密码传输 SM2 公钥")
+    public CommonResult<Sm2PublicKeyRespVO> getSm2PublicKey() {
+        return success(new Sm2PublicKeyRespVO(sm2PasswordTransportService.getPublicKeyHex(), 1));
+    }
 
     /**
      * 使用账号密码登录管理后台。
@@ -81,6 +98,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "使用账号密码登录")
     public CommonResult<AuthLoginRespVO> login(@RequestBody @Valid AuthLoginReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptLoginPassword(reqVO.getPassword()));
         return success(authService.login(reqVO));
     }
 
@@ -94,21 +112,8 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "新管理平台账号密码登录")
     public CommonResult<AuthLoginRespVO> superAdminLogin(@RequestBody @Valid AuthLoginReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptLoginPassword(reqVO.getPassword()));
         return success(authService.superAdminLogin(reqVO));
-    }
-
-    /**
-     * 使用受控分享票据登录。
-     *
-     * @param ticket 分享票据
-     * @return 分享登录结果
-     */
-    @PostMapping("/share-login")
-    @PermitAll
-    @Operation(summary = "使用固定分享码自动登录")
-    @Parameter(name = "ticket", description = "固定分享码", required = true)
-    public CommonResult<AuthShareLoginRespVO> shareLogin(@RequestParam("ticket") String ticket) {
-        return success(authService.shareLogin(ticket));
     }
 
     /**
@@ -191,6 +196,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "注册用户")
     public CommonResult<AuthLoginRespVO> register(@RequestBody @Valid AuthRegisterReqVO registerReqVO) {
+        registerReqVO.setPassword(sm2PasswordTransportService.decryptPassword(registerReqVO.getPassword()));
         return success(authService.register(registerReqVO));
     }
 
@@ -234,6 +240,7 @@ public class AuthController {
     @PermitAll
     @Operation(summary = "重置密码")
     public CommonResult<Boolean> resetPassword(@RequestBody @Valid AuthResetPasswordReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptPassword(reqVO.getPassword()));
         authService.resetPassword(reqVO);
         return success(true);
     }

@@ -30,7 +30,7 @@ public @interface Password {
     /**
      * @return 校验失败时的提示信息
      */
-    String message() default "密码必须为 6-16 位，且同时包含大写字母、小写字母和数字";
+    String message() default "密码必须为 8-32 位，且至少包含大写字母、小写字母、数字、特殊字符中的 3 类";
 
     /**
      * @return 分组校验标识

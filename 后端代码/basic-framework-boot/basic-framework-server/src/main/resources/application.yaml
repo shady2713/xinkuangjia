@@ -7,9 +7,11 @@ spring:
       - optional:file:../.env[.properties]     # IDEA 默认工作目录在 basic-framework-server 模块时
   servlet:
     multipart:
-      # 通用文件上传由运行环境和存储容量控制，-1 表示不在 Spring Multipart 层设置固定大小上限。
-      max-file-size: -1
-      max-request-size: -1
+      # 单文件 50MB；请求体 55MB，为 multipart 边界和表单字段预留少量开销。
+      # 与前端 nginx.conf 的 client_max_body_size 以及 FileController 的有界读取上限保持一致；
+      # 当前容器 Xmx 为 512m，禁止恢复无上限（-1）或盲目放大堆来支撑大文件。
+      max-file-size: 50MB
+      max-request-size: 55MB
   jackson:
     serialization:
       write-dates-as-timestamps: true
@@ -137,6 +139,18 @@ basic-framework:
   security:
     mock-enable: false
     permit-all-urls: []
+    # 密码传输使用 SM2（C1C3C2）。私钥只从环境变量注入，缺失或格式错误时启动失败。
+    sm2:
+      private-key: ${SM2_PRIVATE_KEY:}
+      timestamp-window: ${SM2_TIMESTAMP_WINDOW:5m}
+      nonce-ttl: ${SM2_NONCE_TTL:10m}
+      replay-check-enabled: ${SM2_REPLAY_CHECK_ENABLED:true}
+    # 登录失败锁定：按账号计数，成功登录清零；锁定时返回通用提示。
+    login-lock:
+      enabled: ${LOGIN_LOCK_ENABLED:true}
+      max-failures: ${LOGIN_LOCK_MAX_FAILURES:5}
+      lock-duration: ${LOGIN_LOCK_DURATION:30m}
+      failure-window: ${LOGIN_LOCK_FAILURE_WINDOW:30m}
   captcha:
     enable: true
   access-log:

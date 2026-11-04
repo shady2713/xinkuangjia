@@ -99,6 +99,12 @@ public class AuthPermissionInfoRespVO {
         @Schema(description = "用户邮箱", example = "admin@example.com")
         private String email;
 
+        /**
+         * 是否要求先修改密码。
+         */
+        @Schema(description = "是否要求先修改密码", requiredMode = Schema.RequiredMode.REQUIRED, example = "false")
+        private Boolean passwordChangeRequired;
+
     }
 
     /**

@@ -9,7 +9,7 @@ import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 
-import { ElNotification } from 'element-plus';
+import { ElMessage, ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
 import {
@@ -20,14 +20,18 @@ import {
   smsLogin,
 } from '#/api';
 import { $t } from '#/locales';
-import { md5 } from '@vben/utils';
+import { encryptPassword } from '#/utils/sm2';
 
-export const useAuthStore = defineStore('auth', () => {
+/** 认证状态，负责登录、注册、令牌刷新后的用户信息和首次改密标志。 */
+function useAuthState() {
   const accessStore = useAccessStore();
   const userStore = useUserStore();
   const router = useRouter();
 
   const loginLoading = ref(false);
+
+  /** 首次登录或管理员重置密码后，是否必须先修改密码。 */
+  const passwordChangeRequired = ref(false);
 
   /**
    * 异步处理登录操作
@@ -35,6 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
    * @param type 登录类型
    * @param params 登录表单数据
    * @param onSuccess 登录成功后的回调函数
+   * @returns 登录后的用户信息
    */
   async function authLogin(
     type: 'mobile' | 'register' | 'username',
@@ -56,17 +61,21 @@ export const useAuthStore = defineStore('auth', () => {
         }
         case 'register': {
           const registerParams = params as AuthApi.RegisterParams;
-          registerParams.password = md5(registerParams.password);
-          loginResult = await register(registerParams);
+          loginResult = await register({
+            ...registerParams,
+            password: await encryptPassword(registerParams.password),
+          });
           break;
         }
         default: {
           const loginParams = params as AuthApi.LoginParams;
-          if (loginParams.password) {
-            // 登录表单校验后才会进入提交，判空后再加密，避免把空值传给 md5。
-            loginParams.password = md5(loginParams.password);
-          }
-          loginResult = await loginApi(loginParams);
+          loginResult = await loginApi({
+            ...loginParams,
+            // 登录表单校验后才会进入提交，判空后再加密，避免把空值传给 SM2。
+            password: loginParams.password
+              ? await encryptPassword(loginParams.password)
+              : loginParams.password,
+          });
         }
       }
       const { accessToken, refreshToken } = loginResult;
@@ -75,6 +84,10 @@ export const useAuthStore = defineStore('auth', () => {
       if (accessToken) {
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
+        // 登录响应和权限信息都携带该标志；任一为 true 都先强制改密。
+        passwordChangeRequired.value = Boolean(
+          loginResult.passwordChangeRequired,
+        );
 
         // 获取用户信息并存储到 userStore、accessStore 中
         const fetchUserInfoResult = await fetchUserInfo();
@@ -83,6 +96,9 @@ export const useAuthStore = defineStore('auth', () => {
 
         if (accessStore.loginExpired) {
           accessStore.setLoginExpired(false);
+        } else if (passwordChangeRequired.value) {
+          ElMessage.warning('首次登录或密码被重置，请先修改密码');
+          await router.push('/change-password');
         } else {
           onSuccess
             ? await onSuccess?.()
@@ -137,6 +153,9 @@ export const useAuthStore = defineStore('auth', () => {
       await getAuthPermissionInfoApi();
     // userStore
     userStore.setUserInfo(authPermissionInfo.user);
+    passwordChangeRequired.value =
+      passwordChangeRequired.value ||
+      Boolean(authPermissionInfo.user?.passwordChangeRequired);
     userStore.setUserRoles(authPermissionInfo.roles);
     // accessStore
     accessStore.setAccessMenus(authPermissionInfo.menus);
@@ -144,15 +163,31 @@ export const useAuthStore = defineStore('auth', () => {
     return authPermissionInfo;
   }
 
+  /** 密码修改成功后解除强制改密状态。 */
+  function clearPasswordChangeRequired() {
+    passwordChangeRequired.value = false;
+  }
+
+  /** 重置认证状态。 */
   function $reset() {
     loginLoading.value = false;
+    passwordChangeRequired.value = false;
   }
 
   return {
     $reset,
     authLogin,
+    clearPasswordChangeRequired,
     fetchUserInfo,
     loginLoading,
     logout,
+    passwordChangeRequired,
   };
-});
+}
+
+/**
+ * 认证 store。
+ *
+ * @returns 认证 store
+ */
+export const useAuthStore = defineStore('auth', useAuthState);

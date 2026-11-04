@@ -1,6 +1,6 @@
 """提供 Markdown 语法树、链接、锚点和围栏提取，不把代码示例当作正文。
 
-由文档检查入口加载，依赖 requirements.txt 中的 markdown-it-py。
+由文档检查入口加载，依赖 tools/quality/requirements.txt 中的 markdown-it-py。
 @author 李杰
 """
 
@@ -104,7 +104,7 @@ def tokenize_markdown(source: str) -> tuple[list[Token], dict[str, Any]]:
     try:
         from markdown_it import MarkdownIt
     except ImportError as exc:
-        raise CheckError("缺少 Markdown 解析器，请安装 tools/quality/requirements.txt") from exc
+        raise CheckError("缺少 Markdown 解析器，请运行 python -m pip install -r tools/quality/requirements.txt") from exc
     # YAML 元数据不属于正文；用空行替换以保留之后的诊断行号。
     source = re.sub(
         r"\A---[^\S\n]*\n.*?\n---[^\S\n]*(?:\n|$)",

@@ -1,4 +1,9 @@
-import type { Router } from 'vue-router';
+/**
+ * 路由守卫，负责页面加载进度、登录态、权限路由和首次改密拦截。
+ *
+ * @author shady2713
+ */
+import type { RouteLocationNormalized, Router } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { $t } from '@vben/locales';
@@ -12,6 +17,9 @@ import { useAuthStore } from '#/store';
 import { showLoadingMessage } from '#/utils/feedback';
 
 import { generateAccess } from './access';
+
+/** 首次登录或管理员重置密码后的强制修改密码页。 */
+const PASSWORD_CHANGE_PATH = '/change-password';
 
 /**
  * 通用守卫配置
@@ -48,7 +56,17 @@ function setupCommonGuard(router: Router) {
  * @param router
  */
 function setupAccessGuard(router: Router) {
-  router.beforeEach(async (to, from) => {
+  /**
+   * 处理权限访问和首次改密拦截。
+   *
+   * @param to 目标路由
+   * @param from 来源路由
+   * @returns 放行、重定向目标或继续生成动态路由
+   */
+  const accessGuard = async (
+    to: RouteLocationNormalized,
+    from: RouteLocationNormalized,
+  ) => {
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     const authStore = useAuthStore();
@@ -89,6 +107,13 @@ function setupAccessGuard(router: Router) {
 
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
+      // 后端已返回强制改密标志时，除修改密码页外一律拦截。
+      if (
+        authStore.passwordChangeRequired &&
+        to.path !== PASSWORD_CHANGE_PATH
+      ) {
+        return { path: PASSWORD_CHANGE_PATH, replace: true };
+      }
       return true;
     }
 
@@ -125,6 +150,11 @@ function setupAccessGuard(router: Router) {
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
     userStore.setUserRoles(userRoles);
+    // 动态路由已生成后再拦截，避免跳转到尚未注册的修改密码页。
+    if (authStore.passwordChangeRequired && to.path !== PASSWORD_CHANGE_PATH) {
+      return { path: PASSWORD_CHANGE_PATH, replace: true };
+    }
+
     const redirectPath = (from.query.redirect ??
       (to.path === preferences.app.defaultHomePath
         ? preferences.app.defaultHomePath
@@ -134,7 +164,8 @@ function setupAccessGuard(router: Router) {
       ...router.resolve(decodeURIComponent(redirectPath)),
       replace: true,
     };
-  });
+  };
+  router.beforeEach(accessGuard);
 }
 
 /**

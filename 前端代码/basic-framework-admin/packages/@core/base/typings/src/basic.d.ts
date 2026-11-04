@@ -28,6 +28,10 @@ interface BasicUserInfo {
    * 用户名
    */
   username: string;
+  /**
+   * 是否要求先修改密码
+   */
+  passwordChangeRequired?: boolean;
 }
 
 type ClassType = Array<object | string> | object | string;

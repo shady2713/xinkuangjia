@@ -21,6 +21,7 @@ import com.basicframework.module.system.dal.dataobject.dept.PostDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.enums.ErrorCodeConstants;
 import com.basicframework.module.system.enums.common.SexEnum;
+import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.user.AdminUserService;
@@ -69,6 +70,8 @@ public class UserController {
     private DeptService deptService;
     @Resource
     private PostService postService;
+    @Resource
+    private Sm2PasswordTransportService sm2PasswordTransportService;
 
     /**
      * 创建用户。
@@ -82,6 +85,7 @@ public class UserController {
     @Operation(summary = "新增用户")
     @PreAuthorize("@ss.hasPermission('system:user:create')")
     public CommonResult<Long> createUser(@Valid @RequestBody UserSaveReqVO reqVO) {
+        reqVO.setPassword(sm2PasswordTransportService.decryptPassword(reqVO.getPassword()));
         Long id = userService.createUser(reqVO, getLoginUserType());
         return success(id);
     }
@@ -148,7 +152,8 @@ public class UserController {
     @Operation(summary = "重置用户密码")
     @PreAuthorize("@ss.hasPermission('system:user:update-password')")
     public CommonResult<Boolean> updateUserPassword(@Valid @RequestBody UserUpdatePasswordReqVO reqVO) {
-        userService.updateUserPassword(reqVO.getId(), reqVO.getPassword(), getLoginUserType());
+        userService.updateUserPassword(reqVO.getId(),
+                sm2PasswordTransportService.decryptPassword(reqVO.getPassword()), getLoginUserType());
         return success(true);
     }
 
