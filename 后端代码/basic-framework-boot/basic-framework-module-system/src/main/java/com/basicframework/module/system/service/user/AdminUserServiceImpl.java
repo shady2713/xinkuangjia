@@ -293,11 +293,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
 
-        securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE, LoginResultEnum.SUCCESS,
-                id, user.getUsername());
-        // 改密后旧会话立即失效，避免旧 access/refresh token 继续访问。
+        // 先吊销旧令牌，再写审计，避免审计写入失败导致旧会话继续有效。
         publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
                 UserTokenInvalidationReasonEnum.PASSWORD_CHANGED);
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
     }
 
     /**
@@ -327,11 +327,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
 
-        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
-                id, user.getUsername());
-        // 重置密码后该用户已签发的令牌全部失效。
+        // 先吊销旧令牌，再写审计，避免审计写入失败导致旧会话继续有效。
         publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
                 UserTokenInvalidationReasonEnum.PASSWORD_RESET);
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
@@ -364,11 +364,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setPasswordChangeRequired(true);
         userMapper.updateById(updateObj);
 
-        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
-                id, user.getUsername());
-        // 管理员重置后目标用户的旧令牌立即失效。
+        // 先吊销旧令牌，再写审计，避免审计写入失败导致旧会话继续有效。
         publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
                 UserTokenInvalidationReasonEnum.PASSWORD_RESET);
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
 
         LogRecordContext.putVariable("user", user);
     }
