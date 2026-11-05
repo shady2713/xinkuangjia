@@ -28,7 +28,7 @@
         <mybatis-plus-join.version>1.5.9</mybatis-plus-join.version>
         <dynamic-datasource.version>4.5.0</dynamic-datasource.version>
         <easy-trans.version>3.0.6</easy-trans.version>
-        <redisson.version>3.52.0</redisson.version>
+        <redisson.version>4.8.0</redisson.version>
         <!-- 服务保障相关 -->
         <lock4j.version>2.2.7</lock4j.version>
         <!-- 监控相关 -->
