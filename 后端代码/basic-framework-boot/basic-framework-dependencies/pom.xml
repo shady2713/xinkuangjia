@@ -44,7 +44,7 @@
         <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
         <commons-lang3.version>3.20.0</commons-lang3.version>
         <tika-core.version>3.3.2</tika-core.version>
-        <ip2region.version>2.7.0</ip2region.version>
+        <ip2region.version>3.3.7</ip2region.version>
         <bcprov.version>1.86</bcprov.version>
         <bizlog-sdk.version>3.0.6</bizlog-sdk.version>
         <!-- 三方云服务相关 -->
