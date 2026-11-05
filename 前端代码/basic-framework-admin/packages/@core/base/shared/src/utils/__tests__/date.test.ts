@@ -114,7 +114,10 @@ describe('dateUtils', () => {
     it('should return a valid IANA timezone string', () => {
       const tz = getSystemTimezone();
       expect(typeof tz).toBe('string');
-      expect(tz).toMatch(/^[A-Z]+\/[A-Z_]+/i);
+      // CI runner 常为 UTC；IANA 也允许 Etc/UTC 与 Area/Location 形式。
+      expect(tz === 'UTC' || /^(Etc\/)?[A-Za-z]+(?:\/[A-Za-z_]+)+$/.test(tz)).toBe(
+        true,
+      );
     });
   });
 

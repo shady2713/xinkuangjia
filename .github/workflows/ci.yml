@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (Maven quality-gate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 后端代码/basic-framework-boot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: 后端代码/basic-framework-boot/**/pom.xml
+      - name: Maven quality-gate verify
+        run: mvn -B -ntp -Pquality-gate verify
+
+  frontend:
+    name: frontend (unit + typecheck + build)
+    runs-on: ubuntu-latest
+    env:
+      # GitHub runner 默认 TZ=UTC；仓库时区相关单测期望 IANA 区域名（如 Asia/Shanghai）。
+      TZ: Asia/Shanghai
+    defaults:
+      run:
+        working-directory: 前端代码/basic-framework-admin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Typecheck
+        run: pnpm check:type
+      - name: Build web-ele
+        run: pnpm build:ele
+
+  secrets-scan:
+    name: secrets scan (staged-equivalent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scan changed files for secrets
+        run: |
+          set -euo pipefail
+          # 脚本只扫 git 暂存区，不接受文件路径参数。
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "${BASE}" ] || [ "${BASE}" = "0000000000000000000000000000000000000000" ]; then
+            BASE="$(git rev-list --max-parents=0 HEAD | tail -1)"
+          fi
+          if [ -z "$(git diff --name-only --diff-filter=ACMR "${BASE}"...HEAD)" ]; then
+            echo "No changed files to scan."
+            exit 0
+          fi
+          # 索引对齐到 BASE，工作区保持 HEAD，再 add 全部差异，等价于扫本 PR 变更。
+          git reset --mixed "${BASE}"
+          git add -A
+          python3 -B -X utf8 scripts/security/scan_staged_secrets.py

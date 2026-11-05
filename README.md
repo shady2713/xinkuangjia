@@ -73,3 +73,7 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 - [工程规则（中文）](AGENTS.zh.md)与[英文版](AGENTS.md)：开发约束、Skill 路由、注释与交付要求。
 
 交付文档说明框架当前能力和使用方法。业务项目按自己的需求维护业务文档与决策记录。
+
+## CI
+
+Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 跑后端 quality-gate、前端单测/类型检查/构建与变更密钥扫描。
