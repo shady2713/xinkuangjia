@@ -64,6 +64,17 @@ public interface OAuth2ClientService {
     OAuth2ClientDO getOAuth2ClientFromCache(String clientId);
 
     /**
+     * 获取管理后台内部会话客户端配置。
+     *
+     * <p>内部客户端不持久化，不校验密钥和授权类型，只提供访问令牌与刷新令牌的有效期。
+     * 该配置只应由管理后台登录和刷新令牌流程使用，开放接口必须继续走
+     * {@link #validOAuthClientFromCache(String, String, String, Collection, String)}。</p>
+     *
+     * @return 内部会话客户端配置
+     */
+    OAuth2ClientDO getSystemClient();
+
+    /**
      * 分页查询 OAuth2 客户端。
      *
      * @param pageReqVO 分页查询参数

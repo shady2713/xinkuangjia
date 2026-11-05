@@ -310,6 +310,14 @@ INSERT INTO `system_dict_data` VALUES (41, 20, '用户被禁用', '20', 'system_
 INSERT INTO `system_dict_data` VALUES (42, 30, '验证码不存在', '30', 'system_login_result', 0, 'info', '', '登陆结果 - 验证码不存在', '', '2021-01-18 06:17:54', '1', '2022-02-16 13:24:07', b'0');
 INSERT INTO `system_dict_data` VALUES (43, 31, '验证码不正确', '31', 'system_login_result', 0, 'info', '', '登陆结果 - 验证码不正确', '', '2021-01-18 06:17:54', '1', '2022-02-16 13:24:11', b'0');
 INSERT INTO `system_dict_data` VALUES (44, 100, '未知异常', '100', 'system_login_result', 0, 'danger', '', '登陆结果 - 未知异常', '', '2021-01-18 06:17:54', '1', '2022-02-16 13:24:23', b'0');
+INSERT INTO `system_dict_data` VALUES (3040, 40, '登录尝试被锁定', '40', 'system_login_result', 0, 'danger', '', '登录结果 - 连续失败被临时锁定', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3041, 50, '短信验证码错误', '50', 'system_login_result', 0, 'warning', '', '登录结果 - 短信验证码错误、过期或已使用', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3042, 60, '手机号未注册', '60', 'system_login_result', 0, 'info', '', '登录结果 - 短信登录手机号未注册，仅审计记录', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3043, 70, '密码密文校验失败', '70', 'system_login_result', 0, 'warning', '', '登录结果 - SM2 密文、载荷或时间戳无效', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3044, 71, '密码载荷重放', '71', 'system_login_result', 0, 'danger', '', '登录结果 - SM2 nonce 重放被拒绝', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3045, 72, '防重放校验不可用', '72', 'system_login_result', 0, 'danger', '', '登录结果 - 防重放依赖不可用导致校验失败', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3046, 73, '旧密码校验失败', '73', 'system_login_result', 0, 'warning', '', '登录结果 - 自助改密旧密码错误', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3047, 74, '新密码不合规', '74', 'system_login_result', 0, 'warning', '', '登录结果 - 新密码不满足复杂度策略', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
 INSERT INTO `system_dict_data` VALUES (45, 1, '是', 'true', 'infra_boolean_string', 0, 'danger', '', 'Boolean 是否类型 - 是', '', '2021-01-19 03:20:55', '1', '2022-03-15 23:01:45', b'0');
 INSERT INTO `system_dict_data` VALUES (46, 1, '否', 'false', 'infra_boolean_string', 0, 'info', '', 'Boolean 是否类型 - 否', '', '2021-01-19 03:20:55', '1', '2022-03-15 23:09:45', b'0');
 INSERT INTO `system_dict_data` VALUES (53, 0, '初始化中', '0', 'infra_job_status', 0, 'primary', '', NULL, '', '2021-02-07 07:46:49', '1', '2022-02-16 19:33:29', b'0');
@@ -338,6 +346,9 @@ INSERT INTO `system_dict_data` VALUES (83, 200, '主动登出', '200', 'system_l
 INSERT INTO `system_dict_data` VALUES (85, 202, '强制登出', '202', 'system_login_type', 0, 'danger', '', '强制退出', '1', '2021-10-06 00:53:41', '1', '2022-02-16 13:11:57', b'0');
 INSERT INTO `system_dict_data` VALUES (1154, 20, 'S3 对象存储', '20', 'infra_file_storage', 0, 'default', '', NULL, '1', '2022-03-15 00:26:31', '1', '2022-03-15 00:26:45', b'0');
 INSERT INTO `system_dict_data` VALUES (1155, 103, '短信登录', '103', 'system_login_type', 0, 'default', '', NULL, '1', '2022-05-09 23:57:58', '1', '2022-05-09 23:58:09', b'0');
+INSERT INTO `system_dict_data` VALUES (3037, 300, '修改密码', '300', 'system_login_type', 0, 'warning', '', '安全审计 - 用户自助修改密码', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3038, 301, '重置密码', '301', 'system_login_type', 0, 'warning', '', '安全审计 - 短信或管理员重置密码', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_dict_data` VALUES (3039, 302, '密码传输校验', '302', 'system_login_type', 0, 'danger', '', '安全审计 - SM2 解密或防重放校验', '1', '2026-11-05 00:00:00', '1', '2026-11-05 00:00:00', b'0');
 INSERT INTO `system_dict_data` VALUES (1156, 1, 'password', 'password', 'system_oauth2_grant_type', 0, 'default', '', '密码模式', '1', '2022-05-12 00:22:05', '1', '2022-05-11 16:26:01', b'0');
 INSERT INTO `system_dict_data` VALUES (1157, 2, 'authorization_code', 'authorization_code', 'system_oauth2_grant_type', 0, 'primary', '', '授权码模式', '1', '2022-05-12 00:22:59', '1', '2022-05-11 16:26:02', b'0');
 INSERT INTO `system_dict_data` VALUES (1158, 3, 'implicit', 'implicit', 'system_oauth2_grant_type', 0, 'success', '', '简化模式', '1', '2022-05-12 00:23:40', '1', '2022-05-11 16:26:05', b'0');
@@ -600,7 +611,7 @@ CREATE TABLE `system_oauth2_client`  (
 -- ----------------------------
 -- Records of system_oauth2_client
 -- ----------------------------
-INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', 'Default OAuth2 client. Change secret after deployment', 0, 1800, 2592000, '[\"https://admin.example.com/callback\",\"https://docs.example.com/callback\"]', '[\"password\",\"authorization_code\",\"implicit\",\"refresh_token\",\"client_credentials\"]', '[\"user.read\",\"user.write\"]', '[]', '[\"user.read\",\"user.write\"]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-04-11 12:40:17', b'0');
+INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', '已停用：管理后台改用内部会话客户端，不再使用默认 OAuth2 客户端', 1, 1800, 2592000, '[]', '[]', '[]', '[]', '[]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-11-05 00:00:00', b'0');
 
 -- ----------------------------
 -- Table structure for system_oauth2_refresh_token

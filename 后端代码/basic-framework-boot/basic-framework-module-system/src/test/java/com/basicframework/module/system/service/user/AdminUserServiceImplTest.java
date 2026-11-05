@@ -9,6 +9,11 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.dept.UserPostMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.enums.security.UserTokenInvalidationReasonEnum;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
+import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
@@ -30,6 +35,8 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PAS
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -60,6 +67,8 @@ class AdminUserServiceImplTest {
     private UserPostMapper userPostMapper;
     @Mock
     private com.basicframework.framework.common.api.config.ConfigApi configApi;
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @InjectMocks
     private AdminUserServiceImpl userService;
@@ -97,6 +106,10 @@ class AdminUserServiceImplTest {
         verify(userMapper).updateById(captor.capture());
         assertThat(captor.getValue().getPasswordChangeRequired()).isTrue();
         assertThat(passwordEncoder.matches("New#Pass1", captor.getValue().getPassword())).isTrue();
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_RESET,
+                LoginResultEnum.SUCCESS, 1L, "test-user");
+        verify(applicationContext).publishEvent(argThatTokenInvalidated(
+                UserTokenInvalidationReasonEnum.PASSWORD_RESET));
     }
 
     /** 验证短信重置密码后清除首次改密标志。 */
@@ -109,6 +122,10 @@ class AdminUserServiceImplTest {
         ArgumentCaptor<AdminUserDO> captor = ArgumentCaptor.forClass(AdminUserDO.class);
         verify(userMapper).updateById(captor.capture());
         assertThat(captor.getValue().getPasswordChangeRequired()).isFalse();
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_RESET,
+                LoginResultEnum.SUCCESS, 1L, "test-user");
+        verify(applicationContext).publishEvent(argThatTokenInvalidated(
+                UserTokenInvalidationReasonEnum.PASSWORD_RESET));
     }
 
     /** 验证用户自行修改密码后清除标志，并允许旧密码为历史 md5 哈希。 */
@@ -127,6 +144,10 @@ class AdminUserServiceImplTest {
         verify(userMapper).updateById(captor.capture());
         assertThat(captor.getValue().getPasswordChangeRequired()).isFalse();
         assertThat(passwordEncoder.matches("New#Pass1", captor.getValue().getPassword())).isTrue();
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_CHANGE,
+                LoginResultEnum.SUCCESS, 1L, "test-user");
+        verify(applicationContext).publishEvent(argThatTokenInvalidated(
+                UserTokenInvalidationReasonEnum.PASSWORD_CHANGED));
     }
 
     /** 验证新密码不满足策略时不会写入数据库。 */
@@ -143,6 +164,8 @@ class AdminUserServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(PASSWORD_POLICY_NOT_MATCH.getCode()));
         verify(userMapper, never()).updateById(any(AdminUserDO.class));
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_CHANGE,
+                LoginResultEnum.PASSWORD_POLICY_REJECTED, 1L, "test-user");
     }
 
     /** 验证旧密码错误时无法修改密码。 */
@@ -159,6 +182,23 @@ class AdminUserServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(USER_PASSWORD_FAILED.getCode()));
         verify(userMapper, never()).updateById(any(AdminUserDO.class));
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_CHANGE,
+                LoginResultEnum.PASSWORD_VERIFY_FAILED, 1L, null);
+    }
+
+    /** 验证删除用户后立即发布令牌失效事件。 */
+    @Test
+    void deleteUserRevokesTokens() {
+        when(userMapper.selectById(1L))
+                .thenReturn(buildUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()));
+        PermissionService permissionService = mock(PermissionService.class);
+        when(permissionServiceProvider.getObject()).thenReturn(permissionService);
+
+        userService.deleteUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+
+        verify(permissionService).processUserDeleted(1L);
+        verify(applicationContext).publishEvent(argThatTokenInvalidated(
+                UserTokenInvalidationReasonEnum.USER_DELETED));
     }
 
     /** 验证管理员创建用户时置位首次改密标志。 */
@@ -196,6 +236,16 @@ class AdminUserServiceImplTest {
         ArgumentCaptor<AdminUserDO> captor = ArgumentCaptor.forClass(AdminUserDO.class);
         verify(userMapper).insert(captor.capture());
         assertThat(captor.getValue().getPasswordChangeRequired()).isFalse();
+    }
+
+    /**
+     * 匹配指定原因的令牌失效事件，避免依赖事件对象的其他字段。
+     *
+     * @param reason 期望的失效原因
+     * @return Mockito 参数匹配器
+     */
+    private static UserTokenInvalidatedEvent argThatTokenInvalidated(UserTokenInvalidationReasonEnum reason) {
+        return argThat(event -> event.getReason() == reason);
     }
 
     /**

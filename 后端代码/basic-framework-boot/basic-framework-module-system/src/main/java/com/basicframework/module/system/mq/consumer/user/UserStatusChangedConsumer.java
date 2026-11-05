@@ -6,13 +6,13 @@ import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
  * 针对 {@link UserStatusChangedEvent} 的消费者
  *
- * 当用户被禁用时，删除其所有 Token
+ * 当用户被禁用时，同步删除其所有 Token。监听器保持同步执行，保证禁用接口返回前
+ * 旧令牌已经失效，避免异步窗口内继续访问。
  * @author 李杰
  */
 @Component
@@ -28,7 +28,6 @@ public class UserStatusChangedConsumer {
      * @param event 事件参数
      */
     @EventListener
-    @Async
     public void onMessage(UserStatusChangedEvent event) {
         log.info("[onMessage][用户({}) 状态变更为({})]", event.getUserId(), event.getStatus());
         if (CommonStatusEnum.isDisable(event.getStatus())) {

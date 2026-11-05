@@ -30,6 +30,9 @@ public interface ErrorCodeConstants {
             "登录失败次数过多，账号已临时锁定，请 {} 分钟后重试");
     // 密文、时间戳、重放等传输校验失败统一按账号密码错误返回。
     ErrorCode AUTH_PASSWORD_TRANSPORT_INVALID = new ErrorCode(1_002_000_018, "登录失败，账号密码不正确");
+    // 短信登录按手机号和 IP 限流，提示不包含账号是否存在的信息。
+    ErrorCode AUTH_LOGIN_ATTEMPT_LOCKED = new ErrorCode(1_002_000_019,
+            "登录失败次数过多，请 {} 分钟后重试");
 
     // ========== 菜单模块 1-002-001-000 ==========
     ErrorCode MENU_NAME_DUPLICATE = new ErrorCode(1_002_001_000, "已经存在该名字的菜单");

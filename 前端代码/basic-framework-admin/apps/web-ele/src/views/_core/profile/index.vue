@@ -6,7 +6,7 @@ import { onMounted, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
 
-import { ElCard, ElTabPane, ElTabs } from 'element-plus';
+import { ElCard, ElMessage, ElTabPane, ElTabs } from 'element-plus';
 
 import { getAuthPermissionInfoApi } from '#/api';
 import { getUserProfile } from '#/api/system/user/profile';
@@ -20,9 +20,11 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const activeName = ref('basicInfo');
 
-/** 个人中心修改密码成功后解除前端强制改密状态。 */
-function handlePasswordChanged() {
+/** 个人中心修改密码成功后解除强制改密状态；后端会吊销全部旧令牌，需要重新登录。 */
+async function handlePasswordChanged() {
   authStore.clearPasswordChangeRequired();
+  ElMessage.success('密码修改成功，请使用新密码重新登录');
+  await authStore.logout(false);
 }
 
 /** 加载个人信息 */

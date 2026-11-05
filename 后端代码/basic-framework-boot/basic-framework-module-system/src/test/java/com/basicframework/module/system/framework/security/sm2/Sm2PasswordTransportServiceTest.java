@@ -2,6 +2,9 @@ package com.basicframework.module.system.framework.security.sm2;
 
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.config.SecurityProperties;
+import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +44,8 @@ class Sm2PasswordTransportServiceTest {
     private StringRedisTemplate stringRedisTemplate;
     @Mock
     private ValueOperations<String, String> valueOperations;
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     private SecurityProperties securityProperties;
     private Sm2PasswordCipher cipher;
@@ -56,7 +62,8 @@ class Sm2PasswordTransportServiceTest {
         securityProperties.getSm2().setNonceTtl(Duration.ofMinutes(10));
         securityProperties.getSm2().setReplayCheckEnabled(true);
         cipher = new Sm2PasswordCipher(securityProperties);
-        transportService = new Sm2PasswordTransportService(securityProperties, cipher, stringRedisTemplate);
+        transportService = new Sm2PasswordTransportService(securityProperties, cipher,
+                stringRedisTemplate, securityAuditService);
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
@@ -84,6 +91,8 @@ class Sm2PasswordTransportServiceTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(PASSWORD_TRANSPORT_INVALID.getCode()));
         verifyNoInteractions(valueOperations);
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_TRANSPORT,
+                LoginResultEnum.SM2_DECRYPT_ERROR, null, null);
     }
 
     /** 验证超前时间戳同样被拒绝，避免客户端时间被无限放大。 */
@@ -110,6 +119,8 @@ class Sm2PasswordTransportServiceTest {
         assertThatThrownBy(() -> transportService.decryptPassword(ciphertext))
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(PASSWORD_TRANSPORT_INVALID.getCode()));
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_TRANSPORT,
+                LoginResultEnum.SM2_REPLAY_REJECTED, null, null);
     }
 
     /** 验证 nonce 格式非法时不写入 Redis。 */
@@ -139,6 +150,23 @@ class Sm2PasswordTransportServiceTest {
         assertThatThrownBy(() -> transportService.decryptLoginPassword("not-hex"))
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(AUTH_PASSWORD_TRANSPORT_INVALID.getCode()));
+        verify(securityAuditService).record(LoginLogTypeEnum.LOGIN_USERNAME,
+                LoginResultEnum.SM2_DECRYPT_ERROR, null, null);
+    }
+
+    /** 验证 Redis 不可用时防重放失败关闭，并记录依赖不可用的审计原因。 */
+    @Test
+    void rejectsWhenReplayCheckUnavailable() {
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), anyLong(), eq(TimeUnit.MILLISECONDS)))
+                .thenThrow(new IllegalStateException("redis down"));
+        String ciphertext = encryptPayload("Valid#Pass1", System.currentTimeMillis(),
+                "0123456789abcdef0123456789abcdef");
+
+        assertThatThrownBy(() -> transportService.decryptPassword(ciphertext))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(PASSWORD_TRANSPORT_INVALID.getCode()));
+        verify(securityAuditService).record(LoginLogTypeEnum.PASSWORD_TRANSPORT,
+                LoginResultEnum.SM2_REPLAY_CHECK_UNAVAILABLE, null, null);
     }
 
     /** 验证关闭防重放后只校验时间窗，不依赖 Redis。 */

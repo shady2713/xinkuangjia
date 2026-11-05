@@ -28,7 +28,9 @@ import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.enums.sms.SmsSceneEnum;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import com.basicframework.module.system.framework.security.login.LoginFailureLockService;
+import com.basicframework.module.system.framework.security.login.SmsLoginFailureLockService;
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import com.basicframework.module.system.service.user.AdminUserService;
@@ -73,6 +75,10 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private SmsCodeApi smsCodeApi;
     @Resource
     private LoginFailureLockService loginFailureLockService;
+    @Resource
+    private SmsLoginFailureLockService smsLoginFailureLockService;
+    @Resource
+    private SecurityAuditService securityAuditService;
 
     /**
      * 验证码的开关，默认为 true
@@ -237,12 +243,33 @@ public class AdminAuthServiceImpl implements AdminAuthService {
      */
     @Override
     public AuthLoginRespVO smsLogin(AuthSmsLoginReqVO reqVO) {
-        // 校验验证码
-        smsCodeApi.useSmsCode(AuthConvert.INSTANCE.convert(reqVO, SmsSceneEnum.ADMIN_MEMBER_LOGIN.getScene(), getClientIP()));
+        String clientIp = getClientIP();
+        // 先按手机号和 IP 检查锁定，锁定提示不区分手机号是否已注册。
+        try {
+            smsLoginFailureLockService.assertNotLocked(reqVO.getMobile(), clientIp);
+        } catch (ServiceException ex) {
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
+                    LoginResultEnum.USER_LOCKED);
+            throw ex;
+        }
+
+        // 校验验证码；验证码错误、过期或已使用时按手机号和 IP 累加失败次数。
+        try {
+            smsCodeApi.useSmsCode(AuthConvert.INSTANCE.convert(reqVO,
+                    SmsSceneEnum.ADMIN_MEMBER_LOGIN.getScene(), clientIp));
+        } catch (ServiceException ex) {
+            smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
+                    LoginResultEnum.SMS_CODE_ERROR);
+            throw ex;
+        }
 
         // 获得用户信息
         AdminUserDO user = userService.getUserByMobile(reqVO.getMobile());
         if (user == null) {
+            smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
+                    LoginResultEnum.USER_MOBILE_NOT_FOUND);
             throw exception(USER_NOT_EXISTS);
         }
         // 短信入口与账号密码入口保持同一套账号状态和平台隔离规则，避免绕过禁用与跨平台限制。
@@ -255,6 +282,9 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         validateLoginUserType(user, user.getUsername(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType(),
                 LoginLogTypeEnum.LOGIN_MOBILE);
 
+        // 登录成功后清零手机号和 IP 的失败计数。
+        smsLoginFailureLockService.clearFailures(reqVO.getMobile(), clientIp);
+
         // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
     }
@@ -264,17 +294,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
      */
     private void createLoginLog(Long userId, String username,
                                 LoginLogTypeEnum logTypeEnum, LoginResultEnum loginResult) {
-        // 插入登录日志
-        LoginLogCreateReqDTO reqDTO = new LoginLogCreateReqDTO();
-        reqDTO.setLogType(logTypeEnum.getType());
-        reqDTO.setTraceId(TracerUtils.getTraceId());
-        reqDTO.setUserId(userId);
-        reqDTO.setUserType(getUserType().getValue());
-        reqDTO.setUsername(username);
-        reqDTO.setUserAgent(ServletUtils.getUserAgent());
-        reqDTO.setUserIp(getClientIP());
-        reqDTO.setResult(loginResult.getResult());
-        loginLogService.createLoginLog(reqDTO);
+        // 统一由安全审计服务写入登录日志，避免各处重复拼装请求上下文。
+        securityAuditService.record(logTypeEnum, loginResult, userId, username);
         // 更新最后登录时间
         if (userId != null && Objects.equals(LoginResultEnum.SUCCESS.getResult(), loginResult.getResult())) {
             userService.updateUserLogin(userId, getClientIP());
@@ -325,7 +346,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         createLoginLog(user.getId(), username, logType, LoginResultEnum.SUCCESS);
         // 创建访问令牌
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(user.getId(), getUserType().getValue(),
-                OAuth2ClientConstants.CLIENT_ID_DEFAULT, null);
+                OAuth2ClientConstants.CLIENT_ID_SYSTEM, null);
         // 构建返回结果；首次改密标志用于前端拦截，不能依赖前端自行判断。
         AuthLoginRespVO response = BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
         response.setPasswordChangeRequired(Boolean.TRUE.equals(user.getPasswordChangeRequired()));
@@ -340,7 +361,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
      */
     @Override
     public AuthLoginRespVO refreshToken(String refreshToken) {
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
+        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_SYSTEM);
         if (accessTokenDO == null) {
             return null;
         }

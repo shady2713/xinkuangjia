@@ -27,7 +27,12 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.dept.UserPostMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.enums.security.UserTokenInvalidationReasonEnum;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
+import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
@@ -87,6 +92,9 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Resource
     private ConfigApi configApi;
+
+    @Resource
+    private SecurityAuditService securityAuditService;
 
     /**
      * 创建用户。
@@ -262,8 +270,21 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Override
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
         // 旧密码允许历史 bcrypt(md5(明文)) 格式通过，保证存量账号可完成迁移。
-        validateOldPassword(id, reqVO.getOldPassword());
-        validatePasswordPolicy(reqVO.getNewPassword());
+        AdminUserDO user;
+        try {
+            user = validateOldPassword(id, reqVO.getOldPassword());
+        } catch (ServiceException ex) {
+            securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE,
+                    LoginResultEnum.PASSWORD_VERIFY_FAILED, id, null);
+            throw ex;
+        }
+        try {
+            validatePasswordPolicy(reqVO.getNewPassword());
+        } catch (ServiceException ex) {
+            securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE,
+                    LoginResultEnum.PASSWORD_POLICY_REJECTED, id, user.getUsername());
+            throw ex;
+        }
         // 执行更新
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
@@ -271,6 +292,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 用户自行修改密码后不再要求强制改密。
         updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
+
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
+        // 改密后旧会话立即失效，避免旧 access/refresh token 继续访问。
+        publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
+                UserTokenInvalidationReasonEnum.PASSWORD_CHANGED);
     }
 
     /**
@@ -285,7 +312,13 @@ public class AdminUserServiceImpl implements AdminUserService {
     public void updateUserPassword(Long id, String password) {
         // 1. 校验用户存在和密码复杂度
         AdminUserDO user = validateUserExists(id);
-        validatePasswordPolicy(password);
+        try {
+            validatePasswordPolicy(password);
+        } catch (ServiceException ex) {
+            securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET,
+                    LoginResultEnum.PASSWORD_POLICY_REJECTED, id, user.getUsername());
+            throw ex;
+        }
 
         // 2. 更新密码；短信重置由用户自己设置新密码，不触发首次改密。
         AdminUserDO updateObj = new AdminUserDO();
@@ -293,6 +326,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setPassword(encodePassword(password)); // 加密密码
         updateObj.setPasswordChangeRequired(false);
         userMapper.updateById(updateObj);
+
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
+        // 重置密码后该用户已签发的令牌全部失效。
+        publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
+                UserTokenInvalidationReasonEnum.PASSWORD_RESET);
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
@@ -310,7 +349,13 @@ public class AdminUserServiceImpl implements AdminUserService {
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password, String userType) {
         AdminUserDO user = validateUserForPlatform(id, userType);
-        validatePasswordPolicy(password);
+        try {
+            validatePasswordPolicy(password);
+        } catch (ServiceException ex) {
+            securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET,
+                    LoginResultEnum.PASSWORD_POLICY_REJECTED, id, user.getUsername());
+            throw ex;
+        }
 
         AdminUserDO updateObj = new AdminUserDO();
         updateObj.setId(id);
@@ -318,6 +363,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 管理员重置密码后，用户首次登录必须先修改密码。
         updateObj.setPasswordChangeRequired(true);
         userMapper.updateById(updateObj);
+
+        securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
+                id, user.getUsername());
+        // 管理员重置后目标用户的旧令牌立即失效。
+        publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
+                UserTokenInvalidationReasonEnum.PASSWORD_RESET);
 
         LogRecordContext.putVariable("user", user);
     }
@@ -365,6 +416,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 2.2 删除用户岗位
         userPostMapper.deleteByUserId(id);
 
+        // 2.3 删除后立即撤销用户全部令牌，避免已删除账号继续访问。
+        publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
+                UserTokenInvalidationReasonEnum.USER_DELETED);
+
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
     }
@@ -389,6 +444,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         validatedIds.forEach(id -> {
             getPermissionService().processUserDeleted(id);
             userPostMapper.deleteByUserId(id);
+            // 逐个用户撤销令牌，保证批量删除与单个删除的失效语义一致。
+            publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
+                    UserTokenInvalidationReasonEnum.USER_DELETED);
         });
     }
 
@@ -760,12 +818,15 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验旧密码
+     * 校验旧密码，并返回校验通过的当前用户。
+     *
      * @param id          用户 id
      * @param oldPassword 旧密码
+     * @return 当前用户
+     * @throws com.basicframework.framework.common.exception.ServiceException 用户不存在或旧密码不匹配时抛出
      */
     @VisibleForTesting
-    void validateOldPassword(Long id, String oldPassword) {
+    AdminUserDO validateOldPassword(Long id, String oldPassword) {
         AdminUserDO user = userMapper.selectById(id);
         if (user == null) {
             throw exception(USER_NOT_EXISTS);
@@ -774,6 +835,7 @@ public class AdminUserServiceImpl implements AdminUserService {
                 && !isPasswordMatchLegacy(oldPassword, user.getPassword())) {
             throw exception(USER_PASSWORD_FAILED);
         }
+        return user;
     }
 
     /**
@@ -960,6 +1022,18 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     private String encodePassword(String password) {
         return passwordEncoder.encode(password);
+    }
+
+    /**
+     * 发布用户令牌失效事件，由监听器统一撤销该用户的访问令牌和刷新令牌。
+     *
+     * @param userId 用户编号
+     * @param userType 用户类型
+     * @param reason 失效原因
+     */
+    private void publishTokenInvalidated(Long userId, Integer userType,
+                                         UserTokenInvalidationReasonEnum reason) {
+        applicationContext.publishEvent(new UserTokenInvalidatedEvent(userId, userType, reason));
     }
 
 }

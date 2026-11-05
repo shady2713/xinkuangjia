@@ -28,6 +28,19 @@ public interface OAuth2RefreshTokenMapper extends BaseMapperX<OAuth2RefreshToken
     }
 
     /**
+     * 删除指定用户的全部刷新令牌，用于改密、重置密码和删除用户后的统一吊销。
+     *
+     * @param userId 用户编号
+     * @param userType 用户类型
+     * @return 删除的记录数
+     */
+    default int deleteByUserIdAndUserType(Long userId, Integer userType) {
+        return delete(new LambdaQueryWrapperX<OAuth2RefreshTokenDO>()
+                .eq(OAuth2RefreshTokenDO::getUserId, userId)
+                .eq(OAuth2RefreshTokenDO::getUserType, userType));
+    }
+
+    /**
      * 查询By刷新令牌。
      *
      * @param refreshToken 刷新令牌参数

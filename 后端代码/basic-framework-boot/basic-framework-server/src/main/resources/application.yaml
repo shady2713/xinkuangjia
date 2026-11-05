@@ -151,6 +151,20 @@ basic-framework:
       max-failures: ${LOGIN_LOCK_MAX_FAILURES:5}
       lock-duration: ${LOGIN_LOCK_DURATION:30m}
       failure-window: ${LOGIN_LOCK_FAILURE_WINDOW:30m}
+    # 短信登录按手机号和 IP 两个维度计数与锁定，提示不区分手机号是否注册。
+    sms-login-lock:
+      enabled: ${SMS_LOGIN_LOCK_ENABLED:true}
+      max-failures: ${SMS_LOGIN_LOCK_MAX_FAILURES:5}
+      ip-max-failures: ${SMS_LOGIN_LOCK_IP_MAX_FAILURES:20}
+      lock-duration: ${SMS_LOGIN_LOCK_DURATION:30m}
+      failure-window: ${SMS_LOGIN_LOCK_FAILURE_WINDOW:30m}
+    # 管理后台会话：访问令牌 30 分钟、刷新令牌 30 天，空闲 30 分钟强制失效。
+    session:
+      idle-timeout: ${SESSION_IDLE_TIMEOUT:30m}
+      access-token-validity: ${ACCESS_TOKEN_VALIDITY:30m}
+      refresh-token-validity: ${REFRESH_TOKEN_VALIDITY:30d}
+    # Redis 不可用时的降级策略：local-fallback（默认，单实例内存兜底）或 fail-closed。
+    redis-unavailable-strategy: ${REDIS_UNAVAILABLE_STRATEGY:local-fallback}
   captcha:
     enable: true
   access-log:

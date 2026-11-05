@@ -18,6 +18,10 @@ public enum LoginLogTypeEnum {
 
     LOGOUT_SELF(200),  // 自己主动登出
     LOGOUT_DELETE(202), // 强制退出
+
+    PASSWORD_CHANGE(300), // 用户自助修改密码
+    PASSWORD_RESET(301), // 短信或管理员重置密码
+    PASSWORD_TRANSPORT(302), // 密码传输解密或防重放校验失败
     ;
 
     /**

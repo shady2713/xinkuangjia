@@ -8,6 +8,7 @@ import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants;
 import com.basicframework.framework.common.pojo.PageResult;
+import com.basicframework.framework.security.config.SecurityProperties;
 import com.basicframework.framework.security.core.LoginUser;
 
 import com.basicframework.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
@@ -18,11 +19,14 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import com.basicframework.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -37,6 +41,7 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
  * @author 李杰
  */
 @Service
+@Slf4j
 public class OAuth2TokenServiceImpl implements OAuth2TokenService {
 
     @Resource
@@ -51,6 +56,8 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     private OAuth2ClientService oauth2ClientService;
     @Resource
     private AdminUserService adminUserService;
+    @Resource
+    private SecurityProperties securityProperties;
 
     /**
      * 创建访问令牌。
@@ -64,7 +71,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OAuth2AccessTokenDO createAccessToken(Long userId, Integer userType, String clientId, List<String> scopes) {
-        OAuth2ClientDO clientDO = oauth2ClientService.validOAuthClientFromCache(clientId);
+        OAuth2ClientDO clientDO = resolveClient(clientId);
         // 创建刷新令牌
         OAuth2RefreshTokenDO refreshTokenDO = createOAuth2RefreshToken(userId, userType, clientDO, scopes);
         // 创建访问令牌
@@ -86,15 +93,20 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (refreshTokenDO == null) {
             throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "无效的刷新令牌");
         }
+        // 默认客户端已停用；升级后即使迁移尚未执行，也不允许其刷新令牌继续换发访问令牌。
+        if (isLegacyDefaultClient(refreshTokenDO.getClientId())) {
+            throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
+        }
 
         // 校验 Client 匹配
-        OAuth2ClientDO clientDO = oauth2ClientService.validOAuthClientFromCache(clientId);
+        OAuth2ClientDO clientDO = resolveClient(clientId);
         if (ObjectUtil.notEqual(clientId, refreshTokenDO.getClientId())) {
             throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "刷新令牌的客户端编号不正确");
         }
 
-        // 移除相关的访问令牌
+        // 移除相关的访问令牌；刷新前先确认会话仍在空闲窗口内，避免空闲用户靠刷新令牌续期。
         List<OAuth2AccessTokenDO> accessTokenDOs = oauth2AccessTokenMapper.selectListByRefreshToken(refreshToken);
+        assertSessionActive(refreshTokenDO, accessTokenDOs);
         if (CollUtil.isNotEmpty(accessTokenDOs)) {
             oauth2AccessTokenMapper.deleteByIds(convertSet(accessTokenDOs, OAuth2AccessTokenDO::getId));
             oauth2AccessTokenRedisDAO.deleteList(convertSet(accessTokenDOs, OAuth2AccessTokenDO::getAccessToken));
@@ -151,6 +163,11 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (accessTokenDO.getExpiresTime().isBefore(LocalDateTime.now())) {
             throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "访问令牌已过期");
         }
+        // 默认客户端已停用；拒绝其残留访问令牌，避免升级窗口内继续访问。
+        if (isLegacyDefaultClient(accessTokenDO.getClientId())) {
+            throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
+        }
+        assertAccessTokenActive(accessTokenDO);
         return accessTokenDO;
     }
 
@@ -170,6 +187,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         }
         oauth2AccessTokenMapper.deleteById(accessTokenDO.getId());
         oauth2AccessTokenRedisDAO.delete(accessToken);
+        oauth2AccessTokenRedisDAO.deleteActive(accessToken);
         // 删除刷新令牌
         oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
         return accessTokenDO;
@@ -182,18 +200,15 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      * @param userType userType 参数
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void removeAccessToken(Long userId, Integer userType) {
         List<OAuth2AccessTokenDO> accessTokens = oauth2AccessTokenMapper.selectListByUserIdAndUserType(userId, userType);
-        if (CollUtil.isEmpty(accessTokens)) {
-            return;
+        if (CollUtil.isNotEmpty(accessTokens)) {
+            oauth2AccessTokenMapper.deleteByIds(convertSet(accessTokens, OAuth2AccessTokenDO::getId));
+            oauth2AccessTokenRedisDAO.deleteList(convertSet(accessTokens, OAuth2AccessTokenDO::getAccessToken));
         }
-        accessTokens.forEach(accessToken -> {
-            // 删除访问令牌
-            oauth2AccessTokenMapper.deleteById(accessToken.getId());
-            oauth2AccessTokenRedisDAO.delete(accessToken.getAccessToken());
-            // 删除刷新令牌
-            oauth2RefreshTokenMapper.deleteByRefreshToken(accessToken.getRefreshToken());
-        });
+        // 刷新令牌按用户直接删除，避免访问令牌已过期或已清理时留下可继续换发令牌的孤立记录。
+        oauth2RefreshTokenMapper.deleteByUserIdAndUserType(userId, userType);
     }
 
     /**
@@ -223,6 +238,8 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         oauth2AccessTokenMapper.insert(accessTokenDO);
         // 记录到 Redis 中
         oauth2AccessTokenRedisDAO.set(accessTokenDO);
+        // 管理后台内部会话从创建时刻开始计算空闲窗口。
+        markActive(accessTokenDO);
         return accessTokenDO;
     }
 
@@ -279,6 +296,134 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      */
     private static String generateRefreshToken() {
         return IdUtil.fastSimpleUUID();
+    }
+
+    /**
+     * 解析令牌所属客户端；内部会话客户端使用代码内置配置，其余客户端仍走持久化校验。
+     *
+     * @param clientId 客户端编号
+     * @return 客户端配置
+     */
+    private OAuth2ClientDO resolveClient(String clientId) {
+        if (OAuth2ClientConstants.CLIENT_ID_SYSTEM.equals(clientId)) {
+            return oauth2ClientService.getSystemClient();
+        }
+        return oauth2ClientService.validOAuthClientFromCache(clientId);
+    }
+
+    /**
+     * 记录管理后台访问令牌的一次有效活动，并重置空闲计时。
+     *
+     * <p>空闲超时只作用于内部会话客户端；开放接口客户端继续使用各自登记的有效期，
+     * 不因后台会话配置提前失效。</p>
+     *
+     * @param accessTokenDO 访问令牌
+     */
+    private void markActive(OAuth2AccessTokenDO accessTokenDO) {
+        if (!isIdleCheckEnabled() || !isInternalSession(accessTokenDO.getClientId())) {
+            return;
+        }
+        try {
+            oauth2AccessTokenRedisDAO.setActive(accessTokenDO.getAccessToken(), idleTimeout());
+        } catch (RuntimeException ex) {
+            // 令牌已经创建成功，活动标记写入失败不能回滚登录；Redis 不可用时后续校验会失败关闭。
+            log.error("[markActive][访问令牌活动标记写入失败: {}]", ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 校验管理后台访问令牌是否仍在空闲窗口内，并顺延活动时间。
+     *
+     * <p>Redis 不可用时按失败关闭处理，避免空闲超时在依赖故障期间静默失效。</p>
+     *
+     * @param accessTokenDO 访问令牌
+     */
+    private void assertAccessTokenActive(OAuth2AccessTokenDO accessTokenDO) {
+        if (!isIdleCheckEnabled() || !isInternalSession(accessTokenDO.getClientId())) {
+            return;
+        }
+        try {
+            if (!oauth2AccessTokenRedisDAO.refreshActive(accessTokenDO.getAccessToken(), idleTimeout())) {
+                throw sessionIdleTimeout();
+            }
+        } catch (ServiceException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("[assertAccessTokenActive][空闲校验不可用: {}]", ex.getClass().getSimpleName());
+            throw sessionIdleTimeout();
+        }
+    }
+
+    /**
+     * 刷新令牌前校验旧访问令牌是否仍有活动记录，防止空闲会话通过刷新继续续期。
+     *
+     * @param refreshTokenDO 刷新令牌
+     * @param accessTokens 该刷新令牌关联的访问令牌
+     */
+    private void assertSessionActive(OAuth2RefreshTokenDO refreshTokenDO,
+                                     List<OAuth2AccessTokenDO> accessTokens) {
+        if (!isIdleCheckEnabled() || !isInternalSession(refreshTokenDO.getClientId())) {
+            return;
+        }
+        try {
+            boolean active = CollUtil.isNotEmpty(accessTokens) && accessTokens.stream()
+                    .anyMatch(token -> oauth2AccessTokenRedisDAO.isActive(token.getAccessToken()));
+            if (!active) {
+                throw sessionIdleTimeout();
+            }
+        } catch (ServiceException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            log.error("[assertSessionActive][刷新令牌空闲校验不可用: {}]", ex.getClass().getSimpleName());
+            throw sessionIdleTimeout();
+        }
+    }
+
+    /**
+     * 判断客户端是否为管理后台内部会话客户端。
+     *
+     * @param clientId 客户端编号
+     * @return 内部会话返回 true
+     */
+    private boolean isInternalSession(String clientId) {
+        return OAuth2ClientConstants.CLIENT_ID_SYSTEM.equals(clientId);
+    }
+
+    /**
+     * 判断是否为已停用的历史默认客户端。
+     *
+     * @param clientId 客户端编号
+     * @return 历史默认客户端返回 true
+     */
+    private boolean isLegacyDefaultClient(String clientId) {
+        return OAuth2ClientConstants.CLIENT_ID_LEGACY_DEFAULT.equals(clientId);
+    }
+
+    /**
+     * 判断是否启用会话空闲校验。
+     *
+     * @return 启用返回 true
+     */
+    private boolean isIdleCheckEnabled() {
+        return idleTimeout() != null && !idleTimeout().isZero() && !idleTimeout().isNegative();
+    }
+
+    /**
+     * 读取会话空闲超时配置。
+     *
+     * @return 空闲超时
+     */
+    private Duration idleTimeout() {
+        return securityProperties.getSession().getIdleTimeout();
+    }
+
+    /**
+     * 构造空闲超时错误，使用 401 让前端触发重新认证而不是普通业务提示。
+     *
+     * @return 未抛出的服务异常
+     */
+    private ServiceException sessionIdleTimeout() {
+        return exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已超时，请重新登录");
     }
 
 }

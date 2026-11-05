@@ -10,8 +10,12 @@ import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReq
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import com.basicframework.module.system.framework.security.login.LoginFailureLockService;
+import com.basicframework.module.system.framework.security.login.SmsLoginFailureLockService;
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import com.basicframework.module.system.service.user.AdminUserService;
@@ -21,10 +25,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ACCOUNT_LOCKED;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ATTEMPT_LOCKED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_BAD_CREDENTIALS;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_PLATFORM_MISMATCH;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_USER_DISABLED;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.SMS_CODE_NOT_FOUND;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_NOT_EXISTS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +67,10 @@ class AdminAuthServiceImplTest {
     private SmsCodeApi smsCodeApi;
     @Mock
     private LoginFailureLockService loginFailureLockService;
+    @Mock
+    private SmsLoginFailureLockService smsLoginFailureLockService;
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @InjectMocks
     private AdminAuthServiceImpl authService;
@@ -100,15 +112,63 @@ class AdminAuthServiceImplTest {
         accessToken.setRefreshToken("refresh-token");
         accessToken.setUserId(user.getId());
         when(oauth2TokenService.createAccessToken(eq(user.getId()),
-                eq(UserTypeEnum.ADMIN.getValue()), eq(OAuth2ClientConstants.CLIENT_ID_DEFAULT), isNull()))
+                eq(UserTypeEnum.ADMIN.getValue()), eq(OAuth2ClientConstants.CLIENT_ID_SYSTEM), isNull()))
                 .thenReturn(accessToken);
 
         AuthLoginRespVO response = authService.smsLogin(buildRequest());
 
         assertThat(response.getAccessToken()).isEqualTo("access-token");
         assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
-        verify(loginLogService).createLoginLog(any());
+        verify(securityAuditService).record(eq(LoginLogTypeEnum.LOGIN_MOBILE),
+                eq(LoginResultEnum.SUCCESS), eq(user.getId()), eq(MOBILE));
+        verify(smsLoginFailureLockService).clearFailures(eq(MOBILE), isNull());
         verify(userService).updateUserLogin(eq(user.getId()), isNull());
+    }
+
+    /** 验证短信验证码错误时累加手机号和 IP 失败次数并记录审计。 */
+    @Test
+    void smsLoginRecordsFailureWhenCodeInvalid() {
+        doThrow(exception(SMS_CODE_NOT_FOUND)).when(smsCodeApi).useSmsCode(any());
+
+        assertThatThrownBy(() -> authService.smsLogin(buildRequest()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SMS_CODE_NOT_FOUND.getCode()));
+
+        verify(smsLoginFailureLockService).recordFailure(eq(MOBILE), isNull());
+        verify(securityAuditService).record(eq(LoginLogTypeEnum.LOGIN_MOBILE),
+                eq(LoginResultEnum.SMS_CODE_ERROR), isNull(), eq(MOBILE));
+        verifyNoInteractions(oauth2TokenService);
+    }
+
+    /** 验证短信登录锁定发生在验证码校验之前，并记录锁定审计。 */
+    @Test
+    void smsLoginRejectsLockedAttemptBeforeCodeCheck() {
+        doThrow(exception(AUTH_LOGIN_ATTEMPT_LOCKED, 5L))
+                .when(smsLoginFailureLockService).assertNotLocked(eq(MOBILE), isNull());
+
+        assertThatThrownBy(() -> authService.smsLogin(buildRequest()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(AUTH_LOGIN_ATTEMPT_LOCKED.getCode()));
+
+        verify(smsCodeApi, never()).useSmsCode(any());
+        verify(securityAuditService).record(eq(LoginLogTypeEnum.LOGIN_MOBILE),
+                eq(LoginResultEnum.USER_LOCKED), isNull(), eq(MOBILE));
+        verifyNoInteractions(oauth2TokenService);
+    }
+
+    /** 验证未注册手机号在验证码通过后记录审计和失败次数，但不泄露给调用方。 */
+    @Test
+    void smsLoginRecordsUnknownMobileAsInternalAuditReason() {
+        when(userService.getUserByMobile(MOBILE)).thenReturn(null);
+
+        assertThatThrownBy(() -> authService.smsLogin(buildRequest()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(USER_NOT_EXISTS.getCode()));
+
+        verify(smsLoginFailureLockService).recordFailure(eq(MOBILE), isNull());
+        verify(securityAuditService).record(eq(LoginLogTypeEnum.LOGIN_MOBILE),
+                eq(LoginResultEnum.USER_MOBILE_NOT_FOUND), isNull(), eq(MOBILE));
+        verifyNoInteractions(oauth2TokenService);
     }
 
     /** 验证账号处于锁定期时不查询账号和校验密码，只记录锁定日志。 */
@@ -193,7 +253,7 @@ class AdminAuthServiceImplTest {
         accessToken.setRefreshToken("refresh-token");
         accessToken.setUserId(user.getId());
         when(oauth2TokenService.createAccessToken(eq(user.getId()),
-                eq(UserTypeEnum.ADMIN.getValue()), eq(OAuth2ClientConstants.CLIENT_ID_DEFAULT), isNull()))
+                eq(UserTypeEnum.ADMIN.getValue()), eq(OAuth2ClientConstants.CLIENT_ID_SYSTEM), isNull()))
                 .thenReturn(accessToken);
 
         AuthLoginRespVO response = authService.login(AuthLoginReqVO.builder()

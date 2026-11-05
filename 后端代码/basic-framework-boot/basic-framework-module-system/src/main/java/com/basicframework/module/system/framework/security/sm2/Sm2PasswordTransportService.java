@@ -3,6 +3,9 @@ package com.basicframework.module.system.framework.security.sm2;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.security.config.SecurityProperties;
+import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
+import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +56,8 @@ public class Sm2PasswordTransportService {
 
     private final StringRedisTemplate stringRedisTemplate;
 
+    private final SecurityAuditService securityAuditService;
+
     /**
      * 在关闭防重放校验时输出一次启动告警，提醒部署方该实例仅剩时间戳保护。
      */
@@ -80,7 +85,7 @@ public class Sm2PasswordTransportService {
      * @throws com.basicframework.framework.common.exception.ServiceException 密文、时间戳或 nonce 校验失败时抛出
      */
     public String decryptPassword(String ciphertext) {
-        return decryptInternal(ciphertext, PASSWORD_TRANSPORT_INVALID);
+        return decryptInternal(ciphertext, PASSWORD_TRANSPORT_INVALID, LoginLogTypeEnum.PASSWORD_TRANSPORT);
     }
 
     /**
@@ -91,47 +96,66 @@ public class Sm2PasswordTransportService {
      * @throws com.basicframework.framework.common.exception.ServiceException 校验失败时抛出
      */
     public String decryptLoginPassword(String ciphertext) {
-        return decryptInternal(ciphertext, AUTH_PASSWORD_TRANSPORT_INVALID);
+        return decryptInternal(ciphertext, AUTH_PASSWORD_TRANSPORT_INVALID, LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**
-     * 执行解密、载荷解析、时间窗校验和 nonce 一次性校验。
+     * 执行解密、载荷解析、时间窗校验和 nonce 一次性校验，并把失败原因写入安全审计。
      *
      * @param ciphertext SM2 密文
      * @param errorCode 失败时返回的通用错误码
+     * @param logType 审计记录使用的登录日志类型
      * @return 明文密码
      */
     private String decryptInternal(String ciphertext,
-                                   com.basicframework.framework.common.exception.ErrorCode errorCode) {
-        if (StrUtil.isBlank(ciphertext)) {
+                                   com.basicframework.framework.common.exception.ErrorCode errorCode,
+                                   LoginLogTypeEnum logType) {
+        try {
+            return doDecrypt(ciphertext);
+        } catch (PasswordTransportFailure ex) {
+            // 审计只记录失败原因，不记录密文、载荷或底层异常消息。
+            securityAuditService.record(logType, ex.getResult(), null, null);
             throw exception(errorCode);
+        }
+    }
+
+    /**
+     * 执行实际的解密与校验流程。
+     *
+     * @param ciphertext SM2 密文
+     * @return 明文密码
+     * @throws PasswordTransportFailure 任一传输校验失败时抛出
+     */
+    private String doDecrypt(String ciphertext) {
+        if (StrUtil.isBlank(ciphertext)) {
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_DECRYPT_ERROR);
         }
         String plaintext;
         try {
             plaintext = sm2PasswordCipher.decrypt(ciphertext);
         } catch (RuntimeException ex) {
             // 不记录密文或底层异常消息，避免把攻击输入带进日志。
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_DECRYPT_ERROR);
         }
         PasswordPayload payload;
         try {
             payload = objectMapper.readValue(plaintext, PasswordPayload.class);
         } catch (Exception ex) {
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_DECRYPT_ERROR);
         }
         if (payload == null || StrUtil.isEmpty(payload.getP())
                 || payload.getP().length() > MAX_PASSWORD_LENGTH || payload.getT() == null
                 || StrUtil.isEmpty(payload.getN()) || !NONCE_PATTERN.matcher(payload.getN()).matches()) {
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_DECRYPT_ERROR);
         }
         long now = System.currentTimeMillis();
         long windowMillis = securityProperties.getSm2().getTimestampWindow().toMillis();
         // 同时拒绝过期和超前时间戳，避免客户端时钟偏差过大或重放旧载荷。
         if (payload.getT() > now + windowMillis || payload.getT() < now - windowMillis) {
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_DECRYPT_ERROR);
         }
         if (Boolean.TRUE.equals(securityProperties.getSm2().getReplayCheckEnabled())) {
-            validateNonceUnused(payload.getN(), errorCode);
+            validateNonceUnused(payload.getN());
         }
         return payload.getP();
     }
@@ -140,10 +164,8 @@ public class Sm2PasswordTransportService {
      * 使用 Redis SETNX 保证 nonce 在有效期内只能使用一次。
      *
      * @param nonce 随机串
-     * @param errorCode 失败时返回的通用错误码
      */
-    private void validateNonceUnused(String nonce,
-                                     com.basicframework.framework.common.exception.ErrorCode errorCode) {
+    private void validateNonceUnused(String nonce) {
         long ttlMillis = resolveNonceTtlMillis();
         String key = NONCE_KEY_PREFIX + DigestUtil.sha256Hex(nonce);
         Boolean firstUse;
@@ -153,10 +175,10 @@ public class Sm2PasswordTransportService {
         } catch (RuntimeException ex) {
             // 防重放依赖 Redis；不可用时按失败关闭，避免重放保护静默失效。
             log.error("[sm2][防重放校验不可用: {}]", ex.getClass().getSimpleName());
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_REPLAY_CHECK_UNAVAILABLE);
         }
         if (!Boolean.TRUE.equals(firstUse)) {
-            throw exception(errorCode);
+            throw new PasswordTransportFailure(LoginResultEnum.SM2_REPLAY_REJECTED);
         }
     }
 
@@ -170,6 +192,34 @@ public class Sm2PasswordTransportService {
         Duration window = securityProperties.getSm2().getTimestampWindow();
         long minimum = Math.max(1L, window.toMillis() * 2);
         return Math.max(minimum, configured == null ? minimum : configured.toMillis());
+    }
+
+    /**
+     * 密码传输校验失败，携带写入安全审计的结果原因。
+     */
+    private static class PasswordTransportFailure extends RuntimeException {
+
+        /** 审计结果原因。 */
+        private final LoginResultEnum result;
+
+        /**
+         * 构造携带失败原因的异常。
+         *
+         * @param result 审计结果原因
+         */
+        private PasswordTransportFailure(LoginResultEnum result) {
+            super(null, null, false, false);
+            this.result = result;
+        }
+
+        /**
+         * 获取审计结果原因。
+         *
+         * @return 审计结果原因
+         */
+        private LoginResultEnum getResult() {
+            return result;
+        }
     }
 
     /**
