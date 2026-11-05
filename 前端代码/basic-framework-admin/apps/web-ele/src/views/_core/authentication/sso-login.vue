@@ -35,8 +35,8 @@ async function init() {
     return;
   }
   // 解析参数
-  // 例如说【自动授权不通过】：client_id=default&redirect_uri=https%3A%2F%2Fwww.example.com&response_type=code&scope=user.read%20user.write
-  // 例如说【自动授权通过】：client_id=default&redirect_uri=https%3A%2F%2Fwww.example.com&response_type=code&scope=user.read
+  // 例如说【自动授权不通过】：client_id=your-client-id&redirect_uri=https%3A%2F%2Fwww.example.com&response_type=code&scope=user.read%20user.write
+  // 例如说【自动授权通过】：client_id=your-client-id&redirect_uri=https%3A%2F%2Fwww.example.com&response_type=code&scope=user.read
   queryParams.responseType = query.response_type as string;
   queryParams.clientId = query.client_id as string;
   queryParams.redirectUri = query.redirect_uri as string;

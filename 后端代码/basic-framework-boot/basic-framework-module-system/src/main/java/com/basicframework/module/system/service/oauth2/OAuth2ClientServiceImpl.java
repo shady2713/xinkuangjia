@@ -6,11 +6,13 @@ import cn.hutool.extra.spring.SpringUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.config.SecurityProperties;
 import com.basicframework.module.system.controller.admin.oauth2.vo.client.OAuth2ClientPageReqVO;
 import com.basicframework.module.system.controller.admin.oauth2.vo.client.OAuth2ClientSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2ClientDO;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2ClientMapper;
 import com.basicframework.module.system.dal.redis.RedisKeyConstants;
+import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 
@@ -48,6 +51,8 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     private PasswordEncoder passwordEncoder;
     @Resource
     private CacheManager cacheManager;
+    @Resource
+    private SecurityProperties securityProperties;
 
     /**
      * 创建 OAuth2 客户端，并以 BCrypt 保存客户端密钥。
@@ -164,6 +169,47 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
             unless = "#result == null")
     public OAuth2ClientDO getOAuth2ClientFromCache(String clientId) {
         return oauth2ClientMapper.selectByClientId(clientId);
+    }
+
+    /**
+     * 构造管理后台内部会话客户端。
+     *
+     * <p>该客户端只在内存中生成，不写入数据库，也不参与开放接口的客户端密钥和授权类型校验。
+     * 有效期直接读取会话配置，避免后台登录依赖可被删除或误改的 default 客户端记录。</p>
+     *
+     * @return 内部会话客户端配置
+     */
+    @Override
+    public OAuth2ClientDO getSystemClient() {
+        SecurityProperties.Session session = securityProperties.getSession();
+        OAuth2ClientDO client = new OAuth2ClientDO();
+        client.setClientId(OAuth2ClientConstants.CLIENT_ID_SYSTEM);
+        client.setName("管理后台内部会话");
+        client.setLogo("");
+        client.setDescription("管理后台登录与刷新令牌使用的内部客户端，不参与开放接口授权");
+        client.setSecret("");
+        client.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        client.setAccessTokenValiditySeconds(toValiditySeconds(session.getAccessTokenValidity()));
+        client.setRefreshTokenValiditySeconds(toValiditySeconds(session.getRefreshTokenValidity()));
+        client.setRedirectUris(List.of());
+        client.setAuthorizedGrantTypes(List.of());
+        client.setScopes(List.of());
+        client.setAutoApproveScopes(List.of());
+        client.setAuthorities(List.of());
+        client.setResourceIds(List.of());
+        client.setAdditionalInformation("{}");
+        return client;
+    }
+
+    /**
+     * 将会话有效期转为令牌表使用的秒数，至少保留 1 秒并避免整数溢出。
+     *
+     * @param duration 配置的有效期
+     * @return 秒数
+     */
+    private int toValiditySeconds(Duration duration) {
+        long seconds = duration == null ? 0L : duration.getSeconds();
+        return (int) Math.max(1L, Math.min(Integer.MAX_VALUE, seconds));
     }
 
     /**

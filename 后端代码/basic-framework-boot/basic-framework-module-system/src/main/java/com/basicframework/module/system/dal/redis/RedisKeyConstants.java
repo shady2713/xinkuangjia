@@ -68,6 +68,16 @@ public interface RedisKeyConstants {
     String OAUTH2_ACCESS_TOKEN = "oauth2_access_token:%s";
 
     /**
+     * 访问令牌最后活动时间的缓存
+     * <p>
+     * KEY 格式：oauth2_access_token_active:{token}
+     * VALUE 数据类型：String 固定值
+     * <p>
+     * 每次通过访问令牌认证时刷新 TTL，超过会话空闲超时后自动过期。
+     */
+    String OAUTH2_ACCESS_ACTIVE = "oauth2_access_token_active:%s";
+
+    /**
      * 短信模版的缓存
      * <p>
      * KEY 格式：sms_template:{id}

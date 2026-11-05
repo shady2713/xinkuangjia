@@ -5,12 +5,10 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.security.config.SecurityProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ACCOUNT_LOCKED;
@@ -20,7 +18,8 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOG
  *
  * <p>统计键只保存账号的 SHA-256 摘要，不把账号原文写入 Redis。锁定与计数都带 TTL，
  * 成功登录后同时清除失败计数和锁定标记。账号不存在时也按同一账号键计数，
- * 避免从锁定行为推断账号是否存在。</p>
+ * 避免从锁定行为推断账号是否存在。Redis 不可用时的降级行为由
+ * {@link LoginAttemptStore} 按配置统一处理。</p>
  *
  * @author shady2713
  */
@@ -37,7 +36,7 @@ public class LoginFailureLockService {
 
     private final SecurityProperties securityProperties;
 
-    private final StringRedisTemplate stringRedisTemplate;
+    private final LoginAttemptStore loginAttemptStore;
 
     /**
      * 检查账号是否处于锁定期。
@@ -49,13 +48,7 @@ public class LoginFailureLockService {
         if (!isEnabled()) {
             return false;
         }
-        try {
-            return Boolean.TRUE.equals(stringRedisTemplate.hasKey(formatLockKey(username)));
-        } catch (RuntimeException ex) {
-            // 锁定能力依赖 Redis；不可用时放行登录，由其他认证措施继续保护。
-            log.warn("[login-lock][读取锁定状态失败: {}]", ex.getClass().getSimpleName());
-            return false;
-        }
+        return loginAttemptStore.isLocked(formatLockKey(username));
     }
 
     /**
@@ -81,23 +74,15 @@ public class LoginFailureLockService {
             return;
         }
         String failureKey = formatFailureKey(username);
-        try {
-            Long count = stringRedisTemplate.opsForValue().increment(failureKey);
-            if (count == null) {
-                return;
-            }
-            if (count == 1L) {
-                stringRedisTemplate.expire(failureKey,
-                        securityProperties.getLoginLock().getFailureWindow().toMillis(), TimeUnit.MILLISECONDS);
-            }
-            if (count >= securityProperties.getLoginLock().getMaxFailures()) {
-                stringRedisTemplate.opsForValue().set(formatLockKey(username), "1",
-                        securityProperties.getLoginLock().getLockDuration().toMillis(), TimeUnit.MILLISECONDS);
-                stringRedisTemplate.delete(failureKey);
-            }
-        } catch (RuntimeException ex) {
-            // 失败计数不可用时不阻断正常业务，也不能把异常细节返回给登录调用方。
-            log.warn("[login-lock][记录登录失败失败: {}]", ex.getClass().getSimpleName());
+        long count = loginAttemptStore.incrementFailure(failureKey,
+                securityProperties.getLoginLock().getFailureWindow());
+        if (count < 0) {
+            // 失败关闭策略下锁定检查会拒绝登录，无需依赖本次计数结果。
+            return;
+        }
+        if (count >= securityProperties.getLoginLock().getMaxFailures()) {
+            loginAttemptStore.lock(formatLockKey(username), securityProperties.getLoginLock().getLockDuration());
+            loginAttemptStore.delete(failureKey);
         }
     }
 
@@ -110,12 +95,8 @@ public class LoginFailureLockService {
         if (!isEnabled()) {
             return;
         }
-        try {
-            stringRedisTemplate.delete(formatFailureKey(username));
-            stringRedisTemplate.delete(formatLockKey(username));
-        } catch (RuntimeException ex) {
-            log.warn("[login-lock][清理失败计数失败: {}]", ex.getClass().getSimpleName());
-        }
+        loginAttemptStore.delete(formatFailureKey(username));
+        loginAttemptStore.delete(formatLockKey(username));
     }
 
     /**
@@ -134,16 +115,8 @@ public class LoginFailureLockService {
      * @return 分钟数
      */
     private long resolveRemainingMinutes(String username) {
-        Long seconds;
-        try {
-            seconds = stringRedisTemplate.getExpire(formatLockKey(username), TimeUnit.SECONDS);
-        } catch (RuntimeException ex) {
-            seconds = null;
-        }
-        if (seconds == null || seconds <= 0) {
-            Duration duration = securityProperties.getLoginLock().getLockDuration();
-            return Math.max(1L, (duration.toMillis() + 59_999L) / 60_000L);
-        }
+        Duration configured = securityProperties.getLoginLock().getLockDuration();
+        long seconds = loginAttemptStore.remainingSeconds(formatLockKey(username), configured);
         return Math.max(1L, (seconds + 59L) / 60L);
     }
 
