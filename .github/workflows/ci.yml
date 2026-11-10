@@ -39,7 +39,7 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
       - uses: actions/setup-node@v4
@@ -81,7 +81,7 @@ jobs:
             base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
           fi
           echo "sha=$base" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
       - uses: actions/setup-node@v4
