@@ -582,6 +582,29 @@ def test_comments_base_mode_ignores_base_only_debt(tmp_path: Path) -> None:
     assert "LegacyDebt.java" not in output
 
 
+def test_comments_base_mode_works_in_linked_worktree(tmp_path: Path) -> None:
+    """linked worktree 的共享对象目录必须被解析，基线检查不能报环境错误。"""
+    repo = tmp_path / "repo"
+    init_git_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    base = commit_all(repo, "base")
+    java_file = repo / JAVA_GATE_PATH
+    java_file.parent.mkdir(parents=True)
+    java_file.write_text(JAVA_GATE_MISSING, encoding="utf-8")
+    commit_all(repo, "head")
+    worktree = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "--detach", str(worktree), "HEAD"],
+        check=True,
+        capture_output=True,
+    )
+    result = run_comments_gate(worktree, base)
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "method-javadoc" in output
+    assert "Git 对象目录不存在" not in output
+
+
 def test_web_staged_mode_reads_base_to_head_diff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

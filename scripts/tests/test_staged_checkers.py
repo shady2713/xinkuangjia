@@ -7,6 +7,7 @@ Git 读取使用内存差异替身，避免修改真实索引或读取工作区�
 from __future__ import annotations
 
 import difflib
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -538,4 +539,19 @@ def test_java_checker_rejects_missing_backend_root(tmp_path: Path) -> None:
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
     result = run_java_checker(repo)
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "Java 源码根目录不存在" in result.stderr
+    assert "Java 变更不在源码根目录下" in result.stderr
+
+
+def test_java_checker_reads_staged_source_without_worktree(tmp_path: Path) -> None:
+    """暂存后删除工作区源码目录时，仍按索引中的暂存内容完成检查。"""
+    repo = tmp_path / "repo"
+    init_checker_repository(repo)
+    target = repo / JAVA_REAL_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(JAVA_REAL_MISSING, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    shutil.rmtree(repo / "后端代码")
+    assert not (repo / "后端代码").exists()
+    result = run_java_checker(repo)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "method-javadoc" in result.stderr

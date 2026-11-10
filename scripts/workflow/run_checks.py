@@ -167,17 +167,21 @@ def baseline_environment(root: Path, base: str) -> Iterator[dict[str, str]]:
     repository = root.resolve()
     baseline = resolve_commit(repository, base)
     head = resolve_commit(repository, "HEAD")
-    git_directory = run_process(
-        ["git", "-C", str(repository), "rev-parse", "--absolute-git-dir"],
+    # linked worktree 的 ``--absolute-git-dir`` 指向 ``.git/worktrees/<name>``，
+    # 该目录没有 objects；``--git-path objects`` 才会解析到共享对象目录。
+    object_directory = run_process(
+        ["git", "-C", str(repository), "rev-parse", "--git-path", "objects"],
         repository,
         timeout=30,
         env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
     )
-    if git_directory.code:
-        raise CheckError("无法定位真实仓库的 Git 目录")
+    if object_directory.code:
+        raise CheckError("无法定位 Git 对象目录")
     objects = Path(
-        git_directory.stdout.decode("utf-8", errors="replace").strip()
-    ) / "objects"
+        object_directory.stdout.decode("utf-8", errors="replace").strip()
+    )
+    if not objects.is_absolute():
+        objects = repository / objects
     if not objects.is_dir():
         raise CheckError(f"Git 对象目录不存在：{objects}")
     with tempfile.TemporaryDirectory(prefix="quality-gate-baseline-") as temporary:

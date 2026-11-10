@@ -16,7 +16,6 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 
 # Windows Git Hook 可能继承非 UTF-8 控制台编码，统一输出编码以保证中文提示可读。
 if hasattr(sys.stdout, "reconfigure"):
@@ -171,7 +170,7 @@ def _staged_java_paths() -> list[str]:
         位于 Java 工程源码目录下的仓库相对路径列表。
 
     Raises:
-        RuntimeError: 存在 Java 变更但源码根目录缺失或变更不在其下时抛出，
+        RuntimeError: 存在 Java 变更但均不在源码根目录下时抛出，
             避免路径过期后静默通过。
     """
 
@@ -197,8 +196,7 @@ def _staged_java_paths() -> list[str]:
             candidates.append(normalized)
     if not candidates:
         return []
-    if not Path(JAVA_SOURCE_ROOT).is_dir():
-        raise RuntimeError(f"Java 源码根目录不存在：{JAVA_SOURCE_ROOT}")
+    # 只按暂存路径判断源码根目录，不读取工作区是否物化，稀疏 checkout 也能检查。
     paths = [path for path in candidates if path.startswith(JAVA_SOURCE_ROOT)]
     if not paths:
         raise RuntimeError(f"Java 变更不在源码根目录下：{JAVA_SOURCE_ROOT}")
