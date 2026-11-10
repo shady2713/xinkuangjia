@@ -11,10 +11,13 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import threading
 import time
+from collections.abc import Iterator
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from dataclasses import asdict, dataclass
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 # 直接按文件路径运行时定位工具所属仓库，不依赖调用者的当前目录。
@@ -36,6 +39,8 @@ class Gate:
     group: str
     dependencies: tuple[str, ...] = ()
     root_argument: bool = True
+    arguments: tuple[str, ...] = ()
+    baseline: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +79,13 @@ GATES = (
     ),
 )
 
+# 干净 checkout 没有暂存区，按基线比较时改用读取 base→HEAD 差异的暂存入口。
+BASELINE_COMMENT_GATES = {
+    "java-comments": ("code/java/check_staged_java_comments.py", False, ()),
+    "python-comments": ("code/python/check_staged_python_comments.py", False, ()),
+    "web-comments": ("code/web/check_worktree_web_comments.py", True, ("--staged",)),
+}
+
 
 def select_gates(names: list[str], group: str) -> list[Gate]:
     """选择检查及其递归前置条件；未知名称或依赖环视为配置错误。"""
@@ -100,6 +112,108 @@ def select_gates(names: list[str], group: str) -> list[Gate]:
     return [gate for gate in GATES if gate.name in selected]
 
 
+def apply_baseline(gates: list[Gate], base: str) -> list[Gate]:
+    """把 comments 组切换为读取 base→HEAD 差异的暂存检查入口。"""
+    result = []
+    for gate in gates:
+        replacement = BASELINE_COMMENT_GATES.get(gate.name)
+        if replacement is None:
+            result.append(gate)
+            continue
+        script, root_argument, extra_arguments = replacement
+        result.append(
+            replace(
+                gate,
+                script=script,
+                root_argument=root_argument,
+                arguments=extra_arguments,
+                baseline=base,
+            )
+        )
+    return result
+
+
+def resolve_commit(root: Path, revision: str) -> str:
+    """校验并解析提交引用，失败时报告环境错误而不是使用无效基线。"""
+    result = run_process(
+        ["git", "-C", str(root), "rev-parse", "--verify", f"{revision}^{{commit}}"],
+        root,
+        timeout=30,
+        env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+    )
+    commit = result.stdout.decode("utf-8", errors="replace").strip()
+    if result.code or not commit:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise CheckError(f"无法解析基线提交 {revision}：{detail or 'git rev-parse 失败'}")
+    return commit
+
+
+@contextmanager
+def baseline_environment(root: Path, base: str) -> Iterator[dict[str, str]]:
+    """创建 base→HEAD 的临时 Git 环境，让暂存检查复用于干净 checkout。
+
+    临时对象目录通过 alternates 读取真实仓库对象，HEAD 指向基线提交，索引
+    由工作区当前 HEAD 树建立。因此 ``git diff --cached`` 恰好表示 base 到
+    HEAD 的变更，且不会改动真实索引或仓库状态。
+
+    Args:
+        root: 真实仓库根目录。
+        base: 基线提交引用或完整提交标识。
+    Yields:
+        包含临时 GIT_DIR、GIT_WORK_TREE 和 GIT_INDEX_FILE 的子进程环境。
+    Raises:
+        CheckError: 基线无法解析、仓库目录异常或索引建立失败。
+    """
+    repository = root.resolve()
+    baseline = resolve_commit(repository, base)
+    head = resolve_commit(repository, "HEAD")
+    git_directory = run_process(
+        ["git", "-C", str(repository), "rev-parse", "--absolute-git-dir"],
+        repository,
+        timeout=30,
+        env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
+    )
+    if git_directory.code:
+        raise CheckError("无法定位真实仓库的 Git 目录")
+    objects = Path(
+        git_directory.stdout.decode("utf-8", errors="replace").strip()
+    ) / "objects"
+    if not objects.is_dir():
+        raise CheckError(f"Git 对象目录不存在：{objects}")
+    with tempfile.TemporaryDirectory(prefix="quality-gate-baseline-") as temporary:
+        folder = Path(temporary)
+        temporary_git = folder / "git"
+        (temporary_git / "objects" / "info").mkdir(parents=True)
+        (temporary_git / "refs").mkdir()
+        (temporary_git / "HEAD").write_text(f"{baseline}\n", encoding="utf-8")
+        (temporary_git / "config").write_text(
+            "[core]\n\trepositoryformatversion = 0\n\tbare = false\n",
+            encoding="utf-8",
+        )
+        (temporary_git / "objects" / "info" / "alternates").write_text(
+            f"{objects.resolve()}\n", encoding="utf-8"
+        )
+        environment = {
+            **os.environ,
+            "GIT_DIR": str(temporary_git),
+            "GIT_WORK_TREE": str(repository),
+            "GIT_INDEX_FILE": str(folder / "index"),
+            "GIT_OPTIONAL_LOCKS": "0",
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        result = run_process(
+            ["git", "read-tree", head],
+            repository,
+            timeout=30,
+            env=environment,
+        )
+        if result.code:
+            detail = result.stderr.decode("utf-8", errors="replace").strip()
+            raise CheckError(f"无法建立基线索引：{detail or 'git read-tree 失败'}")
+        yield environment
+
+
 def execute(
     gate: Gate,
     root: Path,
@@ -118,17 +232,33 @@ def execute(
     """
     started = time.monotonic()
     script = SCRIPT_DIRECTORY / gate.script
-    arguments = [sys.executable, "-B", "-X", "utf8", str(script)]
+    command = [sys.executable, "-B", "-X", "utf8", str(script)]
     if gate.root_argument:
-        arguments.extend(["--root", str(root)])
+        command.extend(["--root", str(root)])
+    command.extend(gate.arguments)
+    environment = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
     try:
-        result = run_process(
-            arguments,
-            root,
-            timeout=timeout,
-            env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"},
-            cancel=cancel,
-        )
+        if gate.baseline is None:
+            result = run_process(
+                command,
+                root,
+                timeout=timeout,
+                env=environment,
+                cancel=cancel,
+            )
+        else:
+            with baseline_environment(root, gate.baseline) as baseline_env:
+                result = run_process(
+                    command,
+                    root,
+                    timeout=timeout,
+                    env=baseline_env,
+                    cancel=cancel,
+                )
         code = result.code
         output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
     except CheckError as exc:
@@ -202,10 +332,17 @@ def main() -> int:
     arguments.add_argument("--checks", nargs="+", default=[], help="指定检查名，自动补齐前置检查")
     arguments.add_argument("--jobs", type=positive_integer, default=3)
     arguments.add_argument("--timeout", type=positive_integer, default=180)
+    arguments.add_argument(
+        "--base",
+        default=None,
+        help="以该提交为基线检查 comments 组，适用于没有暂存区的干净检出",
+    )
     arguments.add_argument("--list", action="store_true")
     arguments.add_argument("--json", action="store_true")
     args = arguments.parse_args()
     gates = select_gates(args.checks, args.group)
+    if args.base is not None:
+        gates = apply_baseline(gates, resolve_commit(args.root.resolve(), args.base))
     if args.list:
         print(json.dumps([asdict(gate) for gate in gates], ensure_ascii=False, indent=2))
         return 0
