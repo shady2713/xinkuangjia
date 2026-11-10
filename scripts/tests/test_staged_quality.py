@@ -603,6 +603,11 @@ def test_comments_base_mode_works_in_linked_worktree(tmp_path: Path) -> None:
     assert result.returncode == 1, output
     assert "method-javadoc" in output
     assert "Git 对象目录不存在" not in output
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+        check=True,
+        capture_output=True,
+    )
 
 
 def test_web_staged_mode_reads_base_to_head_diff(

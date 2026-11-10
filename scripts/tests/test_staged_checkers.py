@@ -529,8 +529,8 @@ def test_java_checker_scans_real_backend_layout(
     assert marker in result.stdout + result.stderr
 
 
-def test_java_checker_rejects_missing_backend_root(tmp_path: Path) -> None:
-    """过期源码根不存在时必须报环境错误，不能以检查 0 个对象静默通过。"""
+def test_java_checker_rejects_changes_outside_backend_root(tmp_path: Path) -> None:
+    """候选 Java 变更都不在源码根下时必须报错，不能以检查 0 个对象静默通过。"""
     repo = tmp_path / "repo"
     init_checker_repository(repo)
     legacy = repo / "后端/java服务/Demo.java"
@@ -542,16 +542,25 @@ def test_java_checker_rejects_missing_backend_root(tmp_path: Path) -> None:
     assert "Java 变更不在源码根目录下" in result.stderr
 
 
-def test_java_checker_reads_staged_source_without_worktree(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("content", "expected", "marker"),
+    [
+        (JAVA_REAL_MISSING, 1, "method-javadoc"),
+        (JAVA_REAL_COMPLIANT, 0, "Java 注释检查通过"),
+    ],
+)
+def test_java_checker_reads_staged_source_without_worktree(
+    tmp_path: Path, content: str, expected: int, marker: str
+) -> None:
     """暂存后删除工作区源码目录时，仍按索引中的暂存内容完成检查。"""
     repo = tmp_path / "repo"
     init_checker_repository(repo)
     target = repo / JAVA_REAL_PATH
     target.parent.mkdir(parents=True)
-    target.write_text(JAVA_REAL_MISSING, encoding="utf-8")
+    target.write_text(content, encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
     shutil.rmtree(repo / "后端代码")
     assert not (repo / "后端代码").exists()
     result = run_java_checker(repo)
-    assert result.returncode == 1, result.stdout + result.stderr
-    assert "method-javadoc" in result.stderr
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert marker in result.stdout + result.stderr

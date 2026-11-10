@@ -168,9 +168,17 @@ def baseline_environment(root: Path, base: str) -> Iterator[dict[str, str]]:
     baseline = resolve_commit(repository, base)
     head = resolve_commit(repository, "HEAD")
     # linked worktree 的 ``--absolute-git-dir`` 指向 ``.git/worktrees/<name>``，
-    # 该目录没有 objects；``--git-path objects`` 才会解析到共享对象目录。
+    # 该目录没有 objects；``--git-path`` 才会解析到共享对象目录。
     object_directory = run_process(
-        ["git", "-C", str(repository), "rev-parse", "--git-path", "objects"],
+        [
+            "git",
+            "-C",
+            str(repository),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "objects",
+        ],
         repository,
         timeout=30,
         env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
