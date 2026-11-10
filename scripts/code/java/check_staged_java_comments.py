@@ -23,7 +23,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 
-JAVA_SOURCE_ROOT = "后端/java服务/"
+JAVA_SOURCE_ROOT = "后端代码/basic-framework-boot/"
 GIT_TIMEOUT_SECONDS = 30
 HUNK_HEADER_PATTERN = re.compile(
     r"^@@ -\d+(?:,\d+)? \+(?P<line>\d+)(?:,\d+)? @@"
@@ -168,6 +168,10 @@ def _staged_java_paths() -> list[str]:
 
     Returns:
         位于 Java 工程源码目录下的仓库相对路径列表。
+
+    Raises:
+        RuntimeError: 存在 Java 变更但均不在源码根目录下时抛出，
+            避免路径过期后静默通过。
     """
 
     output = _run_git(
@@ -175,7 +179,7 @@ def _staged_java_paths() -> list[str]:
         text=False,
     )
     assert isinstance(output, bytes)
-    paths = []
+    candidates = []
     for raw_path in output.split(b"\0"):
         if not raw_path:
             continue
@@ -185,12 +189,17 @@ def _staged_java_paths() -> list[str]:
             raise RuntimeError("暂存区文件路径不是有效 UTF-8") from error
         normalized = path.replace("\\", "/")
         if (
-            normalized.startswith(JAVA_SOURCE_ROOT)
-            and normalized.endswith(".java")
+            normalized.endswith(".java")
             and "/target/" not in normalized
             and "/generated-sources/" not in normalized
         ):
-            paths.append(normalized)
+            candidates.append(normalized)
+    if not candidates:
+        return []
+    # 只按暂存路径判断源码根目录，不读取工作区是否物化，稀疏 checkout 也能检查。
+    paths = [path for path in candidates if path.startswith(JAVA_SOURCE_ROOT)]
+    if not paths:
+        raise RuntimeError(f"Java 变更不在源码根目录下：{JAVA_SOURCE_ROOT}")
     return paths
 
 
@@ -1384,7 +1393,7 @@ public class GoodDO {
 }
 """
     all_compliant_lines = set(range(1, compliant_source.count("\n") + 2))
-    if _scan_source("后端/java服务/test/GoodDO.java", compliant_source, all_compliant_lines):
+    if _scan_source("后端代码/basic-framework-boot/test/GoodDO.java", compliant_source, all_compliant_lines):
         raise AssertionError("合规 Java 样本被误报")
 
     missing_source = """public class MissingVO {
@@ -1402,7 +1411,7 @@ public class GoodDO {
     all_missing_lines = set(range(1, missing_source.count("\n") + 2))
     missing_rules = _rules(
         _scan_source(
-            "后端/java服务/test/MissingVO.java",
+            "后端代码/basic-framework-boot/test/MissingVO.java",
             missing_source,
             all_missing_lines,
         )
@@ -1416,7 +1425,7 @@ public interface MissingAuthor {
 }
 """
     author_findings = _scan_source(
-        "后端/java服务/test/MissingAuthor.java", author_source, {2}
+        "后端代码/basic-framework-boot/test/MissingAuthor.java", author_source, {2}
     )
     if "type-author" not in _rules(author_findings):
         raise AssertionError("public 类型缺少作者的样本未被拦截")
@@ -1430,7 +1439,7 @@ public interface PlaceholderAuthor {
 }
 """
     placeholder_author_findings = _scan_source(
-        "后端/java服务/test/PlaceholderAuthor.java",
+        "后端代码/basic-framework-boot/test/PlaceholderAuthor.java",
         placeholder_author_source,
         {6},
     )
@@ -1460,7 +1469,7 @@ public enum StatusEnum {
 }
 """
     enum_findings = _scan_source(
-        "后端/java服务/test/StatusEnum.java", enum_source, {9}
+        "后端代码/basic-framework-boot/test/StatusEnum.java", enum_source, {9}
     )
     if "enum-constant-javadoc" not in _rules(enum_findings):
         raise AssertionError("枚举常量缺少注释的样本未被拦截")
@@ -1482,7 +1491,7 @@ public record ResultVO(
     all_record_lines = set(range(1, record_source.count("\n") + 2))
     record_rules = _rules(
         _scan_source(
-            "后端/java服务/test/ResultVO.java",
+            "后端代码/basic-framework-boot/test/ResultVO.java",
             record_source,
             all_record_lines,
         )
@@ -1499,7 +1508,7 @@ public record ResultVO(
 }
 """
     if _scan_source(
-        "后端/java服务/test/LegacyVO.java", incremental_source, {5}
+        "后端代码/basic-framework-boot/test/LegacyVO.java", incremental_source, {5}
     ):
         raise AssertionError("仅修改方法体时不应追溯历史声明注释")
     print("Java 注释检查规则自检通过")

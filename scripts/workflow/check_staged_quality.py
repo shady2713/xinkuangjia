@@ -62,7 +62,7 @@ def core_jobs(changes: list[Change]) -> list[tuple[str, str, list[str]]]:
     """根据暂存后仍存在的源码选择核心检查，密钥检查始终覆盖本次提交。"""
     paths = [item.path for item in changes if item.status != "D" and not excluded(Path(item.path))]
     jobs = [("secrets", "security/scan_staged_secrets.py", [])]
-    if any(path.startswith("后端/java服务/") and path.endswith(".java") for path in paths):
+    if any(path.startswith("后端代码/basic-framework-boot/") and path.endswith(".java") for path in paths):
         jobs.append(("java-comments", "code/java/check_staged_java_comments.py", []))
     if any(path.endswith(".py") for path in paths):
         jobs.append(("python-comments", "code/python/check_staged_python_comments.py", []))

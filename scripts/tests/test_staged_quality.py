@@ -20,6 +20,7 @@ from scripts.code.web import check_worktree_web_comments as web
 from scripts.common import staged_content as staged
 from scripts.common.quality_common import DEFAULT_ROOT, CheckError, ProcessResult
 from scripts.workflow import check_staged_quality as runner
+from scripts.workflow import run_checks as run_checks_module
 
 OLD = "a" * 40
 NEW = "b" * 40
@@ -392,7 +393,7 @@ def test_all_thirteen_checks_are_dispatched(
             )
         ),
         "hook-probe.py": '"""说明检查样本。\n@author 李杰\n"""\nVALUE = 1\n',
-        "后端/java服务/HookProbe.java": "/** 验证检查。\n * @author 李杰\n */\npublic class HookProbe {}\n",
+        "后端代码/basic-framework-boot/basic-framework-server/src/main/java/com/basicframework/server/HookProbe.java": "/** 验证检查。\n * @author 李杰\n */\npublic class HookProbe {}\n",
         "前端/业务系统/hook-probe.ts": "/** 模块说明。 */\nconst value = 1;\n",
     }
     for name, content in samples.items():
@@ -459,3 +460,181 @@ def test_deleted_doc_ignores_unrelated_history(private_index: dict[str, str]) ->
     assert result.returncode == 1, result.stdout + result.stderr
     assert "md-link" in result.stdout
     assert "doc-structure：" not in result.stdout
+
+
+JAVA_GATE_PATH = (
+    "后端代码/basic-framework-boot/basic-framework-server/"
+    "src/main/java/com/basicframework/server/GateProbe.java"
+)
+JAVA_GATE_MISSING = "public class GateProbe {\n    void run() {}\n}\n"
+JAVA_GATE_COMPLIANT = (
+    "/**\n"
+    " * 质量门禁样本。\n"
+    " *\n"
+    " * @author 李杰\n"
+    " */\n"
+    "public class GateProbe {\n"
+    "    /**\n"
+    "     * 执行任务。\n"
+    "     */\n"
+    "    void run() {}\n"
+    "}\n"
+)
+
+
+def init_git_repository(root: Path) -> None:
+    """创建带固定身份的临时仓库，供真实 CI 基线命令使用。"""
+    root.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main", str(root)], check=True, capture_output=True)
+    for key, value in (
+        ("user.name", "质量门禁样本"),
+        ("user.email", "gate-probe@invalid.local"),
+    ):
+        subprocess.run(
+            ["git", "-C", str(root), "config", key, value],
+            check=True,
+            capture_output=True,
+        )
+
+
+def commit_all(root: Path, message: str) -> str:
+    """提交当前工作区全部已跟踪变更并返回提交标识。"""
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "commit", "-m", message],
+        check=True,
+        capture_output=True,
+    )
+    return subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+
+
+def run_comments_gate(root: Path, base: str) -> subprocess.CompletedProcess[str]:
+    """按 CI 的新基线参数运行 Java 注释门禁，保留真实输出与退出码。"""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-B",
+            str(DEFAULT_ROOT / "scripts/workflow/run_checks.py"),
+            "--root",
+            str(root),
+            "--checks",
+            "java-comments",
+            "--base",
+            base,
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+
+
+def test_core_jobs_selects_java_in_real_backend_layout() -> None:
+    """真实后端目录的 Java 变更必须选择 java-comments，不能继续使用过期前缀。"""
+    changes = [staged.Change(JAVA_GATE_PATH, ZERO, NEW, "A")]
+    names = [name for name, _, _ in runner.core_jobs(changes)]
+    assert "java-comments" in names
+
+
+@pytest.mark.parametrize(
+    ("content", "expected", "marker"),
+    [
+        (JAVA_GATE_MISSING, 1, "method-javadoc"),
+        (JAVA_GATE_COMPLIANT, 0, "Java 注释检查通过"),
+    ],
+)
+def test_comments_base_mode_checks_head_change(
+    tmp_path: Path, content: str, expected: int, marker: str
+) -> None:
+    """干净 checkout 上按基线比较 HEAD：缺注释失败，合规通过。"""
+    repo = tmp_path / "repo"
+    init_git_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    base = commit_all(repo, "base")
+    java_file = repo / JAVA_GATE_PATH
+    java_file.parent.mkdir(parents=True)
+    java_file.write_text(content, encoding="utf-8")
+    commit_all(repo, "head")
+    result = run_comments_gate(repo, base)
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert marker in result.stdout + result.stderr
+
+
+def test_comments_base_mode_ignores_base_only_debt(tmp_path: Path) -> None:
+    """基线中已有的缺注释文件不进入本次检查，只报告 HEAD 新增的文件。"""
+    repo = tmp_path / "repo"
+    init_git_repository(repo)
+    legacy = repo / JAVA_GATE_PATH.replace("GateProbe", "LegacyDebt")
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(JAVA_GATE_MISSING.replace("GateProbe", "LegacyDebt"), encoding="utf-8")
+    base = commit_all(repo, "base")
+    (repo / JAVA_GATE_PATH).write_text(JAVA_GATE_MISSING, encoding="utf-8")
+    commit_all(repo, "head")
+    result = run_comments_gate(repo, base)
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "GateProbe.java" in output
+    assert "LegacyDebt.java" not in output
+
+
+def test_comments_base_mode_works_in_linked_worktree(tmp_path: Path) -> None:
+    """linked worktree 的共享对象目录必须被解析，基线检查不能报环境错误。"""
+    repo = tmp_path / "repo"
+    init_git_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    base = commit_all(repo, "base")
+    java_file = repo / JAVA_GATE_PATH
+    java_file.parent.mkdir(parents=True)
+    java_file.write_text(JAVA_GATE_MISSING, encoding="utf-8")
+    commit_all(repo, "head")
+    worktree = tmp_path / "worktree"
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "--detach", str(worktree), "HEAD"],
+        check=True,
+        capture_output=True,
+    )
+    result = run_comments_gate(worktree, base)
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "method-javadoc" in output
+    assert "Git 对象目录不存在" not in output
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_web_staged_mode_reads_base_to_head_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Web 暂存检查在基线环境中读取 BASE 到 HEAD 的新增文件，而不是空工作区差异。"""
+    repo = tmp_path / "repo"
+    init_git_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    base = commit_all(repo, "base")
+    web_file = "前端代码/basic-framework-admin/apps/web-ele/src/gate-probe.ts"
+    target = repo / web_file
+    target.parent.mkdir(parents=True)
+    target.write_text("export function gateProbe() {}\n", encoding="utf-8")
+    commit_all(repo, "head")
+    captured: list[dict[str, object]] = []
+
+    def fake_invoke(mode: str, payload: dict) -> dict:
+        """记录真实暂存读取结果，不依赖前端解析器。"""
+        captured.extend(payload["files"])
+        return {"findings": []}
+
+    monkeypatch.setattr(web, "invoke", fake_invoke)
+    with run_checks_module.baseline_environment(repo, base) as environment:
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+            monkeypatch.setenv(key, environment[key])
+        count, findings = web.collect_staged(repo, [])
+    assert count == 1 and findings == []
+    assert [item["path"] for item in captured] == [web_file]
+    assert captured[0]["new"] is True

@@ -7,13 +7,16 @@ Git 读取使用内存差异替身，避免修改真实索引或读取工作区�
 from __future__ import annotations
 
 import difflib
+import shutil
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 from scripts.code.java import check_staged_java_comments as java
 from scripts.code.python import check_staged_python_comments as python
+from scripts.common.quality_common import DEFAULT_ROOT
 from scripts.security import scan_staged_secrets as secrets
 
 JAVA_HEADER = "/** 服务职责。\n * @author 李杰\n */\npublic class Demo {\n"
@@ -36,7 +39,12 @@ def scan_staged(
         AssertionError: 检查器调用了替身未覆盖的 Git 命令。
     """
     module = java if language == "java" else python
-    path = "后端/java服务/Demo.java" if language == "java" else "src/demo.py"
+    path = (
+        "后端代码/basic-framework-boot/basic-framework-server/"
+        "src/main/java/com/basicframework/server/Demo.java"
+        if language == "java"
+        else "src/demo.py"
+    )
     patch = "index " + ("a" * 40 if before is not None else "0" * 40) + ".." + "b" * 40
     patch += " 100644\n" + "".join(
         difflib.unified_diff(
@@ -437,3 +445,122 @@ def test_existing_self_tests(language: str) -> None:
     """保留两种语言原有内置样例，防止新增变更识别破坏既有规则。"""
     module = java if language == "java" else python
     module._run_self_test()
+
+
+JAVA_REAL_PATH = (
+    "后端代码/basic-framework-boot/basic-framework-module-system/"
+    "src/main/java/com/basicframework/module/system/GateProbe.java"
+)
+JAVA_REAL_MISSING = "public class GateProbe {\n    void run() {}\n}\n"
+JAVA_REAL_COMPLIANT = (
+    "/**\n"
+    " * 质量门禁样本。\n"
+    " *\n"
+    " * @author 李杰\n"
+    " */\n"
+    "public class GateProbe {\n"
+    "    /**\n"
+    "     * 执行任务。\n"
+    "     */\n"
+    "    void run() {}\n"
+    "}\n"
+)
+
+
+def init_checker_repository(root: Path) -> None:
+    """创建带固定身份的临时仓库，验证独立 Java 检查器的真实入口。"""
+    root.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main", str(root)], check=True, capture_output=True)
+    for key, value in (
+        ("user.name", "质量门禁样本"),
+        ("user.email", "gate-probe@invalid.local"),
+    ):
+        subprocess.run(
+            ["git", "-C", str(root), "config", key, value],
+            check=True,
+            capture_output=True,
+        )
+    (root / "README.md").write_text("# 基线\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "commit", "-m", "base"],
+        check=True,
+        capture_output=True,
+    )
+
+
+def run_java_checker(root: Path) -> subprocess.CompletedProcess[str]:
+    """在临时仓库执行独立 Java 注释检查器，保留真实输出。"""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-B",
+            str(DEFAULT_ROOT / "scripts/code/java/check_staged_java_comments.py"),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+    )
+
+
+@pytest.mark.parametrize(
+    ("content", "expected", "marker"),
+    [
+        (JAVA_REAL_MISSING, 1, "method-javadoc"),
+        (JAVA_REAL_COMPLIANT, 0, "Java 注释检查通过"),
+    ],
+)
+def test_java_checker_scans_real_backend_layout(
+    tmp_path: Path, content: str, expected: int, marker: str
+) -> None:
+    """真实后端路径下缺注释必须失败，合规声明必须通过。"""
+    repo = tmp_path / "repo"
+    init_checker_repository(repo)
+    target = repo / JAVA_REAL_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    result = run_java_checker(repo)
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert marker in result.stdout + result.stderr
+
+
+def test_java_checker_rejects_changes_outside_backend_root(tmp_path: Path) -> None:
+    """候选 Java 变更都不在源码根下时必须报错，不能以检查 0 个对象静默通过。"""
+    repo = tmp_path / "repo"
+    init_checker_repository(repo)
+    legacy = repo / "后端/java服务/Demo.java"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(JAVA_REAL_MISSING, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    result = run_java_checker(repo)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "Java 变更不在源码根目录下" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("content", "expected", "marker"),
+    [
+        (JAVA_REAL_MISSING, 1, "method-javadoc"),
+        (JAVA_REAL_COMPLIANT, 0, "Java 注释检查通过"),
+    ],
+)
+def test_java_checker_reads_staged_source_without_worktree(
+    tmp_path: Path, content: str, expected: int, marker: str
+) -> None:
+    """暂存后删除工作区源码目录时，仍按索引中的暂存内容完成检查。"""
+    repo = tmp_path / "repo"
+    init_checker_repository(repo)
+    target = repo / JAVA_REAL_PATH
+    target.parent.mkdir(parents=True)
+    target.write_text(content, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    shutil.rmtree(repo / "后端代码")
+    assert not (repo / "后端代码").exists()
+    result = run_java_checker(repo)
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert marker in result.stdout + result.stderr

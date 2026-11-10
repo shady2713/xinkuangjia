@@ -59,27 +59,8 @@ jobs:
   docs-comments:
     name: docs + comments
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install quality tooling
-        run: python -m pip install -r tools/quality/requirements.txt
-      - name: Docs checks (mermaid excluded)
-        run: |
-          set -euo pipefail
-          # mermaid 检查依赖前端 node_modules/mermaid；本轻量 job 不安装整套前端依赖。
-          echo "Skipping mermaid: requires frontend node_modules/mermaid, which this lightweight job does not install."
-          python -B -X utf8 scripts/workflow/run_checks.py --checks md-links skills doc-refs package-readmes doc-structure doc-policy note-classification note-format
-      - name: Comments checks
-        run: |
-          set -euo pipefail
-          python -B -X utf8 scripts/workflow/run_checks.py --group comments
-
-  secrets-scan:
-    name: secrets scan (staged-equivalent)
-    runs-on: ubuntu-latest
+    env:
+      EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,19 +68,74 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install quality tooling
+        run: python -m pip install -r tools/quality/requirements.txt
+      - name: Resolve comparison baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${EVENT_BASE_SHA:-}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            empty_tree="$(git hash-object -t tree /dev/null)"
+            base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
+      - name: Install web parser
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm install --frozen-lockfile
+      - name: Docs checks (mermaid excluded)
+        run: |
+          set -euo pipefail
+          # mermaid 检查仍不在本 job 执行；前端依赖已为 comments 暂存检查安装。
+          echo "Skipping mermaid: not part of this job's docs checks; frontend dependencies are installed for staged comments checks."
+          python -B -X utf8 scripts/workflow/run_checks.py --checks md-links skills doc-refs package-readmes doc-structure doc-policy note-classification note-format
+      - name: Comments checks
+        run: |
+          set -euo pipefail
+          python -B -X utf8 scripts/workflow/run_checks.py --group comments --base "${{ steps.baseline.outputs.sha }}"
+
+  secrets-scan:
+    name: secrets scan (staged-equivalent)
+    runs-on: ubuntu-latest
+    env:
+      EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve comparison baseline
+        id: baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${EVENT_BASE_SHA:-}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            empty_tree="$(git hash-object -t tree /dev/null)"
+            base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
+          fi
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
       - name: Scan changed files for secrets
         run: |
           set -euo pipefail
           # 脚本只扫 git 暂存区，不接受文件路径参数。
-          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "${BASE}" ] || [ "${BASE}" = "0000000000000000000000000000000000000000" ]; then
-            BASE="$(git rev-list --max-parents=0 HEAD | tail -1)"
-          fi
-          if [ -z "$(git diff --name-only --diff-filter=ACMR "${BASE}"...HEAD)" ]; then
+          BASE="${{ steps.baseline.outputs.sha }}"
+          if [ -z "$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD)" ]; then
             echo "No changed files to scan."
             exit 0
           fi
-          # 索引对齐到 BASE，工作区保持 HEAD，再 add 全部差异，等价于扫本 PR 变更。
-          git reset --mixed "${BASE}"
+          # 索引对齐到 BASE，工作区保持 HEAD，再 add 全部差异，等价于扫本次变更。
+          git reset --mixed "$BASE"
           git add -A
           python3 -B -X utf8 scripts/security/scan_staged_secrets.py
