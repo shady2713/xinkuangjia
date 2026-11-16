@@ -4,6 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { InfraConfigApi } from '#/api/infra/config';
 
 import { Page, useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 
@@ -62,11 +63,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        query: async ({ page, sorts }, formValues) => {
           return await getConfigPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

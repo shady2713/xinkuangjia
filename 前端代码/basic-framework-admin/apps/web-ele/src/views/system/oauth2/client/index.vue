@@ -4,6 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemOAuth2ClientApi } from '#/api/system/oauth2/client';
 
 import { Page, useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
 import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -55,11 +56,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        query: async ({ page, sorts }, formValues) => {
           return await getOAuth2ClientPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

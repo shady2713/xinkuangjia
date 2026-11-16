@@ -25,9 +25,16 @@ export function getRolePage(params: PageParam) {
   );
 }
 
+/** 角色下拉项。只含编号、名称和状态，不含数据权限范围。 */
+export interface RoleSimple {
+  id?: number;
+  name: string;
+  status: number;
+}
+
 /** 查询角色（精简)列表 */
 export function getSimpleRoleList() {
-  return requestClient.get<SystemRoleApi.Role[]>('/system/role/simple-list');
+  return requestClient.get<RoleSimple[]>('/system/role/simple-list');
 }
 
 /** 查询角色详情 */

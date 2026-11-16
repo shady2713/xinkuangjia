@@ -28,7 +28,6 @@ async function getShimsUrl(provide: string) {
   const shimsSubpath = `dist/es-module-shims.js`;
   const providerShimsMap: Record<string, string> = {
     'esm.sh': `https://esm.sh/es-module-shims@${version}/${shimsSubpath}`,
-    // unpkg: `https://unpkg.com/es-module-shims@${version}/${shimsSubpath}`,
     jsdelivr: `https://cdn.jsdelivr.net/npm/es-module-shims@${version}/${shimsSubpath}`,
 
     // 下面两个CDN不稳定，暂时不用

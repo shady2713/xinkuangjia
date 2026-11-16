@@ -3,7 +3,6 @@ package com.basicframework.framework.mybatis.core.mapper;
 import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.PageParam;
 import com.basicframework.framework.common.pojo.PageResult;
-import com.basicframework.framework.common.pojo.SortablePageParam;
 import com.basicframework.framework.common.pojo.SortingField;
 import com.basicframework.framework.mybatis.core.util.JdbcUtils;
 import com.basicframework.framework.mybatis.core.util.MyBatisUtils;
@@ -35,23 +34,14 @@ public interface BaseMapperX<T> extends MPJBaseMapper<T> {
     /**
      * 查询分页数据。
      *
-     * @param pageParam 分页数据Param参数
-     * @param queryWrapper queryWrapper参数
-     * @return 查询结果
-     */
-    default PageResult<T> selectPage(SortablePageParam pageParam, @Param("ew") Wrapper<T> queryWrapper) {
-        return selectPage(pageParam, pageParam.getSortingFields(), queryWrapper);
-    }
-
-    /**
-     * 查询分页数据。
+     * <p>排序取自分页参数中的 {@code sortingFields}。未传时不追加排序。</p>
      *
-     * @param pageParam 分页数据Param参数
-     * @param queryWrapper queryWrapper参数
-     * @return 查询结果
+     * @param pageParam 分页参数，可携带排序字段
+     * @param queryWrapper 查询条件
+     * @return 分页结果
      */
     default PageResult<T> selectPage(PageParam pageParam, @Param("ew") Wrapper<T> queryWrapper) {
-        return selectPage(pageParam, null, queryWrapper);
+        return selectPage(pageParam, pageParam.getSortingFields(), queryWrapper);
     }
 
     /**
@@ -93,29 +83,6 @@ public interface BaseMapperX<T> extends MPJBaseMapper<T> {
         }
 
         // MyBatis Plus Join 查询
-        IPage<D> mpPage = MyBatisUtils.buildPage(pageParam);
-        mpPage = selectJoinPage(mpPage, clazz, lambdaWrapper);
-        // 转换返回
-        return new PageResult<>(mpPage.getRecords(), mpPage.getTotal());
-    }
-
-    /**
-     * 执行分页查询并返回结果。
-     *
-     * @param pageParam 分页参数，包含页码、每页条数和排序字段信息。如果 pageSize 为 {@link PageParam#PAGE_SIZE_NONE}，则不分页，直接查询所有数据。
-     * @param clazz     结果集的类类型
-     * @param lambdaWrapper MyBatis Plus Join 查询条件包装器
-     * @param <D>       结果集的泛型类型
-     * @return 返回分页查询的结果，包括总记录数和当前页的数据列表
-     */
-    default <D> PageResult<D> selectJoinPage(SortablePageParam pageParam, Class<D> clazz, MPJLambdaWrapper<T> lambdaWrapper) {
-        // 特殊：不分页，直接查询全部
-        if (PageParam.PAGE_SIZE_NONE.equals(pageParam.getPageSize())) {
-            List<D> list = selectJoinList(clazz, lambdaWrapper);
-            return new PageResult<>(list, (long) list.size());
-        }
-
-        // MyBatis Plus Join 查询
         IPage<D> mpPage = MyBatisUtils.buildPage(pageParam, pageParam.getSortingFields());
         mpPage = selectJoinPage(mpPage, clazz, lambdaWrapper);
         // 转换返回
@@ -131,7 +98,7 @@ public interface BaseMapperX<T> extends MPJBaseMapper<T> {
      * @return 查询结果
      */
     default <DTO> PageResult<DTO> selectJoinPage(PageParam pageParam, Class<DTO> resultTypeClass, MPJBaseJoin<T> joinQueryWrapper) {
-        IPage<DTO> mpPage = MyBatisUtils.buildPage(pageParam);
+        IPage<DTO> mpPage = MyBatisUtils.buildPage(pageParam, pageParam.getSortingFields());
         selectJoinPage(mpPage, resultTypeClass, joinQueryWrapper);
         // 转换返回
         return new PageResult<>(mpPage.getRecords(), mpPage.getTotal());

@@ -163,9 +163,8 @@ class RequestClient {
 }
 
 /**
- * 构建排序字段，处理 vxe 排序条件
- *
- * Internal request helpers
+ * 把 vxe 多列排序转换成后端分页参数 `sortingFields` 的查询串。
+ * 没有排序时返回空对象，避免覆盖调用方已经组装的分页条件。
  */
 export const buildSortingField = (sorts: any[]) => {
   if (!sorts || sorts.length === 0) {
