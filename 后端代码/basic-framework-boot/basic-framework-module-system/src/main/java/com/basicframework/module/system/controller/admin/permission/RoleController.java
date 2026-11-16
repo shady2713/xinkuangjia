@@ -9,6 +9,7 @@ import com.basicframework.framework.excel.core.util.ExcelUtils;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RolePageReqVO;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RoleRespVO;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RoleSaveReqVO;
+import com.basicframework.module.system.controller.admin.permission.vo.role.RoleSimpleRespVO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.service.permission.RoleService;
@@ -152,16 +153,29 @@ public class RoleController {
     }
 
     /**
-     * 获取精简数据角色列表。
+     * 获取当前平台角色的下拉数据。
      *
-     * @return 查询结果
+     * <p>只返回编号、名称和状态，供表单禁用停用角色。不返回数据权限范围。</p>
+     *
+     * @return 角色精简列表
      */
-    @GetMapping({"/list-all-simple", "/simple-list"})
+    @GetMapping("/list-all-simple")
     @Operation(summary = "获取角色精简信息列表", description = "包含所有状态的角色，主要用于前端的下拉选项")
-    public CommonResult<List<RoleRespVO>> getSimpleRoleList() {
+    public CommonResult<List<RoleSimpleRespVO>> getSimpleRoleList() {
         List<RoleDO> list = roleService.getRoleListByRoleType(getLoginUserType());
         list.sort(Comparator.comparing(RoleDO::getSort));
-        return success(BeanUtils.toBean(list, RoleRespVO.class));
+        return success(BeanUtils.toBean(list, RoleSimpleRespVO.class));
+    }
+
+    /**
+     * 以兼容路径返回当前平台角色的下拉数据，结果与 {@link #getSimpleRoleList()} 相同。
+     *
+     * @return 角色精简列表
+     */
+    @GetMapping("/simple-list")
+    @Operation(summary = "获取角色精简信息列表", description = "包含所有状态的角色，主要用于前端的下拉选项")
+    public CommonResult<List<RoleSimpleRespVO>> getSimpleRoleListCompatible() {
+        return getSimpleRoleList();
     }
 
     /**

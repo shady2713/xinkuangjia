@@ -213,7 +213,8 @@ public class FileController {
     /**
      * 按对象路径读取公开文件内容。
      *
-     * <p>业务约束要求文件 URL 长期可访问，因此该入口允许匿名读取，但不提供目录列举和写操作。</p>
+     * <p>业务约束要求文件 URL 长期可访问，因此该入口允许匿名读取，但不提供目录列举和写操作。
+     * 路径必须是登记时的相对对象路径；包含父目录、绝对路径或控制字符时按不存在处理，不访问存储。</p>
      *
      * @param request HTTP 请求，用于提取对象路径
      * @param response HTTP 响应，用于写入文件内容
@@ -233,6 +234,10 @@ public class FileController {
         // https://example.com/basic_framework/pulls/807/
         // https://example.com/basic_framework/pulls/1432/
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);
+        if (!FilePathUtils.isObjectPathValid(path)) {
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            return;
+        }
 
         // 读取内容
         byte[] content = fileService.getFileContent(path);

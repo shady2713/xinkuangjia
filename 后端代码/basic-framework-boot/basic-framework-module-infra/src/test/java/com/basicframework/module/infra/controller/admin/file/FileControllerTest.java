@@ -4,7 +4,10 @@ import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadReqVO;
 import com.basicframework.module.infra.service.file.FileService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -95,6 +98,22 @@ class FileControllerTest {
 
         assertThat(result.getData()).isEqualTo("/files/demo.txt");
         verify(fileService).createFile(content, "demo.txt", null, "text/plain");
+    }
+
+    /** 验证公开下载拒绝解码后的父目录片段，且不会把该路径交给对象存储。 */
+    @Test
+    void getFileContentRejectsParentPathWithoutReadingStorage() throws Exception {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+        when(request.getRequestURI()).thenReturn("/admin-api/infra/file/content/2026/%2e%2e/secret");
+
+        controller.getFileContent(request, response);
+
+        verify(response).setStatus(HttpStatus.NOT_FOUND.value());
+        verify(fileService, never()).getFileContent(any());
     }
 
 }

@@ -46,7 +46,8 @@ interface AccessState {
 }
 
 /**
- * @zh_CN 访问权限相关
+ * 保存登录令牌、权限码、菜单和锁屏状态。
+ * 锁屏口令只留在当前页面内存，不写入本地存储。
  */
 export const useAccessStore = defineStore('core-access', {
   actions: {
@@ -100,14 +101,9 @@ export const useAccessStore = defineStore('core-access', {
     },
   },
   persist: {
-    // 持久化
-    pick: [
-      'accessToken',
-      'refreshToken',
-      'accessCodes',
-      'isLockScreen',
-      'lockScreenPassword',
-    ],
+    // 锁屏口令只留在当前页面内存。写入本地存储后，刷新仍能读到，和登录口令复用时会扩大泄露面。
+    // 锁屏标记一并留在内存，避免刷新后只剩下锁定状态、却没有口令可以解开。
+    pick: ['accessToken', 'refreshToken', 'accessCodes'],
   },
   state: (): AccessState => ({
     accessCodes: [],

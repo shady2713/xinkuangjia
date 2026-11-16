@@ -13,8 +13,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 /**
- * 字段字段的 TypeHandler 实现类，基于 {@link AES} 实现
- * 可通过 jasypt.encryptor.password 配置项，设置密钥
+ * 字符串字段的 AES TypeHandler。
+ *
+ * <p>仅在字段显式指定 {@code typeHandler = EncryptTypeHandler.class} 时生效。
+ * 密钥读取 {@code mybatis-plus.encryptor.password}，为空时加密或解密会失败。</p>
  *
  * @author 李杰
  */

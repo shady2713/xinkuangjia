@@ -4,6 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemSmsTemplateApi } from '#/api/system/sms/template';
 
 import { Page, useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { useCrudItemActions } from '#/composables/use-crud-actions';
@@ -42,11 +43,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        /** 按当前页、筛选条件和表格排序查询列表。 */
+        query: async ({ page, sorts }, formValues) => {
           return await getSmsTemplatePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

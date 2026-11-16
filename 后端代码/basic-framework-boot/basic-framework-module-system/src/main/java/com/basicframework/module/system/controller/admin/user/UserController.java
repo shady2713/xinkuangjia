@@ -274,13 +274,16 @@ public class UserController {
     }
 
     /**
-     * 导入模板。
+     * 下载用户导入模板。
+     *
+     * <p>只提供给具备用户导入权限的操作者，避免未授权账号获取导入列结构。</p>
      *
      * @param response HTTP 响应
-     * @throws IOException 执行失败时抛出
+     * @throws IOException Excel 写入失败时抛出
      */
     @GetMapping("/get-import-template")
     @Operation(summary = "获得导入用户模板")
+    @PreAuthorize("@ss.hasPermission('system:user:import')")
     public void importTemplate(HttpServletResponse response) throws IOException {
         // 手动创建导入模板示例数据
         List<UserImportExcelVO> list = Arrays.asList(

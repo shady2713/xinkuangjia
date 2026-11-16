@@ -126,7 +126,12 @@ def run_process(
             )
             try:
                 deadline = time.monotonic() + timeout
-                pending_input = input_bytes
+                if process.stdin is not None:
+                    # 先写完并关闭标准输入。0.2 秒轮询不能中途丢掉未写完的输入，
+                    # 否则解析器会一直等待 EOF，直到整段超时。
+                    if input_bytes:
+                        process.stdin.write(input_bytes)
+                    process.stdin.close()
                 while True:
                     if cancel is not None and cancel.is_set():
                         _terminate(process)
@@ -135,11 +140,9 @@ def run_process(
                     if remaining <= 0:
                         raise subprocess.TimeoutExpired(arguments, timeout)
                     try:
-                        process.communicate(pending_input, timeout=min(0.2, remaining))
+                        process.wait(timeout=min(0.2, remaining))
                         break
                     except subprocess.TimeoutExpired:
-                        # communicate 会保留尚未发送的输入，后续调用不能重复写入。
-                        pending_input = None
                         if stdout.tell() + stderr.tell() > MAX_OUTPUT_BYTES:
                             _terminate(process)
                             raise CheckError("子进程输出超过 32 MiB，已终止")

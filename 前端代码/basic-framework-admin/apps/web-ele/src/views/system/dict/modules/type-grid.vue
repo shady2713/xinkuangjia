@@ -3,6 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDictTypeApi } from '#/api/system/dict/type';
 
 import { useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 
@@ -63,11 +64,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        /** 按当前页、筛选条件和表格排序查询列表。 */
+        query: async ({ page, sorts }, formValues) => {
           return await getDictTypePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

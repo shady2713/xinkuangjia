@@ -24,4 +24,10 @@ public class RoleSimpleRespVO {
     @Schema(description = "角色名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "管理员")
     private String name;
 
+    /**
+     * 角色状态，取值与通用状态枚举一致。下拉据此禁用停用角色。
+     */
+    @Schema(description = "角色状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
+    private Integer status;
+
 }

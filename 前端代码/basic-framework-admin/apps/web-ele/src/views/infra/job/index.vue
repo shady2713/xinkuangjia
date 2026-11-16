@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router';
 
 import { confirm, Page, useVbenModal } from '@vben/common-ui';
 import { InfraJobStatusEnum } from '@vben/constants';
+import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { ElLoading, ElMessage } from 'element-plus';
@@ -125,11 +126,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        /** 按当前页、筛选条件和表格排序查询列表。 */
+        query: async ({ page, sorts }, formValues) => {
           return await getJobPage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

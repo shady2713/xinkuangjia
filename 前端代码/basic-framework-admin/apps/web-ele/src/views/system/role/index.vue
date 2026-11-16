@@ -4,6 +4,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemRoleApi } from '#/api/system/role';
 
 import { Page, useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
@@ -85,11 +86,13 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
+        /** 按当前页、筛选条件和表格排序查询列表。 */
+        query: async ({ page, sorts }, formValues) => {
           return await getRolePage({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },

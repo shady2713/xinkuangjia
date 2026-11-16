@@ -3,13 +3,17 @@ package com.basicframework.framework.common.pojo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 分页查询参数。
+ *
+ * <p>排序字段可选。未传时查询保持原有顺序；传入后由分页实现按字段白名单排序。</p>
  *
  * @author 李杰
  */
@@ -37,5 +41,12 @@ public class PageParam implements Serializable {
     @Min(value = 1, message = "每页条数最小值为 1")
     @Max(value = 200, message = "每页条数最大值为 200")
     private Integer pageSize = PAGE_SIZE;
+
+    /**
+     * 排序字段。为空表示不追加排序。
+     */
+    @Schema(description = "排序字段")
+    @Valid
+    private List<SortingField> sortingFields;
 
 }
