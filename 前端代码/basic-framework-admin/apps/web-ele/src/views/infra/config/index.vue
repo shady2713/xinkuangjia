@@ -63,6 +63,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     keepSource: true,
     proxyConfig: {
       ajax: {
+        /** 按当前页、筛选条件和表格排序查询列表。 */
         query: async ({ page, sorts }, formValues) => {
           return await getConfigPage({
             pageNo: page.currentPage,

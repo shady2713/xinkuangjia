@@ -32,7 +32,10 @@ export interface RoleSimple {
   status: number;
 }
 
-/** 查询角色（精简)列表 */
+/**
+ * 查询角色精简列表。
+ * @returns 只含编号、名称和状态的角色下拉数据，不含数据权限范围
+ */
 export function getSimpleRoleList() {
   return requestClient.get<RoleSimple[]>('/system/role/simple-list');
 }

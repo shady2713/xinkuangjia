@@ -163,8 +163,10 @@ class RequestClient {
 }
 
 /**
- * 把 vxe 多列排序转换成后端分页参数 `sortingFields` 的查询串。
+ * 把 vxe 多列排序转换成后端分页参数 sortingFields 的查询串。
  * 没有排序时返回空对象，避免覆盖调用方已经组装的分页条件。
+ * @param sorts vxe 当前排序列；空数组或空值表示不排序
+ * @returns 可展开到分页查询参数中的 sortingFields 字段
  */
 export const buildSortingField = (sorts: any[]) => {
   if (!sorts || sorts.length === 0) {

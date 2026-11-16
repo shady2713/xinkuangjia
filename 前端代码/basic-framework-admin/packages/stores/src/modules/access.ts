@@ -46,7 +46,8 @@ interface AccessState {
 }
 
 /**
- * @zh_CN 访问权限相关
+ * 保存登录令牌、权限码、菜单和锁屏状态。
+ * 锁屏口令只留在当前页面内存，不写入本地存储。
  */
 export const useAccessStore = defineStore('core-access', {
   actions: {
