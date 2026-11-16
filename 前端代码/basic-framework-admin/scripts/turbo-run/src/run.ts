@@ -6,6 +6,11 @@ interface RunOptions {
   command?: string;
 }
 
+/**
+ * 在声明了目标脚本的工作区包里选出一个包并执行该脚本。
+ * 只有一个候选时直接执行；有多个候选时交互选择。未提供命令、没有候选包或用户取消时结束进程。
+ * @param options 要运行的 pnpm 脚本名，读取其中的 command
+ */
 export async function run(options: RunOptions) {
   const { command } = options;
   if (!command) {
@@ -46,18 +51,3 @@ export async function run(options: RunOptions) {
     stdio: 'inherit',
   });
 }
-
-/**
- * 过滤app包
- * @param root
- * @param packages
- */
-// async function findApps(root: string, packages: Package[]) {
-//   // apps内的
-//   const appPackages = packages.filter((pkg) => {
-//     const viteConfigExists = fs.existsSync(join(pkg.dir, 'vite.config.mts'));
-//     return pkg.dir.startsWith(join(root, 'apps')) && viteConfigExists;
-//   });
-
-//   return appPackages;
-// }
