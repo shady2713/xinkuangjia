@@ -16,14 +16,13 @@ type pluginOptions = GeneratorOptions & {
   importmap?: Array<{ name: string; range?: string }>;
 };
 
-// async function getLatestVersionOfShims() {
-//   const result = await fetch('https://ga.jspm.io/npm:es-module-shims');
-//   const version = result.text();
-//   return version;
-// }
-
+/**
+ * 按 CDN 提供方拼出固定版本的 es-module-shims 地址。
+ * 版本写死为 1.10.0，构建期不访问外网解析最新版本；未知提供方回退到 jspm.io。
+ * @param provide 配置里的 CDN 提供方名称
+ * @returns 可写入 HTML 的 shim 脚本 URL
+ */
 async function getShimsUrl(provide: string) {
-  // const version = await getLatestVersionOfShims();
   const version = '1.10.0';
 
   const shimsSubpath = `dist/es-module-shims.js`;
