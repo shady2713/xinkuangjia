@@ -69,22 +69,26 @@ export class FormApi {
 
   private prevState: null | VbenFormProps = null;
 
+  /**
+   * 创建表单 API，并合并调用方选项与默认状态。
+   * @param options 表单初始化选项。
+   */
   constructor(options: VbenFormProps = {}) {
     const { ...storeState } = options;
 
     const defaultState = getDefaultState();
 
-    this.store = new Store<VbenFormProps>(
-      {
-        ...defaultState,
-        ...storeState,
-      },
-      {
-        onUpdate: () => {
-          this.prevState = this.state;
-          this.state = this.store.state;
-          this.updateState();
-        },
+    this.store = new Store<VbenFormProps>({
+      ...defaultState,
+      ...storeState,
+    });
+    // @tanstack/store 0.11 起 Store 不再接受 onUpdate 选项，改为订阅变更。
+    this.store.subscribe(
+      // 同步 Store 状态并触发表单状态更新。
+      () => {
+        this.prevState = this.state;
+        this.state = this.store.state;
+        this.updateState();
       },
     );
 

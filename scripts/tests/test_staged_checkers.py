@@ -92,6 +92,32 @@ def test_token_measurements_are_not_credentials(line: str) -> None:
     assert secrets._scan_added_line("src/service.py", 1, line) == []
 
 
+def test_lockfile_dependency_package_is_not_credential_assignment() -> None:
+    """锁文件中的 js-tokens 是依赖包名，不应被误判为固定凭据。"""
+    lockfile = DEFAULT_ROOT / "前端代码/basic-framework-admin/pnpm-lock.yaml"
+    expected = "js-tokens" + ": 10.0.0"
+    dependency_line = next(
+        text
+        for text in lockfile.read_text(encoding="utf-8").splitlines()
+        if text.strip() == expected
+    )
+    assert (
+        secrets._scan_added_line(
+            "前端代码/basic-framework-admin/pnpm-lock.yaml",
+            19765,
+            dependency_line,
+        )
+        == []
+    )
+    # 依赖包名豁免不能扩大到普通配置或其他敏感字段。
+    assert secrets._scan_added_line("src/config.yaml", 1, dependency_line)
+    assert secrets._scan_added_line(
+        "前端代码/basic-framework-admin/pnpm-lock.yaml",
+        1,
+        "      " + "access-token" + ": 10.0.0",
+    )
+
+
 @pytest.mark.parametrize("key", ["api_key", "access_token", "max_tokens"])
 def test_fixed_credentials_are_still_rejected(key: str) -> None:
     """字段名称豁免不能放行固定字符串凭据，即使字段声称用于计量。"""

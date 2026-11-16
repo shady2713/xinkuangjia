@@ -54,6 +54,10 @@ PRIVATE_KEY_PAYLOAD_PATTERN = re.compile(r"[A-Za-z0-9+/=]{64,}")
 HUNK_HEADER_PATTERN = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<line>\d+)(?:,\d+)? @@")
 SELF_TEST_PATH = "scripts/security/scan_staged_secrets.py"
 SELF_TEST_ALLOW_MARKER = "# secret-scan: allow-test"
+# 包管理器锁文件由工具生成，依赖包名可能命中敏感词（如 js-tokens）。
+# 仅豁免已确认的依赖包名；锁文件中的密钥前缀、URL 和固定凭据仍按原规则扫描。
+LOCKFILE_PATH_NAMES = frozenset({"package-lock.json", "pnpm-lock.yaml"})
+LOCKFILE_DEPENDENCY_KEYS = frozenset({"js-tokens"})
 
 CONFIG_SUFFIXES = {
     ".cfg",
@@ -648,6 +652,12 @@ def _scan_added_line(
 
     assignment = SENSITIVE_ASSIGNMENT_PATTERN.search(line)
     if assignment is None:
+        return findings
+    # 锁文件依赖项的字段名是包名，不是凭据名；仅放行明确登记过的依赖包名。
+    if (
+        PurePosixPath(path).name in LOCKFILE_PATH_NAMES
+        and assignment.group("key") in LOCKFILE_DEPENDENCY_KEYS
+    ):
         return findings
     # 文档代码块只复用 Python 语法识别，报告路径与其他凭据规则保持原样。
     syntax_path = "snippet.py" if is_python_code else path
