@@ -1,5 +1,5 @@
 ---
-description: "说明 Vue 菜单组件的公开入口、菜单数据和接入边界，供前端页面接入导航时查阅。"
+description: '说明 Vue 菜单组件的公开入口、菜单数据和接入边界，供前端页面接入导航时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 提供 Vue 菜单、普通菜单项和徽标组件，用于前端导航菜单展示。
-
 
 ## 目录
 

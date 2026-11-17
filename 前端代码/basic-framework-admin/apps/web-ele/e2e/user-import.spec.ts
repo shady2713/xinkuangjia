@@ -21,38 +21,35 @@ test.beforeEach(
   },
 );
 
-test(
-  '导入 Excel 后列表可按账号查询到导入用户',
+test('导入 Excel 后列表可按账号查询到导入用户', async ({ page }) => {
   // 覆盖用户导入路径：上传 Excel、提示新增或更新成功、列表可检索到账号。
-  async ({ page }) => {
-    await loginAs(page, adminAccount);
-    await page.goto('./#/system/user');
-    await expect(page.getByText('用户列表')).toBeVisible();
+  await loginAs(page, adminAccount);
+  await page.goto('./#/system/user');
+  await expect(page.getByText('用户列表')).toBeVisible();
 
-    await page.getByRole('button', { name: '导入' }).click();
-    const dialog = page
-      .locator('[role="dialog"]')
-      .filter({ hasText: '导入用户' })
-      .last();
-    await dialog
-      .locator('input[type="file"]')
-      .setInputFiles(fixturePath('user-import.xlsx'));
-    const updateSupport = dialog.locator('.el-switch').first();
-    await updateSupport.click();
-    await expect(updateSupport).toHaveClass(/is-checked/);
-    await dialog.getByRole('button', { name: '确认' }).click();
+  await page.getByRole('button', { name: '导入' }).click();
+  const dialog = page
+    .locator('[role="dialog"]')
+    .filter({ hasText: '导入用户' })
+    .last();
+  await dialog
+    .locator('input[type="file"]')
+    .setInputFiles(fixturePath('user-import.xlsx'));
+  const updateSupport = dialog.locator('.el-switch').first();
+  await updateSupport.click();
+  await expect(updateSupport).toHaveClass(/is-checked/);
+  await dialog.getByRole('button', { name: '确认' }).click();
 
-    await expect(page.locator('.el-message').last()).toContainText(
-      /新增 \d+ 个，更新 \d+ 个/,
-    );
-    await expect(page.locator('.el-message-box')).toHaveCount(0);
+  await expect(page.locator('.el-message').last()).toContainText(
+    /新增 \d+ 个，更新 \d+ 个/,
+  );
+  await expect(page.locator('.el-message-box')).toHaveCount(0);
 
-    await page.getByPlaceholder('请输入用户名称').fill('e2eimportuser');
-    await page.getByRole('button', { name: '搜索' }).first().click();
-    const row = page
-      .locator('.vxe-body--row')
-      .filter({ hasText: 'e2eimportuser' });
-    await expect(row).toBeVisible();
-    await expect(row).toContainText('E2E导入用户');
-  },
-);
+  await page.getByPlaceholder('请输入用户名称').fill('e2eimportuser');
+  await page.getByRole('button', { name: '搜索' }).first().click();
+  const row = page
+    .locator('.vxe-body--row')
+    .filter({ hasText: 'e2eimportuser' });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('E2E导入用户');
+});

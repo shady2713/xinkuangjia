@@ -1,11 +1,5 @@
 export type ButtonVariantSize =
-  | 'default'
-  | 'icon'
-  | 'lg'
-  | 'sm'
-  | 'xs'
-  | null
-  | undefined;
+  'default' | 'icon' | 'lg' | 'sm' | 'xs' | null | undefined;
 
 export type ButtonVariants =
   | 'default'

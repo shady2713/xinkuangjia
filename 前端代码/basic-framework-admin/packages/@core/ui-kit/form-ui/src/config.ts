@@ -66,8 +66,7 @@ export function setupVbenForm<
   const baseModelPropName =
     config?.baseModelPropName ?? DEFAULT_MODEL_PROP_NAME;
   const modelPropNameMap = config?.modelPropNameMap as
-    | Record<BaseFormComponentType, string>
-    | undefined;
+    Record<BaseFormComponentType, string> | undefined;
 
   const components = globalShareState.getComponents();
 

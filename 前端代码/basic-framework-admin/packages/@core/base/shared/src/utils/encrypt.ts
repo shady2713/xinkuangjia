@@ -120,10 +120,14 @@ export const AjCaptchaAES = {
     try {
       assertAesKey(key, '验证码加密');
 
-      const encrypted = CryptoJS.AES.encrypt(data, CryptoJS.enc.Utf8.parse(key), {
-        mode: CryptoJS.mode.ECB,
-        padding: CryptoJS.pad.Pkcs7,
-      });
+      const encrypted = CryptoJS.AES.encrypt(
+        data,
+        CryptoJS.enc.Utf8.parse(key),
+        {
+          mode: CryptoJS.mode.ECB,
+          padding: CryptoJS.pad.Pkcs7,
+        },
+      );
       return CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
     } catch (error) {
       logError('AJ captcha AES encrypt failed', error);

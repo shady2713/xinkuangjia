@@ -10,7 +10,8 @@ import type { BrowserContext, Page, Response } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 /** 后端服务地址；本地 e2e 可用 E2E_BACKEND_URL 指向其他实例。 */
-export const backendUrl = process.env.E2E_BACKEND_URL ?? 'http://127.0.0.1:48080';
+export const backendUrl =
+  process.env.E2E_BACKEND_URL ?? 'http://127.0.0.1:48080';
 
 /** 登录用例使用的测试账号。 */
 export type TestAccount = {

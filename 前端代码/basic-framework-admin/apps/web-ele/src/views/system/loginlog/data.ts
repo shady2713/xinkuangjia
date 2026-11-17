@@ -141,8 +141,8 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'createTime',
       label: '登录日期',
-      render: (val) => formatDateTime(val as Date | string | undefined) as string,
+      render: (val) =>
+        formatDateTime(val as Date | string | undefined) as string,
     },
   ];
 }
-

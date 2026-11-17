@@ -190,4 +190,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

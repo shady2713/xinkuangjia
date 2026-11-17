@@ -13,7 +13,11 @@ export interface CronLoop<TStart = number, TEnd = number> {
   end: TEnd | undefined;
 }
 
-export interface CronItem<TRange = number, TLoopStart = number, TLoopEnd = number> {
+export interface CronItem<
+  TRange = number,
+  TLoopStart = number,
+  TLoopEnd = number,
+> {
   type: string;
   range: CronRange<TRange>;
   loop: CronLoop<TLoopStart, TLoopEnd>;
@@ -264,4 +268,3 @@ export const CronDataDefault: CronData = {
   ],
   year: getYear(),
 };
-

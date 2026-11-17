@@ -51,6 +51,10 @@ export function deleteSmsTemplate(id: number) {
 }
 
 /** 发送测试短信 */
-export function sendSms(data: { templateCode: string; templateParams: Record<string, object>; mobile: string }) {
+export function sendSms(data: {
+  templateCode: string;
+  templateParams: Record<string, object>;
+  mobile: string;
+}) {
   return requestClient.post('/system/sms-template/send-sms', data);
 }

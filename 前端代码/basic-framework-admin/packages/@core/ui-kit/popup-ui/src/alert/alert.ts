@@ -63,10 +63,7 @@ export type PromptProps<T = any> = {
   componentProps?: Recordable<any>;
   /** 输入组件的插槽 */
   componentSlots?:
-    | (() => any)
-    | Recordable<unknown>
-    | VNode
-    | VNodeArrayChildren;
+    (() => any) | Recordable<unknown> | VNode | VNodeArrayChildren;
   /** 默认值 */
   defaultValue?: T;
   /** 输入组件的值属性名 */

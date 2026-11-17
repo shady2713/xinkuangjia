@@ -1,13 +1,7 @@
 import type { ButtonProps } from 'element-plus';
 
 export type ButtonType =
-  | 'danger'
-  | 'default'
-  | 'info'
-  | 'primary'
-  | 'success'
-  | 'text'
-  | 'warning';
+  'danger' | 'default' | 'info' | 'primary' | 'success' | 'text' | 'warning';
 
 export interface PopConfirm {
   title: string;

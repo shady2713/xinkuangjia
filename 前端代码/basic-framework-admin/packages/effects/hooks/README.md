@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/hooks 的 Vue 组合函数，供应用复用分页、标签页和配置等能力时查阅。"
+description: '说明 @vben/hooks 的 Vue 组合函数，供应用复用分页、标签页和配置等能力时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的 hook，同时导出 `@vben-core/composables` 的组合函数。业务上有通用 hooks 可以放在这里。
-
 
 ## 目录
 

@@ -172,7 +172,8 @@ function hasOwnProp(props: Record<string, any>, key: string) {
 
 function isTextInputComponent() {
   return (
-    isString(component) && ['Input', 'Textarea', 'VbenInput'].includes(component)
+    isString(component) &&
+    ['Input', 'Textarea', 'VbenInput'].includes(component)
   );
 }
 
@@ -186,7 +187,8 @@ function isNumberInputComponent(props: Record<string, any>) {
 }
 
 function getDefaultTextMaxLength(props: Record<string, any>) {
-  const fieldIdentity = `${fieldName} ${isString(label) ? label : ''}`.toLowerCase();
+  const fieldIdentity =
+    `${fieldName} ${isString(label) ? label : ''}`.toLowerCase();
   const inputType = String(props.type || '').toLowerCase();
 
   if (
@@ -207,7 +209,11 @@ function getDefaultTextMaxLength(props: Record<string, any>) {
     return DEFAULT_LINK_MAX_LENGTH;
   }
 
-  if (/name|title|label|code|key|名称|标题|标签|编码|代码|关键字|关键词/.test(fieldIdentity)) {
+  if (
+    /name|title|label|code|key|名称|标题|标签|编码|代码|关键字|关键词/.test(
+      fieldIdentity,
+    )
+  ) {
     return DEFAULT_NAME_MAX_LENGTH;
   }
 
@@ -236,14 +242,18 @@ function appendDefaultLimitProps(props: MaybeComponentProps = {}) {
   }
 
   // 文本字段默认补长度上限；已有 maxlength/maxLength 的页面配置优先。
-  if (!hasOwnProp(finalProps, 'maxlength') && !hasOwnProp(finalProps, 'maxLength')) {
+  if (
+    !hasOwnProp(finalProps, 'maxlength') &&
+    !hasOwnProp(finalProps, 'maxLength')
+  ) {
     finalProps.maxlength = getDefaultTextMaxLength(finalProps);
   }
 
   if (
     isString(component) &&
     ['Input', 'Textarea'].includes(component) &&
-    (hasOwnProp(finalProps, 'maxlength') || hasOwnProp(finalProps, 'maxLength')) &&
+    (hasOwnProp(finalProps, 'maxlength') ||
+      hasOwnProp(finalProps, 'maxLength')) &&
     !hasOwnProp(finalProps, 'showWordLimit')
   ) {
     // 有长度上限的 Element Plus 文本框统一显示“当前字数/上限”，让限制在表单上可见。

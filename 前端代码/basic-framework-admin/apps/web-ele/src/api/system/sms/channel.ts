@@ -48,6 +48,10 @@ export function deleteSmsChannel(id: number) {
 }
 
 /** 发送测试短信 */
-export function sendTestSms(data: { templateCode: string; templateParams: Record<string, object>; mobile: string }) {
+export function sendTestSms(data: {
+  templateCode: string;
+  templateParams: Record<string, object>;
+  mobile: string;
+}) {
   return requestClient.post('/system/sms-channel/test-sms', data);
 }

@@ -69,7 +69,8 @@ const {
 
 /** 直接从表格读取当前选中行，避免事件参数带缓存 */
 function handleRowCheckboxChange() {
-  const records = (gridApi.grid?.getCheckboxRecords?.() || []) as SystemDeptApi.Dept[];
+  const records = (gridApi.grid?.getCheckboxRecords?.() ||
+    []) as SystemDeptApi.Dept[];
   checkedIds.value = records.map((row) => row.id!);
 }
 

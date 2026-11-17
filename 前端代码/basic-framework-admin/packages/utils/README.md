@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/utils 的公共工具函数，供应用复用基础处理、缓存及校验辅助能力时查阅。"
+description: '说明 @vben/utils 的公共工具函数，供应用复用基础处理、缓存及校验辅助能力时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的工具包，继承了 `@vben-core/shared/utils` 的所有能力。业务上有通用的工具函数可以放在这里。
-
 
 ## 目录
 

@@ -26,7 +26,10 @@ export function useFormSchema(): VbenFormSchema[] {
       componentProps: {
         placeholder: '请输入参数分类',
       },
-      rules: z.string().min(1, '请输入参数分类').max(50, '参数分类不能超过50个字符'),
+      rules: z
+        .string()
+        .min(1, '请输入参数分类')
+        .max(50, '参数分类不能超过50个字符'),
     },
     {
       fieldName: 'name',

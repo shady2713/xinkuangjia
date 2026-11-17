@@ -22,18 +22,14 @@ function handleRefresh() {
   gridApi.query();
 }
 
-const {
-  checkedIds,
-  handleDelete,
-  handleDeleteBatch,
-  handleRowCheckboxChange,
-} = useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
-  batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
-  deleteApi: deleteOAuth2Token,
-  getDeleteName: () => '令牌',
-  getRowKey: (row) => row.accessToken,
-  refresh: handleRefresh,
-});
+const { checkedIds, handleDelete, handleDeleteBatch, handleRowCheckboxChange } =
+  useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
+    batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
+    deleteApi: deleteOAuth2Token,
+    getDeleteName: () => '令牌',
+    getRowKey: (row) => row.accessToken,
+    refresh: handleRefresh,
+  });
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {

@@ -13,7 +13,6 @@ import { ElTimeline, ElTimelineItem } from 'element-plus';
 import { CronTab } from '#/components/cron-tab';
 import { DictTag } from '#/components/dict-tag';
 
-
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -253,4 +252,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

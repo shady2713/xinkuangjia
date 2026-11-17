@@ -8,7 +8,10 @@ import { isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { logError } from '@vben/utils';
 
-import { buildRequiredPasswordSchema, buildRequiredUsernameSchema } from '#/adapter/form';
+import {
+  buildRequiredPasswordSchema,
+  buildRequiredUsernameSchema,
+} from '#/adapter/form';
 import { checkCaptcha, getCaptcha } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
 
@@ -32,7 +35,11 @@ async function handleRegister(values: Record<string, unknown>) {
   await authStore.authLogin('register', values);
 }
 
-const handleVerifySuccess = async ({ captchaVerification }: { captchaVerification: string }) => {
+const handleVerifySuccess = async ({
+  captchaVerification,
+}: {
+  captchaVerification: string;
+}) => {
   try {
     await authStore.authLogin('register', {
       ...(await registerRef.value.getFormApi().getValues()),
@@ -86,12 +93,11 @@ const formSchema = computed((): VbenFormSchema[] => {
       dependencies: {
         rules(values) {
           const { password } = values;
-          return buildRequiredPasswordSchema($t('authentication.confirmPassword')).refine(
-            (value) => value === password,
-            {
-              message: $t('authentication.confirmPasswordTip'),
-            },
-          );
+          return buildRequiredPasswordSchema(
+            $t('authentication.confirmPassword'),
+          ).refine((value) => value === password, {
+            message: $t('authentication.confirmPasswordTip'),
+          });
         },
         triggerFields: ['password'],
       },

@@ -1,5 +1,5 @@
 ---
-description: "说明 @vben/constants 的公共常量入口，供多个应用复用业务枚举与基础常量时查阅。"
+description: '说明 @vben/constants 的公共常量入口，供多个应用复用业务枚举与基础常量时查阅。'
 kind: package-library
 ---
 
@@ -8,7 +8,6 @@ kind: package-library
 ## 摘要
 
 用于多个 `app` 公用的常量，继承了 `@vben-core/shared/constants` 的所有能力。业务上有通用常量可以放在这里。
-
 
 ## 目录
 

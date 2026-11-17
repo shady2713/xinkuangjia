@@ -26,4 +26,3 @@ describe('feedback utils', () => {
     );
   });
 });
-

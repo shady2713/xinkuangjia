@@ -7,7 +7,6 @@ import { Page, useVbenModal } from '@vben/common-ui';
 import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteConfig,

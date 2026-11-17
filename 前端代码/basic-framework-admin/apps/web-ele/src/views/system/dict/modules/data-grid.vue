@@ -8,7 +8,6 @@ import { useVbenModal } from '@vben/common-ui';
 import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
-
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { useCrudActions } from '#/composables/use-crud-actions';
 import {
@@ -56,7 +55,8 @@ const {
   handleEdit,
 } = useCrudActions<SystemDictDataApi.DictData>({
   batchDeleteApi: deleteDictDataList,
-  createData: () => ({ dictType: props.dictType }) as SystemDictDataApi.DictData,
+  createData: () =>
+    ({ dictType: props.dictType }) as SystemDictDataApi.DictData,
   deleteApi: deleteDictData,
   getDeleteName: (row) => row.label || '',
   modalApi: dataFormModalApi,

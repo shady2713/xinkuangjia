@@ -19,31 +19,25 @@ test.beforeEach(
   },
 );
 
-test(
-  '管理员使用正确账号密码登录后进入概览页',
+test('管理员使用正确账号密码登录后进入概览页', async ({ page }) => {
   // 覆盖登录成功路径：接口返回成功、页面进入概览且管理菜单可见。
-  async ({ page }) => {
-    const response = await submitLogin(page, adminAccount);
-    const payload = await response.json();
-    expect(payload.code).toBe(0);
-    await page.waitForURL(/#\/dashboard/);
+  const response = await submitLogin(page, adminAccount);
+  const payload = await response.json();
+  expect(payload.code).toBe(0);
+  await page.waitForURL(/#\/dashboard/);
 
-    await expect(page.getByText('系统管理', { exact: true })).toBeVisible();
-    await expect(page.locator('body')).toContainText('管理员');
-  },
-);
+  await expect(page.getByText('系统管理', { exact: true })).toBeVisible();
+  await expect(page.locator('body')).toContainText('管理员');
+});
 
-test(
-  '错误密码停留在登录页并提示登录失败',
+test('错误密码停留在登录页并提示登录失败', async ({ page }) => {
   // 覆盖凭据失败路径：接口返回错误码、页面不跳转并显示统一失败提示。
-  async ({ page }) => {
-    const response = await submitLogin(page, unknownAccount);
-    const payload = await response.json();
-    expect(payload.code).not.toBe(0);
+  const response = await submitLogin(page, unknownAccount);
+  const payload = await response.json();
+  expect(payload.code).not.toBe(0);
 
-    await expect(page).toHaveURL(/#\/auth\/login/);
-    await expect(page.locator('.el-message')).toContainText(
-      '登录失败，账号密码不正确',
-    );
-  },
-);
+  await expect(page).toHaveURL(/#\/auth\/login/);
+  await expect(page.locator('.el-message')).toContainText(
+    '登录失败，账号密码不正确',
+  );
+});

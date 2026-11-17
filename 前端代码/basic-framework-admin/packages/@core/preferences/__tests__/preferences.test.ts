@@ -55,7 +55,6 @@ describe('preferences', () => {
     expect(preferenceManager.getPreferences()).toEqual(expected);
   });
 
-
   it('updates theme mode correctly', () => {
     preferenceManager.updatePreferences({
       theme: {

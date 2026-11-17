@@ -142,7 +142,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'traceId',
       label: '链路追踪',
-      show: (...args) => !((args[0] as OperateLogDetail | undefined)?.traceId),
+      show: (...args) => !(args[0] as OperateLogDetail | undefined)?.traceId,
     },
     {
       field: 'userId',
@@ -152,7 +152,10 @@ export function useDetailSchema(): DescriptionItemSchema[] {
       field: 'userType',
       label: '操作人类型',
       render: (val) =>
-        h(DictTag, { type: DICT_TYPE.USER_TYPE, value: val as string | number | boolean }),
+        h(DictTag, {
+          type: DICT_TYPE.USER_TYPE,
+          value: val as string | number | boolean,
+        }),
     },
     {
       field: 'userName',
@@ -197,7 +200,8 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'createTime',
       label: '操作时间',
-      render: (val) => formatDateTime(val as Date | string | undefined) as string,
+      render: (val) =>
+        formatDateTime(val as Date | string | undefined) as string,
     },
     {
       field: 'bizId',
@@ -205,4 +209,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

@@ -7,7 +7,11 @@ import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
 import { handleTree } from '@vben/utils';
 
-import { buildOptionalEmailSchema, buildOptionalMobileSchema, z } from '#/adapter/form';
+import {
+  buildOptionalEmailSchema,
+  buildOptionalMobileSchema,
+  z,
+} from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 
@@ -127,7 +131,8 @@ export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['colum
       title: '负责人',
       minWidth: 150,
       formatter: ({ cellValue }) =>
-        userList.find((user) => String(user.id) === String(cellValue))?.nickname || '-',
+        userList.find((user) => String(user.id) === String(cellValue))
+          ?.nickname || '-',
     },
     {
       field: 'sort',

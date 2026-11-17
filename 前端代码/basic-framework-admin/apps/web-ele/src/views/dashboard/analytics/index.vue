@@ -19,7 +19,11 @@ const userRoles = computed(() => userStore.userRoles);
 const quickLinks = [
   { title: '用户管理', path: '/system/user', description: '管理系统用户账号' },
   { title: '角色管理', path: '/system/role', description: '配置角色与权限' },
-  { title: '部门管理', path: '/system/dept', description: '组织架构与部门管理' },
+  {
+    title: '部门管理',
+    path: '/system/dept',
+    description: '组织架构与部门管理',
+  },
   { title: '字典管理', path: '/system/dict', description: '维护系统字典数据' },
 ].filter((link) => accessStore.getMenuByPath(link.path));
 
@@ -45,7 +49,9 @@ function getGreeting(): string {
       <div class="welcome-content">
         <div class="welcome-text">
           <h1 class="welcome-title">
-            {{ getGreeting() }}，{{ userInfo?.nickname || userInfo?.username || '用户' }}
+            {{ getGreeting() }}，{{
+              userInfo?.nickname || userInfo?.username || '用户'
+            }}
           </h1>
           <p class="welcome-desc">欢迎回到管理系统后台</p>
         </div>

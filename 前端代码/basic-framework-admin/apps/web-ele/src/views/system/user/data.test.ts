@@ -60,7 +60,9 @@ import { useFormSchema } from './data';
 
 describe('system user form schema', () => {
   it('新增用户密码字段使用与个人中心一致的密码组件和规则', () => {
-    const passwordField = useFormSchema().find((item) => item.fieldName === 'password');
+    const passwordField = useFormSchema().find(
+      (item) => item.fieldName === 'password',
+    );
 
     // 锁定新增用户密码项，避免后续回退成仅必填但不校验复杂度的表单配置。
     expect(passwordField).toMatchObject({
