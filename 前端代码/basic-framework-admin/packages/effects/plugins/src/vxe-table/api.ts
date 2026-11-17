@@ -39,17 +39,23 @@ export class VxeGridApi<T extends Record<string, any> = any> {
 
   private stateHandler: StateHandler;
 
+  /**
+   * 创建表格 API，并将调用方选项与默认状态合并。
+   * @param options 表格初始化选项。
+   */
   constructor(options: VxeGridProps = {}) {
     const storeState = { ...options };
 
     const defaultState = getDefaultState();
     this.store = new Store<VxeGridProps>(
       mergeWithArrayOverride(storeState, defaultState),
-      {
-        onUpdate: () => {
-          // this.prevState = this.state;
-          this.state = this.store.state;
-        },
+    );
+    // @tanstack/store 0.11 起 Store 不再接受 onUpdate 选项，改为订阅变更。
+    this.store.subscribe(
+      // 同步 Store 状态到表格 API。
+      () => {
+        // this.prevState = this.state;
+        this.state = this.store.state;
       },
     );
 

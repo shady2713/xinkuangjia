@@ -4,33 +4,68 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ModalApi } from '../modal-api';
 
-vi.mock('@vben-core/shared/store', () => {
-  return {
-    isFunction: (fn: any) => typeof fn === 'function',
-    Store: class {
-      get state() {
-        return this._state;
-      }
-      private _state: ModalState;
+vi.mock(
+  '@vben-core/shared/store',
+  // 以轻量 Store 替身隔离真实依赖。
+  () => {
+    return {
+      // 判断值是否为函数。
+      isFunction: (fn: any) => typeof fn === 'function',
+      Store: class {
+        /**
+         * 读取当前模拟状态。
+         * @returns 当前状态。
+         */
+        get state() {
+          return this._state;
+        }
+        private _listeners = new Set<any>();
 
-      private options: any;
+        private _state: ModalState;
 
-      constructor(initialState: ModalState, options: any) {
-        this._state = initialState;
-        this.options = options;
-      }
+        /**
+         * 创建模拟 Store 并保存初始状态。
+         * @param initialState 初始状态。
+         */
+        constructor(initialState: ModalState) {
+          this._state = initialState;
+        }
 
-      batch(cb: () => void) {
-        cb();
-      }
+        /**
+         * 执行批量更新。
+         * @param cb 批量更新回调。
+         */
+        batch(cb: any) {
+          cb();
+        }
 
-      setState(fn: (prev: ModalState) => ModalState) {
-        this._state = fn(this._state);
-        this.options.onUpdate();
-      }
-    },
-  };
-});
+        /**
+         * 更新模拟状态并通知订阅者。
+         * @param fn 状态更新函数。
+         */
+        setState(fn: any) {
+          this._state = fn(this._state);
+          for (const listener of this._listeners) {
+            listener();
+          }
+        }
+
+        /**
+         * 订阅模拟状态变更。
+         * @param listener 状态变更回调。
+         * @returns 取消订阅函数。
+         */
+        subscribe(listener: any) {
+          this._listeners.add(listener);
+          return {
+            /** 取消订阅并移除监听器。 */
+            unsubscribe: () => this._listeners.delete(listener),
+          };
+        }
+      },
+    };
+  },
+);
 
 describe('modalApi', () => {
   let modalApi: ModalApi;

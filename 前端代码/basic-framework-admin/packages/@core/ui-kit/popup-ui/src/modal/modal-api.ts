@@ -23,6 +23,10 @@ export class ModalApi {
   // private prevState!: ModalState;
   private state!: ModalState;
 
+  /**
+   * 创建弹窗 API，并合并调用方选项与默认状态。
+   * @param options 弹窗初始化选项。
+   */
   constructor(options: ModalApiOptions = {}) {
     const {
       connectedComponent: _,
@@ -62,23 +66,23 @@ export class ModalApi {
       animationType: 'slide',
     };
 
-    this.store = new Store<ModalState>(
-      {
-        ...defaultState,
-        ...storeState,
-      },
-      {
-        onUpdate: () => {
-          const state = this.store.state;
+    this.store = new Store<ModalState>({
+      ...defaultState,
+      ...storeState,
+    });
+    // @tanstack/store 0.11 起 Store 不再接受 onUpdate 选项，改为订阅变更。
+    this.store.subscribe(
+      // 同步 Store 状态，并在开关状态变化时通知 onOpenChange。
+      () => {
+        const state = this.store.state;
 
-          // 每次更新状态时，都会调用 onOpenChange 回调函数
-          if (state?.isOpen === this.state?.isOpen) {
-            this.state = state;
-          } else {
-            this.state = state;
-            this.api.onOpenChange?.(!!state?.isOpen);
-          }
-        },
+        // 每次更新状态时，都会调用 onOpenChange 回调函数
+        if (state?.isOpen === this.state?.isOpen) {
+          this.state = state;
+        } else {
+          this.state = state;
+          this.api.onOpenChange?.(!!state?.isOpen);
+        }
       },
     );
 

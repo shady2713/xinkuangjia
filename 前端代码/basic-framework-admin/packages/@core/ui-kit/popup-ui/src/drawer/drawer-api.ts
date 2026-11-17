@@ -23,6 +23,10 @@ export class DrawerApi {
   // private prevState!: DrawerState;
   private state!: DrawerState;
 
+  /**
+   * 创建抽屉 API，并合并调用方选项与默认状态。
+   * @param options 抽屉初始化选项。
+   */
   constructor(options: DrawerApiOptions = {}) {
     const {
       connectedComponent: _,
@@ -56,21 +60,21 @@ export class DrawerApi {
       title: '',
     };
 
-    this.store = new Store<DrawerState>(
-      {
-        ...defaultState,
-        ...storeState,
-      },
-      {
-        onUpdate: () => {
-          const state = this.store.state;
-          if (state?.isOpen === this.state?.isOpen) {
-            this.state = state;
-          } else {
-            this.state = state;
-            this.api.onOpenChange?.(!!state?.isOpen);
-          }
-        },
+    this.store = new Store<DrawerState>({
+      ...defaultState,
+      ...storeState,
+    });
+    // @tanstack/store 0.11 起 Store 不再接受 onUpdate 选项，改为订阅变更。
+    this.store.subscribe(
+      // 同步 Store 状态，并在开关状态变化时通知 onOpenChange。
+      () => {
+        const state = this.store.state;
+        if (state?.isOpen === this.state?.isOpen) {
+          this.state = state;
+        } else {
+          this.state = state;
+          this.api.onOpenChange?.(!!state?.isOpen);
+        }
       },
     );
     this.state = this.store.state;

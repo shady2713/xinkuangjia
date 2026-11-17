@@ -19,7 +19,10 @@ const sidebarCollapsedShowTitle = defineModel<boolean>(
 const sidebarCollapsed = defineModel<boolean>('sidebarCollapsed');
 const sidebarExpandOnHover = defineModel<boolean>('sidebarExpandOnHover');
 
-const sidebarButtons = defineModel<string[]>('sidebarButtons', { default: [] });
+const sidebarButtons = defineModel<string[]>('sidebarButtons', {
+  /** 默认不选中任何侧栏按钮。 */
+  default: () => [],
+});
 const sidebarCollapsedButton = defineModel<boolean>('sidebarCollapsedButton');
 const sidebarFixedButton = defineModel<boolean>('sidebarFixedButton');
 
