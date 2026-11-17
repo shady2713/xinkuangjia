@@ -143,10 +143,13 @@ export async function loginAs(
     data?: { accessToken?: string };
   };
   const loginData = payload.data;
-  const accessToken = loginData === undefined ? undefined : loginData.accessToken;
-  if (!accessToken) {
+  if (loginData === undefined) {
+    throw new Error(`登录失败：${JSON.stringify(payload)}`);
+  }
+  const loginGrant = loginData.accessToken;
+  if (!loginGrant) {
     throw new Error(`登录失败：${JSON.stringify(payload)}`);
   }
   await page.waitForURL(/#\/dashboard/);
-  return accessToken;
+  return loginGrant;
 }

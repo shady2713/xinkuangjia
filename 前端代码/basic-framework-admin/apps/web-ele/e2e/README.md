@@ -45,8 +45,7 @@ pnpm exec playwright install chromium
 
 ```powershell
 # 在 前端代码/basic-framework-admin 下执行
-$env:E2E_ADMIN_PASSWORD='Test@123456'
-$env:E2E_LIMITED_PASSWORD='E2eLimited@123'
+# 先把 E2E_ADMIN_PASSWORD、E2E_LIMITED_PASSWORD 设成「测试数据」表中的对应口令
 pnpm -F @vben/web-ele test:e2e
 
 # 或使用仓库统一入口（同样需要本地后端与测试库）
