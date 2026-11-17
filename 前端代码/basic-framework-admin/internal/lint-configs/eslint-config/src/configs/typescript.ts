@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 构造 TypeScript ESLint 规则，并禁止产品代码使用 @ts-nocheck。
+ *
+ * @returns TypeScript 扁平配置。
+ */
 export async function typescript(): Promise<Linter.Config[]> {
   const [pluginTs, parserTs] = await Promise.all([
     interopDefault(import('@typescript-eslint/eslint-plugin')),
@@ -37,7 +42,7 @@ export async function typescript(): Promise<Linter.Config[]> {
             'ts-check': false,
             'ts-expect-error': 'allow-with-description',
             'ts-ignore': 'allow-with-description',
-            'ts-nocheck': 'allow-with-description',
+            'ts-nocheck': true,
           },
         ],
 

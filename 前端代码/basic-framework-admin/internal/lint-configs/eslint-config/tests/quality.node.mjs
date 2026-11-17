@@ -21,6 +21,8 @@ import {
 } from '../src/rules/quality-scope.mjs';
 import { checkWebFile } from '../src/rules/web-comments.mjs';
 
+import './footguns.node.mjs';
+
 const frontend = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = join(frontend, 'scripts/check-quality.mjs');
 
