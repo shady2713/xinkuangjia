@@ -3,6 +3,9 @@ import type { ModalApiOptions, ModalState } from './modal';
 import { Store } from '@vben-core/shared/store';
 import { bindMethods, isFunction } from '@vben-core/shared/utils';
 
+/** 基于上一状态计算部分更新 */
+type ModalStateUpdater = (prev: ModalState) => Partial<ModalState>;
+
 export class ModalApi {
   // 共享数据
   public sharedData: Record<'payload', any> = {
@@ -177,10 +180,12 @@ export class ModalApi {
     return this;
   }
 
-  setState(
-    stateOrFn:
-      ((prev: ModalState) => Partial<ModalState>) | Partial<ModalState>,
-  ) {
+  /**
+   * 更新弹窗状态
+   * @param stateOrFn 新的部分状态，或基于上一状态计算的更新函数
+   * @returns 当前 API 实例，便于链式调用
+   */
+  setState(stateOrFn: ModalStateUpdater | Partial<ModalState>) {
     if (isFunction(stateOrFn)) {
       this.store.setState(stateOrFn);
     } else {

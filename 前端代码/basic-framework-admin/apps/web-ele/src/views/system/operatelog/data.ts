@@ -132,7 +132,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-/** 详情页的字段 */
+/**
+ * 详情页的字段
+ * @returns 详情描述项列表
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -142,6 +145,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'traceId',
       label: '链路追踪',
+      // 没有链路追踪编号时不展示该字段
       show: (...args) => !(args[0] as OperateLogDetail | undefined)?.traceId,
     },
     {
@@ -151,6 +155,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'userType',
       label: '操作人类型',
+      // 用字典标签展示操作人类型
       render: (val) =>
         h(DictTag, {
           type: DICT_TYPE.USER_TYPE,
@@ -200,6 +205,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'createTime',
       label: '操作时间',
+      // 把操作时间格式化成详情展示文案
       render: (val) =>
         formatDateTime(val as Date | string | undefined) as string,
     },

@@ -170,6 +170,7 @@ function hasOwnProp(props: Record<string, any>, key: string) {
   return Object.prototype.hasOwnProperty.call(props, key);
 }
 
+/** 判断当前组件是否为文本输入 */
 function isTextInputComponent() {
   return (
     isString(component) &&
@@ -186,6 +187,11 @@ function isNumberInputComponent(props: Record<string, any>) {
   );
 }
 
+/**
+ * 按字段语义给出默认文本长度上限
+ * @param props 组件属性
+ * @returns 默认最大长度
+ */
 function getDefaultTextMaxLength(props: Record<string, any>) {
   const fieldIdentity =
     `${fieldName} ${isString(label) ? label : ''}`.toLowerCase();
@@ -220,6 +226,11 @@ function getDefaultTextMaxLength(props: Record<string, any>) {
   return DEFAULT_INPUT_MAX_LENGTH;
 }
 
+/**
+ * 为数字和文本输入补上默认范围或长度限制
+ * @param props 组件属性
+ * @returns 合并默认限制后的属性
+ */
 function appendDefaultLimitProps(props: MaybeComponentProps = {}) {
   const finalProps: Record<string, any> = { ...props };
 

@@ -5,12 +5,15 @@ import { defineComponent, h } from 'vue';
 
 import { isFunction, isObject, isString } from '@vben-core/shared/utils';
 
+/** 可渲染的函数内容 */
+type RenderContentFn = () => any;
+
 export default defineComponent({
   name: 'RenderContent',
   props: {
     content: {
       default: undefined as
-        PropType<(() => any) | Component | string> | undefined,
+        PropType<Component | RenderContentFn | string> | undefined,
       type: [Object, String, Function],
     },
     renderBr: {

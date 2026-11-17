@@ -116,6 +116,10 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/**
+ * 部门列表的表格列配置
+ * @returns 表格列定义
+ */
 export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['columns'] {
   return [
     { type: 'checkbox', width: 40, fixed: 'left' },
@@ -130,9 +134,12 @@ export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['colum
       field: 'leaderUserId',
       title: '负责人',
       minWidth: 150,
+      // 把负责人编号显示成用户昵称
       formatter: ({ cellValue }) =>
-        userList.find((user) => String(user.id) === String(cellValue))
-          ?.nickname || '-',
+        userList.find(
+          // 按单元格中的用户编号匹配负责人昵称
+          (user) => String(user.id) === String(cellValue),
+        )?.nickname || '-',
     },
     {
       field: 'sort',

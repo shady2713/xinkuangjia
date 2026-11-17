@@ -48,10 +48,13 @@ const getIconWidth = computed(
 
 const getStyle = computed((): CSSProperties => ({ width: unref(getWidth) }));
 
-const getImageWrapperStyle = computed((): CSSProperties => ({
-  height: unref(getWidth),
-  width: unref(getWidth),
-}));
+const getImageWrapperStyle = computed(
+  /** 头像裁剪预览区域的宽高样式 */
+  (): CSSProperties => ({
+    height: unref(getWidth),
+    width: unref(getWidth),
+  }),
+);
 
 watchEffect(() => {
   sourceValue.value = props.value || '';

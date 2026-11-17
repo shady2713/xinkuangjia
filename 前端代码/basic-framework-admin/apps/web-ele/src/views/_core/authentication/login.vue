@@ -33,6 +33,7 @@ async function handleLogin(values: Record<string, unknown>) {
   await authStore.authLogin('username', values);
 }
 
+/** 验证码通过后携带校验串完成登录 */
 async function handleVerifySuccess({
   captchaVerification,
 }: {

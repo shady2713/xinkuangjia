@@ -7,7 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import {
   adminAccount,
@@ -23,8 +23,14 @@ test.beforeEach(
   },
 );
 
-test('上传图片后可从文件列表下载相同内容', async ({ context, page }) => {
-  // 覆盖文件上传到下载的完整路径：上传成功、记录可见、下载字节与上传一致。
+/** 覆盖文件上传到下载的完整路径：上传成功、记录可见、下载字节与上传一致。 */
+async function uploadImageAndDownloadSameContent({
+  context,
+  page,
+}: {
+  context: BrowserContext;
+  page: Page;
+}) {
   const buffer = readFileSync(fixturePath('upload-sample.png'));
   const fileName = `e2e-upload-${Date.now()}.png`;
 
@@ -56,4 +62,6 @@ test('上传图片后可从文件列表下载相同内容', async ({ context, pa
   const response = await context.request.get(popup.url());
   expect(response.status()).toBe(200);
   expect(Buffer.compare(await response.body(), buffer)).toBe(0);
-});
+}
+
+test('上传图片后可从文件列表下载相同内容', uploadImageAndDownloadSameContent);

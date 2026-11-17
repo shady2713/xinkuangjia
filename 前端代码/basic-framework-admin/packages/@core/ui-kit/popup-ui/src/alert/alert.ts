@@ -4,6 +4,9 @@ import type { Recordable } from '@vben-core/typings';
 
 import { createContext } from '@vben-core/shadcn-ui';
 
+/** 输入组件的插槽渲染函数 */
+type AlertComponentSlotFn = () => any;
+
 export type IconType = 'error' | 'info' | 'question' | 'success' | 'warning';
 
 export type BeforeCloseScope = {
@@ -63,7 +66,7 @@ export type PromptProps<T = any> = {
   componentProps?: Recordable<any>;
   /** 输入组件的插槽 */
   componentSlots?:
-    (() => any) | Recordable<unknown> | VNode | VNodeArrayChildren;
+    AlertComponentSlotFn | Recordable<unknown> | VNode | VNodeArrayChildren;
   /** 默认值 */
   defaultValue?: T;
   /** 输入组件的值属性名 */

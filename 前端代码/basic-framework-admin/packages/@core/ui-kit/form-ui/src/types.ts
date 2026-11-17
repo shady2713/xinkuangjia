@@ -226,12 +226,13 @@ export type HandleResetFn = (
   values: Record<string, any>,
 ) => Promise<void> | void;
 
+/** 把时间字段值转成目标格式 */
+type FieldMappingTimeTransform = (value: any, fieldName: string) => any;
+
 export type FieldMappingTime = [
   string,
   [string, string],
-  (
-    ((value: any, fieldName: string) => any) | [string, string] | null | string
-  )?,
+  (FieldMappingTimeTransform | [string, string] | null | string)?,
 ][];
 
 export type ArrayToStringFields = Array<

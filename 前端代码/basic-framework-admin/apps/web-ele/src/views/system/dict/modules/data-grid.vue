@@ -55,6 +55,7 @@ const {
   handleEdit,
 } = useCrudActions<SystemDictDataApi.DictData>({
   batchDeleteApi: deleteDictDataList,
+  // 新建字典数据时带上当前字典类型
   createData: () =>
     ({ dictType: props.dictType }) as SystemDictDataApi.DictData,
   deleteApi: deleteDictData,

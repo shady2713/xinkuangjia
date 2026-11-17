@@ -8,7 +8,10 @@ import { z } from '@vben/common-ui';
 
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 新增/修改的表单 */
+/**
+ * 新增/修改的表单
+ * @returns 表单字段配置
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {

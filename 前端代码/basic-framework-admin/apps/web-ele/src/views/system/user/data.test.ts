@@ -58,9 +58,12 @@ vi.mock('#/adapter/form', () => ({
 
 import { useFormSchema } from './data';
 
-describe('system user form schema', () => {
-  it('新增用户密码字段使用与个人中心一致的密码组件和规则', () => {
+/** 系统用户表单配置的单测 */
+function describeSystemUserFormSchema() {
+  /** 核对新增用户密码字段与个人中心保持一致 */
+  function itPasswordFieldMatchesProfile() {
     const passwordField = useFormSchema().find(
+      // 定位密码字段
       (item) => item.fieldName === 'password',
     );
 
@@ -72,5 +75,12 @@ describe('system user form schema', () => {
     expect(passwordField?.componentProps).toMatchObject({
       passwordStrength: true,
     });
-  });
-});
+  }
+
+  it(
+    '新增用户密码字段使用与个人中心一致的密码组件和规则',
+    itPasswordFieldMatchesProfile,
+  );
+}
+
+describe('system user form schema', describeSystemUserFormSchema);

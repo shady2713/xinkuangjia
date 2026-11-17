@@ -114,7 +114,8 @@ export const AjCaptchaAES = {
    *
    * @param data 要加密的验证码数据
    * @param key 后端下发的 16 位 secretKey
-   * @returns Base64(AES-ECB-PKCS7(ciphertext))
+   * @returns 以 Base64 表示的 AES-ECB-PKCS7 密文
+   * @throws 当密钥长度不符合要求或加密过程失败时抛出异常
    */
   encrypt(data: string, key: string): string {
     try {

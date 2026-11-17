@@ -47,7 +47,11 @@ export function deleteSmsChannel(id: number) {
   return requestClient.delete(`/system/sms-channel/delete?id=${id}`);
 }
 
-/** 发送测试短信 */
+/**
+ * 发送测试短信
+ * @param data 测试短信的模板编码、模板参数和手机号
+ * @returns 后端发送结果
+ */
 export function sendTestSms(data: {
   templateCode: string;
   templateParams: Record<string, object>;

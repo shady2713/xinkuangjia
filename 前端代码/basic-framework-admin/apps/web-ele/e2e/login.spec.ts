@@ -3,7 +3,7 @@
  *
  * 依赖 e2e/fixtures/seed-e2e.sql 准备的测试账号和后端本地实例，命令见 e2e/README.md。
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   adminAccount,
@@ -19,8 +19,8 @@ test.beforeEach(
   },
 );
 
-test('管理员使用正确账号密码登录后进入概览页', async ({ page }) => {
-  // 覆盖登录成功路径：接口返回成功、页面进入概览且管理菜单可见。
+/** 覆盖登录成功路径：接口返回成功、页面进入概览且管理菜单可见。 */
+async function loginWithValidAdminAccount({ page }: { page: Page }) {
   const response = await submitLogin(page, adminAccount);
   const payload = await response.json();
   expect(payload.code).toBe(0);
@@ -28,10 +28,12 @@ test('管理员使用正确账号密码登录后进入概览页', async ({ page 
 
   await expect(page.getByText('系统管理', { exact: true })).toBeVisible();
   await expect(page.locator('body')).toContainText('管理员');
-});
+}
 
-test('错误密码停留在登录页并提示登录失败', async ({ page }) => {
-  // 覆盖凭据失败路径：接口返回错误码、页面不跳转并显示统一失败提示。
+test('管理员使用正确账号密码登录后进入概览页', loginWithValidAdminAccount);
+
+/** 覆盖凭据失败路径：接口返回错误码、页面不跳转并显示统一失败提示。 */
+async function stayOnLoginPageWhenPasswordIsWrong({ page }: { page: Page }) {
   const response = await submitLogin(page, unknownAccount);
   const payload = await response.json();
   expect(payload.code).not.toBe(0);
@@ -40,4 +42,6 @@ test('错误密码停留在登录页并提示登录失败', async ({ page }) => 
   await expect(page.locator('.el-message')).toContainText(
     '登录失败，账号密码不正确',
   );
-});
+}
+
+test('错误密码停留在登录页并提示登录失败', stayOnLoginPageWhenPasswordIsWrong);

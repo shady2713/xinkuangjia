@@ -40,6 +40,10 @@ export const COMPONENT_BIND_EVENT_MAP: Partial<
   VbenCheckbox: 'checked',
 };
 
+/**
+ * 注册表单适配器的组件映射、事件绑定和校验规则
+ * @param options 表单适配器配置
+ */
 export function setupVbenForm<
   T extends BaseFormComponentType = BaseFormComponentType,
 >(options: VbenFormAdapterOptions<T>) {

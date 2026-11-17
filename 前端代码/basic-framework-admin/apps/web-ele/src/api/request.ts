@@ -161,4 +161,5 @@ export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });
 
+/** 不带业务拦截器的基础请求客户端 */
 export const baseRequestClient = new RequestClient({ baseURL: apiURL });

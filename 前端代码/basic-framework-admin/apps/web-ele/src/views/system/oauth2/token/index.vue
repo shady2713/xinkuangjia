@@ -24,9 +24,12 @@ function handleRefresh() {
 
 const { checkedIds, handleDelete, handleDeleteBatch, handleRowCheckboxChange } =
   useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
+    // 批量删除时把令牌列表拼成接口参数
     batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
     deleteApi: deleteOAuth2Token,
+    // 删除确认文案中的对象名称
     getDeleteName: () => '令牌',
+    // 用访问令牌作为行主键
     getRowKey: (row) => row.accessToken,
     refresh: handleRefresh,
   });

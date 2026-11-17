@@ -5,7 +5,7 @@
  * 夹具 e2e/fixtures/user-import.xlsx 与 seed-e2e.sql 的初始密码配置配合使用；
  * 用例勾选“是否覆盖”，重复执行时走更新分支，避免账号已存在造成偶发失败。
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   adminAccount,
@@ -21,8 +21,8 @@ test.beforeEach(
   },
 );
 
-test('导入 Excel 后列表可按账号查询到导入用户', async ({ page }) => {
-  // 覆盖用户导入路径：上传 Excel、提示新增或更新成功、列表可检索到账号。
+/** 覆盖用户导入路径：上传 Excel、提示新增或更新成功、列表可检索到账号。 */
+async function importExcelAndFindUserByAccount({ page }: { page: Page }) {
   await loginAs(page, adminAccount);
   await page.goto('./#/system/user');
   await expect(page.getByText('用户列表')).toBeVisible();
@@ -52,4 +52,9 @@ test('导入 Excel 后列表可按账号查询到导入用户', async ({ page })
     .filter({ hasText: 'e2eimportuser' });
   await expect(row).toBeVisible();
   await expect(row).toContainText('E2E导入用户');
-});
+}
+
+test(
+  '导入 Excel 后列表可按账号查询到导入用户',
+  importExcelAndFindUserByAccount,
+);
