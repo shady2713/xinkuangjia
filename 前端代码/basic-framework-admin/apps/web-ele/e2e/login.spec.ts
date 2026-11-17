@@ -9,6 +9,7 @@ import {
   adminAccount,
   prepareBrowserContext,
   submitLogin,
+  unknownAccount,
 } from './support/flows';
 
 test.beforeEach(
@@ -36,10 +37,7 @@ test(
   '错误密码停留在登录页并提示登录失败',
   // 覆盖凭据失败路径：接口返回错误码、页面不跳转并显示统一失败提示。
   async ({ page }) => {
-    const response = await submitLogin(page, {
-      password: 'WrongPass@123',
-      username: 'e2enotexist',
-    });
+    const response = await submitLogin(page, unknownAccount);
     const payload = await response.json();
     expect(payload.code).not.toBe(0);
 

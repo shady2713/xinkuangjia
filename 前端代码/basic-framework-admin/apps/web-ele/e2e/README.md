@@ -39,12 +39,14 @@ pnpm exec playwright install chromium
 | `e2elimited` | `E2eLimited@123` | 无菜单权限、直达路由被拒绝、后端接口返回 403 |
 | `e2enotexist` | 任意错误口令 | 登录失败路径，不写入数据库 |
 
-以上口令只用于隔离测试库，不是生产凭据。夹具 `fixtures/user-import.xlsx` 导入 `e2eimportuser`，用例勾选“是否覆盖”以便重复执行；`fixtures/upload-sample.png` 用于上传与下载字节比对。
+以上口令只用于隔离测试库，不是生产凭据。用例源码不写口令字面量，运行前必须导出与上表一致的 `E2E_ADMIN_PASSWORD`、`E2E_LIMITED_PASSWORD`。可选 `E2E_ADMIN_USERNAME`、`E2E_LIMITED_USERNAME`（默认 `admin` / `e2elimited`）。夹具 `fixtures/user-import.xlsx` 导入 `e2eimportuser`，用例勾选“是否覆盖”以便重复执行；`fixtures/upload-sample.png` 用于上传与下载字节比对。
 
 ## 执行命令
 
 ```powershell
 # 在 前端代码/basic-framework-admin 下执行
+$env:E2E_ADMIN_PASSWORD='Test@123456'
+$env:E2E_LIMITED_PASSWORD='E2eLimited@123'
 pnpm -F @vben/web-ele test:e2e
 
 # 或使用仓库统一入口（同样需要本地后端与测试库）

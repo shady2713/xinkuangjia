@@ -12,16 +12,45 @@ import { fileURLToPath } from 'node:url';
 /** 后端服务地址；本地 e2e 可用 E2E_BACKEND_URL 指向其他实例。 */
 export const backendUrl = process.env.E2E_BACKEND_URL ?? 'http://127.0.0.1:48080';
 
-/** 管理员测试账号；密码只用于本地测试数据，不包含真实生产凭据。 */
-export const adminAccount = {
-  password: process.env.E2E_ADMIN_PASSWORD ?? 'Test@123456',
+/** 登录用例使用的测试账号。 */
+export type TestAccount = {
+  username: string;
+  password: string;
+};
+
+/**
+ * 读取隔离测试库口令。源码不写口令字面量，避免密钥扫描把测试数据当成固定凭据。
+ *
+ * @param name 环境变量名，例如 E2E_ADMIN_PASSWORD。
+ * @returns 环境变量中的口令。
+ * @throws 未设置该变量时抛出，提示按 README 导出后再跑。
+ */
+function requiredTestSecret(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `缺少 ${name}，请按 e2e/README.md 导出隔离测试账号口令后再跑 e2e。`,
+    );
+  }
+  return value;
+}
+
+/** 管理员测试账号；口令来自 E2E_ADMIN_PASSWORD，对应 seed-e2e.sql。 */
+export const adminAccount: TestAccount = {
+  password: requiredTestSecret('E2E_ADMIN_PASSWORD'),
   username: process.env.E2E_ADMIN_USERNAME ?? 'admin',
 };
 
 /** 无业务菜单权限的受限账号，用于验证无权限入口不可用和后端接口拒绝。 */
-export const limitedAccount = {
-  password: process.env.E2E_LIMITED_PASSWORD ?? 'E2eLimited@123',
+export const limitedAccount: TestAccount = {
+  password: requiredTestSecret('E2E_LIMITED_PASSWORD'),
   username: process.env.E2E_LIMITED_USERNAME ?? 'e2elimited',
+};
+
+/** 不存在的账号与错误口令占位，只用于登录失败路径，不会写入数据库。 */
+export const unknownAccount: TestAccount = {
+  password: 'CHANGE_ME_WRONG_PASSWORD',
+  username: 'e2enotexist',
 };
 
 /**
@@ -82,7 +111,7 @@ export async function prepareBrowserContext(
  */
 export async function submitLogin(
   page: Page,
-  account: { password: string; username: string },
+  account: TestAccount,
 ): Promise<Response> {
   await page.goto('./#/auth/login', { waitUntil: 'networkidle' });
   await page.locator('input[name="username"]').fill(account.username);
@@ -107,13 +136,14 @@ export async function submitLogin(
  */
 export async function loginAs(
   page: Page,
-  account: { password: string; username: string },
+  account: TestAccount,
 ): Promise<string> {
   const response = await submitLogin(page, account);
   const payload = (await response.json()) as {
     data?: { accessToken?: string };
   };
-  const accessToken = payload.data?.accessToken;
+  const loginData = payload.data;
+  const accessToken = loginData === undefined ? undefined : loginData.accessToken;
   if (!accessToken) {
     throw new Error(`登录失败：${JSON.stringify(payload)}`);
   }
