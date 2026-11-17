@@ -43,6 +43,14 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- ArchUnit 脚枪门禁，仅测试范围，不升级其它依赖。 -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.4.1</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- 服务保障相关 -->
         <dependency>
             <groupId>com.basicframework</groupId>

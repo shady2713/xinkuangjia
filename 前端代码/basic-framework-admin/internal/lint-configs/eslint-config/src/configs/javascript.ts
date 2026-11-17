@@ -4,6 +4,11 @@ import js from '@eslint/js';
 import pluginUnusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 
+/**
+ * 构造 JavaScript 基础 ESLint 规则，含 eval、new Function 与 document.write 脚枪门禁。
+ *
+ * @returns JavaScript 扁平配置。
+ */
 export async function javascript(): Promise<Linter.Config[]> {
   return [
     {
@@ -129,6 +134,16 @@ export async function javascript(): Promise<Linter.Config[]> {
             message: 'Use `Object.getOwnPropertyDescriptor` instead.',
             property: '__lookupSetter__',
           },
+          {
+            message: '禁止使用 document.write，避免 DOM XSS 与文档流覆写。',
+            object: 'document',
+            property: 'write',
+          },
+          {
+            message: '禁止使用 document.writeln，避免 DOM XSS 与文档流覆写。',
+            object: 'document',
+            property: 'writeln',
+          },
         ],
         'no-restricted-syntax': [
           'error',
@@ -137,6 +152,26 @@ export async function javascript(): Promise<Linter.Config[]> {
           'WithStatement',
           'TSEnumDeclaration[const=true]',
           'TSExportAssignment',
+          {
+            message: '禁止使用 document.write，避免 DOM XSS 与文档流覆写。',
+            selector:
+              "CallExpression[callee.object.name='document'][callee.property.name='write']",
+          },
+          {
+            message: '禁止使用 document.write，避免 DOM XSS 与文档流覆写。',
+            selector:
+              "CallExpression[callee.object.property.name='document'][callee.property.name='write']",
+          },
+          {
+            message: '禁止使用 document.writeln，避免 DOM XSS 与文档流覆写。',
+            selector:
+              "CallExpression[callee.object.name='document'][callee.property.name='writeln']",
+          },
+          {
+            message: '禁止使用 document.writeln，避免 DOM XSS 与文档流覆写。',
+            selector:
+              "CallExpression[callee.object.property.name='document'][callee.property.name='writeln']",
+          },
         ],
         'no-self-assign': ['error', { props: true }],
         'no-self-compare': 'error',
