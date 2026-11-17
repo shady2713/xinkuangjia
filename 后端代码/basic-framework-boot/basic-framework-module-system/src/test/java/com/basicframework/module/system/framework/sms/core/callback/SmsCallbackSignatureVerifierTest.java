@@ -20,11 +20,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SmsCallbackSignatureVerifierTest {
 
-    /** 阿里云测试密钥。 */
-    private static final String ALIYUN_SECRET = "aliyun-callback-secret";
+    /** 阿里云测试用 HMAC 密钥占位符，仅用于单元测试。 */
+    private static final String ALIYUN_TEST_HMAC_KEY = "CHANGE_ME_ALIYUN_HMAC";
 
-    /** 腾讯云测试密钥。 */
-    private static final String TENCENT_SECRET = "tencent-callback-secret";
+    /** 腾讯云测试用 HMAC 密钥占位符，仅用于单元测试。 */
+    private static final String TENCENT_TEST_HMAC_KEY = "CHANGE_ME_TENCENT_HMAC";
 
     /** 阿里云回执样例，覆盖多字段与中文说明。 */
     private static final String ALIYUN_BODY = "[{\"phone_number\":\"13811112222\",\"send_time\":\"2026-11-17 10:00:00\","
@@ -37,7 +37,7 @@ class SmsCallbackSignatureVerifierTest {
         long timestamp = currentEpochSecond();
 
         SmsCallbackVerificationResult result = newVerifier().verify("ALIYUN", request(Long.toString(timestamp),
-                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET)), ALIYUN_BODY);
+                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY)), ALIYUN_BODY);
 
         assertThat(result).isEqualTo(SmsCallbackVerificationResult.PASS);
     }
@@ -46,7 +46,7 @@ class SmsCallbackSignatureVerifierTest {
     @Test
     void passesWithUppercaseSignature() {
         long timestamp = currentEpochSecond();
-        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET).toUpperCase();
+        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY).toUpperCase();
 
         SmsCallbackVerificationResult result = newVerifier().verify("ALIYUN", request(Long.toString(timestamp), signature),
                 ALIYUN_BODY);
@@ -67,7 +67,7 @@ class SmsCallbackSignatureVerifierTest {
     @Test
     void rejectsSignatureOfTamperedBody() {
         long timestamp = currentEpochSecond();
-        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET);
+        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY);
 
         SmsCallbackVerificationResult result = newVerifier().verify("ALIYUN", request(Long.toString(timestamp), signature),
                 ALIYUN_BODY.replace("DELIVERED", "UNDELIV"));
@@ -78,7 +78,7 @@ class SmsCallbackSignatureVerifierTest {
     /** 验证缺少时间戳请求头时拒绝，签名无法单独成立。 */
     @Test
     void rejectsMissingTimestamp() {
-        String signature = sign("ALIYUN", currentEpochSecond(), ALIYUN_BODY, ALIYUN_SECRET);
+        String signature = sign("ALIYUN", currentEpochSecond(), ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY);
 
         SmsCallbackVerificationResult result = newVerifier().verify("ALIYUN", request(null, signature),
                 ALIYUN_BODY);
@@ -92,7 +92,7 @@ class SmsCallbackSignatureVerifierTest {
         long timestamp = currentEpochSecond() - 600;
 
         SmsCallbackVerificationResult result = newVerifier().verify("ALIYUN", request(Long.toString(timestamp),
-                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET)), ALIYUN_BODY);
+                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY)), ALIYUN_BODY);
 
         assertThat(result).isEqualTo(SmsCallbackVerificationResult.INVALID);
     }
@@ -119,7 +119,7 @@ class SmsCallbackSignatureVerifierTest {
     @Test
     void rejectsSignatureForAnotherChannel() {
         long timestamp = currentEpochSecond();
-        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET);
+        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY);
 
         SmsCallbackVerificationResult result = newVerifier().verify("TENCENT", request(Long.toString(timestamp), signature),
                 ALIYUN_BODY);
@@ -131,12 +131,12 @@ class SmsCallbackSignatureVerifierTest {
     @Test
     void rejectsWhenChannelNotConfigured() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
-        properties.setSecrets(Map.of("ALIYUN", ALIYUN_SECRET));
+        properties.setSecrets(Map.of("ALIYUN", ALIYUN_TEST_HMAC_KEY));
         long timestamp = currentEpochSecond();
         SmsCallbackSignatureVerifier verifier = new SmsCallbackSignatureVerifier(properties);
 
         SmsCallbackVerificationResult result = verifier.verify("TENCENT", request(Long.toString(timestamp),
-                sign("TENCENT", timestamp, ALIYUN_BODY, TENCENT_SECRET)), ALIYUN_BODY);
+                sign("TENCENT", timestamp, ALIYUN_BODY, TENCENT_TEST_HMAC_KEY)), ALIYUN_BODY);
 
         assertThat(result).isEqualTo(SmsCallbackVerificationResult.NOT_CONFIGURED);
     }
@@ -145,12 +145,12 @@ class SmsCallbackSignatureVerifierTest {
     @Test
     void matchesSecretIgnoringChannelCodeCase() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
-        properties.setSecrets(Map.of("aliyun", ALIYUN_SECRET));
+        properties.setSecrets(Map.of("aliyun", ALIYUN_TEST_HMAC_KEY));
         long timestamp = currentEpochSecond();
         SmsCallbackSignatureVerifier verifier = new SmsCallbackSignatureVerifier(properties);
 
         SmsCallbackVerificationResult result = verifier.verify("ALIYUN", request(Long.toString(timestamp),
-                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_SECRET)), ALIYUN_BODY);
+                sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY)), ALIYUN_BODY);
 
         assertThat(result).isEqualTo(SmsCallbackVerificationResult.PASS);
     }
@@ -162,7 +162,7 @@ class SmsCallbackSignatureVerifierTest {
      */
     private static SmsCallbackSignatureVerifier newVerifier() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
-        properties.setSecrets(Map.of("aliyun", ALIYUN_SECRET, "TENCENT", TENCENT_SECRET));
+        properties.setSecrets(Map.of("aliyun", ALIYUN_TEST_HMAC_KEY, "TENCENT", TENCENT_TEST_HMAC_KEY));
         properties.setTimestampTolerance(Duration.ofMinutes(5));
         return new SmsCallbackSignatureVerifier(properties);
     }

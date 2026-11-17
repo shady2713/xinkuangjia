@@ -35,11 +35,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 @ExtendWith(MockitoExtension.class)
 class SmsCallbackControllerTest {
 
-    /** 阿里云测试密钥。 */
-    private static final String ALIYUN_SECRET = "aliyun-callback-secret";
+    /** 阿里云测试用 HMAC 密钥占位符，仅用于单元测试。 */
+    private static final String ALIYUN_TEST_HMAC_KEY = "CHANGE_ME_ALIYUN_HMAC";
 
-    /** 腾讯云测试密钥。 */
-    private static final String TENCENT_SECRET = "tencent-callback-secret";
+    /** 腾讯云测试用 HMAC 密钥占位符，仅用于单元测试。 */
+    private static final String TENCENT_TEST_HMAC_KEY = "CHANGE_ME_TENCENT_HMAC";
 
     /** 阿里云成功回执样例。 */
     private static final String ALIYUN_BODY = "[{\"phone_number\":\"13811112222\",\"send_time\":\"2026-11-17 10:00:00\","
@@ -62,7 +62,7 @@ class SmsCallbackControllerTest {
     @BeforeEach
     void setUp() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
-        properties.setSecrets(Map.of("ALIYUN", ALIYUN_SECRET, "TENCENT", TENCENT_SECRET));
+        properties.setSecrets(Map.of("ALIYUN", ALIYUN_TEST_HMAC_KEY, "TENCENT", TENCENT_TEST_HMAC_KEY));
         SmsCallbackSignatureVerifier verifier = new SmsCallbackSignatureVerifier(properties);
         controller = new SmsCallbackController();
         ReflectionTestUtils.setField(controller, "smsSendService", smsSendService);
@@ -73,7 +73,7 @@ class SmsCallbackControllerTest {
     @Test
     void acceptsAliyunCallbackWithValidSignature() {
         ResponseEntity<AliyunSmsCallbackRespVO> response = controller.receiveAliyunSmsStatus(
-                signedJsonRequest("ALIYUN", ALIYUN_BODY, ALIYUN_SECRET));
+                signedJsonRequest("ALIYUN", ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.success());
@@ -84,7 +84,7 @@ class SmsCallbackControllerTest {
     @Test
     void acceptsTencentCallbackWithValidSignature() {
         ResponseEntity<TencentSmsCallbackRespVO> response = controller.receiveTencentSmsStatus(
-                signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_SECRET));
+                signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_TEST_HMAC_KEY));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(TencentSmsCallbackRespVO.success());
@@ -117,12 +117,12 @@ class SmsCallbackControllerTest {
     @Test
     void rejectsCallbackWhenSecretNotConfigured() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
-        properties.setSecrets(Map.of("ALIYUN", ALIYUN_SECRET));
+        properties.setSecrets(Map.of("ALIYUN", ALIYUN_TEST_HMAC_KEY));
         ReflectionTestUtils.setField(controller, "smsCallbackSignatureVerifier",
                 new SmsCallbackSignatureVerifier(properties));
 
         ResponseEntity<TencentSmsCallbackRespVO> response = controller.receiveTencentSmsStatus(
-                signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_SECRET));
+                signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_TEST_HMAC_KEY));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(response.getBody()).isEqualTo(TencentSmsCallbackRespVO.failure());
@@ -136,7 +136,7 @@ class SmsCallbackControllerTest {
                 .when(smsSendService).receiveSmsStatus(eq("ALIYUN"), eq(ALIYUN_BODY));
 
         ResponseEntity<AliyunSmsCallbackRespVO> response = controller.receiveAliyunSmsStatus(
-                signedJsonRequest("ALIYUN", ALIYUN_BODY, ALIYUN_SECRET));
+                signedJsonRequest("ALIYUN", ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());

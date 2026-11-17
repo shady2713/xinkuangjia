@@ -30,15 +30,15 @@ class SmsCallbackPropertiesBindingTest {
     @Test
     void bindsSecretsAndTimestampTolerance() {
         contextRunner.withPropertyValues(
-                "basic-framework.sms-callback.secrets.ALIYUN=aliyun-secret",
-                "basic-framework.sms-callback.secrets.TENCENT=tencent-secret",
+                "basic-framework.sms-callback.secrets.ALIYUN=CHANGE_ME_ALIYUN_HMAC",
+                "basic-framework.sms-callback.secrets.TENCENT=CHANGE_ME_TENCENT_HMAC",
                 "basic-framework.sms-callback.timestamp-tolerance=90s")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     SmsCallbackProperties properties = context.getBean(SmsCallbackProperties.class);
                     assertThat(properties.getSecrets())
-                            .containsEntry("ALIYUN", "aliyun-secret")
-                            .containsEntry("TENCENT", "tencent-secret");
+                            .containsEntry("ALIYUN", "CHANGE_ME_ALIYUN_HMAC")
+                            .containsEntry("TENCENT", "CHANGE_ME_TENCENT_HMAC");
                     assertThat(properties.getTimestampTolerance()).isEqualTo(Duration.ofSeconds(90));
                 });
     }
