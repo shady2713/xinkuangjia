@@ -1,18 +1,27 @@
+/**
+ * 维护 TabsView 标签栏的横向滚动交互：根据滚动容器尺寸与位置控制左右滚动按钮，处理滚轮滚动和激活标签定位，并管理相关观察器的生命周期。
+ */
+import type { ComponentPublicInstance } from 'vue';
+
 import type { TabsProps } from './types';
 
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-
-import { VbenScrollbar } from '@vben-core/shadcn-ui';
 
 import { useDebounceFn } from '@vueuse/core';
 
 type DomElement = Element | null | undefined;
 
+/**
+ * 创建标签栏滚动状态和操作入口，并在组件挂载、属性变化和卸载时管理滚动容器观察器。
+ * @param props 标签栏属性，提供激活标签、标签集合和风格；调用方需传入组件的响应式 props，属性变化会驱动滚动重新定位。
+ * @returns 返回滚动按钮显隐、左右到达状态、滚动操作与滚轮处理函数、滚动容器引用及初始化方法，供 TabsView 模板绑定；观察器随组件卸载自动断开。
+ */
 export function useTabsViewScroll(props: TabsProps) {
   let resizeObserver: null | ResizeObserver = null;
   let mutationObserver: MutationObserver | null = null;
   let tabItemCount = 0;
-  const scrollbarRef = ref<InstanceType<typeof VbenScrollbar> | null>(null);
+  // 仅声明用到的组件实例公共类型，避免声明文件引用 VbenScrollbar 内部未导出的 Props 类型。
+  const scrollbarRef = ref<ComponentPublicInstance | null>(null);
   const scrollViewportEl = ref<DomElement>(null);
   const showScrollButton = ref(false);
   const scrollIsAtLeft = ref(true);
