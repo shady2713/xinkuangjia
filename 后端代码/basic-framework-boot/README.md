@@ -97,7 +97,9 @@ Token、角色菜单关系和验证码有各自的 Redis 生命周期；不能�
 
 </details>
 
-可执行产物为 `basic-framework-server/target/basic-framework-server.jar`。当前没有仓库级 Java 生产 Compose；按[部署说明](../../docs/部署/部署说明.md)准备目标运行环境、数据库与存储配置。管理前端参见[前端 README](../../前端代码/basic-framework-admin/README.md)。
+可执行产物为 `basic-framework-server/target/basic-framework-server.jar`。当前没有仓库级 Java 生产 Compose；唯一官方服务器部署入口为[部署说明](../../docs/部署/部署说明.md)，按该文档准备目标运行环境、数据库与存储配置。管理前端参见[前端 README](../../前端代码/basic-framework-admin/README.md)。
+
+从 #26 之前的框架版本升级业务项目时，先按[升级与迁移说明](../../docs/开发指南/升级与迁移说明.md)处理已删除公开类型、`PageParam.sortingFields` 迁移和角色/导入/文件/锁屏的安全收紧，再按部署说明发布。
 
 ## 已知限制与暂缓工作
 
