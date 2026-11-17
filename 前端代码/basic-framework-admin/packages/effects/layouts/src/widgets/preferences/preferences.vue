@@ -56,16 +56,19 @@ const listen = computed(() => {
   return result;
 });
 
-const drawerBindings = computed<Record<string, any>>(() => {
-  const result = {
-    ...(rawAttrs as Record<string, any>),
-    ...attrs.value,
-  };
-  if (result.class == null) {
-    delete result.class;
-  }
-  return result;
-});
+const drawerBindings = computed<Record<string, any>>(
+  /** 合并偏好抽屉属性，并去掉空的 class，避免覆盖默认样式。 */
+  () => {
+    const result = {
+      ...(rawAttrs as Record<string, any>),
+      ...attrs.value,
+    };
+    if (result.class === null || result.class === undefined) {
+      delete result.class;
+    }
+    return result;
+  },
+);
 </script>
 <template>
   <div>

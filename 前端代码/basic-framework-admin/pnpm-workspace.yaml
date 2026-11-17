@@ -36,7 +36,6 @@ catalog:
   '@jspm/generator': ^2.18.0
   '@manypkg/get-packages': ^3.1.0
   '@microsoft/fetch-event-source': ^2.0.1
-  '@nolebase/vitepress-plugin-git-changelog': ^2.18.2
   '@playwright/test': ^1.65.0
   '@pnpm/workspace.read-manifest': ^1000.2.10
   '@stylistic/stylelint-plugin': ^4.0.1
@@ -59,8 +58,6 @@ catalog:
   '@typescript-eslint/eslint-plugin': ^8.72.2
   '@typescript-eslint/parser': ^8.72.2
   '@vee-validate/zod': ^4.15.1
-  '@videojs-player/vue': ^1.0.0
-  '@vite-pwa/vitepress': ^1.1.0
   '@vitejs/plugin-vue': ^6.0.10
   '@vitejs/plugin-vue-jsx': ^5.1.6
   '@vitest/coverage-v8': 3.2.4
@@ -74,7 +71,6 @@ catalog:
   autoprefixer: ^10.6.2
   axios: ^1.21.1
   axios-mock-adapter: ^2.1.0
-  benz-amr-recorder: ^1.1.5
   cac: ^6.7.14
   chalk: ^5.6.2
   cheerio: ^1.2.0
@@ -119,7 +115,6 @@ catalog:
   eslint-plugin-vue: ^10.12.1
   eslint-plugin-yml: ^1.19.1
   execa: ^9.6.1
-  fast-xml-parser: ^4.5.3
   find-up: ^7.0.0
   get-port: ^7.1.0
   globals: ^16.5.0
@@ -129,7 +124,6 @@ catalog:
   jiti: ^2.7.0
   jsdom: 26.1.0
   jsencrypt: ^3.5.4
-  sm-crypto: ^0.5.8
   json-bigint: ^1.0.0
   jsonc-eslint-parser: ^2.4.2
   lefthook: ^2.2.2
@@ -162,8 +156,8 @@ catalog:
   rollup-plugin-visualizer: ^5.14.0
   sass: ^1.108.1
   secure-ls: ^2.0.0
+  sm-crypto: ^0.5.8
   sortablejs: ^1.15.6
-  steady-xml: ^0.1.0
   stylelint: ^16.26.1
   stylelint-config-recess-order: ^7.10.0
   stylelint-config-recommended: ^17.0.0
@@ -176,14 +170,13 @@ catalog:
   tailwind-merge: ^2.6.0
   tailwindcss: ^3.4.19
   tailwindcss-animate: ^1.0.7
-  tippy.js: ^6.3.7
   theme-colors: ^0.1.0
+  tippy.js: ^6.3.7
   turbo: ^2.11.10
   typescript: ^5.9.3
   unbuild: ^3.6.1
   unplugin-element-plus: ^0.11.2
   vee-validate: ^4.15.1
-  video.js: ^7.21.7
   vite: ^7.3.1
   vite-plugin-compression: ^0.5.1
   vite-plugin-dts: ^4.5.4
@@ -191,8 +184,6 @@ catalog:
   vite-plugin-lazy-import: ^1.0.7
   vite-plugin-pwa: ^1.2.0
   vite-plugin-vue-devtools: ^8.2.1
-  vitepress: ^1.6.4
-  vitepress-plugin-group-icons: ^1.7.1
   vitest: ^3.2.4
   vue: ^3.5.45
   vue-dompurify-html: ^5.3.0
@@ -202,12 +193,15 @@ catalog:
   vue-router: ^4.6.4
   vue-tippy: ^6.8.0
   vue-tsc: ^3.3.14
-  vue3-print-nb: ^0.1.4
-  vue3-signature: ^0.4.5
-  vuedraggable: ^4.1.0
   vxe-pc-ui: ^4.20.40
   vxe-table: ^4.23.16
   watermark-js-plus: ^1.6.6
   yaml-eslint-parser: ^1.3.2
   zod: ^3.25.76
   zod-defaults: 0.2.3
+onlyBuiltDependencies:
+  - esbuild
+  - '@parcel/watcher'
+  - lefthook
+  - unrs-resolver
+  - vue-demi

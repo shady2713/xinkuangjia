@@ -64,7 +64,7 @@ function handleClick(menu: IContextMenuItem) {
 <template>
   <ContextMenu v-bind="forwarded">
     <ContextMenuTrigger as-child>
-      <slot></slot>
+      <slot />
     </ContextMenuTrigger>
     <ContextMenuContent
       :class="contentClass"

@@ -446,7 +446,7 @@ onUnmounted(() => {
             </VbenHelpTooltip>
           </div>
         </slot>
-        <slot name="toolbar-actions" v-bind="slotProps"> </slot>
+        <slot name="toolbar-actions" v-bind="slotProps" />
       </template>
 
       <!-- 继承默认的slot -->
@@ -455,10 +455,10 @@ onUnmounted(() => {
         :key="slotName"
         #[slotName]="slotProps"
       >
-        <slot :name="slotName" v-bind="slotProps"></slot>
+        <slot :name="slotName" v-bind="slotProps" />
       </template>
       <template #toolbar-tools="slotProps">
-        <slot name="toolbar-tools" v-bind="slotProps"></slot>
+        <slot name="toolbar-tools" v-bind="slotProps" />
       </template>
 
       <!-- form表单 -->
@@ -489,19 +489,19 @@ onUnmounted(() => {
                 <slot
                   :name="`${FORM_SLOT_PREFIX}${slotName}`"
                   v-bind="slotProps"
-                ></slot>
+                />
               </template>
               <template #reset-before="slotProps">
-                <slot name="reset-before" v-bind="slotProps"></slot>
+                <slot name="reset-before" v-bind="slotProps" />
               </template>
               <template #submit-before="slotProps">
-                <slot name="submit-before" v-bind="slotProps"></slot>
+                <slot name="submit-before" v-bind="slotProps" />
               </template>
               <template #expand-before="slotProps">
-                <slot name="expand-before" v-bind="slotProps"></slot>
+                <slot name="expand-before" v-bind="slotProps" />
               </template>
               <template #expand-after="slotProps">
-                <slot name="expand-after" v-bind="slotProps"></slot>
+                <slot name="expand-after" v-bind="slotProps" />
               </template>
             </Form>
           </slot>

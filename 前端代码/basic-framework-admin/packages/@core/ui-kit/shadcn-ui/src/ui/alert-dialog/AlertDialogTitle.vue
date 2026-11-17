@@ -25,6 +25,6 @@ const forwardedProps = useForwardProps(delegatedProps);
       cn('text-lg font-semibold leading-none tracking-tight', props.class)
     "
   >
-    <slot></slot>
+    <slot />
   </AlertDialogTitle>
 </template>

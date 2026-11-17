@@ -63,7 +63,7 @@ defineExpose({
       :key="slotName"
       #[slotName]="slotProps"
     >
-      <slot :name="slotName" v-bind="slotProps"></slot>
+      <slot :name="slotName" v-bind="slotProps" />
     </template>
 
     <ResizablePanelGroup class="w-full" direction="horizontal">
@@ -83,7 +83,7 @@ defineExpose({
               expand: expandLeft,
               collapse: collapseLeft,
             }"
-          ></slot>
+          />
         </template>
       </ResizablePanel>
       <ResizableHandle
@@ -99,7 +99,7 @@ defineExpose({
         :min-size="rightMinWidth"
       >
         <template #default>
-          <slot></slot>
+          <slot />
         </template>
       </ResizablePanel>
     </ResizablePanelGroup>

@@ -26,6 +26,6 @@ const delegatedProps = computed(() => {
     "
     v-bind="delegatedProps"
   >
-    <slot></slot>
+    <slot />
   </TabsContent>
 </template>

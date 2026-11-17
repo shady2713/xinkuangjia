@@ -7,13 +7,13 @@ import { buildSortingField } from '@vben/request';
 import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteDictType,
   deleteDictTypeList,
   exportDictType,
   getDictTypePage,
 } from '#/api/system/dict/type';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useTypeGridColumns, useTypeGridFormSchema } from '../data';

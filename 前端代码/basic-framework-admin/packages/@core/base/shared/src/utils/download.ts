@@ -42,11 +42,11 @@ export async function downloadFileFromUrl({
 
 /**
  * 下载图片（允许跨域）
- * @param url - 图片 URL
- * @param canvasWidth - 画布宽度
- * @param canvasHeight - 画布高度
- * @param drawWithImageSize - 将图片绘制在画布上时带上图片的宽高值, 默认是要带上的
- * @returns
+ * @param url 画布下载参数
+ * @param url.url 图片地址
+ * @param url.canvasWidth 画布宽度
+ * @param url.canvasHeight 画布高度
+ * @param url.drawWithImageSize 绘制时是否使用图片自身宽高，默认使用
  */
 export function downloadImageByCanvas({
   url,

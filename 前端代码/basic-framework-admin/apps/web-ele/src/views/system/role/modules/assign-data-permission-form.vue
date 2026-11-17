@@ -28,8 +28,8 @@ const isCheckStrictly = ref(true); // 父子联动状态
 const expandedKeys = ref<number[]>([]); // 展开的节点
 
 type TreeNodeLike = {
-  id?: number;
   children?: TreeNodeLike[];
+  id?: number;
 };
 
 const [Form, formApi] = useVbenForm({

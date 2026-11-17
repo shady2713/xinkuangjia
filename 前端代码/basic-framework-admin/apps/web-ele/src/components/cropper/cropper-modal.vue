@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import type { CropendResult, CropperModalProps, CropperType } from './typing';
 
 import { ref } from 'vue';
@@ -10,8 +10,9 @@ import { dataURLtoBlob, isFunction } from '@vben/utils';
 
 import { ElAvatar, ElButton, ElSpace, ElTooltip, ElUpload } from 'element-plus';
 
-import CropperImage from './cropper.vue';
 import { showWarningMessage } from '#/utils/feedback';
+
+import CropperImage from './cropper.vue';
 
 defineOptions({ name: 'CropperModal' });
 

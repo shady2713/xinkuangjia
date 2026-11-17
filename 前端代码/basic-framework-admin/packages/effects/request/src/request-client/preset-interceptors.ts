@@ -2,8 +2,7 @@ import type { RequestClient } from './request-client';
 import type { MakeErrorMessageFn, ResponseInterceptorConfig } from './types';
 
 import { $t } from '@vben/locales';
-import { logError } from '@vben/utils';
-import { isFunction } from '@vben/utils';
+import { isFunction, logError } from '@vben/utils';
 
 import axios from 'axios';
 

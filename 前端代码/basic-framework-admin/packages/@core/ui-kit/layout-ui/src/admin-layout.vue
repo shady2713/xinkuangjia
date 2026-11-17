@@ -507,21 +507,21 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
       @leave="() => emit('sideMouseLeave')"
     >
       <template v-if="isSideMode && !isMixedNav" #logo>
-        <slot name="logo"></slot>
+        <slot name="logo" />
       </template>
 
       <template v-if="isSidebarMixedNav || isHeaderMixedNav">
-        <slot name="mixed-menu"></slot>
+        <slot name="mixed-menu" />
       </template>
       <template v-else>
-        <slot name="menu"></slot>
+        <slot name="menu" />
       </template>
 
       <template #extra>
-        <slot name="side-extra"></slot>
+        <slot name="side-extra" />
       </template>
       <template #extra-title>
-        <slot name="side-extra-title"></slot>
+        <slot name="side-extra-title" />
       </template>
     </LayoutSidebar>
 
@@ -551,7 +551,7 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
           :z-index="headerZIndex"
         >
           <template v-if="showHeaderLogo" #logo>
-            <slot name="logo"></slot>
+            <slot name="logo" />
           </template>
 
           <template #toggle-button>
@@ -564,7 +564,7 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
               <IconifyIcon v-else icon="ep:expand" />
             </VbenIconButton>
           </template>
-          <slot name="header"></slot>
+          <slot name="header" />
         </LayoutHeader>
 
         <LayoutTabbar
@@ -572,7 +572,7 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
           :height="tabbarHeight"
           :style="tabbarStyle"
         >
-          <slot name="tabbar"></slot>
+          <slot name="tabbar" />
         </LayoutTabbar>
       </div>
 
@@ -589,10 +589,10 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
         :style="contentStyle"
         class="transition-[margin-top] duration-200"
       >
-        <slot name="content"></slot>
+        <slot name="content" />
 
         <template #overlay>
-          <slot name="content-overlay"></slot>
+          <slot name="content-overlay" />
         </template>
       </LayoutContent>
 
@@ -604,10 +604,10 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
         :width="footerWidth"
         :z-index="zIndex"
       >
-        <slot name="footer"></slot>
+        <slot name="footer" />
       </LayoutFooter>
     </div>
-    <slot name="extra"></slot>
+    <slot name="extra" />
     <div
       v-if="maskVisible"
       :style="maskStyle"

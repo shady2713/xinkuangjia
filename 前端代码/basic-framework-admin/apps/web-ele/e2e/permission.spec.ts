@@ -4,7 +4,9 @@
  *
  * 受限账号在 e2e/fixtures/seed-e2e.sql 中只关联空菜单角色，命令见 e2e/README.md。
  */
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
+
+import { expect, test } from '@playwright/test';
 
 import {
   adminAccount,

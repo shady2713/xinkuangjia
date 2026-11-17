@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import type { UploadFile, UploadRawFile } from 'element-plus';
 
 import { useVbenModal } from '@vben/common-ui';

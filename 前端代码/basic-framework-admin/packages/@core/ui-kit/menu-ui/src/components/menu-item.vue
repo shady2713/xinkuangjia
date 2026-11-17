@@ -100,13 +100,13 @@ onBeforeUnmount(() => {
       <template #trigger>
         <div :class="[nsMenu.be('tooltip', 'trigger')]">
           <VbenIcon :class="nsMenu.e('icon')" :icon="menuIcon" fallback />
-          <slot></slot>
+          <slot />
           <span v-if="collapseShowTitle" :class="nsMenu.e('name')">
-            <slot name="title"></slot>
+            <slot name="title" />
           </span>
         </div>
       </template>
-      <slot name="title"></slot>
+      <slot name="title" />
     </VbenTooltip>
     <div v-show="!showTooltip" :class="[e('content')]">
       <MenuBadge
@@ -115,8 +115,8 @@ onBeforeUnmount(() => {
         v-bind="props"
       />
       <VbenIcon :class="nsMenu.e('icon')" :icon="menuIcon" />
-      <slot></slot>
-      <slot name="title"></slot>
+      <slot />
+      <slot name="title" />
     </div>
   </li>
 </template>

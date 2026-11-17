@@ -7,11 +7,11 @@ import { Page, useVbenModal } from '@vben/common-ui';
 import { buildSortingField } from '@vben/request';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudItemActions } from '#/composables/use-crud-actions';
 import {
   deleteSmsTemplate,
   getSmsTemplatePage,
 } from '#/api/system/sms/template';
+import { useCrudItemActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';

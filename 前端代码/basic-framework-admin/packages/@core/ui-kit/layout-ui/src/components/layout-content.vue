@@ -58,8 +58,8 @@ const style = computed((): CSSProperties => {
 <template>
   <main ref="contentElement" :style="style" class="relative bg-background-deep">
     <Slot :style="overlayStyle">
-      <slot name="overlay"></slot>
+      <slot name="overlay" />
     </Slot>
-    <slot></slot>
+    <slot />
   </main>
 </template>

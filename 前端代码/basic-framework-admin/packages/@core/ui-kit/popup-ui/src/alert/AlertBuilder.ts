@@ -27,93 +27,114 @@ export function vbenAlert(
   options?: Partial<AlertProps>,
 ): Promise<void>;
 
+/**
+ * 打开通用提示框，并在确认或关闭后结束 Promise。
+ * @param arg0 提示内容，或完整的提示框属性
+ * @param arg1 标题，或要合并的提示框属性
+ * @param arg2 前两个参数分别为内容和标题时要合并的属性
+ * @returns 用户确认后兑现；关闭且未确认时拒绝
+ */
 export function vbenAlert(
   arg0: AlertProps | string,
   arg1?: Partial<AlertProps> | string,
   arg2?: Partial<AlertProps>,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const options: AlertProps = isString(arg0)
-      ? {
-          content: arg0,
+  return new Promise(
+    /**
+     * 挂载提示框，并在确认或取消时结束 Promise。
+     * @param resolve 用户确认时兑现
+     * @param reject 用户关闭且未确认时拒绝
+     */
+    (resolve, reject) => {
+      const options: AlertProps = isString(arg0)
+        ? {
+            content: arg0,
+          }
+        : { ...arg0 };
+      if (arg1) {
+        if (isString(arg1)) {
+          options.title = arg1;
+        } else if (!isString(arg1)) {
+          // 如果第二个参数是对象，则合并到选项中
+          Object.assign(options, arg1);
         }
-      : { ...arg0 };
-    if (arg1) {
-      if (isString(arg1)) {
-        options.title = arg1;
-      } else if (!isString(arg1)) {
-        // 如果第二个参数是对象，则合并到选项中
-        Object.assign(options, arg1);
       }
-    }
 
-    if (arg2 && !isString(arg2)) {
-      Object.assign(options, arg2);
-    }
-    // 创建容器元素
-    const container = document.createElement('div');
-    document.body.append(container);
-
-    // 创建一个引用，用于在回调中访问实例
-    const alertRef = { container, instance: null as any };
-
-    let isConfirmed = false;
-    let isSettled = false;
-
-    function dispose() {
-      if (!container.parentNode) {
-        return;
+      if (arg2 && !isString(arg2)) {
+        Object.assign(options, arg2);
       }
-      alerts.value = alerts.value.filter((item) => item !== alertRef);
-      render(null, container);
-      container.remove();
-    }
+      // 创建容器元素
+      const container = document.createElement('div');
+      document.body.append(container);
 
-    function doResolve() {
-      if (isSettled) {
-        return;
-      }
-      isSettled = true;
-      isConfirmed = true;
-      dispose();
-      resolve();
-    }
+      // 创建一个引用，用于在回调中访问实例
+      const alertRef = { container, instance: null as any };
 
-    function doReject() {
-      if (isSettled) {
-        return;
-      }
-      isSettled = true;
-      dispose();
-      reject(new Error('dialog cancelled'));
-    }
+      let isConfirmed = false;
+      let isSettled = false;
 
-    const props: AlertProps & Recordable<any> = {
-      onConfirm: doResolve,
-      onClosed: () => {
-        if (!isConfirmed) {
-          doReject();
-        } else {
-          dispose();
+      /** 卸载当前提示框并从队列中移除。 */
+      function dispose() {
+        if (!container.parentNode) {
+          return;
         }
-      },
-      ...options,
-      open: true,
-      title: options.title ?? $t.value('prompt'),
-    };
+        alerts.value = alerts.value.filter(
+          /** 去掉当前正在关闭的提示框实例。 */
+          (item) => item !== alertRef,
+        );
+        render(null, container);
+        container.remove();
+      }
 
-    // 创建Alert组件的VNode
-    const vnode = h(Alert, props);
+      /** 用户确认后兑现 Promise 并清理容器。 */
+      function doResolve() {
+        if (isSettled) {
+          return;
+        }
+        isSettled = true;
+        isConfirmed = true;
+        dispose();
+        resolve();
+      }
 
-    // 渲染组件到容器
-    render(vnode, container);
+      /** 用户关闭且未确认时拒绝 Promise 并清理容器。 */
+      function doReject() {
+        if (isSettled) {
+          return;
+        }
+        isSettled = true;
+        dispose();
+        reject(new Error('dialog cancelled'));
+      }
 
-    // 保存组件实例引用
-    alertRef.instance = vnode.component?.proxy as Component;
+      const props: AlertProps & Recordable<any> = {
+        onConfirm: doResolve,
+        /** 对话框关闭后：已确认则只清理容器，否则按取消拒绝。 */
+        onClosed: () => {
+          if (isConfirmed) {
+            dispose();
+          } else {
+            doReject();
+          }
+        },
+        ...options,
+        open: true,
+        title: options.title ?? $t.value('prompt'),
+      };
 
-    // 将实例和容器添加到alerts数组中
-    alerts.value.push(alertRef);
-  });
+      // 创建Alert组件的VNode
+      const vnode = h(Alert, props);
+
+      // 渲染组件到容器
+      render(vnode, container);
+
+      // 保存组件实例引用
+      alertRef.instance = vnode.component?.proxy as Component;
+
+      // 将实例和容器添加到alerts数组中
+      alerts.value.push(alertRef);
+    },
+  );
 }
 
 export function vbenConfirm(options: AlertProps): Promise<void>;

@@ -22,7 +22,7 @@ const props = defineProps<Props>();
 <template>
   <FormLabel :class="cn('flex items-center', props.class)">
     <span v-if="required" class="mr-[2px] text-destructive">*</span>
-    <slot></slot>
+    <slot />
     <VbenHelpTooltip v-if="help" trigger-class="size-3.5 ml-1">
       <VbenRenderContent :content="help" />
     </VbenHelpTooltip>

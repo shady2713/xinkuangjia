@@ -1,8 +1,9 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
 import { ElButton, ElMessageBox, ElUpload } from 'element-plus';
+
 import { useVbenForm } from '#/adapter/form';
 import { importUser, importUserTemplate } from '#/api/system/user';
 import { $t } from '#/locales';
@@ -24,7 +25,7 @@ const [Form, formApi] = useVbenForm({
 
 /** 转义 HTML，避免用户名中的特殊字符破坏弹窗结构 */
 function escapeHtml(value: string) {
-  return value.replace(
+  return value.replaceAll(
     /[&<>"']/g,
     (c) =>
       ({

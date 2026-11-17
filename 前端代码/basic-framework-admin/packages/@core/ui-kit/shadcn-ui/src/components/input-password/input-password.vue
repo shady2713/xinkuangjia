@@ -39,7 +39,7 @@ const show = ref(false);
     <template v-if="passwordStrength">
       <PasswordStrength :password="modelValue" />
       <p v-if="slots.strengthText" class="mt-1.5 text-xs text-muted-foreground">
-        <slot name="strengthText"> </slot>
+        <slot name="strengthText" />
       </p>
     </template>
     <div

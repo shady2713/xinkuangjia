@@ -307,7 +307,7 @@ defineExpose({
       "
       v-if="$slots.header"
     >
-      <slot name="header"> </slot>
+      <slot name="header" />
     </div>
     <div
       :class="
@@ -445,7 +445,7 @@ defineExpose({
       "
       v-if="$slots.footer"
     >
-      <slot name="footer"> </slot>
+      <slot name="footer" />
     </div>
   </TreeRoot>
 </template>

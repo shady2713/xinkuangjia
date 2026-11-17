@@ -315,7 +315,7 @@ function handleClosed() {
           })
         "
       >
-        <slot></slot>
+        <slot />
       </div>
       <VbenLoading v-if="showLoading || submitting" spinning />
       <VbenIconButton
@@ -340,7 +340,7 @@ function handleClosed() {
           )
         "
       >
-        <slot name="prepend-footer"></slot>
+        <slot name="prepend-footer" />
         <slot name="footer">
           <component
             :is="components.DefaultButton || VbenButton"
@@ -353,7 +353,7 @@ function handleClosed() {
               {{ cancelText || $t('cancel') }}
             </slot>
           </component>
-          <slot name="center-footer"></slot>
+          <slot name="center-footer" />
           <component
             :is="components.PrimaryButton || VbenButton"
             v-if="showConfirmButton"
@@ -366,7 +366,7 @@ function handleClosed() {
             </slot>
           </component>
         </slot>
-        <slot name="append-footer"></slot>
+        <slot name="append-footer" />
       </DialogFooter>
     </DialogContent>
   </Dialog>

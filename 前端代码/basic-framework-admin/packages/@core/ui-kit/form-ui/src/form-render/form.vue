@@ -182,11 +182,11 @@ const computedSchema = computed(
           :rules="cSchema.rules"
         >
           <template #default="slotProps">
-            <slot v-bind="slotProps" :name="cSchema.fieldName"> </slot>
+            <slot v-bind="slotProps" :name="cSchema.fieldName" />
           </template>
         </FormField>
       </template>
-      <slot :shapes="shapes"></slot>
+      <slot :shapes="shapes" />
     </div>
   </component>
 </template>

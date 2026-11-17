@@ -10,6 +10,6 @@ const props = defineProps<{ class?: any }>();
       cn('flex flex-row flex-col-reverse justify-end gap-x-2', props.class)
     "
   >
-    <slot></slot>
+    <slot />
   </div>
 </template>

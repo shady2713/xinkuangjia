@@ -232,7 +232,7 @@ type FieldMappingTimeTransform = (value: any, fieldName: string) => any;
 export type FieldMappingTime = [
   string,
   [string, string],
-  (FieldMappingTimeTransform | [string, string] | null | string)?,
+  ([string, string] | FieldMappingTimeTransform | null | string)?,
 ][];
 
 export type ArrayToStringFields = Array<

@@ -8,6 +8,6 @@ const props = defineProps<SelectItemTextProps>();
 
 <template>
   <SelectItemText v-bind="props">
-    <slot></slot>
+    <slot />
   </SelectItemText>
 </template>

@@ -11,6 +11,6 @@ const forwarded = useForwardPropsEmits(props, emits);
 
 <template>
   <TooltipRoot v-bind="forwarded">
-    <slot></slot>
+    <slot />
   </TooltipRoot>
 </template>

@@ -1,15 +1,20 @@
-﻿import type { MessageHandler } from 'element-plus';
+import type { MessageHandler } from 'element-plus';
 
 import { ElMessage } from 'element-plus';
 
 const REQUEST_PARAM_PREFIX_RE =
   /^\u8BF7\u6C42\u53C2\u6570\u4E0D\u6B63\u786E[:\uFF1A]\s*/;
 
+/**
+ * 把未知错误值转成可展示的字符串。
+ * @param value 原始错误信息
+ * @returns 字符串原文；空值时返回空字符串
+ */
 function toMessage(value: unknown): string {
   if (typeof value === 'string') {
     return value;
   }
-  if (value == null) {
+  if (value === null || value === undefined) {
     return '';
   }
   return String(value);

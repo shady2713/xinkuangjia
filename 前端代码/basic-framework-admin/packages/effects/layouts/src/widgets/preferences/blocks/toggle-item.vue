@@ -24,7 +24,7 @@ const modelValue = defineModel<string>();
     disabled
   >
     <span class="text-sm">
-      <slot></slot>
+      <slot />
     </span>
     <ToggleGroup
       v-model="modelValue"

@@ -7,6 +7,7 @@
  */
 import type { BrowserContext, Page, Response } from '@playwright/test';
 
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 /** 后端服务地址；本地 e2e 可用 E2E_BACKEND_URL 指向其他实例。 */
@@ -15,8 +16,8 @@ export const backendUrl =
 
 /** 登录用例使用的测试账号。 */
 export type TestAccount = {
-  username: string;
   password: string;
+  username: string;
 };
 
 /**
@@ -81,7 +82,8 @@ export async function prepareBrowserContext(
     // 关闭构建产物中的验证码开关，保证登录可以自动化。
     async (route) => {
       const response = await route.fetch();
-      const body = (await response.text()).replace(
+      const text = await response.text();
+      const body = text.replace(
         "VITE_APP_CAPTCHA_ENABLE: 'true'",
         "VITE_APP_CAPTCHA_ENABLE: 'false'",
       );

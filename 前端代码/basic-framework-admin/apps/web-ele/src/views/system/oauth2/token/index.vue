@@ -8,11 +8,11 @@ import { buildSortingField } from '@vben/request';
 import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudDeleteActions } from '#/composables/use-crud-actions';
 import {
   deleteOAuth2Token,
   getOAuth2TokenPage,
 } from '#/api/system/oauth2/token';
+import { useCrudDeleteActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';

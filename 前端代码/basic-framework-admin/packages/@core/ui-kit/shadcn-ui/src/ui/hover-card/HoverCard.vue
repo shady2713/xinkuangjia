@@ -11,6 +11,6 @@ const forwarded = useForwardPropsEmits(props, emits);
 
 <template>
   <HoverCardRoot v-bind="forwarded">
-    <slot></slot>
+    <slot />
   </HoverCardRoot>
 </template>

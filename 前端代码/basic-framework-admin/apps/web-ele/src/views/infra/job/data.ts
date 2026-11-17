@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -199,10 +199,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'status',
       label: '任务状态',
+      /** 用任务状态字典标签渲染单元格 */
       render: (val) => {
         return h(DictTag, {
           type: DICT_TYPE.INFRA_JOB_STATUS,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         });
       },
     },

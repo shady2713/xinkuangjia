@@ -3,7 +3,9 @@
  *
  * 依赖 e2e/fixtures/seed-e2e.sql 准备的测试账号和后端本地实例，命令见 e2e/README.md。
  */
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from '@playwright/test';
 
 import {
   adminAccount,

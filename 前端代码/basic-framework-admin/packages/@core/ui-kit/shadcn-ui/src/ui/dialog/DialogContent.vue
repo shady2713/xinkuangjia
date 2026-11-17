@@ -111,7 +111,7 @@ defineExpose({
         )
       "
     >
-      <slot></slot>
+      <slot />
 
       <DialogClose
         v-if="showClose"

@@ -10,6 +10,6 @@ const forwardedProps = useForwardProps(props);
 
 <template>
   <ContextMenuTrigger v-bind="forwardedProps">
-    <slot></slot>
+    <slot />
   </ContextMenuTrigger>
 </template>

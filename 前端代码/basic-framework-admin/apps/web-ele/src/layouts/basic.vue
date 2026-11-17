@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 import { computed, watch } from 'vue';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
@@ -7,6 +7,7 @@ import { AntdProfileOutlined } from '@vben/icons';
 import { BasicLayout, LockScreen, UserDropdown } from '@vben/layouts';
 import { preferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
+
 import { $t } from '#/locales';
 import { router } from '#/router';
 import { useAuthStore } from '#/store';

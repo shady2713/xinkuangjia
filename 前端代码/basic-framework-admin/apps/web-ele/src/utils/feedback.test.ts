@@ -1,4 +1,5 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { extractErrorMessage, normalizeErrorMessage } from './feedback';
 
 /** 反馈文案工具的单测 */

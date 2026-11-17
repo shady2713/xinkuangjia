@@ -9,6 +9,13 @@ import { defineLibraryConfig } from './library.ts';
 export * from './application.ts';
 export * from './library.ts';
 
+/**
+ * 按项目类型生成 Vite 配置。
+ * @param userConfigPromise 业务侧可选的 Vite 配置或异步工厂
+ * @param type 项目类型；auto 时根据是否存在 index.html 判断
+ * @returns 对应应用或库的 Vite 配置
+ * @throws 传入不受支持的项目类型时抛出错误
+ */
 function defineConfig(
   userConfigPromise?: DefineConfig,
   type: 'application' | 'auto' | 'library' = 'auto',
@@ -21,12 +28,15 @@ function defineConfig(
   }
 
   switch (projectType) {
-    case 'application':
+    case 'application': {
       return defineApplicationConfig(userConfigPromise);
-    case 'library':
+    }
+    case 'library': {
       return defineLibraryConfig(userConfigPromise);
-    default:
+    }
+    default: {
       throw new Error(`Unsupported project type: ${projectType}`);
+    }
   }
 }
 

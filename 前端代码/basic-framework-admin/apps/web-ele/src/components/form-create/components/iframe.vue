@@ -1,4 +1,4 @@
-﻿<!-- 网页 iframe 组件 (Element Plus 版本) -->
+<!-- 网页 iframe 组件 (Element Plus 版本) -->
 <script lang="ts" setup>
 import { computed } from 'vue';
 
@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<Props>(), {
   allowfullscreen: true,
   loading: 'lazy',
   sandbox: '',
+  formCreateInject: undefined,
 });
 
 // 接受父组件参数
