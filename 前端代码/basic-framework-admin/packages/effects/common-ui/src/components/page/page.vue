@@ -66,7 +66,7 @@ onMounted(() => {
       "
     >
       <div class="flex-auto">
-        <slot name="doc"></slot>
+        <slot name="doc" />
       </div>
     </div>
 
@@ -101,19 +101,19 @@ onMounted(() => {
       </div>
 
       <div v-if="$slots.extra">
-        <slot name="extra"></slot>
+        <slot name="extra" />
       </div>
     </div>
 
     <div :class="cn('h-full p-4', contentClass)" :style="contentStyle">
-      <slot></slot>
+      <slot />
     </div>
     <div
       v-if="$slots.footer"
       ref="footerRef"
       :class="cn('bg-card align-center flex px-6 py-4', footerClass)"
     >
-      <slot name="footer"></slot>
+      <slot name="footer" />
     </div>
   </div>
 </template>

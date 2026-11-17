@@ -32,12 +32,19 @@ const props = {
   direction: { default: 'horizontal', type: String },
 };
 
+/**
+ * 读取描述项插槽并把当前行数据交给插槽函数。
+ * @param slots 组件插槽集合
+ * @param slot 目标插槽名
+ * @param data 传给插槽的行数据
+ * @returns 插槽渲染结果；插槽不存在或不是函数时返回 null
+ */
 function getSlot(slots: Slots, slot: string, data?: Record<string, unknown>) {
   if (!slots || !Reflect.has(slots, slot)) {
     return null;
   }
   if (!isFunction(slots[slot])) {
-    logWarn('description:slot', slot + ' is not a function!');
+    logWarn('description:slot', `${slot} is not a function!`);
     return null;
   }
   const slotFn = slots[slot];

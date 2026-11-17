@@ -28,8 +28,8 @@ const isExpanded = ref(false); // 展开状态
 const expandedKeys = ref<number[]>([]); // 展开的节点
 
 type TreeNodeLike = {
-  id?: number;
   children?: TreeNodeLike[];
+  id?: number;
 };
 
 const [Form, formApi] = useVbenForm({

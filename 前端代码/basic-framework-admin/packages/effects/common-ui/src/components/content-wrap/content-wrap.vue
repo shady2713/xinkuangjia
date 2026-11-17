@@ -75,7 +75,7 @@ onMounted(() => {
             {{ title }}
           </div>
           <div v-if="$slots.extra" class="flex justify-end">
-            <slot name="extra"></slot>
+            <slot name="extra" />
           </div>
         </slot>
 
@@ -88,14 +88,14 @@ onMounted(() => {
     </div>
 
     <div :class="cn('h-full p-4', contentClass)" :style="contentStyle">
-      <slot></slot>
+      <slot />
     </div>
     <div
       v-if="$slots.footer"
       ref="footerRef"
       :class="cn('align-center flex px-6 py-4', footerClass)"
     >
-      <slot name="footer"></slot>
+      <slot name="footer" />
     </div>
   </div>
 </template>

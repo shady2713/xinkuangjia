@@ -1,1 +1,1 @@
-﻿declare module 'element-plus/es/components/*/style/css';
+declare module 'element-plus/es/components/*/style/css';

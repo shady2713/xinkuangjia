@@ -39,6 +39,6 @@ const style = computed((): CSSProperties => {
     :style="style"
     class="bottom-0 w-full bg-background-deep transition-all duration-200"
   >
-    <slot></slot>
+    <slot />
   </footer>
 </template>

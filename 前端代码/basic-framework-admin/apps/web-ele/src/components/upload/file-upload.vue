@@ -7,23 +7,23 @@ import { computed, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
-import { logError } from '@vben/utils';
-import { checkFileType, isObject, isString } from '@vben/utils';
+import { checkFileType, isObject, isString, logError } from '@vben/utils';
 
 import { ElButton, ElUpload } from 'element-plus';
 
-import { UploadResultStatus } from './typing';
-import {
-  requestUpload,
-  resolveUploadUrl,
-  resolveUploadValue,
-} from './use-upload-core';
-import { useUploadType } from './use-upload';
 import {
   showError,
   showErrorMessage,
   showSuccessMessage,
 } from '#/utils/feedback';
+
+import { UploadResultStatus } from './typing';
+import { useUploadType } from './use-upload';
+import {
+  requestUpload,
+  resolveUploadUrl,
+  resolveUploadValue,
+} from './use-upload-core';
 
 defineOptions({ name: 'FileUpload', inheritAttrs: false });
 

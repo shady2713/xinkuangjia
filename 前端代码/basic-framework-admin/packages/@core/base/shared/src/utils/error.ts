@@ -1,4 +1,4 @@
-﻿type ErrorLike = {
+type ErrorLike = {
   code?: number | string;
   message?: string;
   name?: string;
@@ -67,13 +67,22 @@ function getErrorMeta(error: unknown) {
   return meta;
 }
 
+/**
+ * 按统一格式输出作用域日志。
+ * @param level 日志级别
+ * @param scope 业务作用域标识
+ * @param error 可选的错误对象或说明
+ */
 function formatLogMessage(
   level: 'error' | 'warn',
   scope: string,
   error?: unknown,
 ) {
-  const message = error == null ? '' : getErrorMessage(error, 'Unknown error');
-  const meta = error == null ? {} : getErrorMeta(error);
+  const message =
+    error === null || error === undefined
+      ? ''
+      : getErrorMessage(error, 'Unknown error');
+  const meta = error === null || error === undefined ? {} : getErrorMeta(error);
   const suffix = Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
   const base = `[${scope}]${message ? ` ${message}` : ''}${suffix}`;
   if (level === 'warn') {

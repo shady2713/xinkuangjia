@@ -17,6 +17,8 @@ const props = withDefaults(defineProps<Props>(), {
   defaultCurrentDept: false,
   disabled: false,
   placeholder: '',
+  modelValue: undefined,
+  formCreateInject: undefined,
 });
 
 /** update:modelValue：选中部门变化时触发，载荷口径由 returnType 决定（部门 id 或名称），清空时为 undefined */
@@ -124,7 +126,7 @@ function handleChange(value: number | number[] | undefined): void {
 /** 树节点过滤方法（支持搜索过滤） */
 function filterNode(
   value: string,
-  data: { label?: string; name?: string; children?: unknown[] },
+  data: { children?: unknown[]; label?: string; name?: string },
 ): boolean {
   if (!value) return true;
   return !!data.name?.toLowerCase().includes(value.toLowerCase());

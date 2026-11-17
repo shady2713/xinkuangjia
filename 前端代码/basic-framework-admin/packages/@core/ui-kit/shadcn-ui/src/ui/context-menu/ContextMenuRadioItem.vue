@@ -42,6 +42,6 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
         <Circle class="h-2 w-2 fill-current" />
       </ContextMenuItemIndicator>
     </span>
-    <slot></slot>
+    <slot />
   </ContextMenuRadioItem>
 </template>

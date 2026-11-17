@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { useFormSchema } from './data';
+
 function createRuleChain() {
   return {
     default: vi.fn(() => createRuleChain()),
@@ -55,8 +57,6 @@ vi.mock('#/adapter/form', () => ({
     string: vi.fn(() => createRuleChain()),
   },
 }));
-
-import { useFormSchema } from './data';
 
 /** 系统用户表单配置的单测 */
 function describeSystemUserFormSchema() {

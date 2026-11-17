@@ -29,6 +29,6 @@ const delegatedProps = computed(() => {
       )
     "
   >
-    <slot></slot>
+    <slot />
   </ContextMenuLabel>
 </template>

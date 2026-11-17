@@ -1,7 +1,7 @@
 import CryptoJS from 'crypto-js';
+import { JSEncrypt } from 'jsencrypt';
 
 import { logError } from './error';
-import { JSEncrypt } from 'jsencrypt';
 
 const AES_IV_SIZE_BYTES = 16;
 const AES_IV_SIZE_WORDS = AES_IV_SIZE_BYTES / 4;
@@ -33,7 +33,8 @@ export const AES = {
    * AES 加密
    * @param data 要加密的数据
    * @param key 加密密钥
-   * @returns 加密后的字符串
+   * @returns 加密后的字符串，格式为 Base64(16 字节 IV + 密文)
+   * @throws 密钥为空或长度不是 16、24、32 位时抛出错误
    */
   encrypt(data: string, key: string): string {
     try {
@@ -46,7 +47,10 @@ export const AES = {
         mode: CryptoJS.mode.CBC,
         padding: CryptoJS.pad.Pkcs7,
       });
-      const payload = iv.clone().concat(encrypted.ciphertext);
+      const payload = CryptoJS.lib.WordArray.create(
+        [...iv.words, ...encrypted.ciphertext.words],
+        iv.sigBytes + encrypted.ciphertext.sigBytes,
+      );
       return CryptoJS.enc.Base64.stringify(payload);
     } catch (error) {
       logError('AES encrypt failed', error);

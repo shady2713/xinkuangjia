@@ -92,7 +92,7 @@ defineExpose({
         )
       "
     >
-      <slot></slot>
+      <slot />
     </AlertDialogContent>
   </AlertDialogPortal>
 </template>

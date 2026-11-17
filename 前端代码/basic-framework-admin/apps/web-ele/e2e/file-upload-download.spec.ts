@@ -5,9 +5,12 @@
  * 使用项目现有 /infra/file 上传与文件列表，不新增后端接口；对象存储与后端由
  * e2e/README.md 描述的本地环境提供。
  */
+import type { BrowserContext, Page } from '@playwright/test';
+
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   adminAccount,

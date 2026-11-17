@@ -31,6 +31,6 @@ const forwardedProps = useForwardProps(delegatedProps);
       )
     "
   >
-    <slot></slot>
+    <slot />
   </DropdownMenuItem>
 </template>

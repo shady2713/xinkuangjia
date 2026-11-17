@@ -1,4 +1,4 @@
-﻿export interface ShortcutsType {
+export interface ShortcutsType {
   text: string;
   value: string;
 }

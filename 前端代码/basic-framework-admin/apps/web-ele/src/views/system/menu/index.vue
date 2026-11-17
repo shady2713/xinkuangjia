@@ -10,8 +10,8 @@ import { SystemMenuTypeEnum } from '@vben/constants';
 import { IconifyIcon } from '@vben/icons';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudItemActions } from '#/composables/use-crud-actions';
 import { deleteMenu, getMenuList } from '#/api/system/menu';
+import { useCrudItemActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns } from './data';

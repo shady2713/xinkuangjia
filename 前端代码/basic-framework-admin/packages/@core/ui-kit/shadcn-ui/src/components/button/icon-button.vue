@@ -41,7 +41,7 @@ const showTooltip = computed(() => !!slots.tooltip || !!props.tooltip);
     size="icon"
     @click="onClick"
   >
-    <slot></slot>
+    <slot />
   </VbenButton>
 
   <VbenTooltip
@@ -57,10 +57,10 @@ const showTooltip = computed(() => !!slots.tooltip || !!props.tooltip);
         size="icon"
         @click="onClick"
       >
-        <slot></slot>
+        <slot />
       </VbenButton>
     </template>
-    <slot v-if="slots.tooltip" name="tooltip"> </slot>
+    <slot v-if="slots.tooltip" name="tooltip" />
     <template v-else>
       {{ tooltip }}
     </template>

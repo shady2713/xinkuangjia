@@ -103,7 +103,7 @@ const bindProps = computed<Recordable<any>>(() => {
 <template>
   <VueJsonViewer v-bind="bindProps">
     <template #copy="slotProps">
-      <slot name="copy" v-bind="slotProps"></slot>
+      <slot name="copy" v-bind="slotProps" />
     </template>
   </VueJsonViewer>
 </template>

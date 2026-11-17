@@ -25,6 +25,6 @@ const style = computed((): CSSProperties => {
     :style="style"
     class="flex w-full border-b border-border bg-background transition-all"
   >
-    <slot></slot>
+    <slot />
   </section>
 </template>

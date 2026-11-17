@@ -50,13 +50,16 @@ export function resolveUploadUrl(response: unknown): string {
 /**
  * 计算某个已上传文件对外暴露的值。
  * 配置了 resultField 时返回完整响应对象，由调用方自行按字段取值；否则依次回退为文件 URL、响应中的 URL、原始响应。
+ * @param file 已上传文件对象
+ * @param resultField 若传入，则直接返回完整响应对象
+ * @returns 供表单绑定的上传结果值
  */
 export function resolveUploadValue(
   file: UploadFile,
   resultField?: string,
 ): unknown {
   const response = unwrapUploadResponse(file.response);
-  if (resultField && response != null) {
+  if (resultField && response !== null && response !== undefined) {
     return response;
   }
   return file.url || resolveUploadUrl(response) || response;

@@ -11,8 +11,8 @@ import { isEmpty } from '@vben/utils';
 import { ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import { deleteDept, deleteDeptList, getDeptList } from '#/api/system/dept';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns } from './data';

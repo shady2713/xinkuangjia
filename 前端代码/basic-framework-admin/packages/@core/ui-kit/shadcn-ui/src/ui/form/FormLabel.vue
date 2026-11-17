@@ -13,6 +13,6 @@ const { formItemId } = useFormField();
 
 <template>
   <Label :class="cn(props.class)" :for="formItemId">
-    <slot></slot>
+    <slot />
   </Label>
 </template>

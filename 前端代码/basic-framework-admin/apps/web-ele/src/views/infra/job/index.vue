@@ -13,7 +13,6 @@ import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
 import { ElLoading, ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { useCrudActions } from '#/composables/use-crud-actions';
 import {
   deleteJob,
   deleteJobList,
@@ -22,6 +21,7 @@ import {
   runJob,
   updateJobStatus,
 } from '#/api/infra/job';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
 import { useGridColumns, useGridFormSchema } from './data';

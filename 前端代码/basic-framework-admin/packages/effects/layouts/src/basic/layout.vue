@@ -276,7 +276,7 @@ const headerSlots = computed(() => {
         @click="clickLogo"
       >
         <template v-if="$slots['logo-text']" #text>
-          <slot name="logo-text"></slot>
+          <slot name="logo-text" />
         </template>
       </VbenLogo>
     </template>
@@ -309,16 +309,16 @@ const headerSlots = computed(() => {
           />
         </template>
         <template #user-dropdown>
-          <slot name="user-dropdown"></slot>
+          <slot name="user-dropdown" />
         </template>
         <template #notification>
-          <slot name="notification"></slot>
+          <slot name="notification" />
         </template>
         <template #timezone>
-          <slot name="timezone"></slot>
+          <slot name="timezone" />
         </template>
         <template v-for="item in headerSlots" #[item]>
-          <slot :name="item"></slot>
+          <slot :name="item" />
         </template>
       </LayoutHeader>
     </template>
@@ -366,7 +366,7 @@ const headerSlots = computed(() => {
         :theme="theme"
       >
         <template v-if="$slots['logo-text']" #text>
-          <slot name="logo-text"></slot>
+          <slot name="logo-text" />
         </template>
       </VbenLogo>
     </template>
@@ -399,14 +399,14 @@ const headerSlots = computed(() => {
     </template>
 
     <template #extra>
-      <slot name="extra"></slot>
+      <slot name="extra" />
       <CheckUpdates
         v-if="preferences.app.enableCheckUpdates"
         :check-updates-interval="preferences.app.checkUpdatesInterval"
       />
 
       <Transition v-if="preferences.widget.lockScreen" name="slide-up">
-        <slot v-if="accessStore.isLockScreen" name="lock-screen"></slot>
+        <slot v-if="accessStore.isLockScreen" name="lock-screen" />
       </Transition>
 
       <template v-if="preferencesButtonPosition.fixed">

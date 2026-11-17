@@ -8,7 +8,7 @@ export namespace SystemDeptApi {
     parentId?: number;
     status: number;
     sort: number;
-    leaderUserId: number | null;
+    leaderUserId: null | number;
     phone: string;
     email: string;
     createTime: Date;

@@ -13,6 +13,6 @@ const props = defineProps<{
     aria-disabled="true"
     role="link"
   >
-    <slot></slot>
+    <slot />
   </span>
 </template>

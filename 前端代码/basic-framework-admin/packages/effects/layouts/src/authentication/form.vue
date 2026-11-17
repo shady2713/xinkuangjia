@@ -12,7 +12,7 @@ defineProps<{
   <div
     class="flex-col-center dark:bg-background-deep bg-background relative px-6 py-10 lg:flex-initial lg:px-8"
   >
-    <slot></slot>
+    <slot />
     <!-- Router View with Transition and KeepAlive -->
     <RouterView v-slot="{ Component, route }">
       <Transition appear mode="out-in" name="slide-right">
@@ -32,7 +32,7 @@ defineProps<{
     <div
       class="text-muted-foreground absolute bottom-3 flex text-center text-xs"
     >
-      <slot name="copyright"> </slot>
+      <slot name="copyright" />
     </div>
   </div>
 </template>

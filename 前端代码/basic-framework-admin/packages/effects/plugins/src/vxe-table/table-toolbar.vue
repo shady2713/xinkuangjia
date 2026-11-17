@@ -37,7 +37,7 @@ defineExpose({
 <template>
   <VxeToolbar ref="toolbarRef" custom>
     <template #toolPrefix>
-      <slot></slot>
+      <slot />
       <VxeTooltip placement="bottom" content="搜索">
         <template #default>
           <VxeButton class="ml-2 font-normal" circle @click="onHiddenSearchBar">

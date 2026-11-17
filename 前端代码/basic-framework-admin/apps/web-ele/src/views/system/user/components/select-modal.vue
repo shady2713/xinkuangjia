@@ -31,9 +31,9 @@ interface DeptTreeNode {
 }
 
 type DeptSourceNode = {
+  children?: DeptSourceNode[];
   id?: number;
   name?: string;
-  children?: DeptSourceNode[];
 };
 
 defineOptions({ name: 'UserSelectModal' });
@@ -176,47 +176,67 @@ const transferDataSource = computed(() => {
   }));
 });
 
-// 过滤部门树数据
-const filteredDeptTree = computed(() => {
-  if (!deptSearchKeys.value) return deptTree.value;
+const filteredDeptTree = computed(
+  /**
+   * 按搜索关键字过滤后的部门树，供左侧树选择使用。
+   * @returns 过滤后的部门节点列表
+   */
+  () => {
+    if (!deptSearchKeys.value) return deptTree.value;
 
-  const filterNode = (node: DeptTreeNode, depth = 0): DeptTreeNode | null => {
-    // 添加深度限制，防止过深的递归导致爆栈
-    if (depth > 100) return null;
+    /**
+     * 递归保留名称匹配的节点及其祖先。
+     * @param node 当前部门节点
+     * @param depth 递归深度，超过上限时停止，避免过深栈
+     * @returns 过滤后的节点；不匹配且无匹配子节点时返回 null
+     */
+    const filterNode = (node: DeptTreeNode, depth = 0): DeptTreeNode | null => {
+      // 添加深度限制，防止过深的递归导致爆栈
+      if (depth > 100) return null;
 
-    // 按部门名称搜索
-    const name = node?.name?.toLowerCase();
-    const search = deptSearchKeys.value.toLowerCase();
+      // 按部门名称搜索
+      const name = node?.name?.toLowerCase();
+      const search = deptSearchKeys.value.toLowerCase();
 
-    // 如果当前节点匹配，直接返回节点，不处理子节点
-    if (name?.includes(search)) {
-      return {
-        ...node,
-        children: node.children,
-      };
-    }
-
-    // 如果当前节点不匹配，检查子节点
-    if (node.children) {
-      const filteredChildren = node.children
-        .map((child) => filterNode(child, depth + 1))
-        .filter((child): child is DeptTreeNode => Boolean(child));
-
-      if (filteredChildren.length > 0) {
+      // 如果当前节点匹配，直接返回节点，不处理子节点
+      if (name?.includes(search)) {
         return {
           ...node,
-          children: filteredChildren,
+          children: node.children,
         };
       }
+
+      // 如果当前节点不匹配，检查子节点
+      if (node.children) {
+        const filteredChildren: DeptTreeNode[] = [];
+        for (const child of node.children) {
+          const next = filterNode(child, depth + 1);
+          if (next !== null) {
+            filteredChildren.push(next);
+          }
+        }
+
+        if (filteredChildren.length > 0) {
+          return {
+            ...node,
+            children: filteredChildren,
+          };
+        }
+      }
+
+      return null;
+    };
+
+    const filteredRoots: DeptTreeNode[] = [];
+    for (const node of deptTree.value) {
+      const next = filterNode(node);
+      if (next !== null) {
+        filteredRoots.push(next);
+      }
     }
-
-    return null;
-  };
-
-  return deptTree.value
-    .map((node) => filterNode(node))
-    .filter((node): node is DeptTreeNode => Boolean(node));
-});
+    return filteredRoots;
+  },
+);
 
 // 加载用户数据
 async function loadUserData(pageNo: number, pageSize: number) {

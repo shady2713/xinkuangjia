@@ -1,4 +1,4 @@
-// eslint-disable-next-line vue/prefer-import-from-vue
+/** 共享的值类型判断工具。 */
 import { isFunction, isObject, isString } from '@vue/shared';
 
 /**

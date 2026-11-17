@@ -119,7 +119,7 @@ function describeDateUtils() {
       expect(typeof tz).toBe('string');
       // CI runner 常为 UTC；IANA 也允许 Etc/UTC 与 Area/Location 形式。
       expect(
-        tz === 'UTC' || /^(Etc\/)?[A-Za-z]+(?:\/[A-Za-z_]+)+$/.test(tz),
+        tz === 'UTC' || /^(?:Etc\/)?[A-Za-z]+(?:\/[A-Za-z_]+)+$/.test(tz),
       ).toBe(true);
     }
 

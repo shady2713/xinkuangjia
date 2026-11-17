@@ -77,15 +77,14 @@ if (homepage) {
 }
 
 if (authorName || authorEmail) {
-  const authorContent: Array<string | ReturnType<typeof h>> = [];
+  const authorContent: Array<ReturnType<typeof h> | string> = [];
   if (authorName && authorUrl) {
     authorContent.push(renderLink(authorUrl, `${authorName} `));
   } else if (authorName) {
     authorContent.push(authorName);
   }
   if (authorEmail) {
-    authorContent.push(' ');
-    authorContent.push(renderLink(`mailto:${authorEmail}`, authorEmail));
+    authorContent.push(' ', renderLink(`mailto:${authorEmail}`, authorEmail));
   }
   descriptionItems.push({
     content: h('div', authorContent),

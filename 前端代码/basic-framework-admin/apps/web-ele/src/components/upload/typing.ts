@@ -1,4 +1,4 @@
-﻿import type { AxiosResponse } from '@vben/request';
+import type { AxiosResponse } from '@vben/request';
 
 import type { AxiosProgressEvent } from '#/api/core/file';
 
@@ -20,7 +20,7 @@ export interface UploadApiPayload {
 }
 
 export type UploadApiResult =
-  AxiosResponse<UploadApiPayload> | UploadApiPayload | string;
+  AxiosResponse<UploadApiPayload> | string | UploadApiPayload;
 
 /** 文件上传组件属性 */
 export interface FileUploadProps {

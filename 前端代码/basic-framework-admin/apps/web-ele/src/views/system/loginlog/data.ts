@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -112,10 +112,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'logType',
       label: '登录类型',
+      /** 用登录类型字典标签渲染单元格 */
       render: (val) => {
         return h(DictTag, {
           type: DICT_TYPE.SYSTEM_LOGIN_TYPE,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         });
       },
     },
@@ -134,10 +135,11 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'result',
       label: '登录结果',
+      /** 用登录结果字典标签渲染单元格 */
       render: (val) => {
         return h(DictTag, {
           type: DICT_TYPE.SYSTEM_LOGIN_RESULT,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         });
       },
     },

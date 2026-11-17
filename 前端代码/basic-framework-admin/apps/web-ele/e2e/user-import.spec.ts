@@ -5,7 +5,9 @@
  * 夹具 e2e/fixtures/user-import.xlsx 与 seed-e2e.sql 的初始密码配置配合使用；
  * 用例勾选“是否覆盖”，重复执行时走更新分支，避免账号已存在造成偶发失败。
  */
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from '@playwright/test';
 
 import {
   adminAccount,

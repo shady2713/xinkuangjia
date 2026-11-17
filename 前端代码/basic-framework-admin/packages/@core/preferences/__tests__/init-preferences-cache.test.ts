@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+/**
+ * 构造用于隔离本地缓存的内存 Storage。
+ * @returns 仅存当前用例数据的 Storage 替身
+ */
 function createStorage() {
   const store = new Map<string, string>();
 
@@ -10,8 +14,13 @@ function createStorage() {
     getItem(key: string) {
       return store.has(key) ? (store.get(key) as string) : null;
     },
+    /**
+     * 按插入顺序读取键名。
+     * @param index 键的位置
+     * @returns 对应键名；越界时返回 null
+     */
     key(index: number) {
-      return Array.from(store.keys())[index] ?? null;
+      return [...store.keys()][index] ?? null;
     },
     get length() {
       return store.size;
@@ -25,7 +34,11 @@ function createStorage() {
   };
 }
 
-describe('PreferenceManager cache precedence', () => {
+/**
+ * 验证偏好设置初始化时本地缓存的优先级。
+ */
+function describePreferenceManagerCachePrecedence() {
+  /** 每个用例重置模块，并用内存 Storage 替换浏览器缓存。 */
   beforeEach(() => {
     vi.resetModules();
 
@@ -82,4 +95,9 @@ describe('PreferenceManager cache precedence', () => {
 
     expect(preferenceManager.getPreferences().app.name).toBe('agent-brand');
   });
-});
+}
+
+describe(
+  'preferenceManager cache precedence',
+  describePreferenceManagerCachePrecedence,
+);

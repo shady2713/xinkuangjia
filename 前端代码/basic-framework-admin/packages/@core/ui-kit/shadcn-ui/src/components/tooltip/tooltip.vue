@@ -29,7 +29,7 @@ withDefaults(defineProps<Props>(), {
   <TooltipProvider :delay-duration="delayDuration">
     <Tooltip>
       <TooltipTrigger as-child tabindex="-1">
-        <slot name="trigger"></slot>
+        <slot name="trigger" />
       </TooltipTrigger>
       <TooltipContent
         :class="contentClass"
@@ -37,7 +37,7 @@ withDefaults(defineProps<Props>(), {
         :style="contentStyle"
         class="side-content rounded-md bg-accent text-popover-foreground"
       >
-        <slot></slot>
+        <slot />
       </TooltipContent>
     </Tooltip>
   </TooltipProvider>

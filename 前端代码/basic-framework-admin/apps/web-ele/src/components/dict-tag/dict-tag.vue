@@ -11,7 +11,7 @@ import { ElTag } from 'element-plus';
 
 interface DictTagProps {
   type: string; // 字典类型
-  value: string | number | boolean; // 字典值
+  value: boolean | number | string; // 字典值
   icon?: string; // 图标
 }
 

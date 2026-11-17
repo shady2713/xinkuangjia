@@ -11,6 +11,6 @@ const forwarded = useForwardPropsEmits(props, emits);
 
 <template>
   <AccordionRoot v-bind="forwarded">
-    <slot></slot>
+    <slot />
   </AccordionRoot>
 </template>

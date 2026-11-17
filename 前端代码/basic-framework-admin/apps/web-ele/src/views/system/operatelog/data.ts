@@ -1,4 +1,4 @@
-﻿import type { VbenFormSchema } from '#/adapter/form';
+import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { DescriptionItemSchema } from '#/components/description';
 
@@ -12,8 +12,8 @@ import { DictTag } from '#/components/dict-tag';
 import { getRangePickerDefaultProps } from '#/utils';
 
 type OperateLogDetail = {
-  traceId?: string;
   requestMethod?: string;
+  traceId?: string;
 };
 
 /** 列表的搜索表单 */
@@ -159,7 +159,7 @@ export function useDetailSchema(): DescriptionItemSchema[] {
       render: (val) =>
         h(DictTag, {
           type: DICT_TYPE.USER_TYPE,
-          value: val as string | number | boolean,
+          value: val as boolean | number | string,
         }),
     },
     {

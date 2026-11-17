@@ -49,13 +49,16 @@ export function deleteSmsChannel(id: number) {
 
 /**
  * 发送测试短信
- * @param data 测试短信的模板编码、模板参数和手机号
+ * @param data 测试短信请求体
+ * @param data.mobile 接收测试短信的手机号
+ * @param data.templateCode 短信模板编码
+ * @param data.templateParams 模板变量
  * @returns 后端发送结果
  */
 export function sendTestSms(data: {
+  mobile: string;
   templateCode: string;
   templateParams: Record<string, object>;
-  mobile: string;
 }) {
   return requestClient.post('/system/sms-channel/test-sms', data);
 }
