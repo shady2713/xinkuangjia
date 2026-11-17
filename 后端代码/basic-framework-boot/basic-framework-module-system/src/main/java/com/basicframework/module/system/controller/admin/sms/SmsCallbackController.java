@@ -4,6 +4,8 @@ import com.basicframework.framework.common.util.servlet.ServletUtils;
 
 import com.basicframework.module.system.controller.admin.sms.vo.callback.AliyunSmsCallbackRespVO;
 import com.basicframework.module.system.controller.admin.sms.vo.callback.TencentSmsCallbackRespVO;
+import com.basicframework.module.system.framework.sms.core.callback.SmsCallbackSignatureVerifier;
+import com.basicframework.module.system.framework.sms.core.callback.SmsCallbackVerificationResult;
 import com.basicframework.module.system.framework.sms.core.enums.SmsChannelEnum;
 import com.basicframework.module.system.service.sms.SmsSendService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,7 +22,9 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * 短信供应商状态回执入口。
  *
- * <p>回调保持匿名访问，但按供应商协议返回固定响应；处理失败返回 HTTP 50X 触发重试。</p>
+ * <p>回调保持匿名访问，但写入回执状态前必须通过按渠道密钥计算的 HMAC-SHA256 验签；
+ * 验签失败返回 401，渠道未配置密钥返回 503，两种情况都不会解析请求体或写入回执状态。
+ * 验签通过后按供应商协议返回固定响应，解析或落库失败返回 HTTP 500 触发重试。</p>
  *
  * @author 李杰
  */
@@ -33,11 +37,17 @@ public class SmsCallbackController {
     @Resource
     private SmsSendService smsSendService;
 
+    @Resource
+    private SmsCallbackSignatureVerifier smsCallbackSignatureVerifier;
+
     /**
      * 接收阿里云短信状态回执。
      *
+     * <p>请求必须携带 {@code X-Sms-Callback-Timestamp} 与 {@code X-Sms-Callback-Signature}
+     * 请求头，签名覆盖 {@code ALIYUN\n时间戳\n原始请求体}；只有验签通过才交给业务服务解析。</p>
+     *
      * @param request HTTP 请求
-     * @return 阿里云协议响应；处理失败时 HTTP 状态为 500
+     * @return 阿里云协议响应；验签失败时 HTTP 状态为 401，未配置密钥为 503，处理失败为 500
      */
     @PostMapping("/aliyun")
     @PermitAll
@@ -46,6 +56,13 @@ public class SmsCallbackController {
     public ResponseEntity<AliyunSmsCallbackRespVO> receiveAliyunSmsStatus(HttpServletRequest request) {
         try {
             String text = ServletUtils.getBody(request);
+            SmsCallbackVerificationResult verification = smsCallbackSignatureVerifier.verify(
+                    SmsChannelEnum.ALIYUN.getCode(), request, text);
+            if (verification != SmsCallbackVerificationResult.PASS) {
+                log.warn("[receiveAliyunSmsStatus][短信回执验签未通过({})]", verification);
+                return ResponseEntity.status(resolveRejectStatus(verification))
+                        .body(AliyunSmsCallbackRespVO.failure());
+            }
             smsSendService.receiveSmsStatus(SmsChannelEnum.ALIYUN.getCode(), text);
             return ResponseEntity.ok(AliyunSmsCallbackRespVO.success());
         } catch (Exception ex) {
@@ -57,8 +74,11 @@ public class SmsCallbackController {
     /**
      * 接收腾讯云短信状态回执。
      *
+     * <p>请求必须携带 {@code X-Sms-Callback-Timestamp} 与 {@code X-Sms-Callback-Signature}
+     * 请求头，签名覆盖 {@code TENCENT\n时间戳\n原始请求体}；只有验签通过才交给业务服务解析。</p>
+     *
      * @param request HTTP 请求
-     * @return 腾讯云协议响应；处理失败时 HTTP 状态为 500
+     * @return 腾讯云协议响应；验签失败时 HTTP 状态为 401，未配置密钥为 503，处理失败为 500
      */
     @PostMapping("/tencent")
     @PermitAll
@@ -67,12 +87,30 @@ public class SmsCallbackController {
     public ResponseEntity<TencentSmsCallbackRespVO> receiveTencentSmsStatus(HttpServletRequest request) {
         try {
             String text = ServletUtils.getBody(request);
+            SmsCallbackVerificationResult verification = smsCallbackSignatureVerifier.verify(
+                    SmsChannelEnum.TENCENT.getCode(), request, text);
+            if (verification != SmsCallbackVerificationResult.PASS) {
+                log.warn("[receiveTencentSmsStatus][短信回执验签未通过({})]", verification);
+                return ResponseEntity.status(resolveRejectStatus(verification))
+                        .body(TencentSmsCallbackRespVO.failure());
+            }
             smsSendService.receiveSmsStatus(SmsChannelEnum.TENCENT.getCode(), text);
             return ResponseEntity.ok(TencentSmsCallbackRespVO.success());
         } catch (Exception ex) {
             log.warn("[receiveTencentSmsStatus][短信回执处理失败]", ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(TencentSmsCallbackRespVO.failure());
         }
+    }
+
+    /**
+     * 将验签拒绝结果映射为 HTTP 状态。
+     *
+     * @param result 验签结果，调用方保证不是 {@link SmsCallbackVerificationResult#PASS}
+     * @return 未配置密钥时为 503，其余拒绝为 401
+     */
+    private static HttpStatus resolveRejectStatus(SmsCallbackVerificationResult result) {
+        return result == SmsCallbackVerificationResult.NOT_CONFIGURED
+                ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.UNAUTHORIZED;
     }
 
 }
