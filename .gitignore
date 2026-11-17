@@ -32,3 +32,10 @@ __pycache__/
 .pytest_cache/
 .stylelintcache
 LOG_FILE_IS_UNDEFINED
+
+# Isolated local e2e runtime (databases, object storage, env files with secrets).
+/.e2e-env/
+
+# Playwright local artifacts
+/前端代码/basic-framework-admin/apps/**/test-results/
+/前端代码/basic-framework-admin/apps/**/playwright-report/

@@ -6,7 +6,9 @@ export default defineConfig({
   },
   fullyParallel: true,
   reporter: [['list']],
+  screenshot: 'only-on-failure',
   testDir: './e2e',
+  timeout: 60_000,
   use: {
     baseURL: 'http://127.0.0.1:4173/admin/',
     trace: 'retain-on-failure',
