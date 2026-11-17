@@ -170,9 +170,11 @@ function hasOwnProp(props: Record<string, any>, key: string) {
   return Object.prototype.hasOwnProperty.call(props, key);
 }
 
+/** 判断当前组件是否为文本输入 */
 function isTextInputComponent() {
   return (
-    isString(component) && ['Input', 'Textarea', 'VbenInput'].includes(component)
+    isString(component) &&
+    ['Input', 'Textarea', 'VbenInput'].includes(component)
   );
 }
 
@@ -185,8 +187,14 @@ function isNumberInputComponent(props: Record<string, any>) {
   );
 }
 
+/**
+ * 按字段语义给出默认文本长度上限
+ * @param props 组件属性
+ * @returns 默认最大长度
+ */
 function getDefaultTextMaxLength(props: Record<string, any>) {
-  const fieldIdentity = `${fieldName} ${isString(label) ? label : ''}`.toLowerCase();
+  const fieldIdentity =
+    `${fieldName} ${isString(label) ? label : ''}`.toLowerCase();
   const inputType = String(props.type || '').toLowerCase();
 
   if (
@@ -207,13 +215,22 @@ function getDefaultTextMaxLength(props: Record<string, any>) {
     return DEFAULT_LINK_MAX_LENGTH;
   }
 
-  if (/name|title|label|code|key|名称|标题|标签|编码|代码|关键字|关键词/.test(fieldIdentity)) {
+  if (
+    /name|title|label|code|key|名称|标题|标签|编码|代码|关键字|关键词/.test(
+      fieldIdentity,
+    )
+  ) {
     return DEFAULT_NAME_MAX_LENGTH;
   }
 
   return DEFAULT_INPUT_MAX_LENGTH;
 }
 
+/**
+ * 为数字和文本输入补上默认范围或长度限制
+ * @param props 组件属性
+ * @returns 合并默认限制后的属性
+ */
 function appendDefaultLimitProps(props: MaybeComponentProps = {}) {
   const finalProps: Record<string, any> = { ...props };
 
@@ -236,14 +253,18 @@ function appendDefaultLimitProps(props: MaybeComponentProps = {}) {
   }
 
   // 文本字段默认补长度上限；已有 maxlength/maxLength 的页面配置优先。
-  if (!hasOwnProp(finalProps, 'maxlength') && !hasOwnProp(finalProps, 'maxLength')) {
+  if (
+    !hasOwnProp(finalProps, 'maxlength') &&
+    !hasOwnProp(finalProps, 'maxLength')
+  ) {
     finalProps.maxlength = getDefaultTextMaxLength(finalProps);
   }
 
   if (
     isString(component) &&
     ['Input', 'Textarea'].includes(component) &&
-    (hasOwnProp(finalProps, 'maxlength') || hasOwnProp(finalProps, 'maxLength')) &&
+    (hasOwnProp(finalProps, 'maxlength') ||
+      hasOwnProp(finalProps, 'maxLength')) &&
     !hasOwnProp(finalProps, 'showWordLimit')
   ) {
     // 有长度上限的 Element Plus 文本框统一显示“当前字数/上限”，让限制在表单上可见。

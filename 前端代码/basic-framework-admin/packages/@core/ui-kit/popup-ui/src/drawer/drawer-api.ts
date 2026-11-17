@@ -3,6 +3,9 @@ import type { DrawerApiOptions, DrawerState } from './drawer';
 import { Store } from '@vben-core/shared/store';
 import { bindMethods, isFunction } from '@vben-core/shared/utils';
 
+/** 基于上一状态计算部分更新 */
+type DrawerStateUpdater = (prev: DrawerState) => Partial<DrawerState>;
+
 export class DrawerApi {
   // 共享数据
   public sharedData: Record<'payload', any> = {
@@ -164,11 +167,12 @@ export class DrawerApi {
     return this;
   }
 
-  setState(
-    stateOrFn:
-      | ((prev: DrawerState) => Partial<DrawerState>)
-      | Partial<DrawerState>,
-  ) {
+  /**
+   * 更新抽屉状态
+   * @param stateOrFn 新的部分状态，或基于上一状态计算的更新函数
+   * @returns 当前 API 实例，便于链式调用
+   */
+  setState(stateOrFn: DrawerStateUpdater | Partial<DrawerState>) {
     if (isFunction(stateOrFn)) {
       this.store.setState(stateOrFn);
     } else {

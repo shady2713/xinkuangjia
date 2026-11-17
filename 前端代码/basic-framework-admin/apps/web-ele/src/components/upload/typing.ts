@@ -20,9 +20,7 @@ export interface UploadApiPayload {
 }
 
 export type UploadApiResult =
-  | AxiosResponse<UploadApiPayload>
-  | UploadApiPayload
-  | string;
+  AxiosResponse<UploadApiPayload> | UploadApiPayload | string;
 
 /** 文件上传组件属性 */
 export interface FileUploadProps {

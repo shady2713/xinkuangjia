@@ -1,5 +1,5 @@
 ---
-description: "说明 turbo-run 的交互选择与脚本执行方式，供开发者运行工作区应用的已有任务时查阅。"
+description: '说明 turbo-run 的交互选择与脚本执行方式，供开发者运行工作区应用的已有任务时查阅。'
 kind: package-reference
 ---
 
@@ -8,7 +8,6 @@ kind: package-reference
 ## 摘要
 
 `turbo-run` 是一个命令行工具，用于选择工作区中的一个包并运行其脚本。它提供了一个交互式的界面，让你可以选择要运行命令的包。
-
 
 ## 目录
 

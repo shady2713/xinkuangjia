@@ -8,7 +8,6 @@ import { AuthenticationCodeLogin, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 import { logError } from '@vben/utils';
 
-
 import { sendSmsCode } from '#/api';
 import { useAuthStore } from '#/store';
 import { showSuccessMessage } from '#/utils/feedback';
@@ -104,7 +103,3 @@ async function handleLogin(values: Recordable<any>) {
     @submit="handleLogin"
   />
 </template>
-
-
-
-

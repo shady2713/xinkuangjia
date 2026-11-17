@@ -132,7 +132,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-/** 详情页的字段 */
+/**
+ * 详情页的字段
+ * @returns 详情描述项列表
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -190,4 +193,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

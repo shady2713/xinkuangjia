@@ -13,7 +13,6 @@ import { ElTimeline, ElTimelineItem } from 'element-plus';
 import { CronTab } from '#/components/cron-tab';
 import { DictTag } from '#/components/dict-tag';
 
-
 /** 新增/修改的表单 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -183,7 +182,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-/** 详情页的字段 */
+/**
+ * 详情页的字段
+ * @returns 详情描述项列表
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -253,4 +255,3 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     },
   ];
 }
-

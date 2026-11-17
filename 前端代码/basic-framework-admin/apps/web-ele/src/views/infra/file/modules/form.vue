@@ -100,5 +100,3 @@ function beforeUpload(_rawFile: UploadRawFile) {
     </Form>
   </Modal>
 </template>
-
-

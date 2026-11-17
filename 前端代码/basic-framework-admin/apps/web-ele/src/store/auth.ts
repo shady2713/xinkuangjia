@@ -44,9 +44,7 @@ function useAuthState() {
   async function authLogin(
     type: 'mobile' | 'register' | 'username',
     params:
-      | AuthApi.LoginParams
-      | AuthApi.RegisterParams
-      | AuthApi.SmsLoginParams,
+      AuthApi.LoginParams | AuthApi.RegisterParams | AuthApi.SmsLoginParams,
     onSuccess?: () => Promise<void> | void,
   ) {
     // 异步处理用户登录操作并获取 accessToken

@@ -4,7 +4,8 @@ import { defaultPreferences } from '../src/config';
 import { PreferenceManager } from '../src/preferences';
 import { isDarkTheme } from '../src/update-css-variables';
 
-describe('preferences', () => {
+/** 偏好设置管理的单测 */
+function describePreferences() {
   let preferenceManager: PreferenceManager;
 
   // 模拟 window.matchMedia 方法
@@ -54,7 +55,6 @@ describe('preferences', () => {
 
     expect(preferenceManager.getPreferences()).toEqual(expected);
   });
-
 
   it('updates theme mode correctly', () => {
     preferenceManager.updatePreferences({
@@ -223,7 +223,9 @@ describe('preferences', () => {
 
     expect(preferenceManager.getPreferences().theme.mode).toBe('light');
   });
-});
+}
+
+describe('preferences', describePreferences);
 
 describe('isDarkTheme', () => {
   it('should return true for dark theme', () => {

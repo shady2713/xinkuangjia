@@ -25,8 +25,7 @@ type Breakpoints = '2xl:' | '3xl:' | '' | 'lg:' | 'md:' | 'sm:' | 'xl:';
 type GridCols = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export type WrapperClassType =
-  | `${Breakpoints}grid-cols-${GridCols}`
-  | (Record<never, never> & string);
+  `${Breakpoints}grid-cols-${GridCols}` | (Record<never, never> & string);
 
 export type FormItemClassType =
   | `${Breakpoints}cols-end-${'auto' | GridCols}`
@@ -227,15 +226,13 @@ export type HandleResetFn = (
   values: Record<string, any>,
 ) => Promise<void> | void;
 
+/** 把时间字段值转成目标格式 */
+type FieldMappingTimeTransform = (value: any, fieldName: string) => any;
+
 export type FieldMappingTime = [
   string,
   [string, string],
-  (
-    | ((value: any, fieldName: string) => any)
-    | [string, string]
-    | null
-    | string
-  )?,
+  (FieldMappingTimeTransform | [string, string] | null | string)?,
 ][];
 
 export type ArrayToStringFields = Array<

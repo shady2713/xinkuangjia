@@ -37,7 +37,6 @@ async function handleExport() {
   downloadFileFromBlobPart({ fileName: '岗位.xls', source: data });
 }
 
-
 const {
   checkedIds,
   clearCheckedIds,

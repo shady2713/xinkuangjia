@@ -14,9 +14,9 @@ import { VxeGridApi } from './api';
 import VxeGrid from './use-vxe-grid.vue';
 
 type FilteredSlots<T> = {
-  [K in keyof VxeGridSlots<T> as K extends 'form'
-    ? never
-    : K]: VxeGridSlots<T>[K];
+  [
+    K in keyof VxeGridSlots<T> as K extends 'form' ? never : K
+  ]: VxeGridSlots<T>[K];
 };
 
 /** 创建 VxeGrid 表格组件及其 API 实例的 composable 函数 */

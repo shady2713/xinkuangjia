@@ -37,12 +37,7 @@ interface RouteMeta {
    * 徽标颜色
    */
   badgeVariants?:
-    | 'default'
-    | 'destructive'
-    | 'primary'
-    | 'success'
-    | 'warning'
-    | string;
+    'default' | 'destructive' | 'primary' | 'success' | 'warning' | string;
   /**
    * 路由的完整路径作为key（默认true）
    */

@@ -114,16 +114,21 @@ export const AjCaptchaAES = {
    *
    * @param data 要加密的验证码数据
    * @param key 后端下发的 16 位 secretKey
-   * @returns Base64(AES-ECB-PKCS7(ciphertext))
+   * @returns 以 Base64 表示的 AES-ECB-PKCS7 密文
+   * @throws 当密钥长度不符合要求或加密过程失败时抛出异常
    */
   encrypt(data: string, key: string): string {
     try {
       assertAesKey(key, '验证码加密');
 
-      const encrypted = CryptoJS.AES.encrypt(data, CryptoJS.enc.Utf8.parse(key), {
-        mode: CryptoJS.mode.ECB,
-        padding: CryptoJS.pad.Pkcs7,
-      });
+      const encrypted = CryptoJS.AES.encrypt(
+        data,
+        CryptoJS.enc.Utf8.parse(key),
+        {
+          mode: CryptoJS.mode.ECB,
+          padding: CryptoJS.pad.Pkcs7,
+        },
+      );
       return CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
     } catch (error) {
       logError('AJ captcha AES encrypt failed', error);

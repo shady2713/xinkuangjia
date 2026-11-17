@@ -16,7 +16,8 @@ import {
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-describe('dateUtils', () => {
+/** 日期工具的单测 */
+function describeDateUtils() {
   const sampleISO = '2024-10-30T12:34:56Z';
   const sampleTimestamp = Date.parse(sampleISO);
 
@@ -110,16 +111,25 @@ describe('dateUtils', () => {
   // ===============================
   // getSystemTimezone
   // ===============================
-  describe('getSystemTimezone', () => {
-    it('should return a valid IANA timezone string', () => {
+  /** 读取系统时区 */
+  function describeGetSystemTimezone() {
+    /** 断言返回合法的 IANA 时区名 */
+    function itReturnsValidIanaTimezone() {
       const tz = getSystemTimezone();
       expect(typeof tz).toBe('string');
       // CI runner 常为 UTC；IANA 也允许 Etc/UTC 与 Area/Location 形式。
-      expect(tz === 'UTC' || /^(Etc\/)?[A-Za-z]+(?:\/[A-Za-z_]+)+$/.test(tz)).toBe(
-        true,
-      );
-    });
-  });
+      expect(
+        tz === 'UTC' || /^(Etc\/)?[A-Za-z]+(?:\/[A-Za-z_]+)+$/.test(tz),
+      ).toBe(true);
+    }
+
+    it(
+      'should return a valid IANA timezone string',
+      itReturnsValidIanaTimezone,
+    );
+  }
+
+  describe('getSystemTimezone', describeGetSystemTimezone);
 
   // ===============================
   // setCurrentTimezone / getCurrentTimezone
@@ -143,4 +153,6 @@ describe('dateUtils', () => {
       expect(d.tz().format('HH')).not.toBe('00');
     });
   });
-});
+}
+
+describe('dateUtils', describeDateUtils);

@@ -8,7 +8,10 @@ import { isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { logError } from '@vben/utils';
 
-import { buildLoginPasswordSchema, buildRequiredUsernameSchema } from '#/adapter/form';
+import {
+  buildLoginPasswordSchema,
+  buildRequiredUsernameSchema,
+} from '#/adapter/form';
 import { checkCaptcha, getCaptcha } from '#/api/core/auth';
 import { useAuthStore } from '#/store';
 
@@ -30,7 +33,12 @@ async function handleLogin(values: Record<string, unknown>) {
   await authStore.authLogin('username', values);
 }
 
-async function handleVerifySuccess({ captchaVerification }: { captchaVerification: string }) {
+/** 验证码通过后携带校验串完成登录 */
+async function handleVerifySuccess({
+  captchaVerification,
+}: {
+  captchaVerification: string;
+}) {
   try {
     await authStore.authLogin('username', {
       ...(await loginRef.value.getFormApi().getValues()),

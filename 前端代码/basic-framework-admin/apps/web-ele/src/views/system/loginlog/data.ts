@@ -99,7 +99,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-/** 详情页的字段 */
+/**
+ * 详情页的字段
+ * @returns 详情描述项列表
+ */
 export function useDetailSchema(): DescriptionItemSchema[] {
   return [
     {
@@ -141,8 +144,9 @@ export function useDetailSchema(): DescriptionItemSchema[] {
     {
       field: 'createTime',
       label: '登录日期',
-      render: (val) => formatDateTime(val as Date | string | undefined) as string,
+      // 把登录时间格式化成详情展示文案
+      render: (val) =>
+        formatDateTime(val as Date | string | undefined) as string,
     },
   ];
 }
-

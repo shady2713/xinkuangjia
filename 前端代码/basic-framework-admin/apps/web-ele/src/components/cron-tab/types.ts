@@ -13,7 +13,12 @@ export interface CronLoop<TStart = number, TEnd = number> {
   end: TEnd | undefined;
 }
 
-export interface CronItem<TRange = number, TLoopStart = number, TLoopEnd = number> {
+/** 单个 cron 字段的取值方式与可选范围 */
+export interface CronItem<
+  TRange = number,
+  TLoopStart = number,
+  TLoopEnd = number,
+> {
   type: string;
   range: CronRange<TRange>;
   loop: CronLoop<TLoopStart, TLoopEnd>;
@@ -143,6 +148,7 @@ export const CronValueDefault: CronValue = {
   },
 };
 
+/** cron 表达式编辑器的默认字段取值 */
 export const CronDataDefault: CronData = {
   second: [
     '0',
@@ -264,4 +270,3 @@ export const CronDataDefault: CronData = {
   ],
   year: getYear(),
 };
-

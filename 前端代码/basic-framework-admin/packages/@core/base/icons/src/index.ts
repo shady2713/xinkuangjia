@@ -1,5 +1,10 @@
 import lucideIcons from '@iconify/json/json/lucide.json';
-import { addCollection, addIcon, Icon as IconifyIcon, listIcons } from '@iconify/vue';
+import {
+  addCollection,
+  addIcon,
+  Icon as IconifyIcon,
+  listIcons,
+} from '@iconify/vue';
 
 addCollection(lucideIcons);
 

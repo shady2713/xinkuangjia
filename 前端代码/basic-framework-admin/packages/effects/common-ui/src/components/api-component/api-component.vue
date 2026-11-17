@@ -19,6 +19,9 @@ type OptionsItem = {
   value?: string;
 };
 
+/** 根据选项列表自定义自动选中项 */
+type AutoSelectHandler = (item: OptionsItem[]) => OptionsItem;
+
 interface Props {
   /** 组件 */
   component: Component;
@@ -64,12 +67,7 @@ interface Props {
    * - 函数：自定义选择逻辑，函数的参数为请求的结果数组，返回值为选择的选项
    * - false：不自动选择(默认)
    */
-  autoSelect?:
-    | 'first'
-    | 'last'
-    | 'one'
-    | ((item: OptionsItem[]) => OptionsItem)
-    | false;
+  autoSelect?: 'first' | 'last' | 'one' | AutoSelectHandler | false;
 }
 
 defineOptions({ name: 'ApiComponent', inheritAttrs: false });

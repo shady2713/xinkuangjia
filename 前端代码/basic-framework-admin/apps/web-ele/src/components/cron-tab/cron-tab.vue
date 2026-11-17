@@ -11,7 +11,8 @@ import {
   ElForm,
   ElFormItem,
   ElInput,
-  ElInputNumber,  ElOption,
+  ElInputNumber,
+  ElOption,
   ElRadioButton,
   ElRadioGroup,
   ElSelect,
@@ -956,7 +957,3 @@ function inputChange() {
   background-color: var(--el-fill-color-blank);
 }
 </style>
-
-
-
-
