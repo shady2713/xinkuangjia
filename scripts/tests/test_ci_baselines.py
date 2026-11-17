@@ -1,4 +1,4 @@
-"""验证 CI 基线解析：根提交密钥扫描与干净 checkout 的注释检查入口。
+"""验证 CI 基线解析、工具测试 job 与前端门禁步骤。
 
 直接执行 workflow 中对应步骤的 shell，避免只断言 YAML 文本或退出码。
 @author 李杰
@@ -18,6 +18,9 @@ from scripts.common.quality_common import DEFAULT_ROOT
 
 WORKFLOW = DEFAULT_ROOT / ".github" / "workflows" / "ci.yml"
 BASELINE_STEP = "Resolve comparison baseline"
+CHECKOUT_ACTION = "actions/checkout@"
+SETUP_PYTHON_ACTION = "actions/setup-python@"
+PYTEST_COMMAND = "python -B -X utf8 -m pytest scripts/tests"
 ZERO_SHA = "0" * 40
 
 
@@ -32,6 +35,13 @@ def step_run(job: str, name: str) -> str:
         if step.get("name") == name:
             return step["run"]
     raise AssertionError(f"工作流缺少步骤：{job}/{name}")
+
+
+def action_step(job: dict, action: str) -> dict:
+    """返回 job 中使用指定 Action 的唯一步骤，不写死会过时的大版本。"""
+    matches = [step for step in job["steps"] if str(step.get("uses", "")).startswith(action)]
+    assert len(matches) == 1, f"{job.get('name', 'job')} 必须使用一次 {action}"
+    return matches[0]
 
 
 def run_shell(script: str, root: Path, extra_env: dict[str, str] | None = None):
@@ -129,10 +139,23 @@ def test_empty_push_diff_still_succeeds(tmp_path: Path) -> None:
     assert "No changed files to scan." in result.stdout
 
 
+def test_all_jobs_share_one_checkout_version() -> None:
+    """所有 job 使用同一 checkout 版本，只有需要历史的 job 取完整提交。"""
+    jobs = workflow_jobs()
+    checkouts = {name: action_step(job, CHECKOUT_ACTION) for name, job in jobs.items()}
+    versions = {checkout["uses"] for checkout in checkouts.values()}
+    assert len(versions) == 1
+    assert next(iter(versions)).startswith(f"{CHECKOUT_ACTION}v")
+    for name in ("docs-comments", "secrets-scan"):
+        assert checkouts[name]["with"]["fetch-depth"] == 0
+    for name in ("backend", "frontend", "pytest"):
+        assert "fetch-depth" not in checkouts[name].get("with", {})
+
+
 def test_comments_job_uses_baseline_and_installs_web_parser() -> None:
     """注释检查必须传入事件基线，并安装 Web 解析依赖而非静默跳过。"""
     job = workflow_jobs()["docs-comments"]
-    checkout = next(step for step in job["steps"] if step.get("uses") == "actions/checkout@v4")
+    checkout = action_step(job, CHECKOUT_ACTION)
     assert checkout["with"]["fetch-depth"] == 0
     uses = [step.get("uses", "") for step in job["steps"]]
     assert any("pnpm/action-setup" in item for item in uses)
@@ -142,6 +165,38 @@ def test_comments_job_uses_baseline_and_installs_web_parser() -> None:
     assert "pnpm install --frozen-lockfile" in install["run"]
     comments = step_run("docs-comments", "Comments checks")
     assert "--base" in comments and "steps.baseline.outputs.sha" in comments
+
+
+def test_pytest_job_installs_requirements_and_runs_suite() -> None:
+    """工具测试 job 与文档 job 同 Python 版本，并准备真实 Node 解析依赖。"""
+    jobs = workflow_jobs()
+    job = jobs["pytest"]
+    python_version = action_step(job, SETUP_PYTHON_ACTION)["with"]["python-version"]
+    docs_version = action_step(jobs["docs-comments"], SETUP_PYTHON_ACTION)["with"]["python-version"]
+    assert python_version == docs_version
+    uses = [step.get("uses", "") for step in job["steps"]]
+    assert any("pnpm/action-setup" in item for item in uses)
+    assert any("actions/setup-node" in item for item in uses)
+    assert step_run("pytest", "Install quality tooling") == (
+        "python -m pip install -r tools/quality/requirements.txt"
+    )
+    install = next(step for step in job["steps"] if step.get("name") == "Install web parser")
+    assert install["working-directory"] == "前端代码/basic-framework-admin"
+    assert "pnpm install --frozen-lockfile" in install["run"]
+    assert step_run("pytest", "Pytest tooling tests") == PYTEST_COMMAND
+
+
+def test_frontend_job_runs_lint_after_install() -> None:
+    """前端 job 在既有安装之后、构建之前执行现有 lint。"""
+    job = workflow_jobs()["frontend"]
+    assert job["defaults"]["run"]["working-directory"] == "前端代码/basic-framework-admin"
+    steps = job["steps"]
+    runs = [step.get("run") for step in steps]
+    assert (
+        runs.index("pnpm install --frozen-lockfile")
+        < runs.index("pnpm lint")
+        < runs.index("pnpm build:ele")
+    )
 
 
 @pytest.mark.parametrize("event_base", ["", ZERO_SHA])
