@@ -18,8 +18,8 @@ jobs:
       run:
         working-directory: 后端代码/basic-framework-boot
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -38,11 +38,11 @@ jobs:
       run:
         working-directory: 前端代码/basic-framework-admin
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
@@ -62,10 +62,10 @@ jobs:
     env:
       EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install quality tooling
@@ -81,10 +81,10 @@ jobs:
             base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
           fi
           echo "sha=$base" >> "$GITHUB_OUTPUT"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
@@ -109,10 +109,10 @@ jobs:
     env:
       EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Resolve comparison baseline
