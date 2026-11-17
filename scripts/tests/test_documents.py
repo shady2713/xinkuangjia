@@ -4,6 +4,7 @@
 @author 李杰
 """
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -110,9 +111,15 @@ def test_discovery_explicit_files_avoid_pairwise_ancestry(
     calls = 0
 
     def counted(path: Path, other: Path) -> bool:
-        """记录祖先判断次数并调用原方法，保持真实路径判断语义。"""
+        """记录发现实现直接发起的祖先判断次数，并调用原方法保持真实语义。"""
         nonlocal calls
-        calls += 1
+        frame = inspect.currentframe()
+        caller = frame.f_back if frame is not None else None
+        # Python 3.12 的 Path.relative_to 会内部调用 is_relative_to；3.13 已改为内联判断。
+        # 3.12 调用方是 pathlib.py，3.13 是 pathlib/ 包内模块。只统计项目代码中的显式边界校验。
+        source = "" if caller is None else caller.f_code.co_filename.replace("\\", "/")
+        if caller is None or not (source.endswith("/pathlib.py") or "/pathlib/" in source):
+            calls += 1
         return original(path, other)
 
     monkeypatch.setattr(Path, "is_relative_to", counted)
