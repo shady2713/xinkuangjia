@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""在临时 Git 索引中检查工作区 Python 变更，不改动真实暂存区。
+"""在临时 Git 索引中检查暂存区与工作区相对 HEAD 的 Python 变更，不改动真实暂存区。
 
 @author 李杰
 """
@@ -51,22 +51,38 @@ def _run_git(
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Git 命令执行超时。") from exc
     except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.decode("utf-8", "replace") if isinstance(exc.stderr, bytes) else exc.stderr
+        stderr = (
+            exc.stderr.decode("utf-8", "replace")
+            if isinstance(exc.stderr, bytes)
+            else exc.stderr
+        )
         raise RuntimeError(f"Git 命令执行失败：{stderr.strip()}") from exc
 
 
 def _repo_root() -> Path:
-    """根据脚本位置返回 AIMaster 仓库根目录。"""
+    """根据脚本位置返回仓库根目录。"""
 
     return Path(__file__).resolve().parents[3]
 
 
 def _worktree_python_paths(repo_root: Path) -> list[str]:
-    """返回工作区中已修改或未跟踪的 Python 文件路径。"""
+    """返回工作区中相对当前索引已修改或未跟踪的 Python 文件路径。"""
 
     result = _run_git(
         repo_root,
         ["ls-files", "--modified", "--others", "--exclude-standard", "-z", "--", "*.py"],
+        text=False,
+    )
+    return [item.decode("utf-8", "replace") for item in result.stdout.split(b"\0") if item]
+
+
+def _staged_python_paths(repo_root: Path, env: dict[str, str] | None = None) -> list[str]:
+    """返回索引中相对 HEAD 新增或修改的 Python 文件路径。"""
+
+    result = _run_git(
+        repo_root,
+        ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z", "--", "*.py"],
+        env=env,
         text=False,
     )
     return [item.decode("utf-8", "replace") for item in result.stdout.split(b"\0") if item]
@@ -81,15 +97,19 @@ def _real_index_path(repo_root: Path) -> Path:
 
 
 def _temporary_index_environment(repo_root: Path, temporary_index: Path) -> dict[str, str]:
-    """创建仅覆盖 Git 索引位置的子进程环境。"""
+    """创建仅覆盖 Git 索引位置的子进程环境，缺失真实索引时从 HEAD 初始化。"""
 
     env = os.environ.copy()
     real_index = _real_index_path(repo_root)
     if real_index.exists():
         shutil.copy2(real_index, temporary_index)
     else:
-        temporary_index.touch()
+        temporary_index.unlink(missing_ok=True)
     env["GIT_INDEX_FILE"] = str(temporary_index)
+    if not temporary_index.exists():
+        has_head = bool(_run_git(repo_root, ["rev-parse", "--revs-only", "HEAD"]).stdout.strip())
+        if has_head:
+            _run_git(repo_root, ["read-tree", "HEAD"], env=env)
     return env
 
 
@@ -108,20 +128,22 @@ def _run_checker(repo_root: Path, env: dict[str, str]) -> int:
 
 
 def main() -> int:
-    """将工作区 Python 变化写入临时索引并执行注释检查。"""
+    """将工作区与已暂存的 Python 变化合并到临时索引并执行注释检查。"""
 
     _configure_console_encoding()
     repo_root = _repo_root()
     try:
-        paths = _worktree_python_paths(repo_root)
-        if not paths:
+        worktree_paths = _worktree_python_paths(repo_root)
+        staged_paths = _staged_python_paths(repo_root)
+        if not worktree_paths and not staged_paths:
             print("工作区没有需要检查的 Python 变更。")
             return 0
 
-        with tempfile.TemporaryDirectory(prefix="aimaster-python-comments-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="bf-python-comments-") as temp_dir:
             temporary_index = Path(temp_dir) / "index"
             env = _temporary_index_environment(repo_root, temporary_index)
-            _run_git(repo_root, ["add", "-A", "--", *paths], env=env)
+            if worktree_paths:
+                _run_git(repo_root, ["add", "-A", "--", *worktree_paths], env=env)
             return _run_checker(repo_root, env)
     except (RuntimeError, subprocess.TimeoutExpired) as exc:
         print(f"Python 工作区注释检查无法执行：{exc}", file=sys.stderr)

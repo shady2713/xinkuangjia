@@ -117,7 +117,7 @@ def test_runner_concurrency_is_bounded(tmp_path: Path, monkeypatch: pytest.Monke
 def test_missing_executable_and_timeout(tmp_path: Path) -> None:
     """启动失败与真实子进程超时都必须报告环境错误。"""
     with pytest.raises(CheckError, match="无法启动"):
-        run_process(["aimaster-nonexistent-quality-executable"], tmp_path)
+        run_process(["bf-nonexistent-quality-executable"], tmp_path)
     with pytest.raises(CheckError, match="已终止"):
         run_process([sys.executable, "-c", "import time; time.sleep(30)"], tmp_path, timeout=0.2)
 

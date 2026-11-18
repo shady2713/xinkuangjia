@@ -84,7 +84,7 @@ def main() -> int:
             print(f"未找到项目 Java 注释检查器：{checker}", file=sys.stderr)
             return 2
 
-        with tempfile.TemporaryDirectory(prefix="aimaster-java-comments-") as temp_dir:
+        with tempfile.TemporaryDirectory(prefix="bf-java-comments-") as temp_dir:
             temporary_index = Path(temp_dir) / "index"
             child_env = prepare_temporary_index(repo_root, temporary_index)
             changed_java_files = list_worktree_java_changes(repo_root)
