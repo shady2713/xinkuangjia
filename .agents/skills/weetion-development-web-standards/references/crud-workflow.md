@@ -73,14 +73,14 @@ src/
 
 #### 4.1 自动化脚本检查（先运行）
 
-```bash
-# 在目标前端应用根目录（如 前端代码/basic-framework-admin）下执行，路径相对于该目录
-bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh <api-path> <views-path>
-# 示例: bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
+```powershell
+# 在目标前端应用根目录（如 前端代码/basic-framework-admin）下跨平台执行，路径相对于该目录
+python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts/check_crud.py <api-path> <views-path>
+# 示例: python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts/check_crud.py apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
 ```
 
-如果脚本以 `exit 1` 退出，修复错误后重新运行。
-只有脚本输出 "🎉 全部检查通过" 之后，才能进入 4.2。
+如果脚本以 `exit 1` 退出，修复错误后重新运行（Linux/macOS 也可继续使用同目录的 `check.sh`）。
+只有脚本输出“全部检查通过”之后，才能进入 4.2。
 
 #### 4.2 手工对照文档检查（脚本通过后执行）
 

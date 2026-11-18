@@ -8,33 +8,38 @@ import {
 } from '../generate-routes-frontend';
 
 // Mock 路由数据
-const mockRoutes = [
+const mockRoutes: [RouteRecordRaw, RouteRecordRaw, RouteRecordRaw] = [
   {
     meta: {
       authority: ['admin', 'user'],
       hideInMenu: false,
+      title: 'Dashboard',
     },
     path: '/dashboard',
     children: [
       {
+        component: {},
+        meta: { authority: ['admin'], hideInMenu: false, title: 'Overview' },
         path: '/dashboard/overview',
-        meta: { authority: ['admin'], hideInMenu: false },
       },
       {
+        component: {},
+        meta: { authority: ['user'], hideInMenu: true, title: 'Stats' },
         path: '/dashboard/stats',
-        meta: { authority: ['user'], hideInMenu: true },
       },
     ],
   },
   {
-    meta: { authority: ['admin'], hideInMenu: false },
+    component: {},
+    meta: { authority: ['admin'], hideInMenu: false, title: 'Settings' },
     path: '/settings',
   },
   {
-    meta: { hideInMenu: false },
+    component: {},
+    meta: { hideInMenu: false, title: 'Profile' },
     path: '/profile',
   },
-] as RouteRecordRaw[];
+];
 
 describe('hasAuthority', () => {
   it('should return true if there is no authority defined', () => {

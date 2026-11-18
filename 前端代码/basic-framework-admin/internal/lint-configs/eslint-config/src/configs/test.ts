@@ -2,6 +2,11 @@ import type { Linter } from 'eslint';
 
 import { interopDefault } from '../util';
 
+/**
+ * 构造单元测试与端到端测试文件的 ESLint 规则配置。
+ *
+ * @returns 测试文件专用的扁平配置列表
+ */
 export async function test(): Promise<Linter.Config[]> {
   const [pluginTest, pluginNoOnlyTests] = await Promise.all([
     interopDefault(import('eslint-plugin-vitest')),
@@ -34,6 +39,8 @@ export async function test(): Promise<Linter.Config[]> {
           'error',
           { fn: 'it', withinDescribe: 'it' },
         ],
+        'test/no-commented-out-tests': 'error',
+        'test/no-disabled-tests': 'error',
         'test/no-identical-title': 'error',
         'test/no-import-node-test': 'error',
         'test/no-only-tests': 'error',

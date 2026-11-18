@@ -11,14 +11,14 @@ import type {
 } from './types';
 
 import { computed, useAttrs } from 'vue';
-// @ts-ignore
+// @ts-ignore vue-json-viewer 未提供 TypeScript 类型声明文件
 import VueJsonViewer from 'vue-json-viewer';
 
 import { $t } from '@vben/locales';
 
 import { isBoolean } from '@vben-core/shared/utils';
 
-// @ts-ignore
+// @ts-ignore json-bigint 默认导出缺少 ESM 类型声明
 import JsonBigint from 'json-bigint';
 
 defineOptions({ name: 'JsonViewer' });

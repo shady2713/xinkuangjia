@@ -1,3 +1,6 @@
+/** 验证 RequestClient 的基础请求、网络超时异常与上传下载行为。 */
+import type { RequestResponse } from './types';
+
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -92,7 +95,8 @@ describe('requestClient', () => {
 
     mock.onGet('/test/download').reply(200, mockFileContent);
 
-    const res = await requestClient.download('/test/download');
+    const res =
+      await requestClient.download<RequestResponse<Blob>>('/test/download');
 
     expect(res.data).toBeInstanceOf(Blob);
   });

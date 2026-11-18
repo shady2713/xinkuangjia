@@ -325,6 +325,23 @@ def inspect(root: Path) -> dict[str, object]:
         else:
             names[package.name] = package.path
     for package in packages:
+        package_dir = package.path.parent
+        if (
+            package_dir.resolve() != root
+            and (package_dir / "tsconfig.json").is_file()
+            and (package_dir / "src").is_dir()
+        ):
+            scripts_field = _mapping(package.manifest.get("scripts", {}), "scripts")
+            typecheck_cmd = scripts_field.get("typecheck")
+            if not isinstance(typecheck_cmd, str) or not typecheck_cmd.strip():
+                findings.append(
+                    Finding(
+                        package.path.relative_to(root).as_posix(),
+                        "scripts.typecheck",
+                        "missing-typecheck",
+                        f"含 tsconfig.json 与 src 目录的包 {package.name} 必须声明 scripts.typecheck",
+                    )
+                )
         for section in SECTIONS:
             dependencies = _mapping(package.manifest.get(section, {}), section)
             for name, value in sorted(dependencies.items()):

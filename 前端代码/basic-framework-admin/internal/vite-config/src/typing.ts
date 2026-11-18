@@ -7,6 +7,14 @@ import type {
 import type { PluginOptions as DtsPluginOptions } from 'vite-plugin-dts';
 import type { Options as PwaPluginOptions } from 'vite-plugin-pwa';
 
+/** 构建产物压缩归档插件选项。 */
+interface ArchiverPluginOptions {
+  /** 输出压缩包名称，不含扩展名。 */
+  name?: string;
+  /** 压缩包输出目录。 */
+  outputDir?: string;
+}
+
 interface CommonPluginOptions {
   devtools?: boolean;
   injectMetadata?: boolean;
@@ -59,6 +67,7 @@ type VbenViteConfig = Promise<UserConfig> | UserConfig | UserConfigFnPromise;
 
 export type {
   ApplicationPluginOptions,
+  ArchiverPluginOptions,
   CommonPluginOptions,
   ConditionPlugin,
   DefineApplicationOptions,

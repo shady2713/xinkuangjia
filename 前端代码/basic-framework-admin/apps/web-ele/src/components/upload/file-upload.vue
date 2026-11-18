@@ -173,19 +173,20 @@ function handleUploadError(error: unknown) {
  * @param file 待上传的文件
  * @returns 是否允许上传
  */
-// 数量口径分支：空值按 0、单值按 1、数组按长度，嵌套三元可读性优于展开为 if 链
-/* eslint-disable unicorn/no-nested-ternary */
 async function beforeUpload(file: File) {
   const fileContent = await file.text();
   emit('returnText', fileContent);
 
   // 检查文件数量限制（使用 getValue 获取实际已上传的文件数量）
   const currentFiles = getValue();
+  // 数量口径分支：空值按 0、单值按 1、数组按长度，仅在当前表达式局部关闭嵌套三元规则
+  /* eslint-disable unicorn/no-nested-ternary */
   const currentCount = Array.isArray(currentFiles)
     ? currentFiles.length
     : currentFiles
       ? 1
       : 0;
+  /* eslint-enable unicorn/no-nested-ternary */
   if (currentCount >= props.maxNumber) {
     showErrorMessage($t('ui.upload.maxNumber', [props.maxNumber]));
     return false;

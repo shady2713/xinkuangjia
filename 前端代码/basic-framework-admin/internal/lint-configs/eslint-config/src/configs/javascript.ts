@@ -72,7 +72,7 @@ export async function javascript(): Promise<Linter.Config[]> {
         'no-dupe-class-members': 'error',
         'no-dupe-keys': 'error',
         'no-duplicate-case': 'error',
-        'no-empty': ['error', { allowEmptyCatch: true }],
+        'no-empty': ['error', { allowEmptyCatch: false }],
         'no-empty-character-class': 'error',
         'no-empty-function': 'off',
         'no-empty-pattern': 'error',

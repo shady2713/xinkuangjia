@@ -7,6 +7,9 @@ import type {
   RouteMeta,
   RouteRecordStringComponent,
 } from '@vben-core/typings';
+// 仅加载 vue-router 的 RouteMeta 模块扩充类型，不引入运行时代码。
+// eslint-disable-next-line unicorn/require-module-specifiers
+import type {} from '@vben-core/typings/vue-router';
 
 import {
   filterTree,
