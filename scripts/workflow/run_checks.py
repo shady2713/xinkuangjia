@@ -197,13 +197,14 @@ def baseline_environment(root: Path, base: str) -> Iterator[dict[str, str]]:
         temporary_git = folder / "git"
         (temporary_git / "objects" / "info").mkdir(parents=True)
         (temporary_git / "refs").mkdir()
-        (temporary_git / "HEAD").write_text(f"{baseline}\n", encoding="utf-8")
+        (temporary_git / "HEAD").write_text(f"{baseline}\n", encoding="utf-8", newline="\n")
         (temporary_git / "config").write_text(
             "[core]\n\trepositoryformatversion = 0\n\tbare = false\n",
             encoding="utf-8",
+            newline="\n",
         )
         (temporary_git / "objects" / "info" / "alternates").write_text(
-            f"{objects.resolve()}\n", encoding="utf-8"
+            f"{objects.resolve().as_posix()}\n", encoding="utf-8", newline="\n"
         )
         environment = {
             **os.environ,

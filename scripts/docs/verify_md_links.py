@@ -45,10 +45,21 @@ def collect(root: Path, paths: list[str]) -> tuple[int, list[Finding]]:
         if path not in cache:
             cache[path] = parse(read_text(path))
         for link in cache[path].destinations:
-            # 与原脚本一致：根绝对 URL、协议和协议相对地址归渲染器负责。
-            if re.match(r"^(?:[a-zA-Z][a-zA-Z\d+.-]*:|/)", link.url):
+            raw = link.url.strip()
+            if not raw:
+                findings.append(
+                    Finding(
+                        path.relative_to(root).as_posix(),
+                        link.line,
+                        "md-link",
+                        "链接或图片目标不能为空",
+                    )
+                )
                 continue
-            base, separator, fragment = link.url.partition("#")
+            # 与原脚本一致：根绝对 URL、协议和协议相对地址归渲染器负责。
+            if re.match(r"^(?:[a-zA-Z][a-zA-Z\d+.-]*:|/)", raw):
+                continue
+            base, separator, fragment = raw.partition("#")
             base = decode_path(base.split("?", 1)[0])
             target = (path.parent / base).resolve() if base else path.resolve()
             reason = ""
@@ -56,6 +67,8 @@ def collect(root: Path, paths: list[str]) -> tuple[int, list[Finding]]:
                 reason = "相对链接超出仓库"
             elif not target.exists():
                 reason = "目标不存在"
+            elif separator and not fragment:
+                reason = "锚点不能为空"
             elif separator and fragment and target.suffix.lower() == ".md" and target.is_file():
                 # 归档内容仅作为入站链接目标读取；不递归验证其出站引用。
                 if target not in cache:

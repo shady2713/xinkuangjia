@@ -48,6 +48,22 @@ def test_markdown_links_and_anchors(tmp_path: Path) -> None:
     assert any("锚点" in item.message for item in findings)
 
 
+def test_markdown_rejects_empty_targets_and_bare_hash_anchors(tmp_path: Path) -> None:
+    """空链接、空图片地址与空锚点占位符必须报告失败，不得回退为当前文件存在。"""
+    write(tmp_path, "docs/目标.md", "# 标题\n")
+    write(
+        tmp_path,
+        "docs/入口.md",
+        "[空链接]()\n\n![空图片](   )\n\n[本页空锚点](#)\n\n[跨页空锚点](目标.md#)\n",
+    )
+    _, findings = links(tmp_path, ["docs/入口.md"])
+    assert [item.line for item in findings] == [1, 3, 5, 7]
+    assert "不能为空" in findings[0].message
+    assert "不能为空" in findings[1].message
+    assert "锚点不能为空" in findings[2].message
+    assert "锚点不能为空" in findings[3].message
+
+
 def test_unused_definition_and_code_html() -> None:
     """未使用的引用定义也要检查；行内代码和 HTML 注释不能注册锚点。"""
     parsed = parse('[unused]: 缺失.md\n\n`<a id="fake"></a>`\n<!-- <a id="hidden"></a> -->\n')

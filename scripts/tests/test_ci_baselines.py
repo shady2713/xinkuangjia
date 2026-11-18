@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -44,12 +45,37 @@ def action_step(job: dict, action: str) -> dict:
     return matches[0]
 
 
+def resolve_bash_executable() -> str:
+    """优先使用 Git 自带 Bash，避免 Windows 系统目录中的 WSL 启动器在无子系统环境下失败。"""
+    if os.name == "nt":
+        git_executable = shutil.which("git")
+        if git_executable:
+            git_root = Path(git_executable).resolve().parents[1]
+            for relative in ("bin/bash.exe", "usr/bin/bash.exe"):
+                candidate = git_root / relative
+                if candidate.is_file():
+                    return str(candidate)
+    found = shutil.which("bash")
+    assert found is not None, "测试 CI 脚本需要可用的 bash 解释器"
+    return found
+
+
 def run_shell(script: str, root: Path, extra_env: dict[str, str] | None = None):
     """用 bash 执行步骤脚本，保留真实退出码和输出。"""
+    effective_script = (
+        'python3() { "$PYTEST_PYTHON_EXECUTABLE" "$@"; }\n' + script
+        if os.name == "nt"
+        else script
+    )
     return subprocess.run(
-        ["bash", "-euo", "pipefail", "-c", script],
+        [resolve_bash_executable(), "-euo", "pipefail", "-c", effective_script],
         cwd=root,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8", **(extra_env or {})},
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "utf-8",
+            "PYTEST_PYTHON_EXECUTABLE": Path(sys.executable).as_posix(),
+            **(extra_env or {}),
+        },
         capture_output=True,
         text=True,
         encoding="utf-8",
