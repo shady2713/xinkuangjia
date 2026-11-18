@@ -114,13 +114,13 @@ public class DictDataController {
     }
 
     /**
-     * 获取精简数据字典数据列表。
+     * 返回全部启用状态的字典数据项，供已认证管理端初始化前端字典缓存。
      *
-     * @return 查询结果
+     * @return 启用字典项的标签、键值及颜色类型列表
      */
-    @GetMapping(value = {"/list-all-simple", "simple-list"})
-    @Operation(summary = "获得全部字典数据列表", description = "一般用于管理后台缓存字典数据在本地")
-    // 无需添加权限认证，因为前端全局都需要
+    @GetMapping("/simple-list")
+    @Operation(summary = "获得全部字典数据列表", description = "供已认证管理端缓存字典标签")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<DictDataSimpleRespVO>> getSimpleDictDataList() {
         List<DictDataDO> list = dictDataService.getDictDataList(
                 CommonStatusEnum.ENABLE.getStatus(), null);

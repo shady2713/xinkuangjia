@@ -64,7 +64,7 @@ public class FileController {
     private static final int MAX_BATCH_DELETE_SIZE = 100;
 
     /** 单文件上限，与 application.yaml 的 multipart 及前端 nginx 上传上限对齐。 */
-    static final long MAX_UPLOAD_BYTES = 50L * 1024 * 1024;
+    static final long MAX_UPLOAD_BYTES = FilePathUtils.MAX_UPLOAD_BYTES;
 
     /** 有界读取上传流时使用的缓冲区大小。 */
     private static final int UPLOAD_READ_BUFFER_SIZE = 8 * 1024;
@@ -81,6 +81,7 @@ public class FileController {
      * @throws Exception 文件读取或对象存储上传失败时抛出
      */
     @PostMapping("/upload")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "上传文件", description = "模式一：后端上传文件")
     @Parameter(name = "file", description = "文件附件", required = true,
             schema = @Schema(type = "string", format = "binary"))
@@ -135,7 +136,8 @@ public class FileController {
      * @return 上传地址、访问地址和对象路径
      */
     @GetMapping("/presigned-url")
-    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端上传文件：用于前端直接上传七牛、阿里云 OSS 等文件存储器")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "获取文件预签名地址（上传）", description = "模式二：前端直传对象存储")
     @Parameters({
             @Parameter(name = "name", description = "文件名称", required = true),
             @Parameter(name = "directory", description = "文件目录")
@@ -156,7 +158,8 @@ public class FileController {
      * @return 文件记录编号
      */
     @PostMapping("/create")
-    @Operation(summary = "创建文件", description = "模式二：前端上传文件：配合 presigned-url 接口，记录上传了上传的文件")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "创建文件", description = "模式二：配合 presigned-url 登记已上传文件元数据")
     public CommonResult<Long> createFile(@Valid @RequestBody FileCreateReqVO createReqVO) {
         return success(fileService.createFile(createReqVO));
     }
@@ -230,9 +233,7 @@ public class FileController {
         if (StrUtil.isEmpty(path)) {
             throw new IllegalArgumentException("结尾的 path 路径必须传递");
         }
-        // 解码，解决中文路径的问题
-        // https://example.com/basic_framework/pulls/807/
-        // https://example.com/basic_framework/pulls/1432/
+        // URL 解码以支持包含中文字符的相对对象路径。
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);
         if (!FilePathUtils.isObjectPathValid(path)) {
             response.setStatus(HttpStatus.NOT_FOUND.value());

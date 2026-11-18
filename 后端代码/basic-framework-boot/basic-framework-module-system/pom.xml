@@ -18,8 +18,8 @@
     </description>
 
     <properties>
-        <!-- 认证回归测试落地后的保守基线；后续新增测试只能提高，不能回退。 -->
-        <quality.coverage.minimum>0.03</quality.coverage.minimum>
+        <!-- 系统管理与认证权限核心模块行覆盖率硬性水位线。 -->
+        <quality.coverage.minimum>0.20</quality.coverage.minimum>
     </properties>
 
     <dependencies>

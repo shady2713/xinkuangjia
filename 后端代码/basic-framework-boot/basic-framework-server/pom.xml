@@ -14,9 +14,7 @@
 
     <name>${project.artifactId}</name>
     <description>
-        后端 Server 的主项目，通过引入需要 basic-framework-module-xxx 的依赖，
-        从而实现提供 RESTful API 给 basic-framework-admin、basic-framework-ui-user 等前端项目。
-        本质上来说，它就是个空壳（容器）！
+        后端应用聚合启动模块，装配业务模块与公共 Starter，向 basic-framework-admin 提供管理端 REST API。
     </description>
 
     <properties>
@@ -43,7 +41,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- ArchUnit 脚枪门禁，仅测试范围，不升级其它依赖。 -->
+        <!-- ArchUnit 架构约束门禁，仅测试范围。 -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
@@ -51,12 +49,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- 服务保障相关 -->
         <dependency>
-            <groupId>com.basicframework</groupId>
-            <artifactId>basic-framework-spring-boot-starter-protection</artifactId>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
         </dependency>
-
     </dependencies>
 
     <build>

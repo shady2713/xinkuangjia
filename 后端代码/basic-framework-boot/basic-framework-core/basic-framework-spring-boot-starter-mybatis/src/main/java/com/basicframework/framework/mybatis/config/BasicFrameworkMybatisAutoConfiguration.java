@@ -1,6 +1,5 @@
 package com.basicframework.framework.mybatis.config;
 
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -26,9 +25,8 @@ import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.mybatis.core.handler.DefaultDBFieldHandler;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.basicframework.framework.mybatis.core.interceptor.SoftDeleteUniqueInnerInterceptor;
 
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 
 /**
@@ -47,15 +45,21 @@ public class BasicFrameworkMybatisAutoConfiguration {
                         .expireAfterWrite(5, TimeUnit.SECONDS)));
     }
 
+    /** 单次查询与导出分页的数据库硬上限，防止漏写参数校验或传入负页大小拉取整表。 */
+    private static final long MAX_PAGINATION_LIMIT = 10_000L;
+
     /**
-     * 完成 mybatisPlusInterceptor 对应的业务处理。
+     * 创建统一 MyBatis-Plus 拦截器链，挂载逻辑删除唯一键消歧与有界分页插件。
      *
-     * @return 方法处理结果
+     * @return MyBatis-Plus 拦截器实例
      */
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor mybatisPlusInterceptor = new MybatisPlusInterceptor();
-        mybatisPlusInterceptor.addInnerInterceptor(new PaginationInnerInterceptor()); // 分页插件
+        mybatisPlusInterceptor.addInnerInterceptor(new SoftDeleteUniqueInnerInterceptor());
+        PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor();
+        paginationInnerInterceptor.setMaxLimit(MAX_PAGINATION_LIMIT);
+        mybatisPlusInterceptor.addInnerInterceptor(paginationInnerInterceptor);
         return mybatisPlusInterceptor;
     }
 
@@ -101,19 +105,16 @@ public class BasicFrameworkMybatisAutoConfiguration {
     }
 
     /**
-     * 完成 jacksonTypeHandler 对应的业务处理。
+     * 为 MyBatis {@link JacksonTypeHandler} 注入纯净的领域 JSON 序列化器。
      *
-     * @param objectMappers objectMappers参数
-     * @return 方法处理结果
+     * <p>固定使用 {@link JsonUtils#getObjectMapper()} 而非 Web 层 {@code ObjectMapper}，
+     * 避免挂载了 HTML XSS 清洗反序列化器的 Web 映射器污染数据库 JSON 列读写。</p>
+     *
+     * @return 初始化后的类型处理器占位实例（返回 Object 以避免注册为全局默认 TypeHandler）
      */
-    @Bean // 特殊：返回结果使用 Object 而不用 JacksonTypeHandler 的原因，避免因为 JacksonTypeHandler 被 mybatis 全局使用！
-    public Object jacksonTypeHandler(List<ObjectMapper> objectMappers) {
-        // 特殊：设置 JacksonTypeHandler 的 ObjectMapper！
-        ObjectMapper objectMapper = CollUtil.getFirst(objectMappers);
-        if (objectMapper == null) {
-            objectMapper = JsonUtils.getObjectMapper();
-        }
-        JacksonTypeHandler.setObjectMapper(objectMapper);
+    @Bean
+    public Object jacksonTypeHandler() {
+        JacksonTypeHandler.setObjectMapper(JsonUtils.getObjectMapper());
         return new JacksonTypeHandler(Object.class);
     }
 

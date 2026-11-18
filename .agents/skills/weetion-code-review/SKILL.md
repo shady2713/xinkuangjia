@@ -25,9 +25,9 @@ description: 评审指定代码、模块、本地变更或补丁时使用；按�
 
 | 涉及内容 | 读取范围 |
 | --- | --- |
-| basic-framework Java | [Java 规范](../weetion-development-java-standards/SKILL.md)中对应模块与场景的引用 |
+| basic-framework Java | [Java 规范](../weetion-development-java-standards/SKILL.md)中对应模块与场景的引用，涉及权限、密钥、软删唯一索引或跨栈契约时结合[框架安全威胁清单](references/framework-threat-checklist.md) |
 | Python 质量与交付辅助工具 | 根规则、相关脚本、测试和相邻实现；本框架没有 Python 业务服务或独立 Python 技能 |
-| basic-framework Web | [Web 规范](../weetion-development-web-standards/SKILL.md)中受影响的框架、组件及注释约定 |
+| basic-framework Web | [Web 规范](../weetion-development-web-standards/SKILL.md)中受影响的框架、组件及注释约定，涉及外链、弹窗渲染或运行配置时结合[框架安全威胁清单](references/framework-threat-checklist.md) |
 | 资源与异步生命周期 | [通用防御性模式](../../../docs/测试与可靠性/通用防御性模式.md)的相关章节，具体行为以模块契约为准 |
 | 共享状态、并发、时钟、子进程或清理相关测试 | [测试可靠性](../../../docs/测试与可靠性/测试可靠性.md)的相关章节；调查已有偶发失败时才读[诊断流程](../../../docs/测试与可靠性/偶发失败诊断.md) |
 | 验证证据与测试入口 | 目标工程的测试配置和实际报告；basic-framework 使用[测试策略](../../../docs/测试与可靠性/测试策略.md)与[脚本索引](../../../docs/开发指南/脚本使用索引.md)，行为证据边界见[通用测试原则](../../../docs/测试与可靠性/通用测试原则.md) |

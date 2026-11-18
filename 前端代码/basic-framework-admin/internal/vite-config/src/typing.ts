@@ -5,47 +5,29 @@ import type {
   UserConfigFnPromise,
 } from 'vite';
 import type { PluginOptions as DtsPluginOptions } from 'vite-plugin-dts';
-import type { Options as PwaPluginOptions } from 'vite-plugin-pwa';
 
-/** 构建产物压缩归档插件选项。 */
-interface ArchiverPluginOptions {
-  /** 输出压缩包名称，不含扩展名。 */
-  name?: string;
-  /** 压缩包输出目录。 */
-  outputDir?: string;
-}
-
+/** 公共 Vite 插件选项。 */
 interface CommonPluginOptions {
-  devtools?: boolean;
-  injectMetadata?: boolean;
   isBuild?: boolean;
   mode?: string;
   root?: string;
-  visualizer?: boolean;
 }
 
+/** 管理端应用构建插件选项。 */
 interface ApplicationPluginOptions extends CommonPluginOptions {
-  archiver?: boolean;
-  compress?: boolean;
-  compressTypes?: ('brotli' | 'gzip')[];
   extraAppConfig?: boolean;
   html?: boolean;
-  i18n?: boolean;
-  importmap?: boolean;
   injectAppLoading?: boolean;
   injectGlobalScss?: boolean;
-  license?: boolean;
-  nitroMock?: boolean;
-  print?: boolean;
-  pwa?: boolean;
-  pwaOptions?: Partial<PwaPluginOptions>;
   vxeTableLazyImport?: boolean;
 }
 
+/** 库包构建插件选项。 */
 interface LibraryPluginOptions extends CommonPluginOptions {
   dts?: boolean | DtsPluginOptions;
 }
 
+/** 按条件加载的 Vite 插件组。 */
 interface ConditionPlugin {
   condition?: boolean;
   plugins: () => PluginOption[] | PromiseLike<PluginOption[]>;
@@ -67,7 +49,6 @@ type VbenViteConfig = Promise<UserConfig> | UserConfig | UserConfigFnPromise;
 
 export type {
   ApplicationPluginOptions,
-  ArchiverPluginOptions,
   CommonPluginOptions,
   ConditionPlugin,
   DefineApplicationOptions,

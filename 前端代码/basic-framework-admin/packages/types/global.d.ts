@@ -36,8 +36,6 @@ export interface VbenAdminProAppConfigRaw {
   VITE_APP_DEFAULT_PASSWORD: string;
   /** 登录表单默认账号。 */
   VITE_APP_DEFAULT_USERNAME: string;
-  /** 页面文档提醒开关。 */
-  VITE_APP_DOCALERT_ENABLE: RuntimeBoolean;
   /** 是否显示偏好设置入口。 */
   VITE_APP_ENABLE_PREFERENCES: RuntimeBoolean;
   /** 是否显示顶部全局搜索入口。 */

@@ -21,6 +21,8 @@ public final class FilePathUtils {
     public static final int MAX_FILE_URL_LENGTH = 1024;
     /** MIME 类型最大字符数，与 infra_file.type 字段一致。 */
     public static final int MAX_MIME_TYPE_LENGTH = 128;
+    /** 单个上传文件允许的最大字节数（50 MB），与 multipart 及反向代理配置保持一致。 */
+    public static final long MAX_UPLOAD_BYTES = 50L * 1024 * 1024;
 
     /**
      * 禁止实例化纯静态工具类。

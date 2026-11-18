@@ -6,7 +6,7 @@
 
 普通业务表使用明确 DO 和 `@TableName`。跨表投影、展示值和临时计算结果使用 DTO/VO，不以 `@TableField(exist = false)` 混入展示模型。
 
-普通可修改实体、主数据和配置默认沿用 `BaseDO` 的审计与逻辑删除；关系、日志、记录及快照按生命周期选择字段和基类。新模型不继承 `BaseDO` 时说明生命周期即可。已有表沿用既定审计字段和删除方式，改变时作为兼容性变更处理。
+普通可修改实体、主数据和配置默认沿用 `BaseDO` 的审计与逻辑删除；包含业务唯一键（如编码、账号、邮箱、客户端标识）的表继承 `UniqueBaseDO`（附加 `deleted_tag bigint NOT NULL DEFAULT 0`，唯一索引建在 `(业务唯一列, deleted_tag)` 上，由 `SoftDeleteUniqueInnerInterceptor` 在逻辑删除时写入 `deleted_tag = id`）；关系、日志、记录及快照按生命周期选择字段和基类。新模型不继承 `BaseDO` 时说明生命周期即可。已有表沿用既定审计字段和删除方式，改变时作为兼容性变更处理，并确保通过 `SchemaDoRbacParityTest` 的表列对齐校验。
 
 ## 主键与列映射
 

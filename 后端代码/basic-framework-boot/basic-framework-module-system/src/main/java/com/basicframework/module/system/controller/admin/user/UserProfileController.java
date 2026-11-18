@@ -22,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -61,6 +62,7 @@ public class UserProfileController {
      * @return 查询结果
      */
     @GetMapping("/get")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "获得登录用户信息")
     @DataPermission(enable = false) // 关闭数据权限，避免只查看自己时，查询不到部门。
     public CommonResult<UserProfileRespVO> getUserProfile() {
@@ -84,6 +86,7 @@ public class UserProfileController {
      * @return 操作结果
      */
     @PutMapping("/update")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "修改用户个人信息")
     public CommonResult<Boolean> updateUserProfile(@Valid @RequestBody UserProfileUpdateReqVO reqVO) {
         userService.updateUserProfile(getLoginUserId(), reqVO);
@@ -99,6 +102,7 @@ public class UserProfileController {
      * @return 操作结果
      */
     @PutMapping("/update-password")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "修改用户个人密码")
     public CommonResult<Boolean> updateUserProfilePassword(@Valid @RequestBody UserProfileUpdatePasswordReqVO reqVO) {
         reqVO.setOldPassword(sm2PasswordTransportService.decryptPassword(reqVO.getOldPassword()));

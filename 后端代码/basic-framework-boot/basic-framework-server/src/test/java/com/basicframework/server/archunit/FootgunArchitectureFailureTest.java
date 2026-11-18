@@ -1,9 +1,11 @@
 package com.basicframework.server.archunit;
 
 import com.basicframework.framework.footgun.ForbiddenCoreModuleDependency;
+import com.basicframework.module.infra.service.footgun.ForbiddenCrossModuleAndUnqualifiedTxService;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenDoExposureController;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenMapperAccessController;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenPublicEndpointController;
+import com.basicframework.module.system.controller.admin.footgun.ForbiddenUnprotectedEndpointController;
 import com.basicframework.module.system.dal.dataobject.footgun.ForbiddenFootgunDO;
 import com.basicframework.module.system.dal.mysql.footgun.ForbiddenFootgunMapper;
 import com.basicframework.module.system.service.footgun.ForbiddenGenericExceptionAndJulUsage;
@@ -16,26 +18,18 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 反向证明：夹具中的脚枪样本必须被对应 ArchUnit 规则判定为失败。
+ * 反向证明：夹具中的违规架构样本必须被对应 ArchUnit 规则判定为失败。
+ *
+ * @author shady2713
  */
 class FootgunArchitectureFailureTest {
 
-    /**
-     * 导入指定夹具类，供单条规则评估。
-     *
-     * @param classes 夹具类
-     * @return 仅包含这些类的导入结果
-     */
+    /** 导入指定夹具类供单条规则评估。 */
     private static JavaClasses importFixtures(Class<?>... classes) {
         return new ClassFileImporter().importClasses(classes);
     }
 
-    /**
-     * 判断规则评估是否产生失败，并带上失败报告便于诊断。
-     *
-     * @param result 规则评估结果
-     * @param marker 失败报告中应出现的夹具标识
-     */
+    /** 断言评估产生违规且失败报告命中目标夹具名。 */
     private static void assertViolated(EvaluationResult result, String marker) {
         String report = result.getFailureReport().toString();
         assertTrue(result.hasViolation(), "规则应判定夹具失败，实际报告：" + report);
@@ -48,6 +42,14 @@ class FootgunArchitectureFailureTest {
         EvaluationResult result = FootgunRules.permitAllMustBeAllowlisted()
                 .evaluate(importFixtures(ForbiddenPublicEndpointController.class));
         assertViolated(result, "ForbiddenPublicEndpointController");
+    }
+
+    /** 漏写 @PreAuthorize 与 @PermitAll 的控制器端点必须失败。 */
+    @Test
+    void unprotectedControllerEndpointFails() {
+        EvaluationResult result = FootgunRules.controllerEndpointsMustDeclareAuthorization()
+                .evaluate(importFixtures(ForbiddenUnprotectedEndpointController.class));
+        assertViolated(result, "ForbiddenUnprotectedEndpointController");
     }
 
     /** 控制器直接依赖 mapper 包必须失败。 */
@@ -81,6 +83,25 @@ class FootgunArchitectureFailureTest {
         assertViolated(
                 FootgunRules.coreMustNotDependOnModulesOrServer().evaluate(classes),
                 "ForbiddenCoreModuleDependency");
+    }
+
+    /** 跨业务模块直接依赖兄弟模块内部包必须失败。 */
+    @Test
+    void crossModuleInternalDependencyFails() {
+        JavaClasses classes = importFixtures(
+                ForbiddenCrossModuleAndUnqualifiedTxService.class, ForbiddenFootgunMapper.class);
+        assertViolated(
+                FootgunRules.businessModulesMustNotCrossDependOnInternals().evaluate(classes),
+                "ForbiddenCrossModuleAndUnqualifiedTxService");
+    }
+
+    /** 未显式声明 rollbackFor 的 @Transactional 方法必须失败。 */
+    @Test
+    void unqualifiedTransactionalMethodFails() {
+        JavaClasses classes = importFixtures(ForbiddenCrossModuleAndUnqualifiedTxService.class);
+        assertViolated(
+                FootgunRules.transactionalMustDeclareRollbackFor().evaluate(classes),
+                "ForbiddenCrossModuleAndUnqualifiedTxService");
     }
 
     /** 控制器 HTTP 端点在泛型返回类型中暴露持久化 DO 必须失败。 */

@@ -1,9 +1,3 @@
-export { default as PointSelectionCaptcha } from './point-selection-captcha/index.vue';
-export { default as PointSelectionCaptchaCard } from './point-selection-captcha/index.vue';
-
-export { default as SliderCaptcha } from './slider-captcha/index.vue';
-export { default as SliderRotateCaptcha } from './slider-rotate-captcha/index.vue';
-export { default as SliderTranslateCaptcha } from './slider-translate-captcha/index.vue';
+/** 行为图形验证码公共组件与类型导出入口。 */
 export type * from './types';
-
 export { default as Verification } from './verification/index.vue';

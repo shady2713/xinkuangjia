@@ -437,13 +437,18 @@ def _intersects_added_lines(
 
 
 def _member_start(
-    masked: str, brace_depths: list[int], position: int, member_depth: int
+    masked: str,
+    brace_depths: list[int],
+    paren_depths: list[int],
+    position: int,
+    member_depth: int,
 ) -> int:
-    """定位类型成员在上一个同级结构边界之后的起点。
+    """定位类型成员在上一个同级结构边界之后的起点，忽略注解小括号内的花括号数组。
 
     Args:
         masked: 已屏蔽注释和字面量的源码。
         brace_depths: 每个字符之前的大括号深度。
+        paren_depths: 每个字符之前的小括号深度。
         position: 当前声明内的字符偏移。
         member_depth: 类型成员所在的大括号深度。
 
@@ -452,6 +457,8 @@ def _member_start(
     """
 
     for index in range(position - 1, -1, -1):
+        if paren_depths[index] != 0:
+            continue
         char = masked[index]
         if char == ";" and brace_depths[index] == member_depth:
             return index + 1
@@ -537,13 +544,17 @@ def _strip_leading_annotations(fragment: str) -> tuple[str, int]:
 
 
 def _type_declarations(
-    masked: str, brace_depths: list[int], brace_pairs: dict[int, int]
+    masked: str,
+    brace_depths: list[int],
+    paren_depths: list[int],
+    brace_pairs: dict[int, int],
 ) -> list[TypeDeclaration]:
     """解析源码中的显式类型声明及其主体范围。
 
     Args:
         masked: 已屏蔽注释和字面量的源码。
         brace_depths: 每个字符之前的大括号深度。
+        paren_depths: 每个字符之前的小括号深度。
         brace_pairs: 左右大括号偏移映射。
 
     Returns:
@@ -565,7 +576,7 @@ def _type_declarations(
         if brace_depths[open_brace] != outer_depth:
             continue
         segment_start = _member_start(
-            masked, brace_depths, match.start(), outer_depth
+            masked, brace_depths, paren_depths, match.start(), outer_depth
         )
         declaration_offset = _first_code_offset(
             masked, segment_start, match.start() + 1
@@ -764,6 +775,7 @@ def _scan_methods(
     starts: list[int],
     added_lines: set[int],
     brace_depths: list[int],
+    paren_depths: list[int],
     paren_pairs: dict[int, int],
     declarations: list[TypeDeclaration],
 ) -> list[Finding]:
@@ -776,6 +788,7 @@ def _scan_methods(
         starts: 行起始偏移列表。
         added_lines: 暂存差异中的新增行号。
         brace_depths: 每个字符之前的大括号深度。
+        paren_depths: 每个字符之前的小括号深度。
         paren_pairs: 左右小括号偏移映射。
         declarations: 已解析的类型声明。
 
@@ -808,7 +821,7 @@ def _scan_methods(
             continue
         member_depth = enclosing.outer_depth + 1
         segment_start = _member_start(
-            masked, brace_depths, name_offset, member_depth
+            masked, brace_depths, paren_depths, name_offset, member_depth
         )
         declaration_offset = _first_code_offset(masked, segment_start, name_offset + 1)
         fragment = masked[declaration_offset:open_paren]
@@ -856,6 +869,7 @@ def _scan_compact_record_constructors(
     starts: list[int],
     added_lines: set[int],
     brace_depths: list[int],
+    paren_depths: list[int],
     declarations: list[TypeDeclaration],
 ) -> list[Finding]:
     """检查 record 的显式紧凑构造方法 JavaDoc。
@@ -867,6 +881,7 @@ def _scan_compact_record_constructors(
         starts: 行起始偏移列表。
         added_lines: 暂存差异中的新增行号。
         brace_depths: 每个字符之前的大括号深度。
+        paren_depths: 每个字符之前的小括号深度。
         declarations: 已解析的类型声明。
 
     Returns:
@@ -889,7 +904,7 @@ def _scan_compact_record_constructors(
             if brace_depths[open_brace] != member_depth:
                 continue
             segment_start = _member_start(
-                masked, brace_depths, match.start(), member_depth
+                masked, brace_depths, paren_depths, match.start(), member_depth
             )
             declaration_offset = _first_code_offset(
                 masked, segment_start, match.start() + 1
@@ -917,6 +932,7 @@ def _scan_do_vo_fields(
     starts: list[int],
     added_lines: set[int],
     brace_depths: list[int],
+    paren_depths: list[int],
     declarations: list[TypeDeclaration],
 ) -> list[Finding]:
     """检查 DO、VO 中本次新增或修改的成员变量 JavaDoc。
@@ -928,6 +944,7 @@ def _scan_do_vo_fields(
         starts: 行起始偏移列表。
         added_lines: 暂存差异中的新增行号。
         brace_depths: 每个字符之前的大括号深度。
+        paren_depths: 每个字符之前的小括号深度。
         declarations: 已解析的类型声明。
 
     Returns:
@@ -945,7 +962,7 @@ def _scan_do_vo_fields(
             continue
         member_depth = enclosing.outer_depth + 1
         segment_start = _member_start(
-            masked, brace_depths, semicolon, member_depth
+            masked, brace_depths, paren_depths, semicolon, member_depth
         )
         declaration_offset = _first_code_offset(masked, segment_start, semicolon)
         fragment = masked[declaration_offset:semicolon]
@@ -1186,7 +1203,7 @@ def _scan_source(path: str, source: str, added_lines: set[int]) -> list[Finding]
     paren_depths = _depths(masked, "(", ")")
     brace_pairs = _matching_delimiters(masked, "{", "}")
     paren_pairs = _matching_delimiters(masked, "(", ")")
-    declarations = _type_declarations(masked, brace_depths, brace_pairs)
+    declarations = _type_declarations(masked, brace_depths, paren_depths, brace_pairs)
     findings = []
     findings.extend(_scan_types(path, source, starts, added_lines, declarations))
     findings.extend(
@@ -1197,6 +1214,7 @@ def _scan_source(path: str, source: str, added_lines: set[int]) -> list[Finding]
             starts,
             added_lines,
             brace_depths,
+            paren_depths,
             paren_pairs,
             declarations,
         )
@@ -1209,6 +1227,7 @@ def _scan_source(path: str, source: str, added_lines: set[int]) -> list[Finding]
             starts,
             added_lines,
             brace_depths,
+            paren_depths,
             declarations,
         )
     )
@@ -1220,6 +1239,7 @@ def _scan_source(path: str, source: str, added_lines: set[int]) -> list[Finding]
             starts,
             added_lines,
             brace_depths,
+            paren_depths,
             declarations,
         )
     )
@@ -1389,6 +1409,16 @@ public class GoodDO {
             return value;
         }
         return record;
+    }
+
+    /**
+     * 验证注解中包含花括号数组参数时，紧邻 JavaDoc 仍能正常关联。
+     *
+     * @return 列表文本
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public String annotatedArrayMethod() {
+        return "ok";
     }
 }
 """

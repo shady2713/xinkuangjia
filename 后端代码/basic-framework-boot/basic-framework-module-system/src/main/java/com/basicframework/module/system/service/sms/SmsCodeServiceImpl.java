@@ -116,23 +116,26 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     }
 
     /**
-     * 校验 validateSmsCode0 对应的输入与业务约束。
+     * 仅按手机号与场景读取最近签发的一条验证码并在常量时间内比对编码，确保新验证码签发后历史旧码立即失效。
      */
     private SmsCodeDO validateSmsCode0(String mobile, String code, Integer scene) {
-        // 校验验证码
-        SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, code, scene);
-        // 若验证码不存在，抛出异常
+        SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, scene);
         if (lastSmsCode == null) {
             throw exception(SMS_CODE_NOT_FOUND);
         }
-        // 超过时间
         if (LocalDateTimeUtil.between(lastSmsCode.getCreateTime(), LocalDateTime.now()).toMillis()
-                >= smsCodeProperties.getExpireTimes().toMillis()) { // 验证码已过期
+                >= smsCodeProperties.getExpireTimes().toMillis()) {
             throw exception(SMS_CODE_EXPIRED);
         }
-        // 判断验证码是否已被使用
         if (Boolean.TRUE.equals(lastSmsCode.getUsed())) {
             throw exception(SMS_CODE_USED);
+        }
+        byte[] expectedBytes = lastSmsCode.getCode() != null
+                ? lastSmsCode.getCode().getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
+        byte[] actualBytes = code != null
+                ? code.getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
+        if (!java.security.MessageDigest.isEqual(expectedBytes, actualBytes)) {
+            throw exception(SMS_CODE_NOT_FOUND);
         }
         return lastSmsCode;
     }

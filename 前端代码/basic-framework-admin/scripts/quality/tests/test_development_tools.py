@@ -90,12 +90,13 @@ class DevelopmentTests(unittest.TestCase):
         )
 
     def test_layer_direction_matches_existing_contract(self) -> None:
-        """沿用 core/base 与基础包规则，并允许基础包内部相对引用。"""
+        """沿用 core/base 与基础包规则，允许应用内 #/ 别名但禁止应用层直连 @vben-core。"""
         self.assertTrue(audit.forbidden_layer("packages/@core/base/x/src/a.ts", "@vben-core/foo"))
         self.assertTrue(audit.forbidden_layer("packages/@core/x/src/a.ts", "@vben/foo"))
         self.assertTrue(audit.forbidden_layer("packages/utils/src/a.ts", "@vben/foo"))
         self.assertFalse(audit.forbidden_layer("packages/utils/src/a.ts", ""))
-        self.assertTrue(audit.forbidden_layer("apps/web-ele/src/a.ts", "#/api/foo"))
+        self.assertFalse(audit.forbidden_layer("apps/web-ele/src/a.ts", "#/api/foo"))
+        self.assertTrue(audit.forbidden_layer("apps/web-ele/src/a.ts", "@vben-core/shadcn-ui"))
 
     def test_config_diagnostics_do_not_expose_values(self) -> None:
         """配置入口绕过和内联端点只输出位置，不泄露字面量值。"""

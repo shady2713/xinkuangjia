@@ -131,13 +131,14 @@ public class MenuController {
     }
 
     /**
-     * 获取精简数据菜单列表。
+     * 返回当前登录平台下启用且父链路未停用的菜单树选项，供角色授权弹窗勾选。
      *
-     * @return 查询结果
+     * @return 按 {@code sort} 升序排列的菜单节点摘要列表
      */
-    @GetMapping({"/list-all-simple", "simple-list"})
+    @GetMapping("/simple-list")
     @Operation(summary = "获取菜单精简信息列表",
             description = "只包含被开启的菜单，用于【角色分配菜单】功能的选项。")
+    @PreAuthorize("@ss.hasAnyPermissions('system:menu:query', 'system:role:query', 'system:permission:assign-role-menu')")
     public CommonResult<List<MenuSimpleRespVO>> getSimpleMenuList() {
         MenuListReqVO request = new MenuListReqVO();
         request.setStatus(CommonStatusEnum.ENABLE.getStatus());

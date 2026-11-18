@@ -26,13 +26,13 @@ public class OAuth2ClientRespVO {
     /**
      * 客户端编号。
      */
-    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "tudou")
+    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "portal-web")
     private String clientId;
 
     /**
      * 应用名。
      */
-    @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "土豆")
+    @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "门户客户端")
     private String name;
 
     /**

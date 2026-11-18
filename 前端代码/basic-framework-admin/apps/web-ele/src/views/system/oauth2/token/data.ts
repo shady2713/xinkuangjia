@@ -38,29 +38,28 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 构建 OAuth2.0 会话令牌表格列定义。
+ *
+ * @returns 表格列配置数组
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
     {
-      field: 'accessToken',
-      title: '访问令牌',
-      minWidth: 300,
-    },
-    {
-      field: 'refreshToken',
-      title: '刷新令牌',
-      minWidth: 300,
+      field: 'id',
+      title: '令牌编号',
+      minWidth: 120,
     },
     {
       field: 'userId',
       title: '用户编号',
-      minWidth: 100,
+      minWidth: 120,
     },
     {
       field: 'userType',
       title: '用户类型',
-      minWidth: 100,
+      minWidth: 120,
       cellRender: {
         name: 'CellDict',
         props: { type: DICT_TYPE.USER_TYPE },
@@ -69,7 +68,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'clientId',
       title: '客户端编号',
-      minWidth: 120,
+      minWidth: 160,
     },
     {
       field: 'expiresTime',
@@ -85,7 +84,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
     },
     {
       title: '操作',
-      width: 80,
+      width: 90,
       fixed: 'right',
       slots: { default: 'actions' },
     },

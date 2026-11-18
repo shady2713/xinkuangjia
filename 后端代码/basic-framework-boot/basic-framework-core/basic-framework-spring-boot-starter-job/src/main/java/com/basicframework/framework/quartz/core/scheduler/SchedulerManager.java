@@ -33,6 +33,15 @@ public class SchedulerManager {
     }
 
     /**
+     * 判断当前运行环境是否启用了 Quartz 调度器。
+     *
+     * @return 已装配 Scheduler 实例时返回 true
+     */
+    public boolean isEnabled() {
+        return this.scheduler != null;
+    }
+
+    /**
      * 添加 Job 到 Quartz 中。
      *
      * @param jobId           任务编号

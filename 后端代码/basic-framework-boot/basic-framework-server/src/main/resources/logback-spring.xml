@@ -1,9 +1,9 @@
 <configuration>
-    <!-- 格式化输出：%d 表示日期，%thread 表示线程名，%-5level：级别从左显示 5 个字符宽度，%msg：日志消息，%n是换行符 -->
-    <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{50}:%L) - %msg%n"/>
-    <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50}:%L - %msg%n"/>
-    <!-- JSON 格式模板，用于生产环境日志聚合（ELK/Loki 等） -->
-    <property name="JSON_LOG_PATTERN" value='{"timestamp":"%d{yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSZ}","level":"%level","thread":"%thread","logger":"%logger{50}","line":"%L","message":"%replace(%msg){&apos;,&apos;}","exception":"%replace(%xException{10}){&apos;,&apos;}"}%n'/>
+    <!-- 格式化输出：%d 表示日期，%X{tid} 输出链路追踪标识，%thread 表示线程名，%-5level 为日志级别，%msg 为日志消息 -->
+    <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid:-}] [%thread] %highlight(%-5level) %cyan(%logger{50}:%L) - %msg%n"/>
+    <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{tid:-}] [%thread] %-5level %logger{50}:%L - %msg%n"/>
+    <!-- JSON 格式模板，对反斜杠、双引号、回车、换行与制表符逐层转义，保证生产日志严格符合 RFC 8259 -->
+    <property name="JSON_LOG_PATTERN" value='{"timestamp":"%d{yyyy-MM-dd&apos;T&apos;HH:mm:ss.SSSZ}","traceId":"%X{tid:-}","level":"%level","thread":"%replace(%thread){&apos;[\\\\]&apos;,&apos;\\\\\\\\&apos;}","logger":"%logger{50}","line":"%L","message":"%replace(%replace(%replace(%replace(%replace(%msg){&apos;[\\\\]&apos;,&apos;\\\\\\\\&apos;}){&apos;&quot;&apos;,&apos;\\&quot;&apos;}){&apos;\r&apos;,&apos;\\r&apos;}){&apos;\n&apos;,&apos;\\n&apos;}){&apos;\t&apos;,&apos;\\t&apos;}","exception":"%replace(%replace(%replace(%replace(%replace(%xException{10}){&apos;[\\\\]&apos;,&apos;\\\\\\\\&apos;}){&apos;&quot;&apos;,&apos;\\&quot;&apos;}){&apos;\r&apos;,&apos;\\r&apos;}){&apos;\n&apos;,&apos;\\n&apos;}){&apos;\t&apos;,&apos;\\t&apos;}"}%n'/>
 
     <!-- ==================== local/dev 环境 ==================== -->
     <springProfile name="local,dev">

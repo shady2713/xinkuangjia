@@ -8,7 +8,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * OAuth2AccessTokenRespVO 响应对象，承载接口输出数据。
+ * 管理后台在线会话令牌响应对象。
+ *
+ * <p>仅输出令牌记录编号与归属元数据，禁止在管理端列表暴露明文 {@code accessToken} 或 {@code refreshToken}，
+ * 防止管理员直接劫持他人在线会话。</p>
  *
  * @author 李杰
  */
@@ -19,22 +22,10 @@ import java.time.LocalDateTime;
 public class OAuth2AccessTokenRespVO {
 
     /**
-     * 编号。
+     * 令牌记录编号。
      */
     @Schema(description = "编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     private Long id;
-
-    /**
-     * 访问令牌。
-     */
-    @Schema(description = "访问令牌", requiredMode = Schema.RequiredMode.REQUIRED, example = "tudou")
-    private String accessToken;
-
-    /**
-     * 刷新令牌。
-     */
-    @Schema(description = "刷新令牌", requiredMode = Schema.RequiredMode.REQUIRED, example = "nice")
-    private String refreshToken;
 
     /**
      * 用户编号。
@@ -51,7 +42,7 @@ public class OAuth2AccessTokenRespVO {
     /**
      * 客户端编号。
      */
-    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "2")
+    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "system-admin")
     private String clientId;
 
     /**

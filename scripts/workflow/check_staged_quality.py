@@ -362,7 +362,7 @@ def main() -> int:
             if temporary_root.startswith("\\\\")
             else "\\\\?\\" + temporary_root
         )
-    with tempfile.TemporaryDirectory(prefix="aimaster-staged-", dir=temporary_root) as temporary:
+    with tempfile.TemporaryDirectory(prefix="bf-staged-", dir=temporary_root) as temporary:
         folder = Path(temporary).resolve()
         private_index = folder / "index"
         private_index.write_bytes(original)

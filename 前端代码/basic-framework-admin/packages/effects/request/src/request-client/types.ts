@@ -65,6 +65,9 @@ interface ResponseInterceptorConfig<T = any> {
   rejected?: (error: any) => any;
 }
 
+/** 刷新访问令牌期间挂起请求的结算回调签名。 */
+type RefreshTokenQueueCallback = (token: string, error?: unknown) => void;
+
 type MakeErrorMessageFn = (message: string, error: any) => void;
 
 interface HttpResponse<T = any> {
@@ -93,6 +96,7 @@ export type {
   MakeErrorMessageFn,
   PageParam,
   PageResult,
+  RefreshTokenQueueCallback,
   RequestClientConfig,
   RequestClientOptions,
   RequestContentType,

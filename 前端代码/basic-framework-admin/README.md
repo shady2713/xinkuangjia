@@ -76,14 +76,17 @@ pnpm dev:ele
 
 | 命令 | 用途 |
 | --- | --- |
+| `pnpm api:gen` / `pnpm api:check` | 从后端 OpenAPI 快照生成 TypeScript 类型或只读校验零漂移 |
 | `pnpm check:type` | 工作区 TypeScript 类型检查 |
+| `pnpm check:circular` / `pnpm check:dep` | 循环依赖与未声明依赖检查 |
 | `pnpm lint` | ESLint、Prettier、Stylelint 检查；不加 --format 不自动修复 |
 | `pnpm quality:comments` | 当前变更中文职责注释检查 |
-| `pnpm quality:workspace` | workspace 和 catalog 约束 |
+| `pnpm quality:workspace` / `pnpm quality:development` | workspace/catalog 约束与分层/配置源码审计 |
 | `pnpm test:unit` | Vitest 已声明单元测试 |
 | `pnpm test:e2e` | Turbo 分发声明的 E2E 任务，核对实际用例数 |
 | `pnpm build:ele` | 生成 apps/web-ele/dist |
-| `pnpm quality:verify` | 当前串联门禁，包括类型、Lint、单测、构建与 E2E |
+| `pnpm quality:prod-scan` | 扫描生产产物的敏感配置、裸 `window.open(` 与单 chunk `<= 1.2 MB` 体积预算 |
+| `pnpm quality:verify` | 当前串联门禁，包括类型、Lint、单测、构建、产物扫描与 E2E |
 
 完整门禁中任一步失败，不能把其他单项成功当作全量通过。外部接口、登录、权限和真实上传另行验证，见[测试策略](../../docs/测试与可靠性/测试策略.md)与[脚本索引](../../docs/开发指南/脚本使用索引.md)。
 
@@ -97,7 +100,7 @@ pnpm dev:ele
 4. 模板上游为 `basic-framework-backend:48080`。Java 容器使用该名称并与前端加入同一 Docker 网络；Java 在宿主机时运行前端容器需 `--add-host basic-framework-backend:host-gateway`，并验证宿主机监听与防火墙。
 5. 访问 `/admin/`，检查静态资源、登录、菜单、权限和文件链接。目标 HTTPS 与代理端口须一致。
 
-框架不提供完整生产 Compose；Java、前端、中间件与 HTTPS 网关按通用服务器步骤安装。模板不代理 AI、媒体、泛 `/api/` 或 App API；对象读取使用浏览器可达的 `MINIO_PUBLIC_URL`。完整步骤见[部署说明](../../docs/部署/部署说明.md)。
+Java、前端、中间件与 HTTPS 网关按通用服务器步骤安装。内层 Nginx 模板按最小权限代理 `/admin-api/` 与 `/system/oauth2/`；对象读取使用浏览器可达的 `MINIO_PUBLIC_URL`。完整步骤见[部署说明](../../docs/部署/部署说明.md)。
 
 ## 开发机制
 
@@ -114,9 +117,8 @@ pnpm dev:ele
 
 ## 已知限制与暂缓工作
 
-框架页面与菜单只对应当前已提取的业务，接口与环境仍需独立验收。
+框架页面与菜单覆盖系统管理与基础设施能力，业务接口与环境仍需独立验收。
 
-- 当前维护 system、infra 与核心页面，AI、Workflow、媒体页面不在范围内。
 - 路由和按钮权限控制界面，真实授权仍由 Java 执行。
 - 生产对象 URL 必须从浏览器可达；Java 能访问存储不等于用户浏览器能访问。
 - E2E 命令存在不证明每项业务有自动化场景，零任务与跳过必须如实记录。

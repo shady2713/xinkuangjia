@@ -58,6 +58,12 @@ SELF_TEST_ALLOW_MARKER = "# secret-scan: allow-test"
 # 仅豁免已确认的依赖包名；锁文件中的密钥前缀、URL 和固定凭据仍按原规则扫描。
 LOCKFILE_PATH_NAMES = frozenset({"package-lock.json", "pnpm-lock.yaml"})
 LOCKFILE_DEPENDENCY_KEYS = frozenset({"js-tokens"})
+GENERATED_SCHEMA_PATHS = frozenset(
+    {
+        "前端代码/basic-framework-admin/apps/web-ele/src/api/generated/openapi.json",
+        "前端代码/basic-framework-admin/apps/web-ele/src/api/generated/api-types.d.ts",
+    }
+)
 
 CONFIG_SUFFIXES = {
     ".cfg",
@@ -158,7 +164,12 @@ def _is_forbidden_env_path(path: str) -> bool:
         return False
     if name == ".env.local" or re.fullmatch(r"\.env\..+\.local", name):
         return True
-    return name == ".env" and normalized.startswith(("部署/", "后端/"))
+    if name == ".env" or name.startswith(".env."):
+        if normalized.startswith("前端代码/basic-framework-admin/apps/"):
+            return False
+        if normalized.startswith(("部署/", "后端/", "docs/部署/", "后端代码/", "数据库文件/")) or "/" not in normalized:
+            return True
+    return False
 
 
 def _is_config_path(path: str) -> bool:
@@ -197,8 +208,18 @@ def _normalized_literal(raw_value: str) -> tuple[str, bool]:
     return value, quoted
 
 
+TS_TYPE_ANNOTATION_SUFFIXES = frozenset({".ts", ".tsx", ".mts", ".cts", ".vue"})
+TS_TYPE_TOKEN_RE = (
+    r"(?:string|number|boolean|null|undefined|unknown|never|void|[A-Z][A-Za-z0-9_.]*)(?:\[\])*"
+)
+TS_TYPE_ANNOTATION_RE = re.compile(
+    rf"^(?:null\s+as\s+)?{TS_TYPE_TOKEN_RE}(?:\s*\|\s*{TS_TYPE_TOKEN_RE})*"
+    r"(?:\s*(?:[,;)\]}]|=>\s*[A-Za-z0-9_.<>|\[\]\s;]+|$))"
+)
+
+
 def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool:
-    """判断敏感名称命中是否为 Python 类型注解或安全默认参数。
+    """判断敏感名称命中是否为 Python/TypeScript 类型注解或安全空值默认参数。
 
     Args:
         path: 仓库相对路径。
@@ -206,12 +227,20 @@ def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool
         raw_value: 运算符右侧尚未规范化的文本。
 
     Returns:
-        Python 文件中的纯类型表达式，或默认值为 ``None``、``False``、空值等
-        安全占位符时返回 ``True``；固定字符串和配置赋值返回 ``False``，继续
-        执行凭据检查。
+        Python 或 TypeScript/Vue 文件中的纯类型表达式，或默认值为 ``None``、
+        ``False``、空值等安全占位符时返回 ``True``；固定字符串和配置赋值返回
+        ``False``，继续执行凭据检查。
     """
 
-    if not path.lower().endswith(".py") or operator != ":":
+    if operator != ":":
+        return False
+    suffix = PurePosixPath(path.lower()).suffix
+    stripped = raw_value.strip()
+    if suffix in TS_TYPE_ANNOTATION_SUFFIXES:
+        if any(quote in stripped for quote in ('"', "'", "`")):
+            return False
+        return bool(TS_TYPE_ANNOTATION_RE.match(stripped))
+    if suffix != ".py":
         return False
     type_expression = (
         r"[A-Za-z_][A-Za-z0-9_.]*(?:\[[A-Za-z0-9_., |\[\]]+\])?"
@@ -653,6 +682,15 @@ def _scan_added_line(
     assignment = SENSITIVE_ASSIGNMENT_PATTERN.search(line)
     if assignment is None:
         return findings
+    normalized_path = path.replace("\\", "/")
+    if normalized_path in GENERATED_SCHEMA_PATHS:
+        return findings
+    # 冒号分隔的权限码标识（如 system:oauth2-token:query）并非键值赋值。
+    if assignment.start() > 0 and line[assignment.start() - 1] == ":":
+        return findings
+    # JSON/YAML 嵌套对象或数组起始行（如 "password": {）只是结构头，不含标量凭据字面量。
+    if assignment.group("value").strip() in {"{", "["}:
+        return findings
     # 锁文件依赖项的字段名是包名，不是凭据名；仅放行明确登记过的依赖包名。
     if (
         PurePosixPath(path).name in LOCKFILE_PATH_NAMES
@@ -1084,6 +1122,14 @@ def _run_self_test() -> None:
             "src/styles.css",
             ".task-background { mask-image: none; }",  # secret-scan: allow-test
         ),
+        (
+            "数据库文件/basic_framework.sql",
+            "INSERT INTO system_menu VALUES (1063, '令牌列表', 'system:oauth2-token:query');",  # secret-scan: allow-test
+        ),
+        (
+            "schema/openapi.json",
+            '  "password" : {',  # secret-scan: allow-test
+        ),
     )
     unsafe_cases = (
         ("部署/config.yaml", 'password: "Fake-Prod-2026"'),  # secret-scan: allow-test
@@ -1139,10 +1185,12 @@ def _run_self_test() -> None:
         "src/jsencrypt.js", list(enumerate(generated_key_code, start=1))
     ):
         raise AssertionError("私钥生成代码被误报")
-    if not _is_forbidden_env_path("部署/生产/.env"):
+    if not _is_forbidden_env_path("部署/生产/.env") or not _is_forbidden_env_path("docs/部署/.env"):
         raise AssertionError("部署 .env 文件名规则未生效")
-    if _is_forbidden_env_path("部署/.env.example"):
+    if _is_forbidden_env_path("部署/.env.example") or _is_forbidden_env_path("docs/部署/.env.example"):
         raise AssertionError(".env.example 不应被文件名规则拦截")
+    if _is_forbidden_env_path("前端代码/basic-framework-admin/apps/web-ele/.env.production"):
+        raise AssertionError("前端构建环境配置不应被文件名规则拦截")
     print("密钥扫描规则自检通过")
 
 

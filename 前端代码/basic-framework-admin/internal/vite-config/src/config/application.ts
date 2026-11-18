@@ -11,7 +11,47 @@ import { loadAndConvertEnv } from '../utils/env.ts';
 import { getCommonConfig } from './common.ts';
 
 /**
- * 创建应用型前端的 Vite 配置，并按环境加载构建插件。
+ * 按依赖域稳定切分长周期缓存 chunk，防止首屏入口分块膨胀。
+ *
+ * @param id Rollup 模块绝对标识
+ * @returns 目标 vendor 分块名；普通业务模块返回 undefined 交由路由懒加载切分
+ */
+function resolveVendorChunk(id: string): string | undefined {
+  if (!id.includes('node_modules')) {
+    return undefined;
+  }
+  if (
+    /[/\\]node_modules[/\\](?:vue|@vue|vue-router|pinia|pinia-plugin-persistedstate|vue-i18n|@intlify)[/\\]/u.test(
+      id,
+    )
+  ) {
+    return 'vendor-vue';
+  }
+  if (/[/\\]node_modules[/\\](?:element-plus|@element-plus)[/\\]/u.test(id)) {
+    return 'vendor-element-plus';
+  }
+  if (
+    /[/\\]node_modules[/\\](?:vxe-table|vxe-pc-ui|@vxe-ui|xe-utils)[/\\]/u.test(
+      id,
+    )
+  ) {
+    return 'vendor-vxe';
+  }
+  if (/[/\\]node_modules[/\\](?:@iconify|lucide-vue-next)[/\\]/u.test(id)) {
+    return 'vendor-icons';
+  }
+  if (
+    /[/\\]node_modules[/\\](?:reka-ui|tippy\.js|vue-tippy|vee-validate|@vee-validate|zod|sm-crypto|crypto-js|jsencrypt)[/\\]/u.test(
+      id,
+    )
+  ) {
+    return 'vendor-ui-core';
+  }
+  return undefined;
+}
+
+/**
+ * 创建应用型前端的 Vite 配置，并按环境加载构建插件与分块策略。
  *
  * @param userConfigPromise 应用自定义配置工厂
  * @returns 可由 Vite 直接加载的异步配置
@@ -26,15 +66,13 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
     const isBuild = command === 'build';
 
     const plugins = await loadApplicationPlugins({
-      devtools: false,
       html: true,
-      i18n: false,
       injectAppLoading,
       injectGlobalScss: true,
       isBuild,
       mode,
-      pwa: false,
       root: process.cwd(),
+      vxeTableLazyImport: true,
       ...application,
     });
 
@@ -47,6 +85,7 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
             assetFileNames: '[ext]/[name]-[hash].[ext]',
             chunkFileNames: 'js/[name]-[hash].js',
             entryFileNames: 'js/[name]-[hash].js',
+            manualChunks: resolveVendorChunk,
           },
         },
         target: 'es2015',
@@ -77,14 +116,17 @@ function defineApplicationConfig(userConfigPromise?: DefineApplicationOptions) {
   });
 }
 
+/** 解析前端工作区根目录。 */
 function findMonorepoRoot() {
   return path.resolve(__dirnameSafe(), '../../..');
 }
 
+/** 获取当前模块目录路径。 */
 function __dirnameSafe() {
   return path.dirname(new URL(import.meta.url).pathname);
 }
 
+/** 为 apps 下的 SCSS 自动注入全局样式变量。 */
 function createCssOptions(injectGlobalScss = true): CSSOptions {
   const root = findMonorepoRoot();
   return {

@@ -18,6 +18,8 @@
   },
   "type": "module",
   "scripts": {
+    "api:check": "node ./scripts/openapi/generate-api-types.mjs --check",
+    "api:gen": "node ./scripts/openapi/generate-api-types.mjs",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 turbo build",
     "build:analyze": "turbo build:analyze",
     "build:docker": "pnpm run build:ele && docker build -t basic-framework-admin:local apps/web-ele",

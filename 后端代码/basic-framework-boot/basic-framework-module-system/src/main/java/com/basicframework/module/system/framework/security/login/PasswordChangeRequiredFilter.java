@@ -2,6 +2,7 @@ package com.basicframework.module.system.framework.security.login;
 
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.util.servlet.ServletUtils;
+import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.framework.web.config.WebProperties;
 import com.basicframework.framework.web.core.filter.ApiRequestFilter;
@@ -45,7 +46,6 @@ public class PasswordChangeRequiredFilter extends ApiRequestFilter {
             "/system/auth/get-permission-info",
             "/system/auth/send-sms-code",
             "/system/auth/reset-password",
-            "/system/auth/register",
             "/system/auth/sm2-public-key",
             "/system/user/profile/get",
             "/system/user/profile/update-password");
@@ -84,7 +84,8 @@ public class PasswordChangeRequiredFilter extends ApiRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        AdminUserDO user = adminUserService.getUser(loginUserId);
+        // 忽略数据权限读取当前已认证用户自身状态，防止无部门但绑定仅本部门角色的账号查询返回空而绕过首次改密拦截。
+        AdminUserDO user = DataPermissionUtils.executeIgnore(() -> adminUserService.getUser(loginUserId));
         if (user == null || !Boolean.TRUE.equals(user.getPasswordChangeRequired())) {
             chain.doFilter(request, response);
             return;

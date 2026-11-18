@@ -1,6 +1,6 @@
 /**
- * 字典精简查询接口：供路由守卫、表单设计器等核心功能加载字典缓存。
- * 核心组件通过此模块加载字典，系统管理页面的增删改接口仍由 system/dict 模块提供。
+ * 字典精简查询接口：供路由守卫与通用选择器加载字典缓存。
+ * 核心组件通过此模块加载字典，系统管理页面的增删改接口由 system/dict 模块提供。
  */
 import { requestClient } from '#/api/request';
 
@@ -46,12 +46,12 @@ export function getSimpleDictDataList() {
 }
 
 /**
- * 查询表单设计器可选的字典类型；请求失败由统一请求客户端处理。
+ * 查询全部字典类型精简列表；请求失败由统一请求客户端处理。
  *
  * @returns 字典类型列表；无可用类型时返回空数组
  */
 export function getSimpleDictTypeList() {
   return requestClient.get<SystemDictTypeApi.DictType[]>(
-    '/system/dict-type/list-all-simple',
+    '/system/dict-type/simple-list',
   );
 }

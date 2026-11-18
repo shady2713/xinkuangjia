@@ -10,15 +10,19 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ATTEMPT_LOCKED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -32,7 +36,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * 验证短信登录手机号与 IP 两个维度的失败计数、锁定、清零和 Redis 降级。
+ * 验证短信登录手机号与 IP 两个维度的原子失败计数、锁定、清零和 Redis 降级。
  *
  * @author shady2713
  */
@@ -69,12 +73,16 @@ class SmsLoginFailureLockServiceTest {
     }
 
     /**
-     * 按 Redis 键分别累加失败次数，模拟真实计数器语义。
+     * 按 Redis Lua 脚本首个键累加失败次数，模拟真实原子计数器语义。
      */
+    @SuppressWarnings("unchecked")
     private void mockIncrementCounters() {
         Map<String, Long> counters = new HashMap<>();
-        when(valueOperations.increment(anyString())).thenAnswer(invocation ->
-                counters.merge(invocation.getArgument(0), 1L, Long::sum));
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenAnswer(invocation -> {
+                    List<String> keys = invocation.getArgument(1);
+                    return counters.merge(keys.get(0), 1L, Long::sum);
+                });
     }
 
     /** 验证同一手机号达到阈值后写入手机号锁定标记并清理失败计数。 */
@@ -95,7 +103,6 @@ class SmsLoginFailureLockServiceTest {
     /** 验证同一 IP 达到阈值后写入 IP 锁定标记。 */
     @Test
     void locksIpAtThreshold() {
-        // 提高手机号阈值，让同一 IP 先达到锁定条件。
         securityProperties.getSmsLoginLock().setMaxFailures(10);
         mockIncrementCounters();
 
@@ -157,21 +164,31 @@ class SmsLoginFailureLockServiceTest {
 
     /** 验证无客户端 IP 时只按手机号维度计数。 */
     @Test
+    @SuppressWarnings("unchecked")
     void skipsIpDimensionWhenIpMissing() {
-        when(valueOperations.increment(anyString())).thenReturn(1L, 2L);
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenReturn(1L, 2L);
 
         lockService.recordFailure(MOBILE, " ");
         lockService.recordFailure(MOBILE, " ");
 
-        verify(valueOperations, times(2)).increment(argThat(key -> key.contains(":mobile:")));
-        verify(valueOperations, never()).increment(argThat(key -> key.contains(":ip:")));
+        verify(stringRedisTemplate, times(2)).execute(
+                any(RedisScript.class),
+                argThat((List<String> keys) -> keys.size() == 1 && keys.get(0).contains(":mobile:")),
+                anyString());
+        verify(stringRedisTemplate, never()).execute(
+                any(RedisScript.class),
+                argThat((List<String> keys) -> keys.stream().anyMatch(key -> key.contains(":ip:"))),
+                anyString());
     }
 
     /** 验证 Redis 不可用且策略为本地兜底时，手机号仍会被锁定。 */
     @Test
+    @SuppressWarnings("unchecked")
     void locksMobileLocallyWhenRedisUnavailable() {
         securityProperties.setRedisUnavailableStrategy(RedisUnavailableStrategy.LOCAL_FALLBACK);
-        when(valueOperations.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenThrow(new IllegalStateException("redis down"));
         doThrow(new IllegalStateException("redis down")).when(valueOperations)
                 .set(anyString(), eq("1"), anyLong(), eq(TimeUnit.MILLISECONDS));
         when(stringRedisTemplate.hasKey(anyString())).thenThrow(new IllegalStateException("redis down"));
@@ -194,4 +211,5 @@ class SmsLoginFailureLockServiceTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(AUTH_LOGIN_ATTEMPT_LOCKED.getCode()));
     }
+
 }

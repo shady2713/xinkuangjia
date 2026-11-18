@@ -11,7 +11,7 @@ core 提供 Starter，dependencies 维护 BOM，system 和 infra 提供业务，
 | basic-framework-module-system | 登录、用户、组织、角色菜单、字典、审计、OAuth2 与短信 |
 | basic-framework-module-infra | 文件、参数配置、Quartz 任务和日志 |
 | basic-framework-server | 启动扫描与全局配置 |
-| basic-framework-core | Web、Security、MyBatis、Redis、MQ、Job、Excel、保护、数据权限与 IP Starter |
+| basic-framework-core | Web、Security、MyBatis、Redis、Job、Excel、数据权限与 IP Starter |
 
 ## 入口与能力归属
 
@@ -19,7 +19,7 @@ core 提供 Starter，dependencies 维护 BOM，system 和 infra 提供业务，
 
 ## 安全链与数据边界
 
-HTTP 请求经过编码、日志和安全过滤链，再进入 Controller、Service、Mapper 或外部客户端。身份来自认证上下文，权限在真实操作入口校验，不只信任请求字段。跨模块契约、凭证展示与模型转换见[接口规则](api-controller-model.md)。文件由 MinioFileProperties 与 FileStorageService 管理统一存储，凭据从环境注入，不恢复多存储数据库配置。
+HTTP 请求经过编码、日志和安全过滤链，再进入 Controller、Service、Mapper 或外部客户端。身份来自认证上下文，权限在真实操作入口校验，不只信任请求字段。跨模块契约、凭证展示与模型转换见[接口规则](api-controller-model.md)。文件由 MinioFileProperties 与 FileStorageService 管理统一存储，凭据从环境注入。
 
 ## 配置与运行
 
@@ -27,7 +27,7 @@ Java 根目录 `.env` 提供 DB、REDIS、MINIO 系列配置；只有非敏感�
 
 ## 验证与源码定位
 
-按[测试与验证](testing-validation.md)选择当前模块和真实用例。框架没有 AI、Workflow、推理、转码或业务前端，不创建对应依赖。
+按[测试与验证](testing-validation.md)选择当前模块和真实用例。
 
 | 事实 | 权威位置 |
 | --- | --- |

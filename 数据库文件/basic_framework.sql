@@ -1,25 +1,6 @@
--- Repository baseline: historical sessions and runtime logs are omitted.
--- Before importing into an authorized empty database, supply the initial
--- system_users.password as a BCrypt hash, system_oauth2_client.secret as a
--- BCrypt hash, and infra_config.value for system.user.init-password through
--- a controlled provisioning process. These credential fields are empty here.
--- Never import this rebuilding script into an existing application database.
-
-/*
- Navicat Premium Dump SQL
-
- Source Server         : localhost
- Source Server Type    : MySQL
- Source Server Version : 80030 (8.0.30)
- Source Host           : localhost:3306
- Source Schema         : basic_framework1001
-
- Target Server Type    : MySQL
- Target Server Version : 80030 (8.0.30)
- File Encoding         : 65001
-
- Date: 01/10/2026 20:24:05
-*/
+-- basic-framework MySQL 8.x 空库初始化结构与元数据基线。
+-- 导入前请通过受控初始化流程补充 system_users.password（BCrypt 哈希）及必要的业务参数配置；
+-- 严禁将本重建脚本直接导入已有业务数据的生产数据库。
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -121,15 +102,15 @@ CREATE TABLE `infra_config`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_config_key`(`config_key` ASC) USING BTREE
+  UNIQUE INDEX `uk_config_key`(`config_key` ASC, `deleted_tag` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '参数配置表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of infra_config
 -- ----------------------------
-INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', '首次部署后由管理员设置并通过受控流程下发', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0');
-INSERT INTO `infra_config` VALUES (3, '用户管理-账号初始密码', 2, '用户管理-注册开关', 'system.user.register-enabled', 'true', b'0', '', '1', '2025-04-26 17:23:41', '1', '2025-04-26 17:23:41', b'0');
+INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', '首次部署后由管理员设置并通过受控流程下发', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0', 0);
 
 -- ----------------------------
 -- Table structure for infra_file
@@ -185,7 +166,6 @@ CREATE TABLE `infra_job`  (
 INSERT INTO `infra_job` VALUES (25, '访问日志清理 Job', 2, 'accessLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 10:59:41', '1', '2023-10-03 11:01:10', b'0');
 INSERT INTO `infra_job` VALUES (26, '错误日志清理 Job', 2, 'errorLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:00:43', '1', '2023-10-03 11:01:12', b'0');
 INSERT INTO `infra_job` VALUES (27, '任务日志清理 Job', 2, 'jobLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:01:33', '1', '2024-09-12 13:40:34', b'0');
-INSERT INTO `infra_job` VALUES (41, 'AI临时帧清理 Job', 2, 'aiTemporaryFrameCleanupJob', '', '0 30 0 * * ?', 3, 0, 0, 'migration', '2026-05-15 09:18:05', '1', '2026-10-01 19:52:32', b'1');
 
 -- ----------------------------
 -- Table structure for infra_job_log
@@ -218,11 +198,6 @@ CREATE TABLE `infra_job_log`  (
 -- ----------------------------
 
 -- ----------------------------
--- 固定分享码自动登录能力已移除，空库不再创建对应表；
--- 已有库升级请执行 V202611041805__system_drop_auto_login_ticket.sql。
--- ----------------------------
-
--- ----------------------------
 -- Table structure for system_dept
 -- ----------------------------
 DROP TABLE IF EXISTS `system_dept`;
@@ -249,9 +224,9 @@ CREATE TABLE `system_dept`  (
 -- ----------------------------
 -- Records of system_dept
 -- ----------------------------
-INSERT INTO `system_dept` VALUES (100, '总公司', 0, 'super_admin', 0, 1, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
-INSERT INTO `system_dept` VALUES (101, '深圳总公司', 100, 'super_admin', 1, NULL, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 20:22:50', b'0');
-INSERT INTO `system_dept` VALUES (103, '研发部门', 101, 'super_admin', 1, 1, '15888888888', 'ry@qq.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
+INSERT INTO `system_dept` VALUES (100, '总公司', 0, 'super_admin', 0, 1, '15888888888', 'dept@example.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
+INSERT INTO `system_dept` VALUES (101, '深圳总公司', 100, 'super_admin', 1, NULL, '15888888888', 'dept@example.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 20:22:50', b'0');
+INSERT INTO `system_dept` VALUES (103, '研发部门', 101, 'super_admin', 1, 1, '15888888888', 'dept@example.com', 0, 'admin', '2021-01-05 17:03:47', '1', '2026-10-01 19:39:24', b'0');
 
 -- ----------------------------
 -- Table structure for system_dict_data
@@ -385,37 +360,37 @@ CREATE TABLE `system_dict_type`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_time` datetime NULL DEFAULT NULL COMMENT '删除时间',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_type`(`type` ASC) USING BTREE
+  UNIQUE INDEX `uk_type`(`type` ASC, `deleted_tag` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 2010 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '字典类型表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_dict_type
 -- ----------------------------
-INSERT INTO `system_dict_type` VALUES (1, '用户性别', 'system_user_sex', 0, NULL, 'admin', '2021-01-05 17:03:48', '1', '2022-05-16 20:29:32', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (6, '参数类型', 'infra_config_type', 0, NULL, 'admin', '2021-01-05 17:03:48', '', '2022-02-01 16:36:54', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (9, '操作类型', 'infra_operate_type', 0, NULL, 'admin', '2021-01-05 17:03:48', '1', '2024-03-14 12:44:01', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (10, '系统状态', 'common_status', 0, NULL, 'admin', '2021-01-05 17:03:48', '', '2022-02-01 16:21:28', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (11, 'Boolean 是否类型', 'infra_boolean_string', 0, 'boolean 转是否', '', '2021-01-19 03:20:08', '', '2022-02-01 16:37:10', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (104, '登陆结果', 'system_login_result', 0, '登陆结果', '', '2021-01-18 06:17:11', '', '2022-02-01 16:36:00', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (107, '定时任务状态', 'infra_job_status', 0, NULL, '', '2021-02-07 07:44:16', '', '2022-02-01 16:51:11', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (108, '定时任务日志状态', 'infra_job_log_status', 0, NULL, '', '2021-02-08 10:03:51', '', '2022-02-01 16:50:43', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (109, '用户类型', 'user_type', 0, NULL, '', '2021-02-26 00:15:51', '', '2021-02-26 00:15:51', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (110, 'API 异常数据的处理状态', 'infra_api_error_log_process_status', 0, NULL, '', '2021-02-26 07:07:01', '', '2022-02-01 16:50:53', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (111, '短信渠道编码', 'system_sms_channel_code', 0, NULL, '1', '2021-04-05 01:04:50', '1', '2022-02-16 02:09:08', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (112, '短信模板的类型', 'system_sms_template_type', 0, NULL, '1', '2021-04-05 21:50:43', '1', '2022-02-01 16:35:06', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (113, '短信发送状态', 'system_sms_send_status', 0, NULL, '1', '2021-04-11 20:18:03', '1', '2022-02-01 16:35:09', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (114, '短信接收状态', 'system_sms_receive_status', 0, NULL, '1', '2021-04-11 20:27:14', '1', '2022-02-01 16:35:14', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (116, '登陆日志的类型', 'system_login_type', 0, '登陆日志的类型', '1', '2021-10-06 00:50:46', '1', '2022-02-01 16:35:56', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (145, '角色类型', 'system_role_type', 0, '角色类型', '1', '2022-02-16 13:01:46', '1', '2022-02-16 13:01:46', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (146, '文件存储器', 'infra_file_storage', 0, '文件存储器', '1', '2022-03-15 00:24:38', '1', '2022-03-15 00:24:38', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (147, 'OAuth 2.0 授权类型', 'system_oauth2_grant_type', 0, 'OAuth 2.0 授权类型（模式）', '1', '2022-05-12 00:20:52', '1', '2022-05-11 16:25:49', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (160, '终端', 'terminal', 0, '终端', '1', '2022-12-10 10:50:50', '1', '2022-12-10 10:53:11', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (166, '邮件发送状态', 'system_mail_send_status', 0, '邮件发送状态', '1', '2023-01-26 09:53:13', '1', '2023-01-26 09:53:13', b'0', '1970-01-01 00:00:00');
-INSERT INTO `system_dict_type` VALUES (616, '时间间隔', 'date_interval', 0, '', '1', '2024-03-29 22:50:09', '1', '2024-03-29 22:50:09', b'0', '1970-01-01 00:00:00');
-INSERT INTO `system_dict_type` VALUES (2008, '数据权限范围', 'system_data_scope', 0, NULL, '', '2026-10-01 20:22:50', '', '2026-10-01 20:22:50', b'0', NULL);
-INSERT INTO `system_dict_type` VALUES (2009, '菜单类型', 'system_menu_type', 0, NULL, '', '2026-10-01 20:22:50', '', '2026-10-01 20:22:50', b'0', NULL);
+INSERT INTO `system_dict_type` VALUES (1, '用户性别', 'system_user_sex', 0, NULL, 'admin', '2021-01-05 17:03:48', '1', '2022-05-16 20:29:32', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (6, '参数类型', 'infra_config_type', 0, NULL, 'admin', '2021-01-05 17:03:48', '', '2022-02-01 16:36:54', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (9, '操作类型', 'infra_operate_type', 0, NULL, 'admin', '2021-01-05 17:03:48', '1', '2024-03-14 12:44:01', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (10, '系统状态', 'common_status', 0, NULL, 'admin', '2021-01-05 17:03:48', '', '2022-02-01 16:21:28', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (11, 'Boolean 是否类型', 'infra_boolean_string', 0, 'boolean 转是否', '', '2021-01-19 03:20:08', '', '2022-02-01 16:37:10', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (104, '登陆结果', 'system_login_result', 0, '登陆结果', '', '2021-01-18 06:17:11', '', '2022-02-01 16:36:00', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (107, '定时任务状态', 'infra_job_status', 0, NULL, '', '2021-02-07 07:44:16', '', '2022-02-01 16:51:11', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (108, '定时任务日志状态', 'infra_job_log_status', 0, NULL, '', '2021-02-08 10:03:51', '', '2022-02-01 16:50:43', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (109, '用户类型', 'user_type', 0, NULL, '', '2021-02-26 00:15:51', '', '2021-02-26 00:15:51', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (110, 'API 异常数据的处理状态', 'infra_api_error_log_process_status', 0, NULL, '', '2021-02-26 07:07:01', '', '2022-02-01 16:50:53', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (111, '短信渠道编码', 'system_sms_channel_code', 0, NULL, '1', '2021-04-05 01:04:50', '1', '2022-02-16 02:09:08', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (112, '短信模板的类型', 'system_sms_template_type', 0, NULL, '1', '2021-04-05 21:50:43', '1', '2022-02-01 16:35:06', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (113, '短信发送状态', 'system_sms_send_status', 0, NULL, '1', '2021-04-11 20:18:03', '1', '2022-02-01 16:35:09', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (114, '短信接收状态', 'system_sms_receive_status', 0, NULL, '1', '2021-04-11 20:27:14', '1', '2022-02-01 16:35:14', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (116, '登陆日志的类型', 'system_login_type', 0, '登陆日志的类型', '1', '2021-10-06 00:50:46', '1', '2022-02-01 16:35:56', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (145, '角色类型', 'system_role_type', 0, '角色类型', '1', '2022-02-16 13:01:46', '1', '2022-02-16 13:01:46', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (146, '文件存储器', 'infra_file_storage', 0, '文件存储器', '1', '2022-03-15 00:24:38', '1', '2022-03-15 00:24:38', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (147, 'OAuth 2.0 授权类型', 'system_oauth2_grant_type', 0, 'OAuth 2.0 授权类型（模式）', '1', '2022-05-12 00:20:52', '1', '2022-05-11 16:25:49', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (160, '终端', 'terminal', 0, '终端', '1', '2022-12-10 10:50:50', '1', '2022-12-10 10:53:11', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (166, '邮件发送状态', 'system_mail_send_status', 0, '邮件发送状态', '1', '2023-01-26 09:53:13', '1', '2023-01-26 09:53:13', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (616, '时间间隔', 'date_interval', 0, '', '1', '2024-03-29 22:50:09', '1', '2024-03-29 22:50:09', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (2008, '数据权限范围', 'system_data_scope', 0, NULL, '', '2026-10-01 20:22:50', '', '2026-10-01 20:22:50', b'0', 0);
+INSERT INTO `system_dict_type` VALUES (2009, '菜单类型', 'system_menu_type', 0, NULL, '', '2026-10-01 20:22:50', '', '2026-10-01 20:22:50', b'0', 0);
 
 -- ----------------------------
 -- Table structure for system_login_log
@@ -482,10 +457,12 @@ INSERT INTO `system_menu` VALUES (1, '系统管理', '', 1, 'super_admin', 10, 0
 INSERT INTO `system_menu` VALUES (2, '基础设施', '', 1, 'super_admin', 20, 0, '/infra', 'ep:monitor', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (100, '用户管理', 'system:user:list', 2, 'super_admin', 1, 1, 'user', 'ep:avatar', 'system/user/index', 'SystemUser', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (101, '角色管理', '', 2, 'super_admin', 2, 1, 'role', 'ep:user', 'system/role/index', 'SystemRole', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (102, '菜单管理', '', 2, 'super_admin', 3, 1, 'menu', 'ep:menu', 'system/menu/index', 'SystemMenu', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (103, '部门管理', '', 2, 'super_admin', 4, 1, 'dept', 'fa:address-card', 'system/dept/index', 'SystemDept', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (104, '岗位管理', '', 2, 'super_admin', 5, 1, 'post', 'fa:address-book-o', 'system/post/index', 'SystemPost', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (105, '字典管理', '', 2, 'super_admin', 6, 1, 'dict', 'ep:collection', 'system/dict/index', 'SystemDictType', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (106, '配置管理', '', 2, 'super_admin', 8, 2, 'config', 'fa:connectdevelop', 'infra/config/index', 'InfraConfig', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (107, '文件管理', 'infra:file:query', 2, 'super_admin', 3, 2, 'file', 'ep:document', 'infra/file/index', 'InfraFile', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (108, '审计日志', '', 1, 'super_admin', 9, 1, 'log', 'ep:document-copy', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (110, '定时任务', '', 2, 'super_admin', 7, 2, 'job', 'fa-solid:tasks', 'infra/job/index', 'InfraJob', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (500, '操作日志', '', 2, 'super_admin', 1, 108, 'operate-log', 'ep:position', 'system/operatelog/index', 'SystemOperateLog', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
@@ -502,6 +479,10 @@ INSERT INTO `system_menu` VALUES (1009, '角色新增', 'system:role:create', 3,
 INSERT INTO `system_menu` VALUES (1010, '角色修改', 'system:role:update', 3, 'super_admin', 3, 101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1011, '角色删除', 'system:role:delete', 3, 'super_admin', 4, 101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1012, '角色导出', 'system:role:export', 3, 'super_admin', 5, 101, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1013, '菜单查询', 'system:menu:query', 3, 'super_admin', 1, 102, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1014, '菜单新增', 'system:menu:create', 3, 'super_admin', 2, 102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1015, '菜单修改', 'system:menu:update', 3, 'super_admin', 3, 102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1016, '菜单删除', 'system:menu:delete', 3, 'super_admin', 4, 102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1017, '部门查询', 'system:dept:query', 3, 'super_admin', 1, 103, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1018, '部门新增', 'system:dept:create', 3, 'super_admin', 2, 103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1019, '部门修改', 'system:dept:update', 3, 'super_admin', 3, 103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
@@ -548,6 +529,16 @@ INSERT INTO `system_menu` VALUES (1103, '短信模板更新', 'system:sms-templa
 INSERT INTO `system_menu` VALUES (1104, '短信模板删除', 'system:sms-template:delete', 3, 'super_admin', 4, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1105, '短信模板导出', 'system:sms-template:export', 3, 'super_admin', 5, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1106, '发送测试短信', 'system:sms-template:send-sms', 3, 'super_admin', 6, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '1', '2021-04-11 00:26:40', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1070, '文件删除', 'infra:file:delete', 3, 'super_admin', 1, 107, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1090, '令牌管理', '', 2, 'super_admin', 0, 1261, 'oauth2/token', 'ep:key', 'system/oauth2/token/index', 'SystemOAuth2Token', 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1091, '令牌列表', 'system:oauth2-token:page', 3, 'super_admin', 1, 1090, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1092, '令牌删除', 'system:oauth2-token:delete', 3, 'super_admin', 2, 1090, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1261, 'OAuth 2.0', '', 1, 'super_admin', 10, 1, 'oauth2', 'ep:connection', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:38:17', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1263, '应用管理', '', 2, 'super_admin', 1, 1261, 'oauth2/application', 'ep:grid', 'system/oauth2/client/index', 'SystemOAuth2Client', 0, b'1', b'1', b'1', 'admin', '2022-05-10 00:11:33', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1264, '客户端查询', 'system:oauth2-client:query', 3, 'super_admin', 1, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:06', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1265, '客户端创建', 'system:oauth2-client:create', 3, 'super_admin', 2, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:23', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1266, '客户端更新', 'system:oauth2-client:update', 3, 'super_admin', 3, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:28', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1267, '客户端删除', 'system:oauth2-client:delete', 3, 'super_admin', 4, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:33', '1', '2026-10-01 19:42:37', b'0');
 
 -- ----------------------------
 -- Table structure for system_oauth2_access_token
@@ -604,14 +595,15 @@ CREATE TABLE `system_oauth2_client`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_client_id`(`client_id` ASC) USING BTREE
+  UNIQUE INDEX `uk_client_id`(`client_id` ASC, `deleted_tag` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'OAuth2 客户端表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_oauth2_client
 -- ----------------------------
-INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', '已停用：管理后台改用内部会话客户端，不再使用默认 OAuth2 客户端', 1, 1800, 2592000, '[]', '[]', '[]', '[]', '[]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-11-05 00:00:00', b'0');
+INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', '外部开放客户端示例模板（默认停用）', 1, 1800, 2592000, '[]', '[]', '[]', '[]', '[]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-11-05 00:00:00', b'0', 0);
 
 -- ----------------------------
 -- Table structure for system_oauth2_refresh_token
@@ -687,8 +679,9 @@ CREATE TABLE `system_post`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE,
+  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '岗位信息表' ROW_FORMAT = DYNAMIC;
 
@@ -706,7 +699,7 @@ CREATE TABLE `system_role`  (
   `code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '角色权限字符串',
   `role_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '后台类型',
   `sort` int NOT NULL COMMENT '显示顺序',
-  `data_scope` tinyint NOT NULL DEFAULT 1 COMMENT '数据范围（1：全部数据权限 2：自定数据权限 3：本部门数据权限 4：本部门及以下数据权限）',
+  `data_scope` tinyint NOT NULL DEFAULT 5 COMMENT '数据范围（1：全部数据权限 2：自定数据权限 3：本部门数据权限 4：本部门及以下数据权限 5：仅本人数据权限）',
   `data_scope_dept_ids` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '数据范围(指定部门数组)',
   `status` tinyint NOT NULL COMMENT '角色状态（0正常 1停用）',
   `type` tinyint NOT NULL COMMENT '角色类型',
@@ -716,15 +709,16 @@ CREATE TABLE `system_role`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE,
+  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 160 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '角色信息表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of system_role
 -- ----------------------------
-INSERT INTO `system_role` VALUES (1, '超级管理员', 'super_admin', 'super_admin', 1, 1, '', 0, 1, '超级管理员', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:37:55', b'0');
+INSERT INTO `system_role` VALUES (1, '超级管理员', 'super_admin', 'super_admin', 1, 1, '', 0, 1, '超级管理员', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:37:55', b'0', 0);
 
 -- ----------------------------
 -- Table structure for system_role_menu
@@ -817,6 +811,22 @@ INSERT INTO `system_role_menu` VALUES (6379, 1, 1103, '1', '2026-04-07 08:30:13'
 INSERT INTO `system_role_menu` VALUES (6380, 1, 1104, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6381, 1, 1105, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6382, 1, 1106, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6383, 1, 102, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6384, 1, 1013, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6385, 1, 1014, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6386, 1, 1015, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6387, 1, 1016, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6388, 1, 107, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6389, 1, 1070, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6390, 1, 1261, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6391, 1, 1090, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6392, 1, 1091, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6393, 1, 1092, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6394, 1, 1263, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6395, 1, 1264, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6396, 1, 1265, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6397, 1, 1266, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
+INSERT INTO `system_role_menu` VALUES (6398, 1, 1267, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 
 -- ----------------------------
 -- Table structure for system_sms_channel
@@ -836,8 +846,9 @@ CREATE TABLE `system_sms_channel`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE
+  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信渠道' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -852,7 +863,7 @@ CREATE TABLE `system_sms_code`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
   `mobile` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '手机号',
   `code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '验证码',
-  `create_ip` varchar(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '创建 IP',
+  `create_ip` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '创建 IP',
   `scene` tinyint NOT NULL COMMENT '发送场景',
   `today_index` tinyint NOT NULL COMMENT '今日发送的第几条',
   `used` tinyint NOT NULL COMMENT '是否使用',
@@ -934,8 +945,9 @@ CREATE TABLE `system_sms_template`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC) USING BTREE
+  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信模板' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -1013,8 +1025,9 @@ CREATE TABLE `system_users`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_username_user_type`(`username` ASC, `user_type` ASC) USING BTREE,
+  UNIQUE INDEX `uk_username_user_type`(`username` ASC, `user_type` ASC, `deleted_tag` ASC) USING BTREE,
   INDEX `idx_mobile`(`mobile` ASC) USING BTREE,
   INDEX `idx_email`(`email` ASC) USING BTREE,
   INDEX `idx_dept_id`(`dept_id` ASC) USING BTREE,
@@ -1024,6 +1037,6 @@ CREATE TABLE `system_users`  (
 -- ----------------------------
 -- Records of system_users
 -- ----------------------------
-INSERT INTO `system_users` VALUES (1, 'admin', '', 1, 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '18800000000', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0');
+INSERT INTO `system_users` VALUES (1, 'admin', '', 1, 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0', 0);
 
 SET FOREIGN_KEY_CHECKS = 1;

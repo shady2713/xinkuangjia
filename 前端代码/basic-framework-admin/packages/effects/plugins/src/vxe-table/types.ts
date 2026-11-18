@@ -9,12 +9,15 @@ import type { Ref } from 'vue';
 
 import type { ClassType, DeepPartial } from '@vben/types';
 
-import type { BaseFormComponentType, VbenFormProps } from '@vben-core/form-ui';
+import type {
+  BaseFormComponentType,
+  useVbenForm,
+  VbenFormProps,
+} from '@vben-core/form-ui';
 
 import type { VxeGridApi } from './api';
 
-import { useVbenForm } from '@vben-core/form-ui';
-
+/** 表格分页参数与总条数元数据。 */
 export interface VxePaginationInfo {
   currentPage: number;
   pageSize: number;

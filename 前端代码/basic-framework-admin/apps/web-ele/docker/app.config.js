@@ -27,16 +27,14 @@ window._VBEN_ADMIN_PRO_APP_CONF_ = {
 
   // 是否显示登录图形验证码；必须与后端验证码开关保持一致。
   VITE_APP_CAPTCHA_ENABLE: 'true',
-  // 是否显示页面文档提醒；false 表示隐藏提醒入口。
-  VITE_APP_DOCALERT_ENABLE: 'false',
   // 后端 API 前缀；Nginx 会将 `/admin-api` 代理到共用后台容器。
   VITE_GLOB_API_URL: '/admin-api',
   // 钉钉登录客户端 ID；留空时不启用钉钉登录。
   VITE_GLOB_AUTH_DINGDING_CLIENT_ID: '',
   // 钉钉登录企业 ID；留空时不启用钉钉登录。
   VITE_GLOB_AUTH_DINGDING_CORP_ID: '',
-  // 登录表单默认账号；仅用于提升开发体验，不要填写真实生产账号。
-  VITE_APP_DEFAULT_USERNAME: 'admin',
+  // 登录表单默认账号；生产环境保持为空，仅开发环境通过 .env.development 预填。
+  VITE_APP_DEFAULT_USERNAME: '',
   // 登录表单默认密码；必须保持为空，避免凭证被打包或发送到浏览器。
   VITE_APP_DEFAULT_PASSWORD: '',
 

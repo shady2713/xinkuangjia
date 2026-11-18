@@ -12,8 +12,11 @@ import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptSaveRe
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
 import com.basicframework.module.system.dal.mysql.dept.DeptMapper;
 import com.basicframework.module.system.dal.redis.RedisKeyConstants;
+import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
+import com.basicframework.module.system.service.user.AdminUserService;
 import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,9 @@ public class DeptServiceImpl implements DeptService {
     @Resource
     private DeptMapper deptMapper;
 
+    @Resource
+    private ObjectProvider<AdminUserService> adminUserServiceProvider;
+
     /**
      * 创建部门。
      *
@@ -57,10 +63,34 @@ public class DeptServiceImpl implements DeptService {
         // 校验部门名的唯一性
         validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
 
-        // 插入部门
+        // 插入部门；优先继承父部门平台归属，根部门则跟随当前登录管理员平台类型（无上下文时默认 super_admin）。
         DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
+        dept.setRoleType(resolveDeptRoleType(createReqVO.getParentId()));
         deptMapper.insert(dept);
         return dept.getId();
+    }
+
+    /**
+     * 解析新建部门所属的后台平台类型，确保 {@code system_dept.role_type} 非空且与组织树平台一致。
+     *
+     * @param parentId 父部门编号
+     * @return 规范化后的平台类型标识
+     */
+    private String resolveDeptRoleType(Long parentId) {
+        if (parentId != null && !DeptDO.PARENT_ID_ROOT.equals(parentId)) {
+            DeptDO parentDept = deptMapper.selectById(parentId);
+            if (parentDept != null && StrUtil.isNotBlank(parentDept.getRoleType())) {
+                return parentDept.getRoleType();
+            }
+        }
+        AdminUserService userService = adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
+        if (userService != null) {
+            String loginType = userService.getLoginUserTypeOrDefault();
+            if (StrUtil.isNotBlank(loginType)) {
+                return loginType;
+            }
+        }
+        return AdminPlatformTypeEnum.SUPER_ADMIN.getType();
     }
 
     /**

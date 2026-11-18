@@ -1,14 +1,16 @@
 package com.basicframework.module.system.controller.admin.sms.vo.channel;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import org.hibernate.validator.constraints.URL;
 
-import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
 /**
- * SmsChannelRespVO 响应对象，承载接口输出数据。
+ * 管理后台短信渠道响应对象。
+ *
+ * <p>不向前端回传明文 {@code apiSecret}，仅通过 {@link #apiSecretConfigured} 返回密钥是否已配置。</p>
  *
  * @author 李杰
  */
@@ -32,20 +34,20 @@ public class SmsChannelRespVO {
     /**
      * 渠道编码，参见 SmsChannelEnum 枚举类。
      */
-    @Schema(description = "渠道编码，参见 SmsChannelEnum 枚举类", requiredMode = Schema.RequiredMode.REQUIRED, example = "YUN_PIAN")
+    @Schema(description = "渠道编码，参见 SmsChannelEnum 枚举类", requiredMode = Schema.RequiredMode.REQUIRED, example = "ALIYUN")
     private String code;
 
     /**
      * 启用状态。
      */
-    @Schema(description = "启用状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
+    @Schema(description = "启用状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
     @NotNull(message = "启用状态不能为空")
     private Integer status;
 
     /**
      * 备注。
      */
-    @Schema(description = "备注", example = "好吃！")
+    @Schema(description = "备注", example = "生产验证码通道")
     private String remark;
 
     /**
@@ -56,10 +58,10 @@ public class SmsChannelRespVO {
     private String apiKey;
 
     /**
-     * 短信 API 的密钥。
+     * 是否已配置短信 API 密钥。
      */
-    @Schema(description = "短信 API 的密钥", example = "yuanma")
-    private String apiSecret;
+    @Schema(description = "是否已配置短信 API 密钥", requiredMode = Schema.RequiredMode.REQUIRED, example = "true")
+    private Boolean apiSecretConfigured;
 
     /**
      * 短信发送回调 URL。

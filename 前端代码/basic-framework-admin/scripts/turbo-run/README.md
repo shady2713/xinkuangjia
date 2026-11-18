@@ -20,10 +20,10 @@ kind: package-reference
 
 ## 特性
 
-- 🚀 交互式选择要运行的包
-- 📦 支持 monorepo 项目结构
-- 🔍 自动检测可用的命令
-- 🎯 精确过滤目标包
+- 交互式选择要运行的包
+- 支持 monorepo 项目结构
+- 自动检测可用的命令
+- 精确过滤目标包
 
 ## 安装
 
@@ -49,13 +49,7 @@ turbo-run dev
 
 ## 示例
 
-假设你的项目中有以下包：
-
-- `@vben/app`
-- `@vben/admin`
-- `@vben/website`
-
-当你运行：
+当前前端工作区应用包如 `@vben/web-ele` 定义了 `dev` 脚本时，运行：
 
 ```bash
 turbo-run dev

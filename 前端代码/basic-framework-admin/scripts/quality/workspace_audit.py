@@ -128,9 +128,12 @@ def forbidden_layer(path: str, spec: str) -> bool:
         return spec.startswith("@vben/")
     if any(path.startswith(f"packages/{part}/") for part in BASE_PACKAGES):
         return spec.startswith("@vben/")
-    return path.startswith("apps/") and any(
-        spec.startswith(f"#/{part}/") for part in ("api", "layouts", "locales", "stores")
-    )
+    return path.startswith("apps/") and spec.startswith("@vben-core/")
+
+
+def is_test_source(relative_path: str) -> bool:
+    """判断源码文件是否属于单元测试或规范测试文件。"""
+    return any(part in relative_path for part in (".test.", ".spec.", "/__tests__/"))
 
 
 def inspect(root: Path, kind: str) -> dict[str, object]:
@@ -146,6 +149,10 @@ def inspect(root: Path, kind: str) -> dict[str, object]:
     """
     root = root.resolve()
     items = packages(root)
+    root_package = next((item for item in items if item.path == root / "package.json"), None)
+    root_dev_declared = (
+        set(root_package.manifest.get("devDependencies", {})) if root_package else set()
+    )
     paths = source_files(root, items)
     facts, builtins = parse_files(root, paths)
     findings: list[dict[str, object]] = []
@@ -156,6 +163,8 @@ def inspect(root: Path, kind: str) -> dict[str, object]:
         declared = {
             name for section in workspace.SECTIONS for name in package.manifest.get(section, {})
         }
+        if is_test_source(relative):
+            declared = declared | root_dev_declared
         aliases = package.manifest.get("imports", {})
         for entry in fact["imports"]:
             spec = entry["spec"]

@@ -10,6 +10,7 @@ import { isEmpty } from '@vben/utils';
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteOAuth2Token,
+  deleteOAuth2TokenList,
   getOAuth2TokenPage,
 } from '#/api/system/oauth2/token';
 import { useCrudDeleteActions } from '#/composables/use-crud-actions';
@@ -22,15 +23,32 @@ function handleRefresh() {
   gridApi.query();
 }
 
+/**
+ * 生成删除确认弹窗展示的令牌标识文本。
+ *
+ * @param row 令牌记录行
+ * @returns 带井号前缀的令牌记录编号
+ */
+function formatTokenDeleteName(row: SystemOAuth2TokenApi.OAuth2Token) {
+  return `#${row.id}`;
+}
+
+/**
+ * 提取令牌记录主键用于单条与批量吊销。
+ *
+ * @param row 令牌记录行
+ * @returns 令牌记录主键编号
+ */
+function resolveTokenRowKey(row: SystemOAuth2TokenApi.OAuth2Token) {
+  return row.id;
+}
+
 const { checkedIds, handleDelete, handleDeleteBatch, handleRowCheckboxChange } =
-  useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, string>({
-    // 批量删除时把令牌列表拼成接口参数
-    batchDeleteApi: async (tokens) => deleteOAuth2Token(tokens.join(',')),
+  useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, number>({
+    batchDeleteApi: deleteOAuth2TokenList,
     deleteApi: deleteOAuth2Token,
-    // 删除确认文案中的对象名称
-    getDeleteName: () => '令牌',
-    // 用访问令牌作为行主键
-    getRowKey: (row) => row.accessToken,
+    getDeleteName: formatTokenDeleteName,
+    getRowKey: resolveTokenRowKey,
     refresh: handleRefresh,
   });
 
@@ -56,7 +74,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
       },
     },
     rowConfig: {
-      keyField: 'accessToken',
+      keyField: 'id',
       isHover: true,
     },
     toolbarConfig: {
@@ -98,7 +116,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.DELETE,
               auth: ['system:oauth2-token:delete'],
               popConfirm: {
-                title: $t('ui.actionMessage.deleteConfirm', ['令牌']),
+                title: $t('ui.actionMessage.deleteConfirm', [`#${row.id}`]),
                 confirm: handleDelete.bind(null, row),
               },
             },

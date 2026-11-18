@@ -62,6 +62,15 @@ public interface OAuth2TokenService {
     OAuth2AccessTokenDO removeAccessToken(String accessToken);
 
     /**
+     * 按令牌记录主键及调用者所属管理平台移除访问令牌，防止跨平台下线其他平台管理员会话。
+     *
+     * @param id 令牌记录编号
+     * @param operatorPlatformType 操作者所属管理平台类型
+     * @return 被移除的访问令牌信息；不存在时返回 null
+     */
+    OAuth2AccessTokenDO removeAccessTokenById(Long id, String operatorPlatformType);
+
+    /**
      * 移除指定用户的访问令牌和关联刷新令牌。
      *
      * @param userId   用户编号
@@ -76,5 +85,14 @@ public interface OAuth2TokenService {
      * @return 访问令牌分页结果
      */
     PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO);
+
+    /**
+     * 按调用者所属管理平台隔离分页查询在线访问令牌。
+     *
+     * @param reqVO 查询参数
+     * @param operatorPlatformType 操作者所属管理平台类型
+     * @return 当前管理平台可见的访问令牌分页结果
+     */
+    PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO, String operatorPlatformType);
 
 }

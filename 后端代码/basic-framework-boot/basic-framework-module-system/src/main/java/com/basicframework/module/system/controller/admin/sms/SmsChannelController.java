@@ -112,7 +112,7 @@ public class SmsChannelController {
     @PreAuthorize("@ss.hasPermission('system:sms-channel:query')")
     public CommonResult<SmsChannelRespVO> getSmsChannel(@RequestParam("id") Long id) {
         SmsChannelDO channel = smsChannelService.getSmsChannel(id);
-        return success(BeanUtils.toBean(channel, SmsChannelRespVO.class));
+        return success(toRespVO(channel));
     }
 
     /**
@@ -126,20 +126,35 @@ public class SmsChannelController {
     @PreAuthorize("@ss.hasPermission('system:sms-channel:query')")
     public CommonResult<PageResult<SmsChannelRespVO>> getSmsChannelPage(@Valid SmsChannelPageReqVO pageVO) {
         PageResult<SmsChannelDO> pageResult = smsChannelService.getSmsChannelPage(pageVO);
-        return success(BeanUtils.toBean(pageResult, SmsChannelRespVO.class));
+        return success(new PageResult<>(
+                pageResult.getList().stream().map(this::toRespVO).toList(),
+                pageResult.getTotal()));
     }
 
     /**
-     * 获取精简数据短信渠道列表。
+     * 返回按编号升序排列的短信渠道下拉选项列表（含停用渠道以便历史模板回显）。
      *
-     * @return 查询结果
+     * @return 短信渠道编号、编码与签名摘要列表
      */
-    @GetMapping({"/list-all-simple", "/simple-list"})
+    @GetMapping("/simple-list")
     @Operation(summary = "获得短信渠道精简列表", description = "包含被禁用的短信渠道")
+    @PreAuthorize("@ss.hasAnyPermissions('system:sms-channel:query', 'system:sms-template:query')")
     public CommonResult<List<SmsChannelSimpleRespVO>> getSimpleSmsChannelList() {
         List<SmsChannelDO> list = smsChannelService.getSmsChannelList();
         list.sort(Comparator.comparing(SmsChannelDO::getId));
         return success(BeanUtils.toBean(list, SmsChannelSimpleRespVO.class));
+    }
+
+    /**
+     * 将短信渠道实体转换为不暴露明文密钥的响应对象。
+     */
+    private SmsChannelRespVO toRespVO(SmsChannelDO channel) {
+        if (channel == null) {
+            return null;
+        }
+        SmsChannelRespVO respVO = BeanUtils.toBean(channel, SmsChannelRespVO.class);
+        respVO.setApiSecretConfigured(cn.hutool.core.util.StrUtil.isNotBlank(channel.getApiSecret()));
+        return respVO;
     }
 
 }

@@ -28,10 +28,10 @@ const props = withDefaults(defineProps<Props>(), {
   forgetPasswordPath: '/auth/forget-password',
   formSchema: () => [],
   loading: false,
-  registerPath: '/auth/register',
+  registerPath: '',
   showCodeLogin: true,
   showForgetPassword: true,
-  showRegister: true,
+  showRegister: false,
   showRememberMe: true,
   showThirdPartyLogin: true,
   submitButtonText: '',
@@ -93,7 +93,7 @@ defineExpose({
     <slot name="title">
       <Title>
         <slot name="title">
-          {{ title || `${$t('authentication.welcomeBack')} 👋🏻` }}
+          {{ title || $t('authentication.welcomeBack') }}
         </slot>
         <template #desc>
           <span class="text-muted-foreground">

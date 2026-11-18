@@ -8,6 +8,7 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.util.collection.CollectionUtils;
 import com.basicframework.framework.datapermission.core.annotation.DataPermission;
 import com.basicframework.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleMenuDO;
@@ -18,6 +19,7 @@ import com.basicframework.module.system.dal.mysql.permission.UserRoleMapper;
 import com.basicframework.module.system.dal.redis.RedisKeyConstants;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.permission.DataScopeEnum;
+import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.user.AdminUserService;
 import com.baomidou.dynamic.datasource.annotation.DSTransactional;
@@ -35,9 +37,10 @@ import jakarta.annotation.Resource;
 import java.util.*;
 import java.util.function.Supplier;
 
+import com.basicframework.module.system.enums.ErrorCodeConstants;
+
 import static com.basicframework.framework.common.util.collection.CollectionUtils.convertSet;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 
 /**
  * 权限 Service 实现类
@@ -436,57 +439,53 @@ public class PermissionServiceImpl implements PermissionService {
      * @return 查询或转换后的结果
      */
     @Override
-    @DataPermission(enable = false) // 关闭数据权限，不然就会出现递归获取数据权限的问题
+    @DataPermission(enable = false)
     public DeptDataPermissionRespDTO getDeptDataPermission(Long userId) {
-        // 获得用户的角色
-        List<RoleDO> roles = getEnableUserRoleListByUserIdFromCache(userId);
+        String loginUserType = userService.getUserTypeOrDefault(userId);
+        // 仅聚合当前用户所属平台的启用角色，防止跨平台历史角色数据范围穿透。
+        List<RoleDO> roles = getEnableUserRoleListByUserIdFromCache(userId).stream()
+                .filter(role -> AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType))
+                .toList();
 
-        // 如果角色为空，则只能查看自己
         DeptDataPermissionRespDTO result = new DeptDataPermissionRespDTO();
         if (CollUtil.isEmpty(roles)) {
             result.setSelf(true);
             return result;
         }
 
-        // 获得用户的部门编号的缓存，通过 Guava 的 Suppliers 惰性求值，即有且仅有第一次发起 DB 的查询
-        Supplier<Long> userDeptId = Suppliers.memoize(() -> userService.getUser(userId).getDeptId());
-        // 遍历每个角色，计算
+        Supplier<Long> userDeptId = Suppliers.memoize(() -> {
+            AdminUserDO user = userService.getUser(userId);
+            return user != null ? user.getDeptId() : null;
+        });
         for (RoleDO role : roles) {
-            // 为空时，跳过
             if (role.getDataScope() == null) {
                 continue;
             }
-            // 情况一，ALL
             if (Objects.equals(role.getDataScope(), DataScopeEnum.ALL.getScope())) {
                 result.setAll(true);
                 continue;
             }
-            // 情况二，DEPT_CUSTOM
             if (Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_CUSTOM.getScope())) {
                 CollUtil.addAll(result.getDeptIds(), role.getDataScopeDeptIds());
-                // 自定义可见部门时，保证可以看到自己所在的部门。否则，一些场景下可能会有问题。
-                // 例如说，登录时，基于 t_user 的 username 查询会可能被 dept_id 过滤掉
-                CollUtil.addAll(result.getDeptIds(), userDeptId.get());
+                CollectionUtils.addIfNotNull(result.getDeptIds(), userDeptId.get());
                 continue;
             }
-            // 情况三，DEPT_ONLY
             if (Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_ONLY.getScope())) {
                 CollectionUtils.addIfNotNull(result.getDeptIds(), userDeptId.get());
                 continue;
             }
-            // 情况四，DEPT_DEPT_AND_CHILD
             if (Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_AND_CHILD.getScope())) {
-                CollUtil.addAll(result.getDeptIds(), deptService.getChildDeptIdListFromCache(userDeptId.get()));
-                // 添加本身部门编号
-                CollUtil.addAll(result.getDeptIds(), userDeptId.get());
+                Long deptId = userDeptId.get();
+                if (deptId != null) {
+                    CollUtil.addAll(result.getDeptIds(), deptService.getChildDeptIdListFromCache(deptId));
+                    CollectionUtils.addIfNotNull(result.getDeptIds(), deptId);
+                }
                 continue;
             }
-            // 情况五，SELF
             if (Objects.equals(role.getDataScope(), DataScopeEnum.SELF.getScope())) {
                 result.setSelf(true);
                 continue;
             }
-            // 未知情况，error log 即可
             log.error("[getDeptDataPermission][loginUserId({}) roleId({}) dataScope({}) 无法处理]",
                     userId, role.getId(), role.getDataScope());
         }
@@ -494,45 +493,63 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     /**
-     * 获得自身的代理对象，解决 AOP 生效问题
-     *
-     * @return 自己
+     * 校验角色存在、同平台归属，且非超管操作员不得越权分配自身未持有的菜单。
      */
     private void validateRoleMenuPlatform(Long roleId, Set<Long> menuIds) {
         validateRolePlatform(roleId);
         String loginUserType = userService.getLoginUserTypeOrDefault();
         for (MenuDO menu : menuService.getMenuList(menuIds)) {
-            // 角色只能绑定同平台菜单，防止当前平台角色拿到新管理平台菜单权限。
             if (!AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType)) {
-                throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId != null && CollUtil.isNotEmpty(menuIds)) {
+            Set<Long> operatorRoleIds = convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId);
+            if (!roleService.hasAnySuperAdmin(operatorRoleIds)) {
+                Set<Long> operatorMenuIds = getRoleMenuListByRoleId(operatorRoleIds);
+                if (!operatorMenuIds.containsAll(menuIds)) {
+                    throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+                }
             }
         }
     }
 
     /**
-     * 校验 validateUserRolePlatform 对应的输入与业务约束。
+     * 校验目标用户存在（受调用方数据权限约束）、同平台归属，且非超管不得授予超管角色。
      */
     private void validateUserRolePlatform(Long userId, Set<Long> roleIds) {
         AdminUserDO user = userService.getUser(userId);
-        String loginUserType = userService.getLoginUserTypeOrDefault();
-        if (user != null && !AdminPlatformTypeEnum.isSame(user.getUserType(), loginUserType)) {
-            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        if (user == null) {
+            throw exception(ErrorCodeConstants.USER_NOT_EXISTS);
         }
+        String loginUserType = userService.getLoginUserTypeOrDefault();
+        if (!AdminPlatformTypeEnum.isSame(user.getUserType(), loginUserType)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        boolean operatorIsSuperAdmin = operatorId == null
+                || roleService.hasAnySuperAdmin(convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId));
         for (RoleDO role : roleService.getRoleList(roleIds)) {
-            // 用户只能绑定同平台角色，防止当前平台账号被授予新管理平台角色。
             if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType)) {
-                throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            if (!operatorIsSuperAdmin && RoleCodeEnum.isSuperAdmin(role.getCode())) {
+                throw exception(ErrorCodeConstants.ROLE_ADMIN_CODE_ERROR, role.getCode());
             }
         }
     }
 
     /**
-     * 校验 validateRolePlatform 对应的输入与业务约束。
+     * 校验目标角色存在并归属当前登录平台。
      */
     private void validateRolePlatform(Long roleId) {
         RoleDO role = roleService.getRole(roleId);
-        if (role != null && !AdminPlatformTypeEnum.isSame(role.getRoleType(), userService.getLoginUserTypeOrDefault())) {
-            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        if (role == null) {
+            throw exception(ErrorCodeConstants.ROLE_NOT_EXISTS);
+        }
+        if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), userService.getLoginUserTypeOrDefault())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }
 

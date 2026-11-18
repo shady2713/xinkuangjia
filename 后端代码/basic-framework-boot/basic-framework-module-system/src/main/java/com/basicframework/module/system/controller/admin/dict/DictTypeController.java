@@ -142,13 +142,13 @@ public class DictTypeController {
     }
 
     /**
-     * 获取精简数据字典类型列表。
+     * 返回全部字典类型摘要列表，供管理端筛选器与字典选择器绑定。
      *
-     * @return 查询结果
+     * @return 字典类型的编号、编码与名称列表
      */
-    @GetMapping(value = {"/list-all-simple", "simple-list"})
-    @Operation(summary = "获得全部字典类型列表", description = "包括开启 + 禁用的字典类型，主要用于前端的下拉选项")
-    // 无需添加权限认证，因为前端全局都需要
+    @GetMapping("/simple-list")
+    @Operation(summary = "获得全部字典类型列表", description = "包括开启与禁用的字典类型，供已认证管理端使用")
+    @PreAuthorize("isAuthenticated()")
     public CommonResult<List<DictTypeSimpleRespVO>> getSimpleDictTypeList() {
         List<DictTypeDO> list = dictTypeService.getDictTypeList();
         return success(BeanUtils.toBean(list, DictTypeSimpleRespVO.class));
@@ -165,7 +165,7 @@ public class DictTypeController {
      */
     @Operation(summary = "导出数据类型")
     @GetMapping("/export-excel")
-    @PreAuthorize("@ss.hasPermission('system:dict:query')")
+    @PreAuthorize("@ss.hasPermission('system:dict:export')")
     @ApiAccessLog(operateType = EXPORT)
     public void export(HttpServletResponse response, @Valid DictTypePageReqVO exportReqVO) throws IOException {
         exportReqVO.setPageNo(1);

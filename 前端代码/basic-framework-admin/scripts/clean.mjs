@@ -29,7 +29,7 @@ async function processItem(currentDir, item, targets, _depth) {
     if (targets.includes(item)) {
       // 匹配到目标目录或文件时直接删除
       await fs.rm(itemPath, { force: true, recursive: true });
-      console.log(`✅ Deleted: ${itemPath}`);
+      console.log(`[OK] Deleted: ${itemPath}`);
       return false; // 已删除，无需递归
     }
 
@@ -41,10 +41,10 @@ async function processItem(currentDir, item, targets, _depth) {
       // 文件不存在，可能已被删除，这是正常情况
       return false;
     } else if (error.code === 'EPERM' || error.code === 'EACCES') {
-      console.error(`❌ Permission denied: ${item} in ${currentDir}`);
+      console.error(`[ERROR] Permission denied: ${item} in ${currentDir}`);
     } else {
       console.error(
-        `❌ Error handling item ${item} in ${currentDir}: ${error.message}`,
+        `[ERROR] Error handling item ${item} in ${currentDir}: ${error.message}`,
       );
     }
     return false;
@@ -106,7 +106,8 @@ async function cleanTargetsRecursively(currentDir, targets, depth = 0) {
   }
 }
 
-(async function startCleanup() {
+/** 启动构建与依赖缓存清理流程。 */
+async function startCleanup() {
   // 要删除的目录及文件名称
   const targets = ['node_modules', 'dist', '.turbo', 'dist.zip'];
   const deleteLockFile = process.argv.includes('--del-lock');
@@ -117,14 +118,13 @@ async function cleanTargetsRecursively(currentDir, targets, depth = 0) {
   }
 
   console.log(
-    `🚀 Starting cleanup of targets: ${cleanupTargets.join(', ')} from root: ${rootDir}`,
+    `[INFO] Starting cleanup of targets: ${cleanupTargets.join(', ')} from root: ${rootDir}`,
   );
 
   const startTime = Date.now();
 
   try {
-    // 先统计要删除的目标数量
-    console.log('📊 Scanning for cleanup targets...');
+    console.log('[INFO] Scanning for cleanup targets...');
 
     await cleanTargetsRecursively(rootDir, cleanupTargets);
 
@@ -132,10 +132,12 @@ async function cleanTargetsRecursively(currentDir, targets, depth = 0) {
     const duration = (endTime - startTime) / 1000;
 
     console.log(
-      `✨ Cleanup process completed successfully in ${duration.toFixed(2)}s`,
+      `[OK] Cleanup process completed successfully in ${duration.toFixed(2)}s`,
     );
   } catch (error) {
-    console.error(`💥 Unexpected error during cleanup: ${error.message}`);
+    console.error(`[ERROR] Unexpected error during cleanup: ${error.message}`);
     process.exit(1);
   }
-})();
+}
+
+await startCleanup();

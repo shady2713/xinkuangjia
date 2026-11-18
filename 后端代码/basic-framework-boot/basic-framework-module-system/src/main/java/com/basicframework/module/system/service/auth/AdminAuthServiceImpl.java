@@ -1,6 +1,9 @@
 package com.basicframework.module.system.service.auth;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.anji.captcha.model.common.ResponseModel;
+import com.anji.captcha.model.vo.CaptchaVO;
+import com.anji.captcha.service.CaptchaService;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
@@ -15,7 +18,6 @@ import com.basicframework.module.system.api.sms.dto.code.SmsCodeSendReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginRespVO;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
@@ -23,6 +25,7 @@ import com.basicframework.module.system.controller.admin.auth.vo.CaptchaVerifica
 import com.basicframework.module.system.convert.auth.AuthConvert;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
+import com.basicframework.module.system.enums.ErrorCodeConstants;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
@@ -34,9 +37,6 @@ import com.basicframework.module.system.framework.security.login.SmsLoginFailure
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import com.basicframework.module.system.service.user.AdminUserService;
-import com.anji.captcha.model.common.ResponseModel;
-import com.anji.captcha.model.vo.CaptchaVO;
-import com.anji.captcha.service.CaptchaService;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import jakarta.validation.Validator;
@@ -50,16 +50,18 @@ import java.util.Objects;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.util.servlet.ServletUtils.getClientIP;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 
 /**
- * Auth Service 实现类
+ * 管理后台认证服务实现。
  *
  * @author 李杰
  */
 @Service
 @Slf4j
 public class AdminAuthServiceImpl implements AdminAuthService {
+
+    /** 避免同一请求内前置检查与正式登录重复消费一次性图形验证码的请求属性名。 */
+    private static final String CAPTCHA_VERIFIED_ATTR = AdminAuthServiceImpl.class.getName() + ".CAPTCHA_VERIFIED";
 
     @Resource
     private AdminUserService userService;
@@ -80,19 +82,53 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     @Resource
     private SecurityAuditService securityAuditService;
 
-    /**
-     * 验证码的开关，默认为 true
-     */
+    /** 图形验证码开关，默认为 true。 */
     @Value("${basic-framework.captcha.enable:true}")
-    @Setter // 为了单测：开启或者关闭验证码
-    private Boolean captchaEnable;
+    @Setter
+    private Boolean captchaEnable = true;
 
     /**
-     * 校验认证请求并返回登录身份。
+     * 在执行 SM2 私钥解密与防重放存储前校验图形验证码和账号锁定状态。
      *
-     * @param username username 参数
-     * @param password password 参数
-     * @return 方法处理结果
+     * @param reqVO 登录请求
+     */
+    @Override
+    public void precheckLogin(AuthLoginReqVO reqVO) {
+        validateCaptcha(reqVO);
+        try {
+            loginFailureLockService.assertNotLocked(reqVO.getUsername());
+        } catch (ServiceException ex) {
+            createLoginLog(null, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME, LoginResultEnum.USER_LOCKED);
+            throw ex;
+        }
+        var request = ServletUtils.getRequest();
+        if (request != null) {
+            request.setAttribute(CAPTCHA_VERIFIED_ATTR, Boolean.TRUE);
+        }
+    }
+
+    /**
+     * 在重置密码密文解密前校验手机号与客户端 IP 锁定状态。
+     *
+     * @param mobile 目标手机号
+     */
+    @Override
+    public void precheckSmsAttempt(String mobile) {
+        String clientIp = getClientIP();
+        try {
+            smsLoginFailureLockService.assertNotLocked(mobile, clientIp);
+        } catch (ServiceException ex) {
+            createLoginLog(null, mobile, LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.USER_LOCKED);
+            throw ex;
+        }
+    }
+
+    /**
+     * 校验业务管理平台账号与密码。
+     *
+     * @param username 账号
+     * @param password 明文密码
+     * @return 通过认证的用户
      */
     @Override
     public AdminUserDO authenticate(String username, String password) {
@@ -100,92 +136,93 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     }
 
     /**
-     * 校验认证请求并返回登录身份。
+     * 按指定管理平台校验账号与密码，维护连续失败计数与审计日志。
      *
-     * @param username username 参数
-     * @param password password 参数
-     * @param userType userType 参数
-     * @return 方法处理结果
+     * @param username 账号
+     * @param password 明文密码
+     * @param userType 平台类型
+     * @return 通过认证的启用用户
      */
     @Override
     public AdminUserDO authenticate(String username, String password, String userType) {
         final LoginLogTypeEnum logTypeEnum = LoginLogTypeEnum.LOGIN_USERNAME;
-        // 锁定检查放在账号查询之前，锁定提示和账号是否存在无关。
         try {
             loginFailureLockService.assertNotLocked(username);
         } catch (ServiceException ex) {
             createLoginLog(null, username, logTypeEnum, LoginResultEnum.USER_LOCKED);
             throw ex;
         }
-        // 登录账号允许跨平台同名，认证时必须按入口平台类型精确查询。
         AdminUserDO user = userService.getUserByUsernameAndType(username, userType);
         if (user == null) {
             loginFailureLockService.recordFailure(username);
             createLoginLog(null, username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_BAD_CREDENTIALS);
         }
         boolean passwordMatched = userService.isPasswordMatch(password, user.getPassword());
         if (!passwordMatched && userService.isPasswordMatchLegacy(password, user.getPassword())) {
-            // 历史 bcrypt(md5(明文)) 校验通过后立即升级为当前 BCrypt(明文) 格式。
             userService.updatePasswordHash(user.getId(), password);
             passwordMatched = true;
         }
         if (!passwordMatched) {
             loginFailureLockService.recordFailure(username);
             createLoginLog(user.getId(), username, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_BAD_CREDENTIALS);
         }
-        // 凭据正确后清除该账号的连续失败计数。
         loginFailureLockService.clearFailures(username);
-        // 校验是否禁用
         if (CommonStatusEnum.isDisable(user.getStatus())) {
             createLoginLog(user.getId(), username, logTypeEnum, LoginResultEnum.USER_DISABLED);
-            throw exception(AUTH_LOGIN_USER_DISABLED);
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_USER_DISABLED);
         }
         return user;
     }
 
     /**
-     * 校验登录凭据并创建登录会话。
+     * 校验业务管理平台登录凭据并签发会话令牌。
      *
-     * @param reqVO 请求参数
-     * @return 方法处理结果
+     * @param reqVO 登录请求
+     * @return 登录响应
      */
     @Override
     @DataPermission(enable = false)
     public AuthLoginRespVO login(AuthLoginReqVO reqVO) {
-        // 校验验证码
-        validateCaptcha(reqVO);
-
-        // 使用账号密码，进行登录
+        validateCaptchaIfNotPrechecked(reqVO);
         String expectedUserType = AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword(), expectedUserType);
         validateLoginUserType(user, reqVO.getUsername(), expectedUserType);
-
-        // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**
-     * 校验超级管理员凭据并创建登录会话。
+     * 校验超级管理平台登录凭据并签发会话令牌。
      *
-     * @param reqVO 请求参数
-     * @return 方法处理结果
+     * @param reqVO 登录请求
+     * @return 登录响应
      */
     @Override
     @DataPermission(enable = false)
     public AuthLoginRespVO superAdminLogin(AuthLoginReqVO reqVO) {
-        validateCaptcha(reqVO);
-
+        validateCaptchaIfNotPrechecked(reqVO);
         String expectedUserType = AdminPlatformTypeEnum.SUPER_ADMIN.getType();
         AdminUserDO user = authenticate(reqVO.getUsername(), reqVO.getPassword(), expectedUserType);
         validateLoginUserType(user, reqVO.getUsername(), expectedUserType);
-
         return createTokenAfterLoginSuccess(user, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
     }
 
     /**
-     * 登录入口按平台类型隔离：当前平台账号不能登录新平台，新平台账号也不能登录当前平台。
+     * 若当前请求尚未执行前置验证码校验，则补充执行一次校验。
+     *
+     * @param reqVO 登录请求
+     */
+    private void validateCaptchaIfNotPrechecked(AuthLoginReqVO reqVO) {
+        var request = ServletUtils.getRequest();
+        if (request != null && Boolean.TRUE.equals(request.getAttribute(CAPTCHA_VERIFIED_ATTR))) {
+            return;
+        }
+        validateCaptcha(reqVO);
+    }
+
+    /**
+     * 校验账号平台与登录入口一致。
      */
     private void validateLoginUserType(AdminUserDO user, String username, String expectedUserType) {
         validateLoginUserType(user, username, expectedUserType, LoginLogTypeEnum.LOGIN_USERNAME);
@@ -193,13 +230,6 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
     /**
      * 按指定日志类型校验登录账号与入口平台是否一致。
-     *
-     * <p>短信入口复用同一平台隔离规则，但失败日志要保留短信登录类型，便于审计区分入口。</p>
-     *
-     * @param user 已通过凭证校验的用户
-     * @param username 登录日志中记录的账号
-     * @param expectedUserType 当前入口允许的平台类型
-     * @param logType 登录失败日志类型
      */
     private void validateLoginUserType(AdminUserDO user, String username, String expectedUserType,
                                        LoginLogTypeEnum logType) {
@@ -207,124 +237,109 @@ public class AdminAuthServiceImpl implements AdminAuthService {
             return;
         }
         createLoginLog(user.getId(), username, logType, LoginResultEnum.BAD_CREDENTIALS);
-        throw exception(AUTH_LOGIN_PLATFORM_MISMATCH);
+        throw exception(ErrorCodeConstants.AUTH_LOGIN_PLATFORM_MISMATCH);
     }
 
     /**
-     * 发送短信验证码。
+     * 统一校验图形验证码与锁定状态后发送短信验证码，且对未注册或非业务平台账号静默返回以防枚举手机号。
      *
-     * @param reqVO 请求参数
+     * @param reqVO 发送请求
      */
     @Override
+    @DataPermission(enable = false)
     public void sendSmsCode(AuthSmsSendReqVO reqVO) {
-        // 如果是重置密码场景，需要校验图形验证码是否正确
-        if (Objects.equals(SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD.getScene(), reqVO.getScene())) {
-            ResponseModel response = doValidateCaptcha(reqVO);
-            if (!response.isSuccess()) {
-                throw exception(AUTH_REGISTER_CAPTCHA_CODE_ERROR, response.getRepMsg());
-            }
+        String clientIp = getClientIP();
+        smsLoginFailureLockService.assertNotLocked(reqVO.getMobile(), clientIp);
+        ResponseModel response = doValidateCaptcha(reqVO);
+        if (!response.isSuccess()) {
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_CAPTCHA_CODE_ERROR, response.getRepMsg());
         }
 
-        // 登录场景，验证是否存在
-        if (userService.getUserByMobile(reqVO.getMobile()) == null) {
-            throw exception(AUTH_MOBILE_NOT_EXISTS);
+        // 匿名短信入口仅服务已启用的业务管理平台账号；不存在、停用或超管账号静默结束，不向调用方暴露手机号状态。
+        AdminUserDO user = userService.getUserByMobile(reqVO.getMobile());
+        if (user == null
+                || CommonStatusEnum.isDisable(user.getStatus())
+                || !AdminPlatformTypeEnum.isSame(user.getUserType(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())) {
+            return;
         }
-        // 发送验证码
         SmsCodeSendReqDTO sendRequest = AuthConvert.INSTANCE.convert(reqVO);
-        sendRequest.setCreateIp(getClientIP());
+        sendRequest.setCreateIp(clientIp);
         smsCodeApi.sendSmsCode(sendRequest);
     }
 
     /**
-     * 校验短信验证码并创建登录会话。
+     * 校验短信验证码并创建业务管理平台登录会话。
      *
-     * @param reqVO 请求参数
-     * @return 方法处理结果
+     * @param reqVO 短信登录请求
+     * @return 登录令牌
      */
     @Override
+    @DataPermission(enable = false)
     public AuthLoginRespVO smsLogin(AuthSmsLoginReqVO reqVO) {
         String clientIp = getClientIP();
-        // 先按手机号和 IP 检查锁定，锁定提示不区分手机号是否已注册。
         try {
             smsLoginFailureLockService.assertNotLocked(reqVO.getMobile(), clientIp);
         } catch (ServiceException ex) {
-            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
-                    LoginResultEnum.USER_LOCKED);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, LoginResultEnum.USER_LOCKED);
             throw ex;
         }
 
-        // 校验验证码；验证码错误、过期或已使用时按手机号和 IP 累加失败次数。
         try {
             smsCodeApi.useSmsCode(AuthConvert.INSTANCE.convert(reqVO,
                     SmsSceneEnum.ADMIN_MEMBER_LOGIN.getScene(), clientIp));
         } catch (ServiceException ex) {
             smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
-            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
-                    LoginResultEnum.SMS_CODE_ERROR);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE, LoginResultEnum.SMS_CODE_ERROR);
             throw ex;
         }
 
-        // 获得用户信息
         AdminUserDO user = userService.getUserByMobile(reqVO.getMobile());
         if (user == null) {
             smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
             createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE,
                     LoginResultEnum.USER_MOBILE_NOT_FOUND);
-            throw exception(USER_NOT_EXISTS);
+            throw exception(ErrorCodeConstants.USER_NOT_EXISTS);
         }
-        // 短信入口与账号密码入口保持同一套账号状态和平台隔离规则，避免绕过禁用与跨平台限制。
         if (CommonStatusEnum.isDisable(user.getStatus())) {
             createLoginLog(user.getId(), user.getUsername(), LoginLogTypeEnum.LOGIN_MOBILE,
                     LoginResultEnum.USER_DISABLED);
-            throw exception(AUTH_LOGIN_USER_DISABLED);
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_USER_DISABLED);
         }
-        // 该接口沿用业务管理平台认证边界，新管理平台账号只能走独立登录入口。
         validateLoginUserType(user, user.getUsername(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType(),
                 LoginLogTypeEnum.LOGIN_MOBILE);
 
-        // 登录成功后清零手机号和 IP 的失败计数。
         smsLoginFailureLockService.clearFailures(reqVO.getMobile(), clientIp);
-
-        // 创建 Token 令牌，记录登录日志
         return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
     }
 
     /**
-     * 创建登录日志。
+     * 记录安全审计日志并在登录成功时更新最近登录信息。
      */
     private void createLoginLog(Long userId, String username,
                                 LoginLogTypeEnum logTypeEnum, LoginResultEnum loginResult) {
-        // 统一由安全审计服务写入登录日志，避免各处重复拼装请求上下文。
         securityAuditService.record(logTypeEnum, loginResult, userId, username);
-        // 更新最后登录时间
         if (userId != null && Objects.equals(LoginResultEnum.SUCCESS.getResult(), loginResult.getResult())) {
             userService.updateUserLogin(userId, getClientIP());
         }
     }
 
     /**
-     * 校验 validateCaptcha 对应的输入与业务约束。
+     * 校验账号登录图形验证码。
      */
     @VisibleForTesting
     void validateCaptcha(AuthLoginReqVO reqVO) {
         ResponseModel response = doValidateCaptcha(reqVO);
-        // 校验验证码
         if (!response.isSuccess()) {
-            // 创建登录失败日志（验证码不正确)
             createLoginLog(null, reqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME, LoginResultEnum.CAPTCHA_CODE_ERROR);
-            throw exception(AUTH_LOGIN_CAPTCHA_CODE_ERROR, response.getRepMsg());
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_CAPTCHA_CODE_ERROR, response.getRepMsg());
         }
     }
 
     /**
-     * 执行验证码的实际校验流程。
-     *
-     * @param reqVO 请求参数
-     * @return 方法处理结果
+     * 执行底层验证码服务核验；开关关闭时直接放行。
      */
     private ResponseModel doValidateCaptcha(CaptchaVerificationReqVO reqVO) {
-        // 如果验证码关闭，则不进行校验
-        if (!captchaEnable) {
+        if (!Boolean.TRUE.equals(captchaEnable)) {
             return ResponseModel.success();
         }
         ValidationUtils.validate(validator, reqVO, CaptchaVerificationReqVO.CodeEnableGroup.class);
@@ -334,32 +349,25 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     }
 
     /**
-     * 创建令牌After登录Success。
-     *
-     * @param user 已通过认证的用户
-     * @param username 登录日志中记录的账号
-     * @param logType 登录入口类型
-     * @return 令牌和首次改密标志
+     * 登录成功后签发内部客户端访问令牌并附带首次改密标记。
      */
     private AuthLoginRespVO createTokenAfterLoginSuccess(AdminUserDO user, String username, LoginLogTypeEnum logType) {
-        // 插入登陆日志
         createLoginLog(user.getId(), username, logType, LoginResultEnum.SUCCESS);
-        // 创建访问令牌
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.createAccessToken(user.getId(), getUserType().getValue(),
                 OAuth2ClientConstants.CLIENT_ID_SYSTEM, null);
-        // 构建返回结果；首次改密标志用于前端拦截，不能依赖前端自行判断。
         AuthLoginRespVO response = BeanUtils.toBean(accessTokenDO, AuthLoginRespVO.class);
         response.setPasswordChangeRequired(Boolean.TRUE.equals(user.getPasswordChangeRequired()));
         return response;
     }
 
     /**
-     * 刷新令牌。
+     * 刷新管理端访问令牌。
      *
-     * @param refreshToken refreshToken 参数
-     * @return 操作结果
+     * @param refreshToken 刷新令牌
+     * @return 新令牌及首次改密标记
      */
     @Override
+    @DataPermission(enable = false)
     public AuthLoginRespVO refreshToken(String refreshToken) {
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_SYSTEM);
         if (accessTokenDO == null) {
@@ -372,24 +380,23 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     }
 
     /**
-     * 注销当前登录会话并清理访问令牌。
+     * 注销访问令牌并写入登出审计日志。
      *
-     * @param token token 参数
-     * @param logType logType 参数
+     * @param token 访问令牌
+     * @param logType 登出类型
      */
     @Override
+    @DataPermission(enable = false)
     public void logout(String token, Integer logType) {
-        // 删除访问令牌
         OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.removeAccessToken(token);
         if (accessTokenDO == null) {
             return;
         }
-        // 删除成功，则记录登出日志
         createLogoutLog(accessTokenDO.getUserId(), accessTokenDO.getUserType(), logType);
     }
 
     /**
-     * 创建Logout日志。
+     * 组装并持久化登出日志。
      */
     private void createLogoutLog(Long userId, Integer userType, Integer logType) {
         LoginLogCreateReqDTO reqDTO = new LoginLogCreateReqDTO();
@@ -407,7 +414,7 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     }
 
     /**
-     * 获取Username。
+     * 按用户编号读取登录账号名。
      */
     private String getUsername(Long userId) {
         if (userId == null) {
@@ -418,66 +425,59 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     }
 
     /**
-     * 获取用户类型。
+     * 返回管理端固定用户类型枚举。
      */
     private UserTypeEnum getUserType() {
         return UserTypeEnum.ADMIN;
     }
 
     /**
-     * 注册目标数据。
+     * 校验短信锁定、核销最新短信验证码并重置业务管理平台启用账号的密码；禁止通过匿名短信重置超级管理员密码。
      *
-     * @param registerReqVO registerReqVO 参数
-     * @return 方法处理结果
+     * @param reqVO 重置密码请求
      */
     @Override
-    public AuthLoginRespVO register(AuthRegisterReqVO registerReqVO) {
-        // 1. 校验验证码
-        validateCaptcha(registerReqVO);
-
-        // 2. 校验用户名是否已存在
-        Long userId = userService.registerUser(registerReqVO);
-
-        // 3. 创建 Token 令牌，记录登录日志
-        AdminUserDO user = userService.getUser(userId);
-        if (user == null) {
-            throw exception(USER_NOT_EXISTS);
-        }
-        return createTokenAfterLoginSuccess(user, registerReqVO.getUsername(), LoginLogTypeEnum.LOGIN_USERNAME);
-    }
-
-    /**
-     * 校验 validateCaptcha 对应的输入与业务约束。
-     */
-    @VisibleForTesting
-    void validateCaptcha(AuthRegisterReqVO reqVO) {
-        ResponseModel response = doValidateCaptcha(reqVO);
-        // 验证不通过
-        if (!response.isSuccess()) {
-            throw exception(AUTH_REGISTER_CAPTCHA_CODE_ERROR, response.getRepMsg());
-        }
-    }
-
-    /**
-     * 重置密码。
-     *
-     * @param reqVO 请求参数
-     */
-    @Override
+    @DataPermission(enable = false)
     @Transactional(rollbackFor = Exception.class)
     public void resetPassword(AuthResetPasswordReqVO reqVO) {
-        AdminUserDO userByMobile = userService.getUserByMobile(reqVO.getMobile());
-        if (userByMobile == null) {
-            throw exception(USER_MOBILE_NOT_EXISTS);
-        }
+        String clientIp = getClientIP();
+        precheckSmsAttempt(reqVO.getMobile());
 
         SmsCodeUseReqDTO useRequest = new SmsCodeUseReqDTO();
         useRequest.setCode(reqVO.getCode());
         useRequest.setMobile(reqVO.getMobile());
         useRequest.setScene(SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD.getScene());
-        useRequest.setUsedIp(getClientIP());
-        smsCodeApi.useSmsCode(useRequest);
+        useRequest.setUsedIp(clientIp);
+        try {
+            smsCodeApi.useSmsCode(useRequest);
+        } catch (ServiceException ex) {
+            smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SMS_CODE_ERROR);
+            throw ex;
+        }
 
+        AdminUserDO userByMobile = userService.getUserByMobile(reqVO.getMobile());
+        if (userByMobile == null) {
+            smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
+            createLoginLog(null, reqVO.getMobile(), LoginLogTypeEnum.PASSWORD_RESET,
+                    LoginResultEnum.USER_MOBILE_NOT_FOUND);
+            throw exception(ErrorCodeConstants.SMS_CODE_NOT_FOUND);
+        }
+        if (CommonStatusEnum.isDisable(userByMobile.getStatus())) {
+            createLoginLog(userByMobile.getId(), userByMobile.getUsername(), LoginLogTypeEnum.PASSWORD_RESET,
+                    LoginResultEnum.USER_DISABLED);
+            throw exception(ErrorCodeConstants.AUTH_LOGIN_USER_DISABLED);
+        }
+        // 超级管理员账号严禁通过匿名短信找回重置密码，防止手机号接管穿透最高权限边界。
+        if (!AdminPlatformTypeEnum.isSame(userByMobile.getUserType(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())) {
+            smsLoginFailureLockService.recordFailure(reqVO.getMobile(), clientIp);
+            createLoginLog(userByMobile.getId(), userByMobile.getUsername(), LoginLogTypeEnum.PASSWORD_RESET,
+                    LoginResultEnum.BAD_CREDENTIALS);
+            throw exception(ErrorCodeConstants.SMS_CODE_NOT_FOUND);
+        }
+
+        smsLoginFailureLockService.clearFailures(reqVO.getMobile(), clientIp);
         userService.updateUserPassword(userByMobile.getId(), reqVO.getPassword());
     }
+
 }

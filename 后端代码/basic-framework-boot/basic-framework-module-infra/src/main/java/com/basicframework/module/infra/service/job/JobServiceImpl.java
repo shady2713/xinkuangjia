@@ -174,12 +174,12 @@ public class JobServiceImpl implements JobService {
     /**
      * 将数据库中的定时任务配置同步到 Quartz 调度器。
      *
-     * <p>同步时先删除调度器中的同名任务，再按数据库配置重新创建，并恢复暂停状态。</p>
+     * <p>同步时先删除调度器中的同名任务，再按数据库配置重新创建，并恢复暂停状态。
+     * 本方法仅读取数据库并操作内存调度器，不开启数据库写事务，避免事务持有期间穿插调度器锁。</p>
      *
      * @throws SchedulerException Quartz 调度器操作失败时抛出
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void syncJob() throws SchedulerException {
         // 1. 查询 Job 配置
         List<JobDO> jobList = jobMapper.selectList();

@@ -14,7 +14,14 @@ import { createHtmlPlugin as viteHtmlPlugin } from 'vite-plugin-html';
 import { bundleAnalysis } from './bundle-analysis.mjs';
 import { viteExtraAppConfigPlugin } from './extra-app-config.ts';
 import { viteInjectAppLoadingPlugin } from './inject-app-loading/index.ts';
+import { viteVxeTableImportsPlugin } from './vxe-table.ts';
 
+/**
+ * 按启用条件顺序展开 Vite 插件列表。
+ *
+ * @param conditionPlugins 条件插件数组
+ * @returns 已启用的扁平化 Vite 插件列表
+ */
 async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
   const plugins: PluginOption[] = [];
   for (const conditionPlugin of conditionPlugins) {
@@ -60,7 +67,7 @@ async function loadCommonPlugins(
 }
 
 /**
- * 按应用构建选项加载通用插件、首屏 loading 和 HTML 模板处理插件。
+ * 按应用构建选项加载通用插件、vxe-table 按需解析、首屏 loading 和 HTML 模板处理插件。
  *
  * @param options 应用构建插件选项
  * @returns 当前构建启用的 Vite 插件列表
@@ -71,6 +78,15 @@ async function loadApplicationPlugins(
   const commonPlugins = await loadCommonPlugins(options);
   return await loadConditionPlugins([
     ...commonPlugins,
+    {
+      condition: options.vxeTableLazyImport !== false,
+      /**
+       * 加载 vxe-table 与 vxe-pc-ui 按需导入重写插件。
+       *
+       * @returns 插件实例列表
+       */
+      plugins: async () => [await viteVxeTableImportsPlugin()],
+    },
     {
       condition: options.mode === 'analyze',
       // 分析构建与生产产物分目录，避免带报告的输出被误用于发布。
@@ -89,6 +105,7 @@ async function loadApplicationPlugins(
   ]);
 }
 
+/** 加载工作区内部库构建插件。 */
 async function loadLibraryPlugins(
   options: LibraryPluginOptions,
 ): Promise<PluginOption[]> {

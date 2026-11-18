@@ -14,7 +14,6 @@ import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.common.util.validation.ValidationUtils;
 import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdateReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserImportExcelVO;
@@ -69,8 +68,6 @@ import static com.basicframework.module.system.enums.LogRecordConstants.*;
 public class AdminUserServiceImpl implements AdminUserService {
 
     static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
-
-    static final String USER_REGISTER_ENABLED_KEY = "system.user.register-enabled";
 
     @Resource
     private AdminUserMapper userMapper;
@@ -136,35 +133,6 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         // 3. 记录操作日志上下文
         LogRecordContext.putVariable("user", user);
-        return user.getId();
-    }
-
-    /**
-     * 注册用户。
-     *
-     * @param registerReqVO registerReqVO 参数
-     * @return 方法处理结果
-     */
-    @Override
-    public Long registerUser(AuthRegisterReqVO registerReqVO) {
-        // 1.1 校验是否开启注册
-        if (ObjUtil.notEqual(configApi.getConfigValueByKey(USER_REGISTER_ENABLED_KEY), "true")) {
-            throw exception(USER_REGISTER_DISABLED);
-        }
-        // 1.2 校验正确性
-        validateUserForCreateOrUpdate(null, registerReqVO.getUsername(), null, null, null, null,
-                AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
-
-        // 2. 插入用户
-        AdminUserDO user = BeanUtils.toBean(registerReqVO, AdminUserDO.class);
-        // 注册入口只服务当前业务管理平台，不允许通过注册生成新管理平台账号。
-        user.setUserType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
-        user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
-        validatePasswordPolicy(registerReqVO.getPassword());
-        user.setPassword(encodePassword(registerReqVO.getPassword())); // 加密密码
-        // 注册密码由用户自己设置，不触发首次改密。
-        user.setPasswordChangeRequired(false);
-        userMapper.insert(user);
         return user.getId();
     }
 
@@ -657,33 +625,27 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验 validateUserForCreateOrUpdate 对应的输入与业务约束。
+     * 校验创建或更新用户时的可见性、平台边界与全局唯一性约束。
+     *
+     * <p>目标用户存在性及目标部门合法性必须在当前调用者的数据权限范围内校验，防止跨部门越权修改用户或将用户迁入无权部门；
+     * 仅账号、手机号和邮箱的全库唯一性检查忽略数据权限，避免跨部门重名触发底层唯一索引异常。</p>
      */
     private AdminUserDO validateUserForCreateOrUpdate(Long id, String username, String mobile, String email,
                                                Long deptId, Set<Long> postIds, String userType) {
-        // 关闭数据权限，避免因为没有数据权限，查询不到数据，进而导致唯一校验不正确
-        return DataPermissionUtils.executeIgnore(() -> {
-            // 校验用户存在
-            AdminUserDO user = validateUserExists(id);
-            // 用户名唯一性按平台类型隔离；编辑老数据时沿用原账号的平台类型。
-            String resolvedUserType = AdminPlatformTypeEnum.defaultType(
-                    user != null && StrUtil.isBlank(userType) ? user.getUserType() : userType);
-            if (user != null) {
-                // 编辑入口传入的是可信登录平台，禁止借修改资料迁移其他平台账号。
-                validateUserPlatform(user, resolvedUserType);
-            }
-            // 校验用户名唯一
+        AdminUserDO user = validateUserExists(id);
+        String resolvedUserType = AdminPlatformTypeEnum.defaultType(
+                user != null && StrUtil.isBlank(userType) ? user.getUserType() : userType);
+        if (user != null) {
+            validateUserPlatform(user, resolvedUserType);
+        }
+        deptService.validateDeptList(singleton(deptId));
+        postService.validatePostList(postIds);
+        DataPermissionUtils.executeIgnore(() -> {
             validateUsernameUnique(id, username, resolvedUserType);
-            // 校验手机号唯一
             validateMobileUnique(id, mobile);
-            // 校验邮箱唯一
             validateEmailUnique(id, email);
-            // 校验部门处于开启状态
-            deptService.validateDeptList(singleton(deptId));
-            // 校验岗位处于开启状态
-            postService.validatePostList(postIds);
-            return user;
         });
+        return user;
     }
 
     /**
@@ -857,10 +819,12 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (StrUtil.isEmpty(initPassword)) {
             throw exception(USER_IMPORT_INIT_PASSWORD);
         }
-        // 初始密码同样必须满足等保二级复杂度，避免导入绕过密码策略。
+        // 初始密码同样必须满足密码复杂度，并在循环外一次性计算 BCrypt 摘要，避免批量导入按行重复哈希。
         validatePasswordPolicy(initPassword);
+        String encodedInitPassword = encodePassword(initPassword);
+        String importUserType = getLoginUserTypeOrDefault();
 
-        // 2. 遍历，逐个创建 or 更新
+        // 2. 遍历，逐个创建或更新
         UserImportRespVO respVO = UserImportRespVO.builder().createUsernames(new ArrayList<>())
                 .updateUsernames(new ArrayList<>()).failureUsernames(new LinkedHashMap<>()).build();
         AtomicInteger index = new AtomicInteger(1);
@@ -887,32 +851,31 @@ public class AdminUserServiceImpl implements AdminUserService {
                 deptId = dept.getId();
             }
 
-            // 2.1.3 校验，判断是否有不符合的原因
+            // 2.1.3 优先查询同平台存量账号，以便在更新分支按其真实主键核验邮箱/手机号唯一性与可见范围
+            AdminUserDO existUser = DataPermissionUtils.executeIgnore(
+                    () -> userMapper.selectByUsernameAndUserType(importUser.getUsername(), importUserType));
             try {
-                validateUserForCreateOrUpdate(null, null, importUser.getMobile(), importUser.getEmail(),
-                        deptId, null, getLoginUserTypeOrDefault());
+                validateUserForCreateOrUpdate(existUser != null ? existUser.getId() : null,
+                        null, importUser.getMobile(), importUser.getEmail(),
+                        deptId, null, importUserType);
             } catch (ServiceException ex) {
                 respVO.getFailureUsernames().put(importUser.getUsername(), ex.getMessage());
                 return;
             }
 
-            // 2.2.1 判断如果不存在，在进行插入
-            String importUserType = getLoginUserTypeOrDefault();
-            AdminUserDO existUser = userMapper.selectByUsernameAndUserType(importUser.getUsername(), importUserType);
+            // 2.2.1 不存在时创建新用户
             if (existUser == null) {
                 AdminUserDO newUser = BeanUtils.toBean(importUser, AdminUserDO.class);
-                // 导入入口按当前登录平台写入，避免导入数据绕过平台隔离。
                 newUser.setUserType(importUserType);
                 newUser.setDeptId(deptId);
-                newUser.setPassword(encodePassword(initPassword));
-                // 导入生成的初始密码必须在首次登录后修改。
+                newUser.setPassword(encodedInitPassword);
                 newUser.setPasswordChangeRequired(true);
-                newUser.setPostIds(new HashSet<>()); // 设置默认密码及空岗位编号数组
+                newUser.setPostIds(new HashSet<>());
                 userMapper.insert(newUser);
                 respVO.getCreateUsernames().add(importUser.getUsername());
                 return;
             }
-            // 2.2.2 如果存在，判断是否允许更新
+            // 2.2.2 已存在时按更新开关更新，若状态变更为停用则发布下线事件清理令牌
             if (!isUpdateSupport) {
                 respVO.getFailureUsernames().put(importUser.getUsername(), USER_USERNAME_EXISTS.getMsg());
                 return;
@@ -921,6 +884,10 @@ public class AdminUserServiceImpl implements AdminUserService {
             updateUser.setId(existUser.getId());
             updateUser.setDeptId(deptId);
             userMapper.updateById(updateUser);
+            if (importUser.getStatus() != null && !Objects.equals(existUser.getStatus(), importUser.getStatus())) {
+                applicationContext.publishEvent(
+                        new UserStatusChangedEvent(existUser.getId(), UserTypeEnum.ADMIN.getValue(), importUser.getStatus()));
+            }
             respVO.getUpdateUsernames().add(importUser.getUsername());
         });
         return respVO;

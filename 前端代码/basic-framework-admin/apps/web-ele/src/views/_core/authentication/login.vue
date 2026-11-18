@@ -4,7 +4,7 @@ import type { VbenFormSchema } from '@vben/common-ui';
 import { computed, ref } from 'vue';
 
 import { AuthenticationLogin, Verification } from '@vben/common-ui';
-import { isCaptchaEnable } from '@vben/hooks';
+import { getDefaultLoginCredentials, isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { logError } from '@vben/utils';
 
@@ -19,12 +19,17 @@ defineOptions({ name: 'Login' });
 
 const authStore = useAuthStore();
 const captchaEnable = isCaptchaEnable();
+const defaultCredentials = getDefaultLoginCredentials(
+  import.meta.env,
+  import.meta.env.PROD,
+);
 
 const loginRef = ref();
 const verifyRef = ref();
 
 const captchaType = 'blockPuzzle';
 
+/** 提交登录表单；启用图形验证码时先拉起行为验证码弹窗。 */
 async function handleLogin(values: Record<string, unknown>) {
   if (captchaEnable) {
     verifyRef.value.show();
@@ -33,7 +38,7 @@ async function handleLogin(values: Record<string, unknown>) {
   await authStore.authLogin('username', values);
 }
 
-/** 验证码通过后携带校验串完成登录 */
+/** 验证码通过后携带校验串完成登录。 */
 async function handleVerifySuccess({
   captchaVerification,
 }: {
@@ -59,7 +64,7 @@ const formSchema = computed((): VbenFormSchema[] => {
       fieldName: 'username',
       label: $t('authentication.username'),
       rules: buildRequiredUsernameSchema($t('authentication.username')).default(
-        import.meta.env.VITE_APP_DEFAULT_USERNAME,
+        defaultCredentials.username,
       ),
     },
     {
@@ -70,7 +75,7 @@ const formSchema = computed((): VbenFormSchema[] => {
       fieldName: 'password',
       label: $t('authentication.password'),
       rules: buildLoginPasswordSchema($t('authentication.password')).default(
-        import.meta.env.VITE_APP_DEFAULT_PASSWORD,
+        defaultCredentials.password,
       ),
     },
   ];
@@ -83,12 +88,13 @@ const formSchema = computed((): VbenFormSchema[] => {
       ref="loginRef"
       :form-schema="formSchema"
       :loading="authStore.loginLoading"
+      :show-register="false"
       :show-third-party-login="false"
       @submit="handleLogin"
     />
     <Verification
-      ref="verifyRef"
       v-if="captchaEnable"
+      ref="verifyRef"
       :captcha-type="captchaType"
       :check-captcha-api="checkCaptcha"
       :get-captcha-api="getCaptcha"

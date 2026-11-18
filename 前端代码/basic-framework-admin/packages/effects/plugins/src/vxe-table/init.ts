@@ -9,33 +9,14 @@ import { useVbenForm } from '@vben-core/form-ui';
 import {
   VxeButton,
   VxeCheckbox,
-
-  // VxeFormGather,
-  // VxeForm,
-  // VxeFormItem,
   VxeIcon,
   VxeInput,
   VxeLoading,
-  VxeModal,
-  VxeNumberInput,
   VxePager,
-  // VxeList,
-  // VxeModal,
-  // VxeOptgroup,
-  // VxeOption,
-  // VxePulldown,
-  VxeRadio,
-  VxeRadioButton,
-  VxeRadioGroup,
-  VxeSelect,
   VxeTooltip,
   VxeUI,
-  VxeUpload,
-  // VxeSwitch,
-  // VxeTextarea,
 } from 'vxe-pc-ui';
 import enUS from 'vxe-pc-ui/lib/language/en-US';
-// 导入默认的语言
 import zhCN from 'vxe-pc-ui/lib/language/zh-CN';
 import {
   VxeColgroup,
@@ -47,19 +28,19 @@ import {
 
 import { extendsDefaultFormatter } from './extends';
 
-// 是否加载过
 let isInit = false;
 
 // eslint-disable-next-line import/no-mutable-exports
 export let useTableForm: typeof useVbenForm;
 
-// 部分组件，如果没注册，vxe-table 会报错，这里实际没用组件，只是为了不报错，同时可以减少打包体积
+/** 构造虚拟占位组件以跳过未使用的 VxeForm 全量脚本打包。 */
 const createVirtualComponent = (name = '') => {
   return defineComponent({
     name,
   });
 };
 
+/** 按需注册管理后台表格实际使用的 VxeTable 与 VxeUI 核心单元。 */
 export function initVxeTable() {
   if (isInit) {
     return;
@@ -72,34 +53,22 @@ export function initVxeTable() {
   VxeUI.component(VxeToolbar);
 
   VxeUI.component(VxeButton);
-  // VxeUI.component(VxeButtonGroup);
   VxeUI.component(VxeCheckbox);
-  // VxeUI.component(VxeCheckboxGroup);
   VxeUI.component(createVirtualComponent('VxeForm'));
-  // VxeUI.component(VxeFormGather);
-  // VxeUI.component(VxeFormItem);
   VxeUI.component(VxeIcon);
   VxeUI.component(VxeInput);
-  // VxeUI.component(VxeList);
   VxeUI.component(VxeLoading);
-  VxeUI.component(VxeModal);
-  VxeUI.component(VxeNumberInput);
-  // VxeUI.component(VxeOptgroup);
-  // VxeUI.component(VxeOption);
   VxeUI.component(VxePager);
-  // VxeUI.component(VxePulldown);
-  VxeUI.component(VxeRadio);
-  VxeUI.component(VxeRadioButton);
-  VxeUI.component(VxeRadioGroup);
-  VxeUI.component(VxeSelect);
-  // VxeUI.component(VxeSwitch);
-  // VxeUI.component(VxeTextarea);
   VxeUI.component(VxeTooltip);
-  VxeUI.component(VxeUpload);
 
   isInit = true;
 }
 
+/**
+ * 初始化 VxeTable 主题、语言包、默认格式化器及业务侧配置回调。
+ *
+ * @param setupOptions VxeTable 初始化回调与表单构建器选项
+ */
 export function setupVbenVxeTable(setupOptions: SetupVxeTable) {
   const { configVxeTable, useVbenForm } = setupOptions;
 

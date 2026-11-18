@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""统一执行 AIMaster 工作区 Java 与 Python 增量注释检查。
+"""统一执行工作区 Java 与 Python 增量注释检查。
 
 @author 李杰
 """

@@ -1,9 +1,15 @@
 /**
- * 该文件可自行根据业务逻辑进行调整
+ * 管理端统一 HTTP 请求客户端组装模块，负责 Bearer 鉴权、报文加解密、无感刷新与异常提示。
+ *
+ * @author shady2713
  */
-import type { RequestClientOptions } from '@vben/request';
+import type {
+  InternalAxiosRequestConfig,
+  RequestClientOptions,
+  RequestResponse,
+} from '@vben/request';
 
-import { useAppConfig } from '@vben/hooks';
+import { getApiEncryptEnvConfig, useAppConfig } from '@vben/hooks';
 import { preferences } from '@vben/preferences';
 import {
   authenticateResponseInterceptor,
@@ -20,26 +26,33 @@ import { normalizeErrorMessage, showErrorMessage } from '#/utils/feedback';
 import { refreshTokenApi } from './core';
 
 const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
-const apiEncrypt = createApiEncrypt(import.meta.env);
+const apiEncrypt = createApiEncrypt(
+  getApiEncryptEnvConfig(import.meta.env, import.meta.env.PROD),
+);
 
+/**
+ * 创建带统一鉴权、传输加解密与错误提示的管理端请求客户端。
+ *
+ * @param baseURL 接口基础路径
+ * @param options 请求客户端扩展选项
+ * @returns 配置完成的 RequestClient 实例
+ */
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
     ...options,
     baseURL,
   });
 
-  /**
-   * 重新认证逻辑
-   */
+  /** 会话失效后的统一重认证处理；跳转登出前保留当前令牌以便通知后端吊销。 */
   async function doReAuthenticate() {
     logWarn('Authentication expired');
     const accessStore = useAccessStore();
     const authStore = useAuthStore();
-    accessStore.setAccessToken(null);
     if (
       preferences.app.loginExpiredMode === 'modal' &&
       accessStore.isAccessChecked
     ) {
+      accessStore.setAccessToken(null);
       accessStore.setLoginExpired(true);
     } else {
       await authStore.logout();
@@ -47,7 +60,10 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   }
 
   /**
-   * 刷新token逻辑
+   * 使用 refreshToken 换取新的 accessToken。
+   *
+   * @returns 刷新得到的最新访问令牌字符串
+   * @throws 当本地缺少刷新令牌或服务端拒绝刷新时抛出异常
    */
   async function doRefreshToken() {
     const accessStore = useAccessStore();
@@ -57,7 +73,6 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }
     const resp = await refreshTokenApi(refreshToken);
     const newToken = resp?.data?.data?.accessToken;
-    // 这里一定要抛出 resp.data，从而触发 authenticateResponseInterceptor 中的刷新令牌失败逻辑。
     if (!newToken) {
       throw resp.data;
     }
@@ -65,58 +80,78 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     return newToken;
   }
 
+  /**
+   * 格式化 Bearer 认证头。
+   *
+   * @param token 访问令牌字符串
+   * @returns Bearer 头文本或 null
+   */
   function formatToken(token: null | string) {
     return token ? `Bearer ${token}` : null;
   }
 
-  // 请求头处理
+  /**
+   * 注入鉴权请求头与语言偏好，并对显式开启加密的首次请求执行报文加密。
+   *
+   * @param config Axios 内部请求配置
+   * @returns 增强后的请求配置
+   * @throws 请求体加密失败时抛出原始异常
+   */
+  async function handleRequestFulfilled(config: InternalAxiosRequestConfig) {
+    const accessStore = useAccessStore();
+
+    config.headers.Authorization = formatToken(accessStore.accessToken);
+    config.headers['Accept-Language'] = preferences.app.locale;
+
+    const encryptHeader = apiEncrypt.getEncryptHeader();
+    const alreadyEncrypted =
+      config.headers[encryptHeader] === 'true' ||
+      config.headers[encryptHeader.toLowerCase()] === 'true';
+    if ((config.headers || {}).isEncrypt && !alreadyEncrypted) {
+      try {
+        if (config.data) {
+          config.data = apiEncrypt.encryptRequest(config.data);
+          config.headers[encryptHeader] = 'true';
+        }
+      } catch (error) {
+        logError('Request encryption failed', error);
+        throw error;
+      }
+    }
+    return config;
+  }
+
+  /**
+   * 对携带加密响应头的字符串密文报文执行对称解密。
+   *
+   * @param response Axios 原始响应对象
+   * @returns 解密或原样透传后的响应对象
+   * @throws 密文损坏或密钥不匹配导致解密失败时抛出异常
+   */
+  function handleResponseDecrypt(response: RequestResponse) {
+    const encryptHeader = apiEncrypt.getEncryptHeader();
+    const isEncryptResponse =
+      response.headers[encryptHeader] === 'true' ||
+      response.headers[encryptHeader.toLowerCase()] === 'true';
+    if (isEncryptResponse && typeof response.data === 'string') {
+      try {
+        response.data = apiEncrypt.decryptResponse(response.data);
+      } catch (error) {
+        logError('Response decryption failed', error);
+        throw new Error(`响应数据解密失败: ${(error as Error).message}`);
+      }
+    }
+    return response;
+  }
+
   client.addRequestInterceptor({
-    fulfilled: async (config) => {
-      const accessStore = useAccessStore();
-
-      config.headers.Authorization = formatToken(accessStore.accessToken);
-      config.headers['Accept-Language'] = preferences.app.locale;
-
-      // 是否 API 加密
-      if ((config.headers || {}).isEncrypt) {
-        try {
-          // 加密请求数据
-          if (config.data) {
-            config.data = apiEncrypt.encryptRequest(config.data);
-            // 设置加密标识头
-            config.headers[apiEncrypt.getEncryptHeader()] = 'true';
-          }
-        } catch (error) {
-          logError('Request encryption failed', error);
-          throw error;
-        }
-      }
-      return config;
-    },
+    fulfilled: handleRequestFulfilled,
   });
 
-  // API 解密响应拦截器
   client.addResponseInterceptor({
-    fulfilled: (response) => {
-      // 检查是否需要解密响应数据
-      const encryptHeader = apiEncrypt.getEncryptHeader();
-      const isEncryptResponse =
-        response.headers[encryptHeader] === 'true' ||
-        response.headers[encryptHeader.toLowerCase()] === 'true';
-      if (isEncryptResponse && typeof response.data === 'string') {
-        try {
-          // 解密响应数据
-          response.data = apiEncrypt.decryptResponse(response.data);
-        } catch (error) {
-          logError('Response decryption failed', error);
-          throw new Error(`响应数据解密失败: ${(error as Error).message}`);
-        }
-      }
-      return response;
-    },
+    fulfilled: handleResponseDecrypt,
   });
 
-  // 处理返回的响应数据格式
   client.addResponseInterceptor(
     defaultResponseInterceptor({
       codeField: 'code',
@@ -125,7 +160,6 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
-  // token过期的处理
   client.addResponseInterceptor(
     authenticateResponseInterceptor({
       client,
@@ -136,30 +170,34 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     }),
   );
 
-  // 通用的错误处理,如果没有进入上面的错误处理逻辑，就会进入这里
+  /**
+   * 提取服务端标准错误文案并触发全局错误提示（跳过 401 重认证流程）。
+   *
+   * @param msg 拦截器兜底错误文案
+   * @param error Axios 错误对象
+   */
+  function handleErrorMessage(msg: string, error: any) {
+    const responseData = error?.response?.data ?? {};
+    const errorMessage = normalizeErrorMessage(
+      responseData?.error ?? responseData?.message ?? responseData.msg ?? '',
+    );
+    if (error?.data?.code === 401) {
+      return;
+    }
+    showErrorMessage(errorMessage || msg);
+  }
+
   client.addResponseInterceptor(
-    errorMessageResponseInterceptor((msg: string, error) => {
-      // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
-      // 当前mock接口返回的错误字段是 error 或者 message
-      const responseData = error?.response?.data ?? {};
-      const errorMessage = normalizeErrorMessage(
-        responseData?.error ?? responseData?.message ?? responseData.msg ?? '',
-      );
-      // 特殊处理：避免 401 “账号未登录” 重复提示。因为此时会跳转到登录界面，只需提示一次。
-      if (error?.data?.code === 401) {
-        return;
-      }
-      // 如果没有错误信息，则会根据状态码进行提示
-      showErrorMessage(errorMessage || msg);
-    }),
+    errorMessageResponseInterceptor(handleErrorMessage),
   );
 
   return client;
 }
 
+/** 默认管理端业务请求客户端。 */
 export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });
 
-/** 不带业务拦截器的基础请求客户端 */
+/** 不带业务拦截器的基础请求客户端。 */
 export const baseRequestClient = new RequestClient({ baseURL: apiURL });

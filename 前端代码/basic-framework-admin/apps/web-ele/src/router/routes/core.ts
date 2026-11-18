@@ -74,14 +74,6 @@ const coreRoutes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'Register',
-        path: 'register',
-        component: () => import('#/views/_core/authentication/register.vue'),
-        meta: {
-          title: $t('page.auth.register'),
-        },
-      },
-      {
         name: 'SSOLogin',
         path: 'sso-login',
         component: () => import('#/views/_core/authentication/sso-login.vue'),

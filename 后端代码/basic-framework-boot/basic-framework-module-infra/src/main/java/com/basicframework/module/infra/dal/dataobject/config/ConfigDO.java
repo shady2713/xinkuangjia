@@ -1,6 +1,6 @@
 package com.basicframework.module.infra.dal.dataobject.config;
 
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 
 import com.basicframework.module.infra.enums.config.ConfigTypeEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -22,7 +22,7 @@ import lombok.ToString;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class ConfigDO extends BaseDO {
+public class ConfigDO extends UniqueBaseDO {
 
     /**
      * 参数主键。

@@ -1,6 +1,10 @@
 import type { AxiosInstance, AxiosResponse } from 'axios';
 
-import type { RequestClientConfig, RequestClientOptions } from './types';
+import type {
+  RefreshTokenQueueCallback,
+  RequestClientConfig,
+  RequestClientOptions,
+} from './types';
 
 import { bindMethods, isString, merge } from '@vben/utils';
 
@@ -46,8 +50,8 @@ class RequestClient {
   // 是否正在刷新token
   public isRefreshing = false;
   public postSSE: SSE['postSSE'];
-  // 刷新token队列
-  public refreshTokenQueue: ((token: string) => void)[] = [];
+  /** 刷新访问令牌期间挂起的请求回调队列。 */
+  public refreshTokenQueue: RefreshTokenQueueCallback[] = [];
   public requestSSE: SSE['requestSSE'];
   public upload: FileUploader['upload'];
 

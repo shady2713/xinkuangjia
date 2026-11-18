@@ -174,18 +174,24 @@ public class HttpUtils {
         return null;
     }
 
+    /** 默认 HTTP 连接超时时间（毫秒）。 */
+    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
+
+    /** 默认 HTTP 读取超时时间（毫秒）。 */
+    private static final int DEFAULT_READ_TIMEOUT_MS = 10_000;
+
     /**
-     * HTTP post 请求，基于 {@link cn.hutool.http.HttpUtil} 实现
+     * 发送带默认连接与读取超时的 HTTP POST 请求。
      *
-     * 为什么要封装该方法，因为 HttpUtil 默认封装的方法，没有允许传递 headers 参数
-     *
-     * @param url URL
-     * @param headers 请求头
-     * @param requestBody 请求体
-     * @return 请求结果
+     * @param url 请求地址
+     * @param headers 请求头映射
+     * @param requestBody 请求体内容
+     * @return 响应体字符串
      */
     public static String post(String url, Map<String, String> headers, String requestBody) {
         try (HttpResponse response = HttpRequest.post(url)
+                .setConnectionTimeout(DEFAULT_CONNECT_TIMEOUT_MS)
+                .setReadTimeout(DEFAULT_READ_TIMEOUT_MS)
                 .addHeaders(headers)
                 .body(requestBody)
                 .execute()) {
@@ -194,16 +200,16 @@ public class HttpUtils {
     }
 
     /**
-     * HTTP get 请求，基于 {@link cn.hutool.http.HttpUtil} 实现
+     * 发送带默认连接与读取超时的 HTTP GET 请求。
      *
-     * 为什么要封装该方法，因为 HttpUtil 默认封装的方法，没有允许传递 headers 参数
-     *
-     * @param url URL
-     * @param headers 请求头
-     * @return 请求结果
+     * @param url 请求地址
+     * @param headers 请求头映射
+     * @return 响应体字符串
      */
     public static String get(String url, Map<String, String> headers) {
         try (HttpResponse response = HttpRequest.get(url)
+                .setConnectionTimeout(DEFAULT_CONNECT_TIMEOUT_MS)
+                .setReadTimeout(DEFAULT_READ_TIMEOUT_MS)
                 .addHeaders(headers)
                 .execute()) {
             return response.body();

@@ -49,23 +49,25 @@ flowchart LR
 
 ### 2. 单责切片与隔离分支（Slice & Isolate）
 
-- 遵循“一事一分支、一事一 PR”：将跨栈大改动拆分为文件边界清晰、可独立回滚的小切片；复杂需求使用 [weetion-task-cards](../../.agents/skills/weetion-task-cards/SKILL.md) 拆卡跟踪。
-- 首次接入或新克隆环境先执行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply`，按 [`后端代码/basic-framework-boot/.env.example`](../../后端代码/basic-framework-boot/.env.example) 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`，再按需通过 [`docker-compose.dev.yml`](../../docker-compose.dev.yml) 拉起环回绑定的本地 MySQL、Redis 与 MinIO。
+- 遵循“一事一分支、一事一 PR”：将跨栈大改动拆分为文件边界清晰、可独立回滚的小切片（非生成文件净变更默认控制在 `<= 600` 行，架构级变更须在 PR 描述中显式标注 `[slice-override]` 说明原因）；复杂需求使用 [weetion-task-cards](../../.agents/skills/weetion-task-cards/SKILL.md) 拆卡跟踪。
+- 首次接入或新克隆环境先执行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply`，按 [`后端代码/basic-framework-boot/.env.example`](../../后端代码/basic-framework-boot/.env.example) 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`，再按需通过 [`docker-compose.dev.yml`](../../docker-compose.dev.yml) 拉起环回绑定的本地 MySQL、Redis 与 MinIO；需要确定性联调账号时运行 `python -B -X utf8 scripts/runtime/seed_local_dev.py --apply`。
 
 ### 3. 调用方与契约同步实现（Consumer-Sync Implementation）
 
-- 后端遵循 [weetion-development-java-standards](../../.agents/skills/weetion-development-java-standards/SKILL.md) 与模块脚手架规范：Controller 入参与返回值使用 VO/DTO，禁止暴露 `dal.dataobject.*DO`；`core` 禁止反向依赖业务 `module` 或 `server`。
-- 前端遵循 [weetion-development-web-standards](../../.agents/skills/weetion-development-web-standards/SKILL.md)：所有含 `tsconfig.json` 与 `src/` 的工作区包必须声明 `scripts.typecheck`；禁止空 `catch`、裸 `@ts-ignore` 与残留的 `it.skip`。
+- 新建模块与标准 CRUD 优先运行黄金脚手架（`python -B -X utf8 scripts/scaffold/new_java_module.py` 与 `python -B -X utf8 scripts/scaffold/new_web_crud.py`），减少样板手写漂移。
+- 后端遵循 [weetion-development-java-standards](../../.agents/skills/weetion-development-java-standards/SKILL.md) 与模块脚手架规范：Controller 入参与返回值使用 VO/DTO，禁止暴露 `dal.dataobject.*DO`；`core` 禁止反向依赖业务 `module` 或 `server`；DDL、DO 与 `system_menu` 权限码由 `SchemaDoRbacParityTest` 统一校验。
+- 前后端接口契约以 `OpenApiContractSnapshotTest` 导出的 `openapi.json` 为唯一事实源，前端通过 `pnpm api:gen` 同步 `api-types.d.ts` 并由 `pnpm api:check` 拦截手工漂移；所有含 `tsconfig.json` 与 `src/` 的工作区包必须声明 `scripts.typecheck`，禁止空 `catch`、裸 `@ts-ignore`、裸 `window.open(` 与残留的 `it.skip`。
 - 内部契约（环境变量、接口 URL、权限标识、脚本入口）变更时，在同一提交内同步 `.env.example`、调用方测试与[脚本使用索引](脚本使用索引.md)，防止配置与文档漂移。
 
 ### 4. 运行期与反例验证（Runtime & Negative-Proof Verify）
 
+- 编码迭代期间优先运行 `python -B -X utf8 scripts/workflow/verify_slice.py` 对当前改动文件执行秒级增量门禁（密钥、注释、关联文档与对应单测），缩短反馈回路。
 - 编译通过不等于验证通过：Mapper 与 SQL 改动须执行基于真实数据库或 H2 MySQL 模式的切片测试，杜绝仅 Mock Mapper 掩盖 SQL 语法或依赖二进制不兼容。
 - 缺陷修复与坏味道治理遵循[纠错即门禁](纠错即门禁.md)：将确定性检查接入既有 `eslint`、`ArchUnit`、`pytest` 或文档检查，并验证故意引入坏样本时门禁必然失败。
 
 ### 5. 独立视角代码审查（Independent Review）
 
-- 切片实现并通过门禁后，按 [weetion-code-review](../../.agents/skills/weetion-code-review/SKILL.md) 以只读审查视角复核真实 diff：核查越权漏检、空值边界、事务范围、敏感信息脱敏与死代码残留。
+- 切片实现并通过门禁后，按 [weetion-code-review](../../.agents/skills/weetion-code-review/SKILL.md) 及[框架安全威胁清单](../../.agents/skills/weetion-code-review/references/framework-threat-checklist.md)以只读审查视角复核真实 diff：核查越权漏检、数据权限写操作绕过、软删唯一约束、空值边界、事务范围、敏感信息脱敏与死代码残留。
 - 多智能体协作时，编写代码的执行者与最终审查者分离，主会话负责集成冲突消解与终态验证。
 
 ### 6. 提交前门禁与小 PR（Pre-Commit & Small PR）
@@ -105,9 +107,9 @@ git worktree remove ../06kuangjiaxin-wt-feature
 | 变更层面 | 本地必跑门禁 | 对应线上 CI 任务 |
 | --- | --- | --- |
 | Java 源码、SQL、Maven 依赖或环境变量 | `mvn -B -ntp -Pquality-gate verify` | `backend (Maven quality-gate)` |
-| Vue、TypeScript、工作区包清单或 ESLint | `pnpm check:type`、`CI=true pnpm lint`、`pnpm test:unit`、`pnpm build:ele` | `frontend (unit + typecheck + lint + build)` |
+| Vue、TypeScript、OpenAPI 契约、工作区包清单或 ESLint | `pnpm api:check`、`pnpm quality:workspace`、`pnpm quality:development`、`pnpm check:circular`、`pnpm check:dep`、`pnpm check:type`、`CI=true pnpm lint`、`pnpm test:unit`、`pnpm build:ele`、`pnpm quality:prod-scan` | `frontend (unit + typecheck + lint + build)` |
 | Markdown 文档、README、Skill 或代码注释 | `python -B -X utf8 scripts/workflow/run_checks.py --group docs`、`check_staged_quality.py` | `docs + comments` |
-| Python 质量脚本、本地引导工具或跨栈约束 | `python -B -X utf8 -m pytest scripts/tests` | `pytest (scripts/tests)` |
+| Python 质量脚本、脚手架工具或跨栈约束 | `python -B -X utf8 -m pytest scripts/tests` | `pytest (scripts/tests)` |
 | 配置文件、测试夹具与任意新增变更 | `python -B -X utf8 scripts/security/scan_staged_secrets.py` | `secrets scan (staged-equivalent)` |
 
 -----

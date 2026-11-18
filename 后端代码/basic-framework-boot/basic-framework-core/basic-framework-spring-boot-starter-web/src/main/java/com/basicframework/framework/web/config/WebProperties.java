@@ -10,6 +10,7 @@ import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import java.net.InetAddress;
 import java.util.List;
 
 /**
@@ -42,10 +43,13 @@ public class WebProperties {
     private Ui adminUi;
 
     /**
-     * CORS 允许的源地址列表，支持 Ant 风格通配符
-     * 生产环境应配置为具体域名
+     * CORS 允许的源地址列表，支持 Ant 风格通配符。
+     * 默认仅放行本地开发前端入口，生产环境通过环境变量显式指定受信域名，避免凭据跨域与通配符并存。
      */
-    private List<String> corsAllowedOrigins = List.of("*");
+    @NotEmpty(message = "CORS 允许源列表不能为空")
+    private List<String> corsAllowedOrigins = List.of(
+            "http://localhost:5175",
+            "http://" + InetAddress.getLoopbackAddress().getHostAddress() + ":5175");
 
     /**
      * API 路径映射配置

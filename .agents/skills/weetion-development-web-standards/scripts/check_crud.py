@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""跨平台校验 Vue Vben Admin CRUD 模块的文件完整性、别名导入与类型检查。
+"""跨平台校验 Vue Vben Admin CRUD 模块的文件完整性、导入层级与类型检查。
 
 用法（在管理前端根目录 前端代码/basic-framework-admin 下执行）：
   python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts/check_crud.py <api-path> <views-path>
@@ -95,9 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("通过：TypeScript 类型检查")
 
-    # 步骤 2：必需文件检查
+    # 步骤 2：必需文件检查（API 类型允许内聚在 index.ts 或独立 types.ts）
     required_files = [
-        api_path / "types.ts",
         api_path / "index.ts",
         view_path / "index.vue",
         view_path / "modules" / "form.vue",
@@ -110,15 +109,17 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"通过：存在 {required.as_posix()}")
 
-    # 步骤 3：禁止跨级相对路径导入
-    relative_hits = scan_lines([view_path, api_path], "../")
+    # 步骤 3：禁止跨模块多级相对路径（模块内 modules/form.vue 引用 ../data 合法，禁止 ../../ 越界）
+    relative_hits = scan_lines([view_path, api_path], "../../") + scan_lines(
+        [api_path], "../"
+    )
     if relative_hits:
-        print("错误：发现跨级相对路径，请改用 #/ 别名：", file=sys.stderr)
+        print("错误：发现越界相对路径，跨模块引用请改用 #/ 别名：", file=sys.stderr)
         for item in relative_hits:
             print(f"  {item}", file=sys.stderr)
         errors += 1
     else:
-        print("通过：未发现跨级相对路径")
+        print("通过：未发现越界相对路径")
 
     # 步骤 4：提示显式 any 使用
     any_hits = scan_lines([api_path, view_path], ": any")

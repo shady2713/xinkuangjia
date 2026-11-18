@@ -1,5 +1,5 @@
 ---
-description: "说明管理后台 SM2 密码传输、服务端密钥配置、密码存储兼容迁移、等保二级密码策略、登录会话空闲超时、安全审计、短信登录限流和 Redis 降级行为。"
+description: "说明管理后台 SM2 密码传输、服务端密钥配置、BCrypt 密码存储、等保二级密码策略、登录会话空闲超时、安全审计、短信登录限流和 Redis 降级行为。"
 kind: package-reference
 ---
 
@@ -7,7 +7,7 @@ kind: package-reference
 
 ## 摘要
 
-管理后台所有提交用户密码的接口不再接收前端 MD5 摘要，改为 SM2 密文。前端用服务端公钥按 C1C3C2 模式加密 `{"p":密码,"t":时间戳,"n":nonce}`，后端用 BouncyCastle 私钥解密，并校验时间窗和 nonce 一次性。密码仍以 BCrypt 存储，历史 `bcrypt(md5(明文))` 在登录成功时自动升级。密码复杂度、失败锁定、首次改密、会话空闲超时和安全审计按等保二级要求落在后端；短信登录按手机号与 IP 双维度限流；默认 OAuth2 客户端停用，管理后台改用内部会话客户端。
+管理后台所有提交用户密码的接口统一接收 SM2 密文。前端用服务端公钥按 C1C3C2 模式加密 `{"p":密码,"t":时间戳,"n":nonce}`，后端用 BouncyCastle 私钥解密，并校验时间窗和 nonce 一次性。密码统一以 BCrypt 存储。密码复杂度、失败锁定、首次改密、会话空闲超时和安全审计按等保二级要求落在后端；短信登录按手机号与 IP 双维度限流；管理后台登录与刷新统一使用代码内置的内部会话客户端。
 
 ## 目录
 
@@ -15,7 +15,7 @@ kind: package-reference
 - [配置项](#配置项)
 - [密钥生成与注入](#密钥生成与注入)
 - [覆盖的接口](#覆盖的接口)
-- [密码存储与兼容迁移](#密码存储与兼容迁移)
+- [密码存储](#密码存储)
 - [等保二级密码策略](#等保二级密码策略)
 - [登录会话与空闲超时](#登录会话与空闲超时)
 - [令牌吊销](#令牌吊销)
@@ -94,7 +94,6 @@ node -e "const {sm2}=require('sm-crypto'); const k=sm2.generateKeyPairHex(); con
 | 入口 | 字段 | 说明 |
 | --- | --- | --- |
 | `POST /system/auth/login`、`POST /system/auth/super-admin-login` | `password` | 账号密码登录 |
-| `POST /system/auth/register` | `password` | 注册 |
 | `POST /system/auth/reset-password` | `password` | 短信重置密码 |
 | `PUT /system/user/profile/update-password` | `oldPassword`、`newPassword` | 个人修改密码 |
 | `POST /system/user/create` | `password` | 管理员创建用户 |
@@ -102,25 +101,9 @@ node -e "const {sm2}=require('sm-crypto'); const k=sm2.generateKeyPairHex(); con
 
 OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露对应 HTTP 入口；新增入口时必须复用同一套 SM2 传输服务。
 
-## 密码存储与兼容迁移
+## 密码存储
 
-现状：`AdminUserServiceImpl` 注入 Spring Security 的 `BCryptPasswordEncoder`，强度取 `basic-framework.security.password-encoder-length`，默认 10；DAL 字段为 `system_users.password`。BCrypt 自带盐，不需要额外盐字段。等保二级不强制密码存储使用国密算法，因此保留 BCrypt。
-
-前端旧方案提交 `md5(明文)`，后端用 BCrypt 存储，所以历史哈希实际是 `bcrypt(md5(明文))`。本次登录流程为：
-
-1. 先按新格式校验 `BCrypt.matches(明文, hash)`。
-2. 失败后按历史格式校验 `BCrypt.matches(md5(明文), hash)`。
-3. 历史格式通过时立即用 `BCrypt(明文)` 重写该用户 hash，再继续登录。
-
-兼容代码位于 `AdminUserServiceImpl.isPasswordMatchLegacy` 和 `AuthServiceImpl.authenticate`。建议在存量账号完成一次成功登录后，设置迁移截止日期并删除兼容分支；届时从未登录的旧账号需要管理员重置密码。MD5 只作为历史输入，不参与新的传输或存储。
-
-旧库升级步骤：
-
-1. 备份数据库并确认恢复方式。
-2. 执行 [V202611042000__system_add_password_change_required.sql](../../数据库文件/V202611042000__system_add_password_change_required.sql)。
-3. 执行 [V202611051200__system_harden_default_oauth2_client.sql](../../数据库文件/V202611051200__system_harden_default_oauth2_client.sql)，停用默认 OAuth2 客户端并补充审计字典。
-4. 注入 `SM2_PRIVATE_KEY` 后滚动重启后端；升级会清理默认客户端令牌，旧会话需要重新登录。
-5. 管理员创建或重置密码后，用户首次登录会被要求改密；存量非空密码账号首次登录时自动升级哈希。
+`AdminUserServiceImpl` 注入 Spring Security 的 `BCryptPasswordEncoder`，强度取 `basic-framework.security.password-encoder-length`（默认 10），持久化字段为 `system_users.password`。BCrypt 自带随机盐，不需要独立盐字段；若外部导入的账号哈希为 `bcrypt(md5(明文))`，首次登录校验通过后会自动重写为标准 `BCrypt(明文)`。
 
 ## 等保二级密码策略
 
@@ -130,13 +113,13 @@ OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露�
 - 只允许可见 ASCII 字符，不允许空格、控制字符和非 ASCII 字符；
 - 大写字母、小写字母、数字、特殊字符四类中至少包含三类。
 
-规则在解密后于 Service 层执行；前端规则、提示文案和表单校验同步更新。登录不强制校验当前密码复杂度，避免历史弱密码用户无法登录；新建、注册、重置和修改密码必须通过策略。
+规则在解密后于 Service 层执行；前端规则、提示文案和表单校验同步生效。新建、重置和修改密码必须通过该策略。
 
 登录失败按账号计数，达到阈值后锁定，成功登录清零。锁定提示只说明剩余时间，不区分账号是否存在。
 
 ## 登录会话与空闲超时
 
-管理后台登录和刷新令牌使用代码内置的 `system-admin` 内部会话客户端，不再读取 `system_oauth2_client` 中的 `default` 记录。访问令牌默认 30 分钟、刷新令牌默认 30 天，配置项见[配置项](#配置项)。
+管理后台登录和刷新令牌使用代码内置的 `system-admin` 内部会话客户端，不读取 `system_oauth2_client` 中的外部客户端记录。访问令牌默认 30 分钟、刷新令牌默认 30 天，配置项见[配置项](#配置项)。
 
 空闲超时按访问令牌的最后活动时间计算，默认 30 分钟：
 
@@ -146,8 +129,6 @@ OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露�
 4. 退出登录、改密、重置密码、删除用户和刷新令牌时同步删除活动标记。
 
 空闲校验只作用于 `system-admin` 内部会话客户端，开放接口客户端继续使用各自登记的有效期。校验在后端强制执行，前端无需额外空闲计时；前端现有 401 刷新拦截仍可在空闲窗口内正常续期，超过窗口后刷新失败并回到登录页。`SESSION_IDLE_TIMEOUT=0` 可关闭空闲校验，但访问令牌有效期仍然生效。Redis 不可用时空闲校验失败关闭，见 [Redis 不可用时的行为](#redis-不可用时的行为)。
-
-升级后旧版本签发的访问令牌没有活动标记，第一次请求会被判定为空闲超时，用户需要重新登录一次；这是强制新会话策略的预期结果。
 
 ## 令牌吊销
 
@@ -177,7 +158,7 @@ OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露�
 | SM2 nonce 重放 | `302` 密码传输校验 | `71` 重放被拒绝 |
 | 防重放依赖不可用 | `302` 密码传输校验 | `72` Redis 不可用导致校验失败 |
 
-字典数据 `system_login_type` 和 `system_login_result` 包含上述编码；存量库通过 [V202611051200__system_harden_default_oauth2_client.sql](../../数据库文件/V202611051200__system_harden_default_oauth2_client.sql) 幂等补充。
+字典数据 `system_login_type` 和 `system_login_result` 已在初始化 SQL [`basic_framework.sql`](../../数据库文件/basic_framework.sql) 中预置上述编码。
 
 ## 短信登录限流
 
@@ -212,21 +193,21 @@ OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露�
 
 ## 默认 OAuth2 客户端
 
-空库基线和存量迁移都会停用 `client_id='default'` 的 OAuth2 客户端：状态置为停用，授权类型和回调地址清空，并删除该客户端已签发的访问令牌和刷新令牌。管理后台登录、刷新令牌和权限查询不读取该记录，前端也没有依赖 `client_id=default` 的登录流程；SSO 授权页示例已改为占位客户端编号。
+初始化 SQL 基线默认停用 `client_id='default'` 的外部 OAuth2 客户端（状态为停用，授权类型和回调地址为空）。管理后台登录、刷新令牌和权限查询不读取该记录；SSO 授权页按实际接入的外部客户端编号校验。
 
-后端同时拒绝 `default` 客户端残留的访问令牌和刷新令牌，即使迁移尚未执行或 Redis 仍缓存旧令牌，也不会继续放行。管理后台使用代码内置的 `system-admin` 内部会话客户端：不落库、不校验客户端密钥、授权类型为空，只能由登录和刷新流程签发令牌，不能通过开放接口换取令牌。有效期来自 `basic-framework.security.session`。
+后端同时拒绝 `default` 客户端签发的访问令牌和刷新令牌。管理后台统一使用代码内置的 `system-admin` 内部会话客户端：不落库、不校验客户端密钥、授权类型为空，只能由登录和刷新流程签发令牌，不能通过开放接口换取令牌。有效期来自 `basic-framework.security.session`。
 
 ## 首次改密
 
 `system_users.password_change_required` 字段标记是否必须先改密：
 
 - 管理员创建用户、管理员重置密码、导入初始密码时置为 `1`；
-- 用户自行修改密码、短信重置密码、注册时置为 `0`；
+- 用户自行修改密码、短信重置密码时置为 `0`；
 - 登录响应和 `/system/auth/get-permission-info` 返回该标志；
 - 前端路由守卫强制跳转 `/change-password`；
 - 后端 `PasswordChangeRequiredFilter` 对已登录且标志为 `1` 的请求返回 403，只放行登录、刷新、权限信息、个人中心读取和修改密码等必要入口。
 
-初始化 SQL 中管理员密码 hash 仍为空，必须由受控 provisioning 写入；该账号的 `password_change_required` 初始为 `1`。`system.user.init-password` 不再包含任何明文线索，导入前必须由管理员在系统中设置符合策略的初始密码。
+初始化 SQL 中管理员密码 hash 为空，由部署受控 provisioning（或本地环回开发环境的 `scripts/runtime/seed_local_dev.py --apply`）写入；该账号的 `password_change_required` 初始为 `1`。`system.user.init-password` 默认为空，导入前必须由管理员在系统中设置符合策略的初始密码。
 
 ## 验证入口
 

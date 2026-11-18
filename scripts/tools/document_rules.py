@@ -41,7 +41,7 @@ RULES = {
     "runtime_kinds": ["package-reference", "package-library", "package-bundle"],
     "model_readmes": [],
     "developer_headings": ["理解实现", "实现细节", "开发者细节", "运行原理与维护"],
-    "forbidden_terms": [],
+    "forbidden_terms": ["AIMaster", "xinkuangjia", "yudao", "ruoyi", "芋道", "胖友", "代码生成器"],
     "forbidden_skill_prefixes": [],
     "forbidden_skill_names": [],
     "forbidden_reference_dirs": [".agents/notes/implemented/process/"],

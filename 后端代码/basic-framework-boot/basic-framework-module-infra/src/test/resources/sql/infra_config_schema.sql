@@ -11,5 +11,7 @@ CREATE TABLE IF NOT EXISTS infra_config (
     create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updater VARCHAR(64) DEFAULT '',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted SMALLINT NOT NULL DEFAULT 0
+    deleted SMALLINT NOT NULL DEFAULT 0,
+    deleted_tag BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT uk_config_key UNIQUE (config_key, deleted_tag)
 );

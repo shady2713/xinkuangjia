@@ -146,7 +146,7 @@ public class RoleController {
     @GetMapping("/page")
     @Operation(summary = "获得角色分页")
     @PreAuthorize("@ss.hasPermission('system:role:query')")
-    public CommonResult<PageResult<RoleRespVO>> getRolePage(RolePageReqVO pageReqVO) {
+    public CommonResult<PageResult<RoleRespVO>> getRolePage(@Valid RolePageReqVO pageReqVO) {
         pageReqVO.setRoleType(getLoginUserType());
         PageResult<RoleDO> pageResult = roleService.getRolePage(pageReqVO);
         return success(BeanUtils.toBean(pageResult, RoleRespVO.class));
@@ -155,27 +155,17 @@ public class RoleController {
     /**
      * 获取当前平台角色的下拉数据。
      *
-     * <p>只返回编号、名称和状态，供表单禁用停用角色。不返回数据权限范围。</p>
-     *
-     * @return 角色精简列表
-     */
-    @GetMapping("/list-all-simple")
-    @Operation(summary = "获取角色精简信息列表", description = "包含所有状态的角色，主要用于前端的下拉选项")
-    public CommonResult<List<RoleSimpleRespVO>> getSimpleRoleList() {
-        List<RoleDO> list = roleService.getRoleListByRoleType(getLoginUserType());
-        list.sort(Comparator.comparing(RoleDO::getSort));
-        return success(BeanUtils.toBean(list, RoleSimpleRespVO.class));
-    }
-
-    /**
-     * 以兼容路径返回当前平台角色的下拉数据，结果与 {@link #getSimpleRoleList()} 相同。
+     * <p>只返回编号、名称和状态，供表单禁用停用角色，不暴露数据权限范围。</p>
      *
      * @return 角色精简列表
      */
     @GetMapping("/simple-list")
     @Operation(summary = "获取角色精简信息列表", description = "包含所有状态的角色，主要用于前端的下拉选项")
-    public CommonResult<List<RoleSimpleRespVO>> getSimpleRoleListCompatible() {
-        return getSimpleRoleList();
+    @PreAuthorize("@ss.hasAnyPermissions('system:role:query', 'system:user:query', 'system:permission:assign-user-role')")
+    public CommonResult<List<RoleSimpleRespVO>> getSimpleRoleList() {
+        List<RoleDO> list = roleService.getRoleListByRoleType(getLoginUserType());
+        list.sort(Comparator.comparing(RoleDO::getSort));
+        return success(BeanUtils.toBean(list, RoleSimpleRespVO.class));
     }
 
     /**

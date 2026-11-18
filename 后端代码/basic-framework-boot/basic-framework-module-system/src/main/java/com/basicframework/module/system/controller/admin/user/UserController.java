@@ -201,12 +201,13 @@ public class UserController {
     }
 
     /**
-     * 获取精简数据用户列表。
+     * 返回当前登录平台下已启用后台用户及所属部门名称摘要列表，供负责人或审计筛选下拉框使用。
      *
-     * @return 查询结果
+     * @return 已启用用户的编号、昵称与部门摘要列表
      */
-    @GetMapping({"/list-all-simple", "/simple-list"})
+    @GetMapping("/simple-list")
     @Operation(summary = "获取用户精简信息列表", description = "只包含被开启的用户，主要用于前端的下拉选项")
+    @PreAuthorize("@ss.hasAnyPermissions('system:user:query', 'system:dept:query', 'system:operate-log:query')")
     public CommonResult<List<UserSimpleRespVO>> getSimpleUserList() {
         String loginUserType = getLoginUserType();
         List<AdminUserDO> list = userService.getUserListByStatusAndType(
