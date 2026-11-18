@@ -1,8 +1,12 @@
 package com.basicframework.server.archunit;
 
+import com.basicframework.framework.footgun.ForbiddenCoreModuleDependency;
+import com.basicframework.module.system.controller.admin.footgun.ForbiddenDoExposureController;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenMapperAccessController;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenPublicEndpointController;
+import com.basicframework.module.system.dal.dataobject.footgun.ForbiddenFootgunDO;
 import com.basicframework.module.system.dal.mysql.footgun.ForbiddenFootgunMapper;
+import com.basicframework.module.system.service.footgun.ForbiddenGenericExceptionAndJulUsage;
 import com.basicframework.module.system.service.footgun.ForbiddenStandardStreamUsage;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -67,5 +71,43 @@ class FootgunArchitectureFailureTest {
     void printStackTraceUsageFails() {
         JavaClasses classes = importFixtures(ForbiddenStandardStreamUsage.class);
         assertViolated(FootgunRules.noPrintStackTrace().evaluate(classes), "ForbiddenStandardStreamUsage");
+    }
+
+    /** 公共基础层 core 依赖业务 module 必须失败。 */
+    @Test
+    void coreDependingOnBusinessModuleFails() {
+        JavaClasses classes = importFixtures(
+                ForbiddenCoreModuleDependency.class, ForbiddenFootgunMapper.class);
+        assertViolated(
+                FootgunRules.coreMustNotDependOnModulesOrServer().evaluate(classes),
+                "ForbiddenCoreModuleDependency");
+    }
+
+    /** 控制器 HTTP 端点在泛型返回类型中暴露持久化 DO 必须失败。 */
+    @Test
+    void controllerExposingDoInEndpointSignatureFails() {
+        JavaClasses classes = importFixtures(
+                ForbiddenDoExposureController.class, ForbiddenFootgunDO.class);
+        assertViolated(
+                FootgunRules.controllerEndpointsMustNotExposeDataObjects().evaluate(classes),
+                "ForbiddenDoExposureController");
+    }
+
+    /** 业务模块直接抛出裸 RuntimeException 必须失败。 */
+    @Test
+    void businessModuleThrowingGenericExceptionFails() {
+        JavaClasses classes = importFixtures(ForbiddenGenericExceptionAndJulUsage.class);
+        assertViolated(
+                FootgunRules.businessModulesMustNotThrowGenericExceptions().evaluate(classes),
+                "ForbiddenGenericExceptionAndJulUsage");
+    }
+
+    /** 产品代码使用 java.util.logging 必须失败。 */
+    @Test
+    void legacyJulLoggingFails() {
+        JavaClasses classes = importFixtures(ForbiddenGenericExceptionAndJulUsage.class);
+        assertViolated(
+                FootgunRules.noLegacyLoggingApis().evaluate(classes),
+                "ForbiddenGenericExceptionAndJulUsage");
     }
 }

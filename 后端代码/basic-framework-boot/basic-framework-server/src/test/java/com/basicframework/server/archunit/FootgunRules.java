@@ -10,6 +10,7 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.library.GeneralCodingRules;
 import jakarta.annotation.security.PermitAll;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.Set;
 
@@ -154,5 +155,88 @@ final class FootgunRules {
                     }
                 })
                 .because("名单外新增 @PermitAll 端点必须失败，防止意外公开接口");
+    }
+
+    /**
+     * 公共基础层 core 不得反向依赖业务模块或启动装配模块。
+     *
+     * @return 模块单向依赖规则
+     */
+    static ArchRule coreMustNotDependOnModulesOrServer() {
+        return noClasses()
+                .that().resideInAPackage("com.basicframework.framework..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("com.basicframework.module..", "com.basicframework.server..")
+                .because("basic-framework-core 必须保持业务无关，不得依赖 module 或 server");
+    }
+
+    /**
+     * 判断方法是否声明了 Spring MVC 路由映射注解（含 {@code @GetMapping} 等派生注解）。
+     *
+     * @return 路由端点方法谓词
+     */
+    private static DescribedPredicate<JavaMethod> isRequestMappingEndpoint() {
+        return new DescribedPredicate<JavaMethod>("声明 Spring MVC 路由映射注解") {
+            @Override
+            public boolean test(JavaMethod method) {
+                return method.isAnnotatedWith(RequestMapping.class)
+                        || method.isMetaAnnotatedWith(RequestMapping.class);
+            }
+        };
+    }
+
+    /**
+     * 控制器 HTTP 端点的入参和返回值（含泛型类型实参）不得直接暴露持久化 DO。
+     * 允许控制器在方法内部引用 DO 完成 VO 转换，兼顾存量实现与对外契约边界。
+     *
+     * @return HTTP 契约与持久化对象隔离规则
+     */
+    static ArchRule controllerEndpointsMustNotExposeDataObjects() {
+        return methods()
+                .that().areDeclaredInClassesThat().resideInAPackage("..controller..")
+                .and(isRequestMappingEndpoint())
+                .should(new ArchCondition<JavaMethod>("不在 HTTP 参数或返回类型中暴露 dal.dataobject 类型") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        for (JavaClass involved : method.getAllInvolvedRawTypes()) {
+                            if (involved.getPackageName().contains(".dal.dataobject")) {
+                                events.add(SimpleConditionEvent.violated(
+                                        method,
+                                        "HTTP 端点签名直接暴露持久化对象 " + involved.getName()
+                                                + "：" + method.getFullName()));
+                            }
+                        }
+                    }
+                })
+                .because("HTTP 请求和响应契约必须使用 VO/DTO，禁止直接暴露持久化 DO");
+    }
+
+    /**
+     * 业务模块禁止直接抛出未分类的裸 {@code RuntimeException}、{@code Exception}、{@code Throwable} 或 {@code Error}。
+     * 底层 core 组件包装受检异常的边界保持豁免。
+     *
+     * @return 业务异常规范规则
+     */
+    static ArchRule businessModulesMustNotThrowGenericExceptions() {
+        return noClasses()
+                .that().resideInAPackage("com.basicframework.module..")
+                .should(GeneralCodingRules.THROW_GENERIC_EXCEPTIONS)
+                .because("业务模块应抛出 ServiceException 或明确定义的领域异常，禁止直接抛裸通用异常");
+    }
+
+    /**
+     * 产品代码统一通过 SLF4J 记录日志，禁止直接依赖 JUL、Commons Logging 或 Log4j 实现包。
+     *
+     * @return 日志门面统一规则
+     */
+    static ArchRule noLegacyLoggingApis() {
+        return noClasses()
+                .that().resideInAPackage("com.basicframework..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage(
+                        "java.util.logging..",
+                        "org.apache.commons.logging..",
+                        "org.apache.logging.log4j..")
+                .because("产品代码统一使用 SLF4J 日志门面，禁止混用旧日志 API");
     }
 }
