@@ -3,9 +3,10 @@ package com.basicframework.module.system.dal.dataobject.sms;
 
 import com.basicframework.module.system.enums.sms.SmsTemplateTypeEnum;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
@@ -25,11 +26,12 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class SmsTemplateDO extends BaseDO {
+public class SmsTemplateDO extends UniqueBaseDO {
 
     /**
      * 自增编号。
      */
+    @TableId
     private Long id;
 
     // ========= 模板相关字段 =========

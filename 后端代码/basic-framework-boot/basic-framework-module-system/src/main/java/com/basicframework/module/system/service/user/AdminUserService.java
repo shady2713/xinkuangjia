@@ -3,7 +3,6 @@ package com.basicframework.module.system.service.user;
 import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.collection.CollectionUtils;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdateReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserImportExcelVO;
@@ -33,14 +32,6 @@ public interface AdminUserService {
      * @return 用户编号
      */
     Long createUser(@Valid UserSaveReqVO createReqVO, String userType);
-
-    /**
-     * 注册用户
-     *
-     * @param registerReqVO 用户信息
-     * @return 用户编号
-     */
-    Long registerUser(@Valid AuthRegisterReqVO registerReqVO);
 
     /**
      * 修改用户

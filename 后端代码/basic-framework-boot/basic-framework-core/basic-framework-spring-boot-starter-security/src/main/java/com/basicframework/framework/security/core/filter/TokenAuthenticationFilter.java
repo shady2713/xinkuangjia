@@ -58,7 +58,7 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
         if (StrUtil.isNotEmpty(token)) {
             Integer userType = WebFrameworkUtils.getLoginUserType(request);
             try {
-                // 基于标准 token 校验结果构建登录用户，开源版不再保留 mock 登录兜底能力。
+                // 基于访问令牌校验结果构建当前登录用户上下文。
                 LoginUser loginUser = buildLoginUserByToken(token, userType);
                 // 仅在标准 token 校验通过时写入当前登录用户。
                 if (loginUser != null) {

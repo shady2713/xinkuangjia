@@ -15,13 +15,8 @@
         <module>basic-framework-spring-boot-starter-redis</module>
         <module>basic-framework-spring-boot-starter-web</module>
         <module>basic-framework-spring-boot-starter-security</module>
-
-        <module>basic-framework-spring-boot-starter-protection</module>
         <module>basic-framework-spring-boot-starter-job</module>
-
         <module>basic-framework-spring-boot-starter-excel</module>
-
-
         <module>basic-framework-spring-boot-starter-biz-data-permission</module>
         <module>basic-framework-spring-boot-starter-biz-ip</module>
     </modules>

@@ -78,7 +78,8 @@ public class RoleServiceImpl implements RoleService {
         role.setRoleType(AdminPlatformTypeEnum.defaultType(createReqVO.getRoleType()));
         role.setType(ObjectUtil.defaultIfNull(type, RoleTypeEnum.CUSTOM.getType()));
         role.setStatus(ObjUtil.defaultIfNull(createReqVO.getStatus(), CommonStatusEnum.ENABLE.getStatus()));
-        role.setDataScope(DataScopeEnum.ALL.getScope()); // 默认可查看所有数据。原因是，可能一些项目不需要项目权限
+        // 默认最小权限原则，新建角色仅可查看本人数据，需更大范围时由管理员显式授权。
+        role.setDataScope(DataScopeEnum.SELF.getScope());
         roleMapper.insert(role);
 
         // 3. 记录操作日志上下文

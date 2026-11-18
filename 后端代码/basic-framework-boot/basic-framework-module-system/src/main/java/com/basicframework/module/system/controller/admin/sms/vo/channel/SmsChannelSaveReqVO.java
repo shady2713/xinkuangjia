@@ -48,7 +48,7 @@ public class SmsChannelSaveReqVO {
     /**
      * 备注。
      */
-    @Schema(description = "备注", example = "好吃！")
+    @Schema(description = "备注", example = "生产验证码通道")
     @Size(max = 255, message = "备注长度不能超过 255 个字符")
     private String remark;
 
@@ -61,9 +61,9 @@ public class SmsChannelSaveReqVO {
     private String apiKey;
 
     /**
-     * 短信 API 的密钥。
+     * 短信 API 的密钥；更新时留空表示保持原密钥不变。
      */
-    @Schema(description = "短信 API 的密钥", example = "yuanma")
+    @Schema(description = "短信 API 的密钥；更新时留空表示保持原密钥不变", example = "CHANGE_ME_API_SECRET")
     @Size(max = 128, message = "短信 API 密钥长度不能超过 128 个字符")
     private String apiSecret;
 

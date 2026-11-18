@@ -12,7 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 在质量门禁中执行后端脚枪规则：分层、标准流、堆栈打印和公开端点允许名单。
+ * 在质量门禁中执行全量后端架构规则：分层、授权完备性、模块隔离、事务边界与编码禁令。
+ *
+ * @author shady2713
  */
 @AnalyzeClasses(packages = "com.basicframework", importOptions = ImportOption.DoNotIncludeTests.class)
 class FootgunArchitectureTest {
@@ -38,10 +40,25 @@ class FootgunArchitectureTest {
     @ArchTest
     static final ArchRule permitAllMustBeAllowlisted = FootgunRules.permitAllMustBeAllowlisted();
 
+    /** 所有控制器路由端点必须显式声明 @PreAuthorize 或 @PermitAll。 */
+    @ArchTest
+    static final ArchRule controllerEndpointsMustDeclareAuthorization =
+            FootgunRules.controllerEndpointsMustDeclareAuthorization();
+
     /** 公共 core 模块不得反向依赖业务 module 或 server。 */
     @ArchTest
     static final ArchRule coreMustNotDependOnModulesOrServer =
             FootgunRules.coreMustNotDependOnModulesOrServer();
+
+    /** 业务模块间不得跨模块访问对方内部实现包。 */
+    @ArchTest
+    static final ArchRule businessModulesMustNotCrossDependOnInternals =
+            FootgunRules.businessModulesMustNotCrossDependOnInternals();
+
+    /** 所有 @Transactional 方法必须显式声明 rollbackFor。 */
+    @ArchTest
+    static final ArchRule transactionalMustDeclareRollbackFor =
+            FootgunRules.transactionalMustDeclareRollbackFor();
 
     /** 控制器 HTTP 端点签名不得直接暴露持久化 DO。 */
     @ArchTest

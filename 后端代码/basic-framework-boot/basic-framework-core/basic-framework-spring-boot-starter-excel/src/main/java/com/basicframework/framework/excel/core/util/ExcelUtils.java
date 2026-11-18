@@ -2,6 +2,7 @@ package com.basicframework.framework.excel.core.util;
 
 import cn.idev.excel.FastExcelFactory;
 import cn.idev.excel.converters.longconverter.LongStringConverter;
+import cn.idev.excel.enums.CellDataTypeEnum;
 import com.basicframework.framework.excel.core.handler.ColumnWidthMatchStyleStrategy;
 import com.basicframework.framework.excel.core.handler.SelectSheetWriteHandler;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,7 +39,7 @@ public class ExcelUtils {
                 .autoCloseStream(false) // 不要自动关闭，交给 Servlet 自己处理
                 .registerWriteHandler(new ColumnWidthMatchStyleStrategy()) // 基于 column 长度，自动适配。最大 255 宽度
                 .registerWriteHandler(new SelectSheetWriteHandler(head)) // 基于固定 sheet 实现下拉框
-                .registerConverter(new LongStringConverter()) // 避免 Long 类型丢失精度
+                .registerConverter(new LongPlainStringWriteConverter()) // 覆盖默认 LongNumberConverter 键，防止 64 位雪花主键丢失精度
                 .sheet(sheetName).doWrite(data);
         // 设置 header 和 contentType。写在最后的原因是，避免报错时，响应 contentType 已经被修改了
         response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(filename, StandardCharsets.UTF_8));
@@ -61,6 +62,24 @@ public class ExcelUtils {
                     .autoCloseStream(false) // 不要自动关闭，交给 Servlet 自己处理
                     .doReadAllSync();
         }
+    }
+
+    /**
+     * 将 {@link #supportExcelTypeKey()} 声明为 {@code null}，使 FastExcel 写出阶段真正覆盖默认的
+     * {@code (Long.class, null)} 数值转换器，按完整十进制字符串写出 64 位整数。
+     */
+    private static final class LongPlainStringWriteConverter extends LongStringConverter {
+
+        /**
+         * 返回 {@code null} 以绑定 FastExcel 默认写出转换器映射键。
+         *
+         * @return 固定返回 {@code null}
+         */
+        @Override
+        public CellDataTypeEnum supportExcelTypeKey() {
+            return null;
+        }
+
     }
 
 }

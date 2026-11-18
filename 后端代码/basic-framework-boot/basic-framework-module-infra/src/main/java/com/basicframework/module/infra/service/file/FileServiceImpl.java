@@ -197,8 +197,15 @@ public class FileServiceImpl implements FileService {
     @Override
     @SneakyThrows
     public FilePresignedUrlRespVO presignPutUrl(String name, String directory) {
-        // 预签名上传同样复用统一的路径生成规则，避免和直接上传路径不一致。
-        String path = generateUploadPath(name, directory);
+        String normalizedName = FilePathUtils.normalizeFileName(name);
+        if (!FilePathUtils.isFileNameValid(normalizedName)) {
+            throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
+        }
+        // 预签名直传前置校验扩展名白名单，阻止向对象存储申请 .html/.svg 等可执行后缀的直传签名。
+        if (!FileTypeUtils.isAllowedUploadFileName(normalizedName)) {
+            throw exception(ErrorCodeConstants.FILE_TYPE_NOT_ALLOWED);
+        }
+        String path = generateUploadPath(normalizedName, directory);
 
         // 同时返回上传地址和访问地址，前端上传后可以直接使用访问地址预览。
         String uploadUrl = fileStorageService.presignPutUrl(path);
@@ -236,11 +243,26 @@ public class FileServiceImpl implements FileService {
                 || !FilePathUtils.isFileNameValid(createReqVO.getName())) {
             throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
         }
+        String pathExt = FileTypeUtils.getFileExtension(createReqVO.getPath());
+        String nameExt = FileTypeUtils.getFileExtension(createReqVO.getName());
+        // 校验对象路径后缀与原始文件名后缀一致且符合上传类型白名单，防止预签名阶段与登记阶段掉包路径后缀。
+        if (!StrUtil.equals(pathExt, nameExt)
+                || !FileTypeUtils.isAllowedUploadMetadata(createReqVO.getName(), createReqVO.getType())) {
+            throw exception(ErrorCodeConstants.FILE_TYPE_NOT_ALLOWED);
+        }
+        if (createReqVO.getSize() == null
+                || createReqVO.getSize() <= 0
+                || createReqVO.getSize() > FilePathUtils.MAX_UPLOAD_BYTES) {
+            throw exception(ErrorCodeConstants.FILE_TOO_LARGE);
+        }
         if (!FilePathUtils.isMimeTypeValid(createReqVO.getType())) {
             throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
         }
         FileDO file = BeanUtils.toBean(createReqVO, FileDO.class);
-        // 只持久化受控对象存储生成的稳定 URL，客户端 URL 仅为旧协议兼容字段。
+        if (StrUtil.isBlank(file.getType())) {
+            file.setType(FileTypeUtils.getMineType(createReqVO.getName()));
+        }
+        // 只持久化受控对象存储生成的稳定 URL，不采信客户端提交的任意外部地址。
         file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
         if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
             throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);

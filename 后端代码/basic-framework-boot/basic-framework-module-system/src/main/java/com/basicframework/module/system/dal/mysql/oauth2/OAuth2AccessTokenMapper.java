@@ -9,6 +9,8 @@ import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenD
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -46,9 +48,25 @@ public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO
      * @return 查询结果
      */
     default PageResult<OAuth2AccessTokenDO> selectPage(OAuth2AccessTokenPageReqVO reqVO) {
+        return selectPage(reqVO, (Collection<Long>) null);
+    }
+
+    /**
+     * 按允许的用户编号范围过滤查询有效令牌分页；当 {@code allowedAdminUserIds} 非 null 且为空集合时直接返回空分页。
+     *
+     * @param reqVO 分页条件
+     * @param allowedAdminUserIds 当前平台允许访问的后台用户编号集合；为 null 时不额外限制
+     * @return 令牌分页结果
+     */
+    default PageResult<OAuth2AccessTokenDO> selectPage(OAuth2AccessTokenPageReqVO reqVO,
+                                                       Collection<Long> allowedAdminUserIds) {
+        if (allowedAdminUserIds != null && allowedAdminUserIds.isEmpty()) {
+            return new PageResult<>(Collections.emptyList(), 0L);
+        }
         return selectPage(reqVO, new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
                 .eqIfPresent(OAuth2AccessTokenDO::getUserId, reqVO.getUserId())
                 .eqIfPresent(OAuth2AccessTokenDO::getUserType, reqVO.getUserType())
+                .inIfPresent(OAuth2AccessTokenDO::getUserId, allowedAdminUserIds)
                 .likeIfPresent(OAuth2AccessTokenDO::getClientId, reqVO.getClientId())
                 .gt(OAuth2AccessTokenDO::getExpiresTime, LocalDateTime.now())
                 .orderByDesc(OAuth2AccessTokenDO::getId));

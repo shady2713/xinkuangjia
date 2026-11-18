@@ -2,7 +2,6 @@ package com.basicframework.module.system.service.oauth2;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
@@ -19,21 +18,29 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import com.basicframework.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.service.user.AdminUserService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception0;
 import static com.basicframework.framework.common.util.collection.CollectionUtils.convertSet;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 
 /**
  * OAuth2.0 Token Service 实现类
@@ -43,6 +50,11 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 @Service
 @Slf4j
 public class OAuth2TokenServiceImpl implements OAuth2TokenService {
+
+    /** 密码学安全随机源，用于生成 128 位不可预测的访问令牌与刷新令牌。 */
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    /** 令牌字节长度（16 字节编码为 32 位十六进制字符串，适配数据库列宽）。 */
+    private static final int TOKEN_BYTE_LENGTH = 16;
 
     @Resource
     private OAuth2AccessTokenMapper oauth2AccessTokenMapper;
@@ -86,14 +98,13 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      * @return 操作结果
      */
     @Override
-    @Transactional(noRollbackFor = ServiceException.class)
+    @Transactional(rollbackFor = Exception.class, noRollbackFor = ServiceException.class)
     public OAuth2AccessTokenDO refreshAccessToken(String refreshToken, String clientId) {
         // 查询访问令牌
         OAuth2RefreshTokenDO refreshTokenDO = oauth2RefreshTokenMapper.selectByRefreshToken(refreshToken);
         if (refreshTokenDO == null) {
             throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "无效的刷新令牌");
         }
-        // 默认客户端已停用；升级后即使迁移尚未执行，也不允许其刷新令牌继续换发访问令牌。
         if (isLegacyDefaultClient(refreshTokenDO.getClientId())) {
             throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
         }
@@ -109,7 +120,8 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         assertSessionActive(refreshTokenDO, accessTokenDOs);
         if (CollUtil.isNotEmpty(accessTokenDOs)) {
             oauth2AccessTokenMapper.deleteByIds(convertSet(accessTokenDOs, OAuth2AccessTokenDO::getId));
-            oauth2AccessTokenRedisDAO.deleteList(convertSet(accessTokenDOs, OAuth2AccessTokenDO::getAccessToken));
+            Set<String> oldTokens = convertSet(accessTokenDOs, OAuth2AccessTokenDO::getAccessToken);
+            runAfterCommitOrNow(() -> oauth2AccessTokenRedisDAO.deleteList(oldTokens));
         }
 
         // 已过期的情况下，删除刷新令牌
@@ -123,27 +135,31 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 根据访问令牌获取令牌信息。
-     *
-     * <p>刷新令牌只能用于刷新流程，不能作为 Bearer 访问令牌使用，避免绕过访问令牌有效期。</p>
+     * 根据访问令牌获取令牌信息；Redis 故障时按失败关闭抛出 401，避免穿透成 HTTP 500。
      *
      * @param accessToken 访问令牌
-     * @return 令牌信息，未找到时返回 {@code null}；过期状态由统一校验流程处理
+     * @return 令牌信息，未找到时返回 {@code null}
      */
     @Override
     public OAuth2AccessTokenDO getAccessToken(String accessToken) {
-        // 优先从 Redis 中获取
-        OAuth2AccessTokenDO accessTokenDO = oauth2AccessTokenRedisDAO.get(accessToken);
+        OAuth2AccessTokenDO accessTokenDO;
+        try {
+            accessTokenDO = oauth2AccessTokenRedisDAO.get(accessToken);
+        } catch (RuntimeException ex) {
+            log.error("[getAccessToken][Redis 读取访问令牌异常，按失败关闭处理: {}]", ex.getClass().getSimpleName());
+            throw sessionIdleTimeout();
+        }
         if (accessTokenDO != null) {
             return accessTokenDO;
         }
 
-        // 获取不到，从 MySQL 中获取访问令牌
         accessTokenDO = oauth2AccessTokenMapper.selectByAccessToken(accessToken);
-
-        // 如果在 MySQL 存在，则往 Redis 中写入
         if (accessTokenDO != null && !accessTokenDO.getExpiresTime().isBefore(LocalDateTime.now())) {
-            oauth2AccessTokenRedisDAO.set(accessTokenDO);
+            try {
+                oauth2AccessTokenRedisDAO.set(accessTokenDO);
+            } catch (RuntimeException ex) {
+                log.warn("[getAccessToken][回填访问令牌缓存失败: {}]", ex.getClass().getSimpleName());
+            }
         }
         return accessTokenDO;
     }
@@ -180,24 +196,59 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OAuth2AccessTokenDO removeAccessToken(String accessToken) {
-        // 删除访问令牌
         OAuth2AccessTokenDO accessTokenDO = oauth2AccessTokenMapper.selectByAccessToken(accessToken);
         if (accessTokenDO == null) {
             return null;
         }
-        oauth2AccessTokenMapper.deleteById(accessTokenDO.getId());
-        oauth2AccessTokenRedisDAO.delete(accessToken);
-        oauth2AccessTokenRedisDAO.deleteActive(accessToken);
-        // 删除刷新令牌
-        oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
+        revokeAccessTokenRecord(accessTokenDO);
         return accessTokenDO;
     }
 
     /**
-     * 移除访问令牌。
+     * 按令牌记录编号与操作者平台隔离吊销访问令牌。
+     *
+     * @param id 令牌记录编号
+     * @param operatorPlatformType 操作者管理平台类型
+     * @return 被移除的访问令牌；不存在时返回 null
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OAuth2AccessTokenDO removeAccessTokenById(Long id, String operatorPlatformType) {
+        if (id == null) {
+            return null;
+        }
+        OAuth2AccessTokenDO accessTokenDO = oauth2AccessTokenMapper.selectById(id);
+        if (accessTokenDO == null) {
+            return null;
+        }
+        if (UserTypeEnum.ADMIN.getValue().equals(accessTokenDO.getUserType())) {
+            String targetPlatform = adminUserService.getUserTypeOrDefault(accessTokenDO.getUserId());
+            if (!AdminPlatformTypeEnum.isSame(targetPlatform, operatorPlatformType)) {
+                throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
+        revokeAccessTokenRecord(accessTokenDO);
+        return accessTokenDO;
+    }
+
+    /**
+     * 清理数据库中的访问令牌与刷新令牌，并在事务提交后移除对应 Redis 缓存与活动标记。
+     */
+    private void revokeAccessTokenRecord(OAuth2AccessTokenDO accessTokenDO) {
+        oauth2AccessTokenMapper.deleteById(accessTokenDO.getId());
+        oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
+        String tokenValue = accessTokenDO.getAccessToken();
+        runAfterCommitOrNow(() -> {
+            oauth2AccessTokenRedisDAO.delete(tokenValue);
+            oauth2AccessTokenRedisDAO.deleteActive(tokenValue);
+        });
+    }
+
+    /**
+     * 移除指定用户的全部访问令牌与刷新令牌。
      *
      * @param userId 用户编号
-     * @param userType userType 参数
+     * @param userType 用户类型
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -205,9 +256,9 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         List<OAuth2AccessTokenDO> accessTokens = oauth2AccessTokenMapper.selectListByUserIdAndUserType(userId, userType);
         if (CollUtil.isNotEmpty(accessTokens)) {
             oauth2AccessTokenMapper.deleteByIds(convertSet(accessTokens, OAuth2AccessTokenDO::getId));
-            oauth2AccessTokenRedisDAO.deleteList(convertSet(accessTokens, OAuth2AccessTokenDO::getAccessToken));
+            Set<String> tokenValues = convertSet(accessTokens, OAuth2AccessTokenDO::getAccessToken);
+            runAfterCommitOrNow(() -> oauth2AccessTokenRedisDAO.deleteList(tokenValues));
         }
-        // 刷新令牌按用户直接删除，避免访问令牌已过期或已清理时留下可继续换发令牌的孤立记录。
         oauth2RefreshTokenMapper.deleteByUserIdAndUserType(userId, userType);
     }
 
@@ -215,7 +266,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      * 获取访问令牌分页数据。
      *
      * @param reqVO 请求参数
-     * @return 查询或转换后的结果
+     * @return 令牌分页
      */
     @Override
     public PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO) {
@@ -223,7 +274,23 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 创建OAuth2访问令牌。
+     * 按调用者管理平台隔离查询在线访问令牌分页，防止业务管理平台看见超级管理平台的在线会话。
+     *
+     * @param reqVO 分页条件
+     * @param operatorPlatformType 操作者所属管理平台类型
+     * @return 过滤后的在线令牌分页
+     */
+    @Override
+    public PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO, String operatorPlatformType) {
+        String normalizedPlatform = AdminPlatformTypeEnum.defaultType(operatorPlatformType);
+        List<AdminUserDO> platformUsers = com.basicframework.framework.datapermission.core.util.DataPermissionUtils.executeIgnore(
+                () -> adminUserService.getUserListByStatusAndType(null, normalizedPlatform));
+        Set<Long> allowedUserIds = convertSet(platformUsers, AdminUserDO::getId);
+        return oauth2AccessTokenMapper.selectPage(reqVO, allowedUserIds);
+    }
+
+    /**
+     * 创建 OAuth2 访问令牌并在事务提交后同步写入 Redis。
      */
     private OAuth2AccessTokenDO createOAuth2AccessToken(OAuth2RefreshTokenDO refreshTokenDO, OAuth2ClientDO clientDO) {
         OAuth2AccessTokenDO accessTokenDO = new OAuth2AccessTokenDO();
@@ -236,10 +303,10 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         accessTokenDO.setRefreshToken(refreshTokenDO.getRefreshToken());
         accessTokenDO.setExpiresTime(LocalDateTime.now().plusSeconds(clientDO.getAccessTokenValiditySeconds()));
         oauth2AccessTokenMapper.insert(accessTokenDO);
-        // 记录到 Redis 中
-        oauth2AccessTokenRedisDAO.set(accessTokenDO);
-        // 管理后台内部会话从创建时刻开始计算空闲窗口。
-        markActive(accessTokenDO);
+        runAfterCommitOrNow(() -> {
+            oauth2AccessTokenRedisDAO.set(accessTokenDO);
+            markActive(accessTokenDO);
+        });
         return accessTokenDO;
     }
 
@@ -281,21 +348,44 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 生成访问令牌。
+     * 使用密码学安全随机数生成器签发 128 位十六进制访问令牌。
      *
-     * @return 方法处理结果
+     * @return 32 位小写十六进制令牌
      */
     private static String generateAccessToken() {
-        return IdUtil.fastSimpleUUID();
+        byte[] bytes = new byte[TOKEN_BYTE_LENGTH];
+        SECURE_RANDOM.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
     }
 
     /**
-     * 生成Refresh令牌。
+     * 使用密码学安全随机数生成器签发 128 位十六进制刷新令牌。
      *
-     * @return 方法处理结果
+     * @return 32 位小写十六进制令牌
      */
     private static String generateRefreshToken() {
-        return IdUtil.fastSimpleUUID();
+        byte[] bytes = new byte[TOKEN_BYTE_LENGTH];
+        SECURE_RANDOM.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
+
+    /**
+     * 若当前存在活动 Spring 事务则延迟到事务成功提交后执行 Redis 同步，否则立即执行。
+     *
+     * @param action Redis 同步动作
+     */
+    private static void runAfterCommitOrNow(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                /** 事务提交后执行外部缓存同步。 */
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     /**

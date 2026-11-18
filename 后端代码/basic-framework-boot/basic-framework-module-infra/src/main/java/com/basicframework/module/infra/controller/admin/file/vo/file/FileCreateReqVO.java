@@ -4,6 +4,7 @@ import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -58,6 +59,7 @@ public class FileCreateReqVO {
      */
     @NotNull(message = "文件大小不能为空")
     @Positive(message = "文件大小必须大于 0")
+    @Max(value = FilePathUtils.MAX_UPLOAD_BYTES, message = "文件大小不能超过 50MB")
     @Schema(description = "文件大小", example = "2048", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long size;
 

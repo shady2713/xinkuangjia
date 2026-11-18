@@ -1,29 +1,31 @@
 package com.basicframework.module.system.dal.dataobject.dict;
 
 import com.basicframework.framework.common.enums.CommonStatusEnum;
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
-
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.*;
-
-import java.time.LocalDateTime;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
- * 字典类型表
+ * 字典类型表。
  *
  * @author 李杰
  */
 @TableName("system_dict_type")
-@KeySequence("system_dict_type_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。
+@KeySequence("system_dict_type_seq")
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DictTypeDO extends BaseDO {
+public class DictTypeDO extends UniqueBaseDO {
 
     /**
      * 字典主键。
@@ -39,19 +41,12 @@ public class DictTypeDO extends BaseDO {
      */
     private String type;
     /**
-     * 状态
-     *
-     * 枚举 {@link CommonStatusEnum}。
+     * 状态，参见 {@link CommonStatusEnum}。
      */
     private Integer status;
     /**
      * 备注。
      */
     private String remark;
-
-    /**
-     * 删除时间。
-     */
-    private LocalDateTime deletedTime;
 
 }

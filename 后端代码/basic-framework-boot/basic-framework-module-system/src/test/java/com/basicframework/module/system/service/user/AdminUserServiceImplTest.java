@@ -2,7 +2,6 @@ package com.basicframework.module.system.service.user;
 
 import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.exception.ServiceException;
-import com.basicframework.module.system.controller.admin.auth.vo.AuthRegisterReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
@@ -220,22 +219,18 @@ class AdminUserServiceImplTest {
         assertThat(passwordEncoder.matches("Init#Pass1", captor.getValue().getPassword())).isTrue();
     }
 
-    /** 验证注册入口由用户自行设置密码，不触发首次改密。 */
+    /** 验证更新用户时在当前数据权限范围内校验目标用户可见性，数据权限过滤返回空时拒绝越权更新。 */
     @Test
-    void registerUserClearsChangeRequiredFlag() {
-        when(configApi.getConfigValueByKey("system.user.register-enabled")).thenReturn("true");
-        when(userMapper.selectByUsernameAndUserType("registered-user",
-                AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())).thenReturn(null);
-        AuthRegisterReqVO reqVO = new AuthRegisterReqVO();
-        reqVO.setUsername("registered-user");
-        reqVO.setNickname("Registered User");
-        reqVO.setPassword("Init#Pass1");
+    void updateUserRejectsInvisibleTargetInDataScope() {
+        when(userMapper.selectById(999L)).thenReturn(null);
+        UserSaveReqVO reqVO = new UserSaveReqVO();
+        reqVO.setId(999L);
+        reqVO.setUsername("other-dept-user");
+        reqVO.setNickname("Other Dept");
 
-        userService.registerUser(reqVO);
-
-        ArgumentCaptor<AdminUserDO> captor = ArgumentCaptor.forClass(AdminUserDO.class);
-        verify(userMapper).insert(captor.capture());
-        assertThat(captor.getValue().getPasswordChangeRequired()).isFalse();
+        assertThatThrownBy(() -> userService.updateUser(reqVO, AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
+                .isInstanceOf(ServiceException.class);
+        verify(userMapper, never()).updateById(any(AdminUserDO.class));
     }
 
     /**

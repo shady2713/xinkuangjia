@@ -1,7 +1,7 @@
 package com.basicframework.module.system.dal.dataobject.user;
 
 import com.basicframework.framework.common.enums.CommonStatusEnum;
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 import com.basicframework.module.system.enums.common.SexEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableField;
@@ -26,7 +26,7 @@ import java.util.Set;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AdminUserDO extends BaseDO {
+public class AdminUserDO extends UniqueBaseDO {
 
     /**
      * 用户 ID。

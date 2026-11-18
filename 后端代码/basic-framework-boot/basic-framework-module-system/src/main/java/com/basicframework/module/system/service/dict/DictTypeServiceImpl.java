@@ -13,7 +13,6 @@ import jakarta.annotation.Resource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -27,11 +26,6 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
  */
 @Service
 public class DictTypeServiceImpl implements DictTypeService {
-
-    /**
-     * 软删除唯一索引使用的非空占位时间。
-     */
-    private static final LocalDateTime EMPTY_DELETED_TIME = LocalDateTime.of(1970, 1, 1, 0, 0);
 
     @Resource
     private ObjectProvider<DictDataService> dictDataServiceProvider;
@@ -87,7 +81,6 @@ public class DictTypeServiceImpl implements DictTypeService {
 
         // 插入字典类型
         DictTypeDO dictType = BeanUtils.toBean(createReqVO, DictTypeDO.class);
-        dictType.setDeletedTime(EMPTY_DELETED_TIME); // 唯一索引，避免 null 值
         dictTypeMapper.insert(dictType);
         return dictType.getId();
     }
@@ -124,8 +117,8 @@ public class DictTypeServiceImpl implements DictTypeService {
         if (getDictDataService().getDictDataCountByDictType(dictType.getType()) > 0) {
             throw exception(DICT_TYPE_HAS_CHILDREN);
         }
-        // 删除字典类型
-        dictTypeMapper.updateToDelete(id, LocalDateTime.now());
+        // 逻辑删除字典类型（由拦截器自动同步设置 deleted_tag = id 释放唯一索引）。
+        dictTypeMapper.deleteById(id);
     }
 
     /**
@@ -151,8 +144,8 @@ public class DictTypeServiceImpl implements DictTypeService {
             throw exception(DICT_TYPE_HAS_CHILDREN);
         }
 
-        // 校验通过后一次性更新，避免逐项计数和逐项删除造成 2N 次数据库访问。
-        dictTypeMapper.updateToDeleteByIds(distinctIds, LocalDateTime.now());
+        // 校验通过后一次性逻辑删除，避免逐项计数和逐项删除造成 2N 次数据库访问。
+        dictTypeMapper.deleteByIds(distinctIds);
     }
 
     /**

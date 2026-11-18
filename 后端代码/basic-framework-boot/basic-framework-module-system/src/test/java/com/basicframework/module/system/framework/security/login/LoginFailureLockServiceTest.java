@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ACCOUNT_LOCKED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -29,7 +32,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * 验证登录失败计数、锁定、解锁、关闭开关以及 Redis 不可用时的降级策略。
+ * 验证登录失败原子计数、锁定、解锁、关闭开关以及 Redis 不可用时的隔离本地降级策略。
  *
  * @author shady2713
  */
@@ -59,21 +62,25 @@ class LoginFailureLockServiceTest {
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
-    /** 验证首次失败写入带 TTL 的计数键。 */
+    /** 验证首次失败通过单次原子 Lua 脚本写入带毫秒 TTL 的计数键。 */
     @Test
-    void recordsFirstFailureWithExpiry() {
-        when(valueOperations.increment(anyString())).thenReturn(1L);
+    @SuppressWarnings("unchecked")
+    void recordsFirstFailureAtomicallyWithWindowMillis() {
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString())).thenReturn(1L);
 
         lockService.recordFailure("Admin");
 
-        verify(stringRedisTemplate).expire(anyString(), eq(Duration.ofMinutes(30).toMillis()),
-                eq(TimeUnit.MILLISECONDS));
+        verify(stringRedisTemplate).execute(
+                any(RedisScript.class),
+                anyList(),
+                eq(String.valueOf(Duration.ofMinutes(30).toMillis())));
     }
 
     /** 验证达到阈值后写入锁定键并清理失败计数。 */
     @Test
+    @SuppressWarnings("unchecked")
     void locksAccountAtThreshold() {
-        when(valueOperations.increment(anyString())).thenReturn(3L);
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString())).thenReturn(3L);
 
         lockService.recordFailure("Admin");
 
@@ -116,11 +123,13 @@ class LoginFailureLockServiceTest {
         verify(stringRedisTemplate, never()).delete(anyString());
     }
 
-    /** 验证 Redis 不可用且策略为本地兜底时，仍能按内存计数锁定账号。 */
+    /** 验证 Redis 不可用且策略为本地兜底时，仍能按内存计数锁定账号，且随机账号刷计数不会挤出已锁定记录。 */
     @Test
-    void locksAccountLocallyWhenRedisUnavailable() {
+    @SuppressWarnings("unchecked")
+    void locksAccountLocallyAndResistsFailureFloodEviction() {
         securityProperties.setRedisUnavailableStrategy(RedisUnavailableStrategy.LOCAL_FALLBACK);
-        when(valueOperations.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenThrow(new IllegalStateException("redis down"));
         doThrow(new IllegalStateException("redis down")).when(valueOperations)
                 .set(anyString(), eq("1"), anyLong(), eq(TimeUnit.MILLISECONDS));
         when(stringRedisTemplate.hasKey(anyString())).thenThrow(new IllegalStateException("redis down"));
@@ -129,14 +138,20 @@ class LoginFailureLockServiceTest {
         lockService.recordFailure("Admin");
         lockService.recordFailure("Admin");
 
+        for (int i = 0; i < LoginAttemptStore.MAX_LOCAL_ENTRIES + 200; i++) {
+            lockService.recordFailure("random-probe-" + i);
+        }
+
         assertThat(lockService.isLocked("Admin")).isTrue();
     }
 
     /** 验证本地兜底锁定也能返回剩余分钟数。 */
     @Test
+    @SuppressWarnings("unchecked")
     void localLockReturnsRemainingMinutes() {
         securityProperties.setRedisUnavailableStrategy(RedisUnavailableStrategy.LOCAL_FALLBACK);
-        when(valueOperations.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenThrow(new IllegalStateException("redis down"));
         doThrow(new IllegalStateException("redis down")).when(valueOperations)
                 .set(anyString(), eq("1"), anyLong(), eq(TimeUnit.MILLISECONDS));
         when(stringRedisTemplate.hasKey(anyString())).thenThrow(new IllegalStateException("redis down"));
@@ -165,9 +180,11 @@ class LoginFailureLockServiceTest {
 
     /** 验证本地兜底计数在成功登录后会被清理。 */
     @Test
+    @SuppressWarnings("unchecked")
     void clearsLocalFailuresAfterSuccess() {
         securityProperties.setRedisUnavailableStrategy(RedisUnavailableStrategy.LOCAL_FALLBACK);
-        when(valueOperations.increment(anyString())).thenThrow(new IllegalStateException("redis down"));
+        when(stringRedisTemplate.execute(any(RedisScript.class), anyList(), anyString()))
+                .thenThrow(new IllegalStateException("redis down"));
         when(stringRedisTemplate.hasKey(anyString())).thenThrow(new IllegalStateException("redis down"));
 
         lockService.recordFailure("Admin");
@@ -176,4 +193,5 @@ class LoginFailureLockServiceTest {
 
         assertThat(lockService.isLocked("Admin")).isFalse();
     }
+
 }

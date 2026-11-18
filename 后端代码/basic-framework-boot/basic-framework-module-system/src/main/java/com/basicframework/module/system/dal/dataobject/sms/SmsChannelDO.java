@@ -1,10 +1,11 @@
 package com.basicframework.module.system.dal.dataobject.sms;
 
 import com.basicframework.framework.common.enums.CommonStatusEnum;
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 
 import com.basicframework.module.system.framework.sms.core.enums.SmsChannelEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
+import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -21,11 +22,12 @@ import lombok.ToString;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class SmsChannelDO extends BaseDO {
+public class SmsChannelDO extends UniqueBaseDO {
 
     /**
      * 渠道编号。
      */
+    @TableId
     private Long id;
     /**
      * 短信签名。

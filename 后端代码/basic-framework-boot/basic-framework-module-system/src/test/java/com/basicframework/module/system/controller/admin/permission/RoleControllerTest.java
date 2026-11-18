@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证角色下拉只返回表单所需字段，不带出数据权限范围。
  *
- * @author Cursor Agent
+ * @author shady2713
  */
 class RoleControllerTest {
 
@@ -46,7 +46,6 @@ class RoleControllerTest {
         when(roleService.getRoleListByRoleType("admin")).thenReturn(new ArrayList<>(List.of(role)));
 
         CommonResult<List<RoleSimpleRespVO>> result = controller.getSimpleRoleList();
-        assertThat(controller.getSimpleRoleListCompatible().getData()).isEqualTo(result.getData());
 
         assertThat(result.getData()).hasSize(1);
         RoleSimpleRespVO simple = result.getData().get(0);

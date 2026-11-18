@@ -68,8 +68,11 @@ public class SmsChannelServiceImpl implements SmsChannelService {
         // 校验渠道编码唯一
         validateSmsChannelCodeUnique(updateReqVO.getId(), updateReqVO.getCode());
 
-        // 更新
+        // 更新；前端留空密钥时置为 null，由 MyBatis-Plus 跳过列更新以保留已持久化的原密钥。
         SmsChannelDO updateObj = BeanUtils.toBean(updateReqVO, SmsChannelDO.class);
+        if (cn.hutool.core.util.StrUtil.isBlank(updateReqVO.getApiSecret())) {
+            updateObj.setApiSecret(null);
+        }
         smsChannelMapper.updateById(updateObj);
     }
 

@@ -29,9 +29,6 @@
         <mybatis-plus-join.version>1.5.9</mybatis-plus-join.version>
         <dynamic-datasource.version>4.6.0</dynamic-datasource.version>
         <easy-trans.version>3.0.6</easy-trans.version>
-        <redisson.version>3.52.0</redisson.version>
-        <!-- 服务保障相关 -->
-        <lock4j.version>2.2.7</lock4j.version>
         <!-- 监控相关 -->
         <skywalking.version>9.8.0</skywalking.version>
         <!-- 工具类相关 -->
@@ -145,7 +142,7 @@
                 <version>${druid.version}</version>
             </dependency>
             <dependency>
-                <!-- 注意：必须声明，避免 flowable 和 mybatis-plus 引入的 mybatis 版本不一致！！！ -->
+                <!-- 统一约束 MyBatis 核心版本，与 MyBatis-Plus 保持一致。 -->
                 <groupId>org.mybatis</groupId>
                 <artifactId>mybatis</artifactId>
                 <version>${mybatis.version}</version>
@@ -203,48 +200,11 @@
                 <version>${revision}</version>
             </dependency>
 
-            <dependency>
-                <groupId>org.redisson</groupId>
-                <artifactId>redisson-spring-boot-starter</artifactId>
-                <version>${redisson.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.springframework.boot</groupId>
-                        <artifactId>spring-boot-starter-actuator</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-
             <!-- Job 定时任务相关 -->
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-spring-boot-starter-job</artifactId>
                 <version>${revision}</version>
-            </dependency>
-
-            <!-- 消息队列相关 -->
-            <dependency>
-                <groupId>com.basicframework</groupId>
-                <artifactId>basic-framework-spring-boot-starter-mq</artifactId>
-                <version>${revision}</version>
-            </dependency>
-            <!-- 服务保障相关 -->
-            <dependency>
-                <groupId>com.basicframework</groupId>
-                <artifactId>basic-framework-spring-boot-starter-protection</artifactId>
-                <version>${revision}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.baomidou</groupId>
-                <artifactId>lock4j-redisson-spring-boot-starter</artifactId>
-                <version>${lock4j.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <artifactId>redisson-spring-boot-starter</artifactId>
-                        <groupId>org.redisson</groupId>
-                    </exclusion>
-                </exclusions>
             </dependency>
 
             <!-- 监控相关 -->

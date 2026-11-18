@@ -38,6 +38,12 @@
             <groupId>com.basicframework</groupId>
             <artifactId>basic-framework-spring-boot-starter-mybatis</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 </project>

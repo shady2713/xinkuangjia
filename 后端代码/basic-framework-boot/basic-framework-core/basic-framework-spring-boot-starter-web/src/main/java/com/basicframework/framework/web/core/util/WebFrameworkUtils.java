@@ -92,6 +92,9 @@ public class WebFrameworkUtils {
             return userType;
         }
         // 2. 其次，基于 URL 前缀的约定
+        if (properties == null) {
+            return null;
+        }
         if (request.getServletPath().startsWith(properties.getAdminApi().getPrefix())) {
             return UserTypeEnum.ADMIN.getValue();
         }

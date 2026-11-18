@@ -117,12 +117,13 @@ public class DeptController {
     }
 
     /**
-     * 获取精简数据部门列表。
+     * 查询当前登录者可见的启用部门下拉选项列表。
      *
-     * @return 查询结果
+     * @return 已启用部门的编号、父级编号与名称列表
      */
-    @GetMapping(value = {"/list-all-simple", "/simple-list"})
+    @GetMapping("/simple-list")
     @Operation(summary = "获取部门精简信息列表", description = "只包含被开启的部门，主要用于前端的下拉选项")
+    @PreAuthorize("@ss.hasAnyPermissions('system:dept:query', 'system:user:query', 'system:role:query', 'system:permission:assign-role-data-scope')")
     public CommonResult<List<DeptSimpleRespVO>> getSimpleDeptList() {
         DeptListReqVO request = new DeptListReqVO();
         request.setStatus(CommonStatusEnum.ENABLE.getStatus());

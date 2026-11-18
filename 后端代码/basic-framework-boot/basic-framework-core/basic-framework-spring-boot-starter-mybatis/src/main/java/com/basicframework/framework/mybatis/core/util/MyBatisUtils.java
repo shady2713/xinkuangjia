@@ -6,8 +6,6 @@ import cn.hutool.core.lang.func.LambdaUtil;
 import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.pojo.PageParam;
 import com.basicframework.framework.common.pojo.SortingField;
-import com.basicframework.framework.mybatis.core.enums.DbTypeEnum;
-import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -162,22 +160,7 @@ public class MyBatisUtils {
     }
 
     /**
-     * 跨数据库的 find_in_set 实现
-     *
-     * @param column 字段名称
-     * @param value  查询值(不带单引号)
-     * @return sql
-     */
-    public static String findInSet(String column, Object value) {
-        DbType dbType = JdbcUtils.getDbType();
-        return DbTypeEnum.getFindInSetTemplate(dbType)
-                .replace("#{column}", column)
-                .replace("#{value}", StrUtil.toString(value));
-    }
-
-    /**
      * 将驼峰命名转换为下划线命名
-     *
      *
      * @param func 字段名函数(驼峰命名)
      * @return 字段名(下划线命名)

@@ -13,6 +13,7 @@ import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.enums.permission.MenuTypeEnum;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
 import org.slf4j.LoggerFactory;
 
@@ -96,6 +97,7 @@ public interface AuthConvert {
      * @param reqVO 请求参数
      * @return 转换结果
      */
+    @Mapping(target = "createIp", ignore = true)
     SmsCodeSendReqDTO convert(AuthSmsSendReqVO reqVO);
 
     /**

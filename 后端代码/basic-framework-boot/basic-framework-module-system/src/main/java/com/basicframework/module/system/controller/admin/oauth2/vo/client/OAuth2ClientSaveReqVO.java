@@ -33,7 +33,7 @@ public class OAuth2ClientSaveReqVO {
     /**
      * 客户端编号。
      */
-    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "tudou")
+    @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "portal-web")
     @NotNull(message = "客户端编号不能为空")
     @Size(max = 255, message = "客户端编号长度不能超过 255 个字符")
     private String clientId;
@@ -48,7 +48,7 @@ public class OAuth2ClientSaveReqVO {
     /**
      * 应用名。
      */
-    @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "土豆")
+    @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "门户客户端")
     @NotNull(message = "应用名不能为空")
     @Size(max = 255, message = "应用名长度不能超过 255 个字符")
     private String name;

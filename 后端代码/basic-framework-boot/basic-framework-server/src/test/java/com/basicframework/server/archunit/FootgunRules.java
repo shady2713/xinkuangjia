@@ -1,6 +1,7 @@
 package com.basicframework.server.archunit;
 
 import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.Dependency;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
@@ -10,21 +11,25 @@ import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.library.GeneralCodingRules;
 import jakarta.annotation.security.PermitAll;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.util.Set;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
- * 后端脚枪门禁规则，供质量门禁测试与反向失败夹具复用。
+ * 后端确定性架构门禁规则，供质量门禁测试与反向失败夹具复用。
+ *
+ * @author shady2713
  */
 final class FootgunRules {
 
     /**
-     * 当前 main 已盘点的公开端点允许名单，格式为「全限定类名#方法名」。
-     * 覆盖登录、注册、验证码、短信回调、文件内容下载和开放令牌入口。
+     * 公开端点允许名单，格式为「全限定类名#方法名」。
      */
     static final Set<String> PERMIT_ALL_ALLOWLIST = Set.of(
             "com.basicframework.module.system.controller.admin.auth.AuthController#getSm2PublicKey",
@@ -32,7 +37,6 @@ final class FootgunRules {
             "com.basicframework.module.system.controller.admin.auth.AuthController#superAdminLogin",
             "com.basicframework.module.system.controller.admin.auth.AuthController#logout",
             "com.basicframework.module.system.controller.admin.auth.AuthController#refreshToken",
-            "com.basicframework.module.system.controller.admin.auth.AuthController#register",
             "com.basicframework.module.system.controller.admin.auth.AuthController#smsLogin",
             "com.basicframework.module.system.controller.admin.auth.AuthController#sendLoginSmsCode",
             "com.basicframework.module.system.controller.admin.auth.AuthController#resetPassword",
@@ -42,6 +46,11 @@ final class FootgunRules {
             "com.basicframework.module.infra.controller.admin.file.FileController#getFileContent",
             "com.basicframework.module.system.controller.admin.sms.SmsCallbackController#receiveAliyunSmsStatus",
             "com.basicframework.module.system.controller.admin.sms.SmsCallbackController#receiveTencentSmsStatus"
+    );
+
+    /** 跨模块严禁直接访问的对方模块内部包名段。 */
+    private static final Set<String> MODULE_INTERNAL_SEGMENTS = Set.of(
+            "controller", "service", "dal", "convert", "framework", "mq", "job"
     );
 
     /** 工具类，禁止实例化。 */
@@ -60,7 +69,6 @@ final class FootgunRules {
 
     /**
      * 控制器不得直接依赖 mapper / dal.mysql / dal.redis 持久化包。
-     * 不限制 dal.dataobject，因为当前主树仍有多处控制器引用数据对象。
      *
      * @return 分层规则
      */
@@ -84,10 +92,8 @@ final class FootgunRules {
                 .because("产品代码禁止使用 System.out / System.err / System.in");
     }
 
-
     /**
      * 判断一次方法调用是否为 {@code Throwable.printStackTrace} 或其子类上的同名调用。
-     * 仅导入单个产品类时，JDK 类型可能是没有继承信息的桩，因此同时按类型名识别。
      *
      * @param call 待检查的方法调用
      * @return 若调用属于打印堆栈则返回 true
@@ -158,6 +164,31 @@ final class FootgunRules {
     }
 
     /**
+     * 控制器中的每一个 HTTP 路由端点都必须显式标注 {@code @PreAuthorize} 或 {@code @PermitAll}，封死漏鉴权盲区。
+     *
+     * @return 端点显式授权声明规则
+     */
+    static ArchRule controllerEndpointsMustDeclareAuthorization() {
+        return methods()
+                .that().areDeclaredInClassesThat().resideInAPackage("..controller..")
+                .and(isRequestMappingEndpoint())
+                .should(new ArchCondition<JavaMethod>("显式标注 @PreAuthorize 或 @PermitAll") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        boolean hasPreAuthorize = method.isAnnotatedWith(PreAuthorize.class)
+                                || method.getOwner().isAnnotatedWith(PreAuthorize.class);
+                        boolean hasPermitAll = method.isAnnotatedWith(PermitAll.class);
+                        if (!hasPreAuthorize && !hasPermitAll) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    "HTTP 端点未显式声明 @PreAuthorize 或 @PermitAll：" + method.getFullName()));
+                        }
+                    }
+                })
+                .because("所有 HTTP 端点必须显式声明 @PreAuthorize 或受审 @PermitAll，禁止依赖默认兜底");
+    }
+
+    /**
      * 公共基础层 core 不得反向依赖业务模块或启动装配模块。
      *
      * @return 模块单向依赖规则
@@ -171,9 +202,91 @@ final class FootgunRules {
     }
 
     /**
-     * 判断方法是否声明了 Spring MVC 路由映射注解（含 {@code @GetMapping} 等派生注解）。
+     * 业务模块之间严禁跨模块直接依赖对方的 controller/service/dal/convert/framework 内部实现，仅允许依赖 api 或 enums。
      *
-     * @return 路由端点方法谓词
+     * @return 业务模块水平隔离规则
+     */
+    static ArchRule businessModulesMustNotCrossDependOnInternals() {
+        return classes()
+                .that().resideInAPackage("com.basicframework.module..")
+                .should(new ArchCondition<JavaClass>("不跨业务模块访问内部实现包") {
+                    @Override
+                    public void check(JavaClass origin, ConditionEvents events) {
+                        String originModule = extractModuleName(origin.getPackageName());
+                        if (originModule == null) {
+                            return;
+                        }
+                        for (Dependency dep : origin.getDirectDependenciesFromSelf()) {
+                            JavaClass target = dep.getTargetClass();
+                            String targetPkg = target.getPackageName();
+                            String targetModule = extractModuleName(targetPkg);
+                            if (targetModule == null || originModule.equals(targetModule)) {
+                                continue;
+                            }
+                            String subSegment = extractModuleSubSegment(targetPkg, targetModule);
+                            if (subSegment != null && MODULE_INTERNAL_SEGMENTS.contains(subSegment)) {
+                                events.add(SimpleConditionEvent.violated(
+                                        origin,
+                                        "跨模块违规依赖内部实现（仅允许依赖 api/enums）："
+                                                + origin.getName() + " -> " + target.getName()));
+                            }
+                        }
+                    }
+                })
+                .because("业务模块之间只能通过 api 与 enums 包通信，禁止穿透访问其他模块的内部实现");
+    }
+
+    /**
+     * 提取 {@code com.basicframework.module.<name>} 中的模块名。
+     */
+    private static String extractModuleName(String packageName) {
+        String prefix = "com.basicframework.module.";
+        if (!packageName.startsWith(prefix)) {
+            return null;
+        }
+        String rest = packageName.substring(prefix.length());
+        int dot = rest.indexOf('.');
+        return dot >= 0 ? rest.substring(0, dot) : rest;
+    }
+
+    /**
+     * 提取模块下第一级子包名（如 {@code api}、{@code service}、{@code dal}）。
+     */
+    private static String extractModuleSubSegment(String packageName, String moduleName) {
+        String prefix = "com.basicframework.module." + moduleName + ".";
+        if (!packageName.startsWith(prefix)) {
+            return null;
+        }
+        String rest = packageName.substring(prefix.length());
+        int dot = rest.indexOf('.');
+        return dot >= 0 ? rest.substring(0, dot) : rest;
+    }
+
+    /**
+     * 所有 {@code @Transactional} 声明都必须显式指定非空的 {@code rollbackFor}，防止受检异常默认不回滚。
+     *
+     * @return 事务回滚异常显式声明规则
+     */
+    static ArchRule transactionalMustDeclareRollbackFor() {
+        return methods()
+                .that().areDeclaredInClassesThat().resideInAPackage("com.basicframework..")
+                .and().areAnnotatedWith(Transactional.class)
+                .should(new ArchCondition<JavaMethod>("在 @Transactional 中显式指定 rollbackFor") {
+                    @Override
+                    public void check(JavaMethod method, ConditionEvents events) {
+                        Transactional tx = method.getAnnotationOfType(Transactional.class);
+                        if (tx.rollbackFor().length == 0 && tx.rollbackForClassName().length == 0) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    "@Transactional 未显式声明 rollbackFor = Exception.class：" + method.getFullName()));
+                        }
+                    }
+                })
+                .because("所有 @Transactional 方法必须显式声明 rollbackFor，避免受检异常提交半成品数据");
+    }
+
+    /**
+     * 判断方法是否声明了 Spring MVC 路由映射注解。
      */
     private static DescribedPredicate<JavaMethod> isRequestMappingEndpoint() {
         return new DescribedPredicate<JavaMethod>("声明 Spring MVC 路由映射注解") {
@@ -187,7 +300,6 @@ final class FootgunRules {
 
     /**
      * 控制器 HTTP 端点的入参和返回值（含泛型类型实参）不得直接暴露持久化 DO。
-     * 允许控制器在方法内部引用 DO 完成 VO 转换，兼顾存量实现与对外契约边界。
      *
      * @return HTTP 契约与持久化对象隔离规则
      */
@@ -212,8 +324,7 @@ final class FootgunRules {
     }
 
     /**
-     * 业务模块禁止直接抛出未分类的裸 {@code RuntimeException}、{@code Exception}、{@code Throwable} 或 {@code Error}。
-     * 底层 core 组件包装受检异常的边界保持豁免。
+     * 业务模块禁止直接抛出未分类的裸通用异常。
      *
      * @return 业务异常规范规则
      */
@@ -225,7 +336,7 @@ final class FootgunRules {
     }
 
     /**
-     * 产品代码统一通过 SLF4J 记录日志，禁止直接依赖 JUL、Commons Logging 或 Log4j 实现包。
+     * 产品代码统一通过 SLF4J 记录日志，禁止直接依赖旧日志 API。
      *
      * @return 日志门面统一规则
      */

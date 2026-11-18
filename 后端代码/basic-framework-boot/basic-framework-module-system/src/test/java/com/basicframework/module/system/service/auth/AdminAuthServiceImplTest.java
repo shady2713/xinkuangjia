@@ -1,34 +1,43 @@
 package com.basicframework.module.system.service.auth;
 
+import com.anji.captcha.model.common.ResponseModel;
+import com.anji.captcha.service.CaptchaService;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.module.system.api.sms.SmsCodeApi;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthLoginRespVO;
+import com.basicframework.module.system.controller.admin.auth.vo.AuthResetPasswordReqVO;
 import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsLoginReqVO;
+import com.basicframework.module.system.controller.admin.auth.vo.AuthSmsSendReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
+import com.basicframework.module.system.enums.sms.SmsSceneEnum;
 import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
 import com.basicframework.module.system.framework.security.login.LoginFailureLockService;
 import com.basicframework.module.system.framework.security.login.SmsLoginFailureLockService;
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
 import com.basicframework.module.system.service.user.AdminUserService;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ACCOUNT_LOCKED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_ATTEMPT_LOCKED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_BAD_CREDENTIALS;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_CAPTCHA_CODE_ERROR;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_PLATFORM_MISMATCH;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOGIN_USER_DISABLED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.SMS_CODE_NOT_FOUND;
@@ -65,6 +74,10 @@ class AdminAuthServiceImplTest {
     private OAuth2TokenService oauth2TokenService;
     @Mock
     private SmsCodeApi smsCodeApi;
+    @Mock
+    private CaptchaService captchaService;
+    @Spy
+    private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
     @Mock
     private LoginFailureLockService loginFailureLockService;
     @Mock
@@ -262,6 +275,81 @@ class AdminAuthServiceImplTest {
         assertThat(response.getAccessToken()).isEqualTo("access-token");
         assertThat(response.getPasswordChangeRequired()).isTrue();
         verify(userService).updateUserLogin(eq(user.getId()), isNull());
+    }
+
+    /** 验证发送短信验证码在验证码开启时必须通过图形验证码校验。 */
+    @Test
+    void sendSmsCodeRejectsInvalidCaptcha() {
+        authService.setCaptchaEnable(true);
+        ResponseModel failed = new ResponseModel();
+        failed.setRepCode("6111");
+        failed.setRepMsg("验证码错误");
+        when(captchaService.verification(any())).thenReturn(failed);
+        AuthSmsSendReqVO reqVO = AuthSmsSendReqVO.builder()
+                .mobile(MOBILE)
+                .scene(SmsSceneEnum.ADMIN_MEMBER_LOGIN.getScene())
+                .build();
+        reqVO.setCaptchaVerification("invalid-token");
+
+        assertThatThrownBy(() -> authService.sendSmsCode(reqVO))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(AUTH_LOGIN_CAPTCHA_CODE_ERROR.getCode()));
+        verifyNoInteractions(smsCodeApi);
+    }
+
+    /** 验证发送短信验证码对未注册或超级管理员手机号静默返回，不向外暴露手机号存在性或消耗短信通道。 */
+    @Test
+    void sendSmsCodeSilentlySkipsUnknownOrSuperAdminMobile() {
+        authService.setCaptchaEnable(false);
+        AuthSmsSendReqVO reqVO = AuthSmsSendReqVO.builder()
+                .mobile(MOBILE)
+                .scene(SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD.getScene())
+                .build();
+        AdminUserDO superAdmin = buildUser("admin", AdminPlatformTypeEnum.SUPER_ADMIN.getType());
+        superAdmin.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        when(userService.getUserByMobile(MOBILE)).thenReturn(null, superAdmin);
+
+        authService.sendSmsCode(reqVO);
+        authService.sendSmsCode(reqVO);
+
+        verifyNoInteractions(smsCodeApi);
+    }
+
+    /** 验证匿名短信重置密码禁止修改超级管理员账号并累计短信失败次数。 */
+    @Test
+    void resetPasswordRejectsSuperAdminAccount() {
+        AdminUserDO superAdmin = buildUser("admin", AdminPlatformTypeEnum.SUPER_ADMIN.getType());
+        superAdmin.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        when(userService.getUserByMobile(MOBILE)).thenReturn(superAdmin);
+        AuthResetPasswordReqVO reqVO = AuthResetPasswordReqVO.builder()
+                .mobile(MOBILE)
+                .code(SMS_CODE)
+                .password("NewStrong#Pass1")
+                .build();
+
+        assertThatThrownBy(() -> authService.resetPassword(reqVO))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SMS_CODE_NOT_FOUND.getCode()));
+        verify(smsLoginFailureLockService).recordFailure(eq(MOBILE), isNull());
+        verify(userService, never()).updateUserPassword(any(), any(String.class));
+    }
+
+    /** 验证启用的业务管理员账号在通过短信验证码校验后可重置密码并清空失败计数。 */
+    @Test
+    void resetPasswordUpdatesEnabledBusinessAdminPassword() {
+        AdminUserDO user = buildUser("biz-admin", AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        user.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        when(userService.getUserByMobile(MOBILE)).thenReturn(user);
+        AuthResetPasswordReqVO reqVO = AuthResetPasswordReqVO.builder()
+                .mobile(MOBILE)
+                .code(SMS_CODE)
+                .password("NewStrong#Pass1")
+                .build();
+
+        authService.resetPassword(reqVO);
+
+        verify(smsLoginFailureLockService).clearFailures(eq(MOBILE), isNull());
+        verify(userService).updateUserPassword(user.getId(), "NewStrong#Pass1");
     }
 
     /**

@@ -127,12 +127,13 @@ public class PostController {
     }
 
     /**
-     * 获取精简数据岗位列表。
+     * 按显示顺序返回全量岗位下拉选项列表。
      *
-     * @return 查询结果
+     * @return 按 {@code sort} 升序排列的岗位编号与名称列表
      */
-    @GetMapping(value = {"/list-all-simple", "simple-list"})
+    @GetMapping("/simple-list")
     @Operation(summary = "获取岗位全列表", description = "包含所有状态的岗位，主要用于前端的下拉选项")
+    @PreAuthorize("@ss.hasAnyPermissions('system:post:query', 'system:user:query')")
     public CommonResult<List<PostSimpleRespVO>> getSimplePostList() {
         // 获得岗位列表，包含所有状态
         List<PostDO> list = postService.getPostList(null, null);

@@ -18,6 +18,14 @@ spring:
       write-date-timestamps-as-nanoseconds: false
       write-durations-as-timestamps: true
       fail-on-empty-beans: false
+  task:
+    execution:
+      thread-name-prefix: async-task-
+      pool:
+        core-size: 4
+        max-size: 16
+        queue-capacity: 200
+        keep-alive: 60s
   cache:
     type: REDIS
     redis:
@@ -83,9 +91,7 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
     banner: false
-  type-aliases-package: ${basic-framework.info.base-package}.module.*.dal.dataobject
-  encryptor:
-    password: ${MYBATIS_ENCRYPT_PASSWORD:}
+  type-aliases-package: ${basic-framework.info.base-package}.module.**.dal.dataobject
 
 mybatis-plus-join:
   banner: false
@@ -113,10 +119,6 @@ aj:
     req-check-minute-limit: 60
     req-verify-minute-limit: 60
 
-lock4j:
-  acquire-timeout: 3000
-  expire: 30000
-
 basic-framework:
   info:
     version: ${APP_VERSION:1.0.0}
@@ -134,10 +136,10 @@ basic-framework:
   web:
     admin-ui:
       url: ${ADMIN_UI_URL:http://localhost:5175}
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5175,http://127.0.0.1:5175}
   xss:
     enable: true
   security:
-    mock-enable: false
     permit-all-urls: []
     # 密码传输使用 SM2（C1C3C2）。私钥只从环境变量注入，缺失或格式错误时启动失败。
     sm2:

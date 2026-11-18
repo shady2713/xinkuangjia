@@ -40,6 +40,10 @@ public class DeptDO extends BaseDO {
      */
     private Long parentId;
     /**
+     * 所属管理平台类型，参见 {@code AdminPlatformTypeEnum}，与 {@code system_dept.role_type} 列对应。
+     */
+    private String roleType;
+    /**
      * 显示顺序。
      */
     private Integer sort;

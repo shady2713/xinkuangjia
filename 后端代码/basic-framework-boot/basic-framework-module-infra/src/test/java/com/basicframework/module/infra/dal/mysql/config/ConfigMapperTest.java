@@ -10,8 +10,10 @@ import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.handler.DefaultDBFieldHandler;
+import com.basicframework.framework.mybatis.core.interceptor.SoftDeleteUniqueInnerInterceptor;
 import com.basicframework.module.infra.controller.admin.config.vo.ConfigPageReqVO;
 import com.basicframework.module.infra.dal.dataobject.config.ConfigDO;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -34,6 +36,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 基于 H2 MySQL 兼容模式的参数配置 Mapper 真实 SQL 切片测试示例。
@@ -69,6 +72,7 @@ class ConfigMapperTest {
         configuration.setMapUnderscoreToCamelCase(true);
 
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new SoftDeleteUniqueInnerInterceptor());
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.H2));
         configuration.addInterceptor(interceptor);
 
@@ -116,6 +120,29 @@ class ConfigMapperTest {
 
             mapper.deleteById(entity.getId());
             assertNull(mapper.selectByKey("ui.theme"));
+        }
+    }
+
+    /** 验证未删除记录严格保持业务键唯一，而多次逻辑删除后可反复创建同键名配置且互不冲突。 */
+    @Test
+    void softDeleteReleasesUniqueKeyAcrossRepeatedDeletions() {
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            ConfigMapper mapper = session.getMapper(ConfigMapper.class);
+            ConfigDO first = buildConfig("sys.quota", "配额一", "10", 2);
+            mapper.insert(first);
+
+            ConfigDO duplicateActive = buildConfig("sys.quota", "冲突配置", "20", 2);
+            assertThrows(PersistenceException.class, () -> mapper.insert(duplicateActive));
+
+            mapper.deleteById(first.getId());
+            ConfigDO second = buildConfig("sys.quota", "配额二", "20", 2);
+            mapper.insert(second);
+            assertEquals("20", mapper.selectByKey("sys.quota").getValue());
+
+            mapper.deleteById(second.getId());
+            ConfigDO third = buildConfig("sys.quota", "配额三", "30", 2);
+            mapper.insert(third);
+            assertEquals("30", mapper.selectByKey("sys.quota").getValue());
         }
     }
 
