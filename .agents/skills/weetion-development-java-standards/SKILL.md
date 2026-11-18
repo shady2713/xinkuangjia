@@ -22,6 +22,7 @@ description: 在 basic-framework 项目设计、修改或评审 Java 后端及�
 | 当前要解决的问题 | 参考 |
 | --- | --- |
 | 工程定位、模块归属、Starter、集成、安全链或配置装配 | [项目框架说明](references/project-framework.md)的对应章节 |
+| 新建独立业务模块、接入聚合 POM、对齐菜单权限与 Mapper 切片测试 | [新建业务模块与全栈契约对齐指南](references/module-scaffold.md) |
 | HTTP、跨模块契约、接口认证、凭证输出与模型转换 | [接口与模型](references/api-controller-model.md) |
 | 如何实现业务用例和组织数据访问 | [Service](references/service.md) |
 | 如何映射字段或修改查询 | 分别选择 [DO](references/do.md)、[Mapper](references/mapper.md) |

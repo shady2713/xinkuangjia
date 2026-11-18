@@ -83,7 +83,7 @@ MyBatis Starter 管理 MySQL 访问，Redis Starter 管理缓存。运行时配�
 
 直传链路获取预签名 PUT 地址、浏览器上传、再登记文件；跨域与浏览器可达 endpoint 是额外条件。对象存储与 MySQL 不构成同一事务，失败补偿要按实际代码和业务情况验证，不能把数据库事务描述为全资源原子提交。
 
-Quartz 管理任务调度，infra 的 `JobService` 管理 handler、Cron 和日志。handler 是 Spring Bean 名称，新增任务需实现 core 的 `JobHandler` 并注册 Bean。当前 YAML 没有映射 `.env.example` 中 `QUARTZ_AUTO_STARTUP` 或 `QUARTZ_JDBC_INITIALIZE_SCHEMA`，也未配置 JDBC JobStore；需要这些能力时使用 Spring 标准 `spring.quartz.*` 配置并验证。`infra_job` 的存在不证明调度状态已写入 `QRTZ_*` 表。
+Quartz 管理任务调度，infra 的 `JobService` 管理 handler、Cron 和日志。handler 是 Spring Bean 名称，新增任务需实现 core 的 `JobHandler` 并注册 Bean。默认配置未启用 Quartz JDBC JobStore；需要持久化调度时按 Spring 标准 `spring.quartz.*` 属性配置并验证。`infra_job` 的存在不证明调度状态已写入 `QRTZ_*` 表。
 
 ## 实现入口
 

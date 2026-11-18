@@ -51,7 +51,7 @@ kind: package-reference
 
 `.env` 按 Java properties 读取，值不加 shell 引号；示例中的 `your_*` 是占位值，使用前替换。与 Docker 共用 MinIO 配置时，`MINIO_SECURE` 使用 `true` 或 `false`，endpoint 与 TLS 实际方式一致。不要把宿主机 localhost 当作容器中的外部服务地址。
 
-样例中的 `FLYWAY_ENABLED`、`QUARTZ_AUTO_STARTUP`、`QUARTZ_JDBC_INITIALIZE_SCHEMA`、`CORS_ALLOWED_ORIGIN` 当前没有相应 YAML 映射，不能据此认为迁移、调度或跨域已配置。需要调整时使用实际 Spring 属性或已绑定的 `basic-framework.web.cors-allowed-origins`，见[服务器配置](../../docs/部署/部署说明.md#准备目录与配置)。
+`.env.example` 中的所有非注释键均在 `application.yaml` 有明确占位绑定，并由 `LocalEnvironmentConfigurationTest` 守护禁止新增悬空配置项。框架未内置自动数据库迁移或 Quartz JDBC JobStore；需要调整调度或跨域时，直接使用标准 Spring 属性或已绑定的 `basic-framework.web.cors-allowed-origins`，见[服务器配置](../../docs/部署/部署说明.md#准备目录与配置)。
 
 ## 本地启动
 

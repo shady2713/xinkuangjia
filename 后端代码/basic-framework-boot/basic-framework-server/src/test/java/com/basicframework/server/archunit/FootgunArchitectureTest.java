@@ -38,6 +38,25 @@ class FootgunArchitectureTest {
     @ArchTest
     static final ArchRule permitAllMustBeAllowlisted = FootgunRules.permitAllMustBeAllowlisted();
 
+    /** 公共 core 模块不得反向依赖业务 module 或 server。 */
+    @ArchTest
+    static final ArchRule coreMustNotDependOnModulesOrServer =
+            FootgunRules.coreMustNotDependOnModulesOrServer();
+
+    /** 控制器 HTTP 端点签名不得直接暴露持久化 DO。 */
+    @ArchTest
+    static final ArchRule controllerEndpointsMustNotExposeDataObjects =
+            FootgunRules.controllerEndpointsMustNotExposeDataObjects();
+
+    /** 业务模块不得直接抛出未分类的裸通用异常。 */
+    @ArchTest
+    static final ArchRule businessModulesMustNotThrowGenericExceptions =
+            FootgunRules.businessModulesMustNotThrowGenericExceptions();
+
+    /** 产品代码统一使用 SLF4J，不得依赖旧日志 API。 */
+    @ArchTest
+    static final ArchRule noLegacyLoggingApis = FootgunRules.noLegacyLoggingApis();
+
     /**
      * 允许名单中的每一个端点都必须仍然存在于当前产品代码中，避免名单在端点被删除后仍看似有效。
      *

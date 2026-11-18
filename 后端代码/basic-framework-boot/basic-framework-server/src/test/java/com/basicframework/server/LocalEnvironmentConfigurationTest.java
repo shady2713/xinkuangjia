@@ -9,12 +9,22 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 验证本地环境变量到应用配置的绑定及缺失配置失败契约。
@@ -22,6 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * @author 李杰
  */
 class LocalEnvironmentConfigurationTest {
+
+    /** 匹配应用配置中的占位符引用，例如 {@code ${DB_HOST:127.0.0.1}}。 */
+    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Z][A-Z0-9_]*)(?::[^}]*)?}");
 
     /** 验证端口、主数据源和 Redis 使用显式环境配置，避免退回默认实例。 */
     @Test
@@ -65,6 +78,102 @@ class LocalEnvironmentConfigurationTest {
         StandardEnvironment environment = environment(localValues());
         assertThrows(BindException.class,
                 () -> Binder.get(environment).bind("basic-framework.file.minio.secure", Boolean.class));
+    }
+
+    /**
+     * {@code .env.example} 中的所有非注释变量都必须在服务端配置文件中有真实占位绑定，防止悬空变量误导开发者。
+     *
+     * @throws IOException 读取环境样例或配置文件失败时抛出
+     */
+    @Test
+    void envExampleKeysAreAllConsumedByServerConfiguration() throws IOException {
+        Path envExample = resolveEnvExample();
+        Set<String> declaredKeys = parseEnvKeys(Files.readAllLines(envExample, StandardCharsets.UTF_8));
+        assertFalse(declaredKeys.isEmpty(), ".env.example 不得为空");
+        Set<String> referencedKeys = loadReferencedPlaceholders();
+        Set<String> unmapped = findUnmappedKeys(declaredKeys, referencedKeys);
+        assertTrue(unmapped.isEmpty(), ".env.example 存在未被配置消费的悬空变量：" + unmapped);
+    }
+
+    /**
+     * 反向证明：当 {@code .env.example} 出现未绑定的伪配置键时，校验逻辑必须检出。
+     *
+     * @throws IOException 读取配置文件失败时抛出
+     */
+    @Test
+    void unmappedEnvExampleKeyIsDetected() throws IOException {
+        Set<String> declared = parseEnvKeys(List.of(
+                "# 注释行不计入",
+                "SERVER_PORT=48080",
+                "UNMAPPED_GHOST_SWITCH=true"));
+        Set<String> unmapped = findUnmappedKeys(declared, loadReferencedPlaceholders());
+        assertEquals(Set.of("UNMAPPED_GHOST_SWITCH"), unmapped);
+    }
+
+    /**
+     * 定位后端聚合工程根目录下的 {@code .env.example}，兼容在聚合根或 server 模块工作目录执行测试。
+     *
+     * @return 真实存在的环境模板路径
+     */
+    private static Path resolveEnvExample() {
+        Path fromModule = Path.of("..", ".env.example").normalize();
+        if (Files.isRegularFile(fromModule)) {
+            return fromModule;
+        }
+        Path fromReactor = Path.of(".env.example").normalize();
+        assertTrue(Files.isRegularFile(fromReactor), "未找到后端 .env.example");
+        return fromReactor;
+    }
+
+    /**
+     * 解析 {@code KEY=VALUE} 行的键名集合，忽略空行与井号注释行。
+     *
+     * @param lines 环境模板文本行
+     * @return 按出现顺序去重的键名集合
+     */
+    private static Set<String> parseEnvKeys(List<String> lines) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (String raw : lines) {
+            String line = raw.trim();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            int separator = line.indexOf('=');
+            assertTrue(separator > 0, ".env.example 存在非法配置行：" + line);
+            keys.add(line.substring(0, separator).trim());
+        }
+        return keys;
+    }
+
+    /**
+     * 提取 {@code application.yaml} 与 {@code logback-spring.xml} 中实际引用的大写环境变量占位符。
+     *
+     * @return 服务端配置实际消费的环境变量集合
+     * @throws IOException 类路径配置无法读取时抛出
+     */
+    private static Set<String> loadReferencedPlaceholders() throws IOException {
+        Set<String> referenced = new LinkedHashSet<>();
+        for (String resourceName : List.of("application.yaml", "logback-spring.xml")) {
+            String content = new ClassPathResource(resourceName).getContentAsString(StandardCharsets.UTF_8);
+            Matcher matcher = PLACEHOLDER_PATTERN.matcher(content);
+            while (matcher.find()) {
+                referenced.add(matcher.group(1));
+            }
+        }
+        return referenced;
+    }
+
+    /**
+     * 计算环境模板中声明但未被服务端配置引用的悬空键。
+     *
+     * @param declaredKeys 环境模板声明的键集合
+     * @param referencedKeys 服务端配置引用的占位符集合
+     * @return 悬空键集合
+     */
+    private static Set<String> findUnmappedKeys(Set<String> declaredKeys, Set<String> referencedKeys) {
+        Set<String> unmapped = new LinkedHashSet<>(declaredKeys);
+        unmapped.removeAll(referencedKeys);
+        return unmapped;
     }
 
     /**
