@@ -32,12 +32,11 @@ kind: "package-reference"
 
 生成前提供模块名、字段类型与校验、是否需要多标签页，以及导入导出或批量操作等特殊需求；未提供且无法从真实接口确定的关键要求须先确认。可使用[需求模板](assets/quick-start-template.md)整理输入，其中推送字段和端点是示例。
 
-完整流程见 [CRUD 生成](references/crud-workflow.md)，主要产物位于 `apps/web-ele/src`：
+完整流程见 [CRUD 生成](references/crud-workflow.md)（可先通过仓库根 `scripts/scaffold/new_web_crud.py` 生成标准骨架），主要产物位于 `apps/web-ele/src`：
 
 | 产物 | 职责 |
 | --- | --- |
-| `api/<module>/types.ts` | 实际请求、响应与实体类型 |
-| `api/<module>/index.ts` | 基于 `#/api/request` 的请求封装 |
+| `api/<module>/index.ts`（或拆分 `types.ts`） | 基于 `#/api/request` 的请求封装与命名空间类型定义 |
 | `views/<module>/index.vue` | 查询、分页和操作入口 |
 | `views/<module>/data.ts` | 列配置、搜索与编辑 schema |
 | `views/<module>/modules/form.vue` | 新增、编辑、校验和保存 |
@@ -46,10 +45,10 @@ kind: "package-reference"
 
 ## 检查与验收
 
-在 `前端代码/basic-framework-admin` 执行 CRUD 专项脚本。下面的 `system/push` 是待生成模块的路径示例，需替换为本次实际存在的 API 与页面目录；Windows 执行此入口需要可用的 Bash：
+在 `前端代码/basic-framework-admin` 执行跨平台 CRUD 专项检查脚本。下面的 `system/push` 是待生成模块的路径示例，需替换为本次实际存在的 API 与页面目录：
 
-```bash
-bash ../../.agents/skills/weetion-development-web-standards/scripts/check.sh apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
+```powershell
+python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts/check_crud.py apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
 ```
 
 脚本检查必需文件、相对导入与明显 `any` 使用，并定位所属应用进行类型检查。若依赖或应用配置缺失导致类型检查跳过，不能把末尾成功提示当作类型验证通过，需补齐环境并执行应用实际类型命令。

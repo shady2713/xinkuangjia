@@ -25,12 +25,12 @@ kind: package-reference
 | 模块 | 职责 |
 | --- | --- |
 | basic-framework-dependencies | BOM 和依赖版本 |
-| basic-framework-core | common 及 Web、Security、MyBatis、Redis、Job、Excel、保护、数据权限、IP Starter |
+| basic-framework-core | common 及 Web、Security、MyBatis、Redis、Job、Excel、数据权限、IP Starter |
 | basic-framework-module-system | 用户、角色、菜单、部门、岗位、字典、认证、OAuth2、短信和日志 |
 | basic-framework-module-infra | 参数配置、唯一 MinIO 文件存储、Quartz 任务与执行日志 |
 | basic-framework-server | 启动扫描、运行配置与可执行 JAR |
 
-实际聚合清单以[根 POM](pom.xml)、[core POM](basic-framework-core/pom.xml)和[server POM](basic-framework-server/pom.xml)为准。MQ Starter 源目录未进入当前 core 聚合，不要求为框架启动 RabbitMQ。
+实际聚合清单以[根 POM](pom.xml)、[core POM](basic-framework-core/pom.xml)和[server POM](basic-framework-server/pom.xml)为准；新增业务模块可使用仓库根 `scripts/scaffold/new_java_module.py` 生成标准骨架并登记依赖。
 
 ## 环境与配置
 
@@ -97,15 +97,12 @@ Token、角色菜单关系和验证码有各自的 Redis 生命周期；不能�
 
 </details>
 
-可执行产物为 `basic-framework-server/target/basic-framework-server.jar`。当前没有仓库级 Java 生产 Compose；唯一官方服务器部署入口为[部署说明](../../docs/部署/部署说明.md)，按该文档准备目标运行环境、数据库与存储配置。管理前端参见[前端 README](../../前端代码/basic-framework-admin/README.md)。
-
-从 #26 之前的框架版本升级业务项目时，先按[升级与迁移说明](../../docs/开发指南/升级与迁移说明.md)处理已删除公开类型、`PageParam.sortingFields` 迁移和角色/导入/文件/锁屏的安全收紧，再按部署说明发布。
+可执行产物为 `basic-framework-server/target/basic-framework-server.jar`。唯一官方服务器部署入口为[部署说明](../../docs/部署/部署说明.md)，按该文档准备目标运行环境、数据库与存储配置。管理前端参见[前端 README](../../前端代码/basic-framework-admin/README.md)。
 
 ## 已知限制与暂缓工作
 
 配置与构建只证明相应工程条件，不能证明业务外部依赖已可用。
 
-- 不包含 AI、Workflow、代码生成器、数据源管理、多存储配置、公告或站内通知业务。
 - 未接入自动数据库迁移；已有数据库升级需另行设计备份与恢复。
 - 短信、OAuth2、Quartz handler 需匹配实际配置和数据。
 - 当前文件地址按公开读取契约生成；需要私有文件授权时须设计完整权限与签名链路，不能只修改桶策略。

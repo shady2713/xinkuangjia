@@ -31,22 +31,21 @@
 | 弹窗 Modal | `vben-modal.md` | `../assets/modal-template.md` |
 | 抽屉 Drawer | `vben-drawer.md` | `../assets/drawer-template.md` |
 | 页面 Page | `vben-page.md` | `../assets/page-template.md` |
-| 数字动画 Count Animator | `vben-count-animator.md` | `../assets/count-animator-template.md` |
 | 省略文本 Ellipsis Text | `vben-ellipsis-text.md` | `../assets/ellipsis-text-template.md` |
 | 提示 Alert | `vben-alert.md` | `../assets/alert-template.md` |
 
-本 Skill 中所有 `src/` 路径均指目标前端应用的源码目录：本仓库为 `前端代码/basic-framework-admin/apps/web-ele/src`，执行前确认目标业务模块。当前应用使用 Element Plus，API 使用 `#/api/request`；分页复用 `PageParam`/`PageResult`，参数为 `pageNo`、`pageSize`，结果为 `list`、`total`。接口端点、实体字段及更新签名须核对实际后端和相邻模块，不照搬示例字段。生成代码前必须完整读取本技能的 [Web 注释完整规范](web-comments.md)（中文注释、props/emits 契约、职责说明）。
+本 Skill 中所有 `src/` 路径均指目标前端应用的源码目录：本仓库为 `前端代码/basic-framework-admin/apps/web-ele/src`，执行前确认目标业务模块。当前应用使用 Element Plus，API 使用 `#/api/request`；分页复用 `PageParam`/`PageResult`，参数为 `pageNo`、`pageSize`，结果为 `list`、`total`。接口端点、实体字段及更新签名须核对实际后端（或 `src/api/generated/api-types.d.ts`）和相邻模块，不照搬示例字段。生成代码前必须完整读取本技能的 [Web 注释完整规范](web-comments.md)（中文注释、props/emits 契约、职责说明）。
 
 ### 3. 生成文件结构
 
-API 类型、请求封装、页面、表单和数据配置必须生成或复用已有对应文件。当前管理应用使用后端菜单模式：业务菜单在 `system_menu` 配置组件路径及权限，再分配角色；不为每个 CRUD 强制新增静态路由。只有明确需要核心或独立静态路由时，才生成下图的路由文件：
+可先在仓库根运行 `python -B -X utf8 scripts/scaffold/new_web_crud.py` 生成标准骨架，再按实际字段调整。API 类型与请求封装、页面、表单和数据配置必须生成或复用已有对应文件。当前管理应用使用后端菜单模式：业务菜单在 `system_menu` 配置组件路径及权限，再分配角色；不为每个 CRUD 强制新增静态路由。只有明确需要核心或独立静态路由时，才生成下图的路由文件：
 
 ```
 src/
 ├── api/
 │   └── [module]/
-│       ├── types.ts              # 类型定义，必须生成
-│       └── index.ts              # API 接口，必须生成
+│       ├── index.ts              # API 接口与命名空间类型，必须生成
+│       └── types.ts              # 可选独立类型文件（规模较大时拆分）
 ├── router/
 │   └── routes/
 │       └── modules/
@@ -59,11 +58,10 @@ src/
             └── form.vue          # 表单组件，必须生成
 ```
 
-**重要：`index.vue` 和 `data.ts` 同级，位于 `views/[module]/` 页面模块目录下。`form.vue`、`drawer.vue` 等其他组件位于该页面模块的 `modules/` 子目录下。不要嵌套额外的 `[module]` 子目录。**
+**重要：`index.vue` 和 `data.ts` 同级，位于 `views/[module]/` 页面模块目录下。`form.vue`、`drawer.vue` 等其他组件位于该页面模块的 `modules/` 子目录下（子组件允许使用 `../data` 引用同模块配置，禁止 `../../` 跨模块相对导入）。不要嵌套额外的 `[module]` 子目录。**
 
 **文件职责：**
-- `types.ts`：定义请求/响应类型和实体类型
-- `index.ts`：封装 CRUD API 方法（新增、查询、更新、删除）
+- `index.ts`（及可选 `types.ts`）：定义实体/请求/响应类型并封装 CRUD API 方法（新增、查询、更新、删除）
 - `[module].ts`：仅静态路由场景定义页面路由；后端菜单模式由后端菜单与授权配置提供业务路由
 - `form.vue`：使用 `useVbenModal` 或 `useVbenDrawer` 的表单组件
 - `data.ts`：表格列配置和搜索表单 schema
@@ -100,19 +98,18 @@ python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts
 
 生成完成后，必须按以下固定格式输出总结：
 
-```
-✅ [Module Name] CRUD 模块生成完成
+```text
+[完成] [Module Name] CRUD 模块生成完成
 
-📁 生成的文件：
-- src/api/[module]/types.ts
-- src/api/[module]/index.ts
+生成的文件：
+- src/api/[module]/index.ts（及可选 types.ts）
 - 后端菜单与角色授权配置（或明确需要时的 src/router/routes/modules/[module].ts）
 - src/views/[module]/index.vue
 - src/views/[module]/modules/form.vue
 - src/views/[module]/data.ts
 
-🎯 后续步骤：
-1. 调整 API 端点 URL，使其与实际后端路径一致
+后续步骤：
+1. 调整 API 端点 URL，使其与实际后端路径及 OpenAPI 契约一致
 2. 核对后端菜单组件路径、权限标识和角色授权；静态路由场景再核对路由注册
 3. 根据业务需求调整字段校验和展示逻辑
 ```

@@ -262,14 +262,16 @@ def test_policy_encoding_relative_links_and_product_names(tmp_path: Path) -> Non
     assert any(item.line == 5 and item.rule == "doc-policy-skill" for item in findings)
 
 
-def test_project_policy_keeps_reference_checks_without_name_blacklists(tmp_path: Path) -> None:
-    """项目停用名称黑名单后，普通文本不拦截，历史目录引用仍产生阻断诊断。"""
+def test_project_policy_blocks_legacy_terms_emojis_and_reference_dirs(tmp_path: Path) -> None:
+    """项目启用来源旧词与 Emoji 阻断后，普通文本放行，禁用标识、Emoji 和历史目录引用均产生诊断。"""
     rules = load_rules(DEFAULT_ROOT)
-    assert not rules.forbidden_terms
+    assert {"AIMaster", "xinkuangjia", "yudao", "ruoyi", "代码生成器"} <= set(rules.forbidden_terms)
     assert not rules.forbidden_skill_prefixes
     assert not rules.forbidden_skill_names
     path = tmp_path / "docs/入口.md"
     assert policy(tmp_path, path, "obsolete retired-doc retired-explicit", rules, {"doc"}) == []
+    legacy_findings = policy(tmp_path, path, "禁止残留 AIMaster 与 \u2705 符号", rules, {"doc"})
+    assert {item.rule for item in legacy_findings} == {"doc-policy-term", "doc-policy-emoji"}
     source = "[旧记录](../" + rules.forbidden_reference_dirs[0] + "记录.md)"
     findings = policy(tmp_path, path, source, rules, set())
     assert {item.rule for item in findings} == {"doc-policy-reference"}

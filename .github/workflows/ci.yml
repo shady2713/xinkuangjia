@@ -49,6 +49,17 @@ jobs:
           cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: OpenAPI contract check
+        run: pnpm api:check
+      - name: Workspace & architecture audit
+        run: |
+          pnpm quality:workspace
+          pnpm quality:development
+          pnpm graph:modules:check
+      - name: Circular & dependency check
+        run: |
+          pnpm check:circular
+          pnpm check:dep
       - name: Unit tests
         run: pnpm test:unit
       - name: Typecheck
@@ -57,6 +68,8 @@ jobs:
         run: pnpm lint
       - name: Build web-ele
         run: pnpm build:ele
+      - name: Production security & bundle budget scan
+        run: pnpm quality:prod-scan
 
   docs-comments:
     name: docs + comments
@@ -104,6 +117,26 @@ jobs:
         run: |
           set -euo pipefail
           python -B -X utf8 scripts/workflow/run_checks.py --group comments --base "${{ steps.baseline.outputs.sha }}"
+      - name: PR slice size guard
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          CHANGED_LINES="$(git diff --numstat "$BASE_SHA" HEAD -- . \
+            ':!pnpm-lock.yaml' \
+            ':!*/pnpm-lock.yaml' \
+            ':!*/openapi.json' \
+            ':!*/api-types.d.ts' \
+            ':!docs/开发指南/模块依赖关系图.md' \
+            | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { sum += $1 + $2 } END { print sum + 0 }')"
+          echo "Non-generated PR changed lines: $CHANGED_LINES"
+          if [ "$CHANGED_LINES" -gt 600 ] && [[ "${PR_BODY:-}" != *"[slice-override]"* ]]; then
+            echo "PR non-generated diff ($CHANGED_LINES lines) exceeds 600-line slice budget; split into smaller PRs or add [slice-override] rationale in PR body." >&2
+            exit 1
+          fi
 
   pytest:
     name: pytest (scripts/tests)

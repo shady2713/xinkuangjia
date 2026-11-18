@@ -21,6 +21,8 @@ from scripts.common.quality_common import Finding, discover, entry, parser, read
 from scripts.docs.document_support import Rules, load_rules
 from scripts.docs.markdown_support import parse, tokenize_markdown
 
+EMOJI_RE = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
+
 
 def canonical(text: str) -> str:
     """规范 URL 编码、HTML 实体和兼容字符；不执行转义文本或访问 URL。"""
@@ -149,6 +151,10 @@ def validate(
                             f"含旧技能名称：{match[0]}",
                         )
                     )
+        if not note and number >= 1 and EMOJI_RE.search(line):
+            findings.append(
+                Finding(relative, number, "doc-policy-emoji", "普通文档禁止引入 Emoji 符号")
+            )
         if not note and any(
             canonical(directory).rstrip("/") in canonical(sources.get(number, (set(), line))[1])
             for directory in rules.forbidden_reference_dirs

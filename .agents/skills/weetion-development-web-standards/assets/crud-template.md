@@ -7,14 +7,12 @@
 ```vue
 <script lang="ts" setup>
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { OperationEvent } from './data';
 import type { [Module]Api } from '#/api/[module]';
 
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Plus } from '@vben/icons';
-import { ElButton, ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { delete[Module], get[Module]List } from '#/api/[module]';
 import { $t } from '#/locales';
 
@@ -32,7 +30,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     submitOnChange: true,
   },
   gridOptions: {
-    columns: useColumns(onActionClick),
+    columns: useColumns(),
     height: 'auto',
     proxyConfig: {
       ajax: {
@@ -50,29 +48,15 @@ const [Grid, gridApi] = useVbenVxeGrid({
       zoom: true,
       search: true,
     },
-  } as VxeTableGridOptions,
+  } as VxeTableGridOptions<[Module]Api.[Module]>,
 });
-
-/** 按操作码打开编辑表单或进入删除确认。 */
-function onActionClick(e: OperationEvent) {
-  switch (e.code) {
-    case 'delete': {
-      onDelete(e.row);
-      break;
-    }
-    case 'edit': {
-      onEdit(e.row);
-      break;
-    }
-  }
-}
 
 /** 将目标记录传给编辑抽屉，不修改列表行本身。 */
 function onEdit(row: [Module]Api.[Module]) {
   formDrawerApi.setData(row).open();
 }
 
-/** CellOperation 确认后删除有效编号对应的记录；请求错误由请求客户端提示。 */
+/** 弹窗确认后删除有效编号对应的记录；请求错误由请求客户端提示。 */
 async function onDelete(row: [Module]Api.[Module]) {
   if (row.id == null) return;
   await delete[Module](row.id);
@@ -96,10 +80,42 @@ function onCreate() {
     <FormDrawer @success="onRefresh" />
     <Grid>
       <template #toolbar-tools>
-        <ElButton type="primary" @click="onCreate">
-          <Plus class="size-5" />
-          {{ $t('ui.actionTitle.create') }}
-        </ElButton>
+        <TableAction
+          :actions="[
+            {
+              label: $t('ui.actionTitle.create'),
+              type: 'primary',
+              icon: ACTION_ICON.ADD,
+              auth: ['[module]:create'],
+              onClick: onCreate,
+            },
+          ]"
+        />
+      </template>
+      <template #actions="{ row }">
+        <TableAction
+          :actions="[
+            {
+              label: $t('common.edit'),
+              type: 'primary',
+              link: true,
+              icon: ACTION_ICON.EDIT,
+              auth: ['[module]:update'],
+              onClick: onEdit.bind(null, row),
+            },
+            {
+              label: $t('common.delete'),
+              type: 'danger',
+              link: true,
+              icon: ACTION_ICON.DELETE,
+              auth: ['[module]:delete'],
+              popConfirm: {
+                title: $t('ui.actionMessage.deleteConfirm', [row.name]),
+                confirm: onDelete.bind(null, row),
+              },
+            },
+          ]"
+        />
       </template>
     </Grid>
   </Page>
@@ -191,12 +207,6 @@ import type { [Module]Api } from '#/api/[module]';
 
 import { $t } from '#/locales';
 
-/** 操作列发送的业务记录及操作码，由本模块定义而非表格适配器导出。 */
-export interface OperationEvent {
-  code: string;
-  row: [Module]Api.[Module];
-}
-
 /** 返回实体名称、状态和备注的编辑校验配置。 */
 export function useFormSchema(): VbenFormSchema[] {
   return [
@@ -250,10 +260,8 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 定义列表字段及操作回调；权限标识须按当前业务补齐。 */
-export function useColumns(
-  onActionClick: (event: OperationEvent) => void,
-): VxeTableGridOptions['columns'] {
+/** 定义列表字段与 `#actions` 操作插槽；权限标识须按当前业务补齐。 */
+export function useColumns(): VxeTableGridOptions<[Module]Api.[Module]>['columns'] {
   return [
     {
       field: 'name',
@@ -269,6 +277,7 @@ export function useColumns(
     {
       field: 'createTime',
       title: '创建时间',
+      formatter: 'formatDateTime',
       width: 200,
     },
     {
@@ -277,19 +286,11 @@ export function useColumns(
       minWidth: 100,
     },
     {
-      field: 'operation',
       title: '操作',
       fixed: 'right',
-      width: 130,
+      width: 140,
       align: 'center',
-      cellRender: {
-        name: 'CellOperation',
-        // 操作可见性须按真实业务权限配置，服务端仍需校验权限。
-        options: ['edit', 'delete'],
-        attrs: {
-          onClick: onActionClick,
-        },
-      },
+      slots: { default: 'actions' },
     },
   ];
 }

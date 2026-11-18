@@ -24,8 +24,6 @@ kind: package-reference
 | 安装完整项目，构建并运行应用与中间件 | [服务器部署](部署说明.md) |
 | 准备并验收断网服务器安装包 | [离线部署包](构建离线部署包说明.md) |
 
-从 #26 之前的框架版本升级业务项目，先读[升级与迁移说明](../开发指南/升级与迁移说明.md)，再按服务器部署文档执行。
-
 ## 配置与开发入口
 
 Java配置字段查[环境样例](../../后端代码/basic-framework-boot/.env.example)，浏览器参数查[运行配置](../../前端代码/basic-framework-admin/apps/web-ele/docker/app.config.js)。实际密码、私钥与Token由负责人受控提供，模板不公布默认口令。
@@ -33,7 +31,7 @@ Java配置字段查[环境样例](../../后端代码/basic-framework-boot/.env.e
 仓库辅助脚本只保留本地用途，不构成部署入口：
 
 - [http-client.env.json](../../后端代码/basic-framework-boot/script/idea/http-client.env.json)及其[说明](../../后端代码/basic-framework-boot/script/idea/README.md)是IntelliJ IDEA HTTP Client的本地调试环境，令牌由使用者在本机填写，不参与服务器部署、镜像构建或交付包制作。
-- 原 `script/docker` 全栈 Compose 与 `script/shell/deploy.sh` 入口已删除，仓库不再维护第二条官方部署路径。不要从旧脚本或旧分支推断部署方式，服务器安装只按[服务器部署](部署说明.md)执行。
+- 服务器安装统一按[服务器部署](部署说明.md)的容器化流程与官方 Dockerfile 执行。
 
 开发构建与模块说明分别见[Java README](../../后端代码/basic-framework-boot/README.md)、[前端 README](../../前端代码/basic-framework-admin/README.md)，模块关系见[总体架构](../架构/00-总体架构.md)。
 
@@ -43,8 +41,8 @@ Java配置字段查[环境样例](../../后端代码/basic-framework-boot/.env.e
 
 - SQL含重建语句，已有库升级需要迁移和备份恢复设计。
 - 密码传输要求 `SM2_PRIVATE_KEY`；缺失时后端拒绝启动，首次登录或管理员重置密码后强制改密，详见[SM2 密码传输与密码策略](../开发指南/SM2密码传输与密码策略.md)。
-- 文件地址采用长期公开读取契约，敏感文件需要完整私有授权实现。
+- 文件地址采用长期公开读取契约，网关 `/files/` 路径须开启 `Content-Security-Policy: sandbox` 与 `X-Content-Type-Options: nosniff`；敏感文件需要完整私有授权实现。
 - Redis不可用时默认按 `REDIS_UNAVAILABLE_STRATEGY=local-fallback` 降级：登录失败锁定和短信登录限流改用当前实例的有界内存计数，多实例之间不共享、重启后清零；令牌空闲校验仍失败关闭。多实例或严格安全要求应显式改为 `fail-closed`，并接受Redis故障期间拒绝登录。适用场景与风险见[Redis 不可用时的行为](../开发指南/SM2密码传输与密码策略.md#redis-不可用时的行为)。
-- 短信发送侧只有同一手机号的发送间隔和每日上限，未实现按IP的发送频控；短信登录失败锁定才有手机号/IP双维度。短信回调入口保持匿名，回调验签由并行任务补齐；补齐并发布前，生产应在网关限制回调来源。
+- 短信发送侧按同一手机号执行发送间隔和每日上限；短信回调入口 `/admin-api/system/sms/callback/{aliyun,tencent}` 强制校验时间戳与 HMAC 签名（`basic-framework.sms-callback.secrets.ALIYUN` / `TENCENT`），未配置对应密钥时默认失败关闭返回 403。
 - 短信、第三方OAuth2与数据恢复不因应用构建成功而自动通过。
 - 目标操作系统、CPU架构与Docker离线安装依赖必须实际确认。

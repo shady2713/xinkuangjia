@@ -213,16 +213,52 @@ def test_pytest_job_installs_requirements_and_runs_suite() -> None:
 
 
 def test_frontend_job_runs_lint_after_install() -> None:
-    """前端 job 在既有安装之后、构建之前执行现有 lint。"""
+    """前端 job 在既有安装之后、构建之前执行契约与 lint 门禁，并在构建后扫描产物。"""
     job = workflow_jobs()["frontend"]
     assert job["defaults"]["run"]["working-directory"] == "前端代码/basic-framework-admin"
     steps = job["steps"]
     runs = [step.get("run") for step in steps]
     assert (
         runs.index("pnpm install --frozen-lockfile")
+        < runs.index("pnpm api:check")
         < runs.index("pnpm lint")
         < runs.index("pnpm build:ele")
+        < runs.index("pnpm quality:prod-scan")
     )
+
+
+def test_pr_slice_size_guard_blocks_oversized_pr_without_override(tmp_path: Path) -> None:
+    """超大非生成 PR 缺少 [slice-override] 时阻断，声明豁免或仅生成文件大改动时放行。"""
+    repo = tmp_path / "repo"
+    init_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    base_sha = commit_all(repo, "base")
+
+    # 1. 生成文件超过 600 行不计入预算
+    gen = repo / "apps" / "web-ele" / "src" / "api" / "generated" / "api-types.d.ts"
+    gen.parent.mkdir(parents=True)
+    gen.write_text("\n".join(f"export type T{i} = string;" for i in range(700)) + "\n", encoding="utf-8")
+    commit_all(repo, "generated")
+    guard_script = step_run("docs-comments", "PR slice size guard")
+    gen_res = run_shell(guard_script, repo, {"BASE_SHA": base_sha, "PR_BODY": "routine sync"})
+    assert gen_res.returncode == 0, gen_res.stdout + gen_res.stderr
+
+    # 2. 业务源码超过 600 行且无 [slice-override] 必须失败
+    src = repo / "src" / "Oversized.java"
+    src.parent.mkdir(parents=True)
+    src.write_text("\n".join(f"// line {i}" for i in range(650)) + "\n", encoding="utf-8")
+    commit_all(repo, "oversized")
+    blocked = run_shell(guard_script, repo, {"BASE_SHA": base_sha, "PR_BODY": "missing rationale"})
+    assert blocked.returncode == 1
+    assert "exceeds 600-line slice budget" in blocked.stderr
+
+    # 3. PR 描述显式附带 [slice-override] 时放行
+    allowed = run_shell(
+        guard_script,
+        repo,
+        {"BASE_SHA": base_sha, "PR_BODY": "Architecture baseline [slice-override]"},
+    )
+    assert allowed.returncode == 0, allowed.stdout + allowed.stderr
 
 
 @pytest.mark.parametrize("event_base", ["", ZERO_SHA])

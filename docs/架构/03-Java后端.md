@@ -27,14 +27,14 @@ Java 工程位于 `后端代码/basic-framework-boot`，编译目标 Java 17，�
 | --- | --- |
 | dependencies | BOM 与第三方、内部依赖版本 |
 | core/common | 结果、分页、异常、工具与公共类型 |
-| core Starter | Web、Security、MyBatis、Redis、保护、Quartz、Excel、部门数据权限、IP |
+| core Starter | Web、Security、MyBatis、Redis、Quartz、Excel、部门数据权限、IP |
 | module-system | 用户、组织、角色菜单、字典、认证、OAuth2、短信与日志 |
 | module-infra | 参数配置、统一文件存储、任务管理、任务日志及 API 日志 |
 | server | 启动扫描、全局配置、可执行 JAR；不承载业务规则 |
 
-启动类扫描配置的基础包 `com.basicframework` 下的 `server` 与 `module`；Starter 由 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 装配。新模块不仅要有源码，还需进入聚合 POM 与 server 依赖。MQ Starter 目录未进入当前 core 聚合清单，不能把它当作已经装配的消息消费服务。
+启动类扫描配置的基础包 `com.basicframework` 下的 `server` 与 `module`；Starter 由 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 装配。新模块不仅要有源码，还需进入聚合 POM 与 server 依赖（可使用 `scripts/scaffold/new_java_module.py` 一键注册并分配错误码号段）。
 
-版本以[根 POM](../../后端代码/basic-framework-boot/pom.xml)和[BOM](../../后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml)为准：MyBatis 3.5.19、MyBatis-Plus 3.5.17、Redisson 3.52.0、Springdoc 2.8.17、Knife4j 4.5.0；MinIO 客户端使用 AWS SDK S3，BOM 为 2.54.7，不是 MinIO Java SDK。
+版本以[根 POM](../../后端代码/basic-framework-boot/pom.xml)和[BOM](../../后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml)为准：MyBatis 3.5.19、MyBatis-Plus 3.5.18.1、Redisson 3.52.0、Springdoc 2.8.17、Knife4j 4.5.0；MinIO 客户端使用 AWS SDK S3，BOM 为 2.57.12，不是 MinIO Java SDK。
 
 ## 业务开发与接口边界
 
@@ -52,15 +52,22 @@ Controller 负责协议与校验，Service 负责业务规则，Mapper 与客户
 
 Web Starter 按 Controller 包匹配自动加前缀：`controller.admin` 为 `/admin-api`，`controller.app` 为 `/app-api`。例如 Controller 声明 `/system/user`，管理请求实际访问 `/admin-api/system/user`；不要在 Controller 中再写一次前缀。常规接口返回 `CommonResult`，分页使用 `PageResult`，导出等接口按对应协议输出，不能机械套结果拆包。
 
-新查询应使用项目分页和查询基类；用户身份取认证上下文，不信任请求中的用户、部门或权限字段。部门数据权限仅作用于已登记规则和对应 SQL 路径，应验证越权读取与更新，不宣称所有表自动隔离。
+传输序列化与错误码规范由公共组件统一约束：
+
+- **JSON 与 Excel 传输契约**：`LocalDateTime` 统一序列化/反序列化为毫秒级时间戳（epoch-ms `number`）；超过 JavaScript 安全整数（`> 2^53 - 1`）的 `Long` 值自动序列化为 JSON 字符串，FastExcel 导出通过 `LongPlainStringWriteConverter` 转为纯数字文本防止科学计数法精度丢失。
+- **模块错误码号段**：业务异常统一登记在 `ServiceErrorCodeRange` 与模块 `ErrorCodeConstants`（`system` 为 `1-002-000-000`，`infra` 为 `1-001-000-000`，新建业务模块从 `1-003-000-000` 起按百万步长分配），禁止直接抛出裸 `RuntimeException`。
+- **链路追踪日志**：请求过滤链自动将链路标识写入 SLF4J MDC `traceId`（日志格式包含 `[%X{traceId:-}]`），便于跨 Controller、Service 与异常处理器检索同一请求日志。
+- **OpenAPI 契约快照**：Controller 签名或 VO 字段变更后，通过 `OpenApiContractSnapshotTest`（携带 `-Dopenapi.snapshot.update=true`）更新 `apps/web-ele/src/api/generated/openapi.json`，再运行前端 `pnpm api:gen` 同步 TypeScript 类型。
+
+新查询应使用项目分页和查询基类；用户身份取认证上下文，不信任请求中的用户、部门或权限字段。部门数据权限仅作用于已登记规则和对应 SQL 路径，写操作（更新、删除、分配角色/状态）必须在 Service 层显式校验目标记录在当前登录者可访问的数据范围内，防止只拦截列表查询而漏放单条 ID 修改。
 
 ## 认证和权限
 
 账号、令牌与操作权限由 system 提供；浏览器路由不是授权边界。
 
-- 账号密码界面调用 `/system/auth/super-admin-login`；普通 `/login` 和短信 `/sms-login` 入口仍在服务端，二者按业务管理平台校验账号平台类型。超级管理员入口与普通入口分别校验用户平台类型，权限信息也按角色、菜单平台类型过滤。新增用户、角色或菜单须保持这些契约一致。
-- `TokenAuthenticationFilter` 在 Security 过滤链中读取令牌，通过 OAuth2 Token API 校验并设置当前身份。匿名路径由 `@PermitAll`、Security 配置与模块定制共同决定，其余请求要求认证。
-- 操作权限使用 `@PreAuthorize("@ss.hasPermission('域:资源:操作')")`，由权限服务计算角色和菜单关系；权限码须与菜单及前端按钮一致。数据范围是另一层约束，不能用按钮权限代替。
+- 账号密码界面调用 `/system/auth/super-admin-login`；普通 `/login` 和短信 `/sms-login` 入口按业务管理平台校验账号平台类型。超级管理员（`super_admin`）拥有全局全量权限；业务管理员（`business_admin`）受所属平台与数据权限约束，严禁修改或接管 `super_admin` 角色及账号。
+- `TokenAuthenticationFilter` 在 Security 过滤链中读取令牌，通过 OAuth2 Token API 校验并设置当前身份。匿名路径由 `@PermitAll`、Security 配置与 `FootgunRules.PERMIT_ALL_ALLOWLIST` 共同锁定，其余请求要求认证。
+- 操作权限使用 `@PreAuthorize("@ss.hasPermission('域:资源:操作')")`，由权限服务计算角色和菜单关系；权限码须与 `system_menu` 及前端按钮一致（由 `SchemaDoRbacParityTest` 自动校验）。数据范围是另一层约束，不能用按钮权限代替。
 - access/refresh Token 存入 MySQL，access Token 有 Redis 缓存。查询先读缓存，未命中读数据库并回填，校验检查有效期；刷新与撤销由令牌服务维护。不能只删除浏览器 Token 就声称服务端登录态已撤销。
 
 图形验证码使用 Anji Captcha 和 Redis，服务端启用开关与前端显示开关须一致。默认 `CAPTCHA_AES_STATUS=false` 对应当前前端坐标协议，不能只在后端开启 AES 就认为双方兼容。
@@ -69,7 +76,7 @@ Web Starter 按 Controller 包匹配自动加前缀：`controller.admin` 为 `/a
 
 MyBatis Starter 管理 MySQL 访问，Redis Starter 管理缓存。运行时配置见[服务器部署](../部署/部署说明.md#准备目录与配置)。
 
-主库名为 `master`，配置使用 `DB_*`；从库使用 `DB_SLAVE_*`，未提供时回退主库。启用严格数据源匹配，写错数据源名不应按默认库悄悄运行。MyBatis-Plus 开启下划线到驼峰与逻辑删除约定，DO 沿用公共审计字段及相邻模块的映射。
+主库名为 `master`，配置使用 `DB_*`；从库使用 `DB_SLAVE_*`，未提供时回退主库。启用严格数据源匹配，写错数据源名不应按默认库悄悄运行。MyBatis-Plus 开启下划线到驼峰与逻辑删除约定：无业务唯一索引的普通表继承 `BaseDO`；含业务唯一键的表继承 `UniqueBaseDO`（附加 `deleted_tag bigint NOT NULL DEFAULT 0`，唯一索引建在 `(业务唯一列, deleted_tag)` 上），由 `SoftDeleteUniqueInnerInterceptor` 在逻辑删除时自动重写 `SET deleted = 1, deleted_tag = id`，保证同名记录删除后可安全重建且活跃记录严格唯一。`SchemaDoRbacParityTest` 在构建期自动核验全部 DO 与 `basic_framework.sql` 的表列对齐。
 
 权限关系使用 `@Cacheable`、`@CacheEvict`；普通 Spring Redis Cache 默认 TTL 为一小时，不代表每个 Token、验证码和业务缓存都采用同一期限。更改权限应走对应 Service 失效流程；直接 SQL 修改不会触发缓存注解，联调时要明确刷新目标缓存或重新装配权限，不能无差别清空共享 Redis。
 
