@@ -42,12 +42,20 @@ def test_public_parameter_return_and_throw_failures() -> None:
 
 
 def test_private_function_and_callback_are_checked() -> None:
-    """内部函数与箭头回调也不能因未导出而缺少职责说明。"""
+    """内部函数、具名箭头函数与多分支内联回调须有职责说明；简单单表达式实参回调与测试用例回调豁免复述噪音。"""
     findings = web(
-        "/** 模块说明。 */\nconst value = 1;\nfunction hidden() {}\n[1].map(value => value + 1);\n"
+        "/** 模块说明。 */\n"
+        "const value = 1;\n"
+        "function hidden() {}\n"
+        "const mapper = (item: number) => item + 1;\n"
+        "[1].map((item) => { if (item > 0) return item; if (item < 0) return 0; return -1; });\n"
     )
-    assert sum(item["rule"] == "web-doc" for item in findings) == 2
-    assert not web("/** 模块计算数组。 */\n[1].map(/** 将数量增加一。 */ value => value + 1);")
+    assert sum(item["rule"] == "web-doc" for item in findings) == 3
+    assert not web(
+        "/** 模块计算数组。 */\n"
+        "[1].map(value => value + 1);\n"
+        "it('验证数量累加', () => { expect(1 + 1).toBe(2); });\n"
+    )
 
 
 def test_incremental_deletion_is_detected() -> None:

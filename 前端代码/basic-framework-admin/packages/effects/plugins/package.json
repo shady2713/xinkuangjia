@@ -3,14 +3,13 @@
   "version": "5.6.0",
   "license": "MIT",
   "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit --skipLibCheck"
+  },
   "sideEffects": [
     "**/*.css"
   ],
   "exports": {
-    "./code-editor": {
-      "types": "./src/code-editor/index.ts",
-      "default": "./src/code-editor/index.ts"
-    },
     "./echarts": {
       "types": "./src/echarts/index.ts",
       "default": "./src/echarts/index.ts"
@@ -36,7 +35,6 @@
     "@vben/utils": "workspace:*",
     "@vueuse/core": "catalog:",
     "@vueuse/motion": "catalog:",
-    "codemirror": "catalog:",
     "echarts": "catalog:",
     "markdown-it": "catalog:",
     "vue": "catalog:",
@@ -44,7 +42,6 @@
     "vxe-table": "catalog:"
   },
   "devDependencies": {
-    "@types/codemirror": "catalog:",
     "@types/markdown-it": "catalog:"
   }
 }

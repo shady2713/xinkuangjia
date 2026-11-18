@@ -195,6 +195,18 @@ class WorkspaceTests(unittest.TestCase):
                 },
             )
 
+    def test_source_package_requires_typecheck_script(self) -> None:
+        """含 tsconfig.json 与 src 目录的子包缺少 typecheck 脚本时必须失败。"""
+        self.write("packages/core/tsconfig.json", "{}\n")
+        self.write("packages/core/src/index.ts", "export const ok = 1;\n")
+        self.assertEqual(self.rules(), ["missing-typecheck"])
+        self.package(
+            "packages/core",
+            "@demo/core",
+            scripts={"typecheck": "vue-tsc -p tsconfig.json --noEmit --skipLibCheck"},
+        )
+        self.assertEqual(self.rules(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

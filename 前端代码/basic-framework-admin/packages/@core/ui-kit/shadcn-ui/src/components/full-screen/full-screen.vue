@@ -12,11 +12,11 @@ const { isFullscreen, toggle } = useFullscreen();
 // 重新检查全屏状态
 isFullscreen.value = !!(
   document.fullscreenElement ||
-  // @ts-ignore
+  // @ts-ignore 兼容旧版 WebKit 私有全屏状态属性
   document.webkitFullscreenElement ||
-  // @ts-ignore
+  // @ts-ignore 兼容旧版 Firefox 私有全屏状态属性
   document.mozFullScreenElement ||
-  // @ts-ignore
+  // @ts-ignore 兼容旧版 IE/Edge 私有全屏状态属性
   document.msFullscreenElement
 );
 </script>

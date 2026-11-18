@@ -343,6 +343,9 @@ const showDefaultEmpty = computed(() => {
   return !hasEmptyText && !hasEmptyRender;
 });
 
+/**
+ * 初始化表格默认配置并在启用自动加载时触发首轮代理查询。
+ */
 async function init() {
   await nextTick();
   const globalGridConfig = VxeUI?.getConfig()?.grid ?? {};
@@ -370,7 +373,7 @@ async function init() {
       '[Vben Vxe Table]: The formConfig in the grid is not supported, please use the `formOptions` props',
     );
   }
-  // @ts-ignore
+  // @ts-ignore 初始化阶段将默认表格配置合并写入表格 API 内部状态
   props.api?.setState?.({ gridOptions: defaultGridOptions });
   extendProxyOptions(props.api, defaultGridOptions, () =>
     formApi.getLatestSubmissionValues(),

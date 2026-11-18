@@ -26,20 +26,31 @@ async function loadConditionPlugins(conditionPlugins: ConditionPlugin[]) {
   return plugins.flat();
 }
 
+/**
+ * 组装应用与组件库共用的基础 Vite 插件集合。
+ *
+ * @param options 公共插件选项
+ * @returns 带启用条件的插件定义列表
+ */
 async function loadCommonPlugins(
   options: CommonPluginOptions,
 ): Promise<ConditionPlugin[]> {
   return [
     {
       condition: true,
-      plugins: () => [
+      /**
+       * 加载通用 Vue 编译与运行时配置注入插件。
+       *
+       * @returns 通用插件实例列表
+       */
+      plugins: async () => [
         viteVue({
           script: {
             defineModel: true,
           },
         }),
         viteVueJsx(),
-        viteExtraAppConfigPlugin({
+        await viteExtraAppConfigPlugin({
           isBuild: options.isBuild ?? false,
           root: options.root ?? process.cwd(),
         }),
@@ -63,7 +74,9 @@ async function loadApplicationPlugins(
     {
       condition: options.mode === 'analyze',
       // 分析构建与生产产物分目录，避免带报告的输出被误用于发布。
-      plugins: () => [bundleAnalysis(options.root ?? process.cwd())],
+      plugins: () => [
+        bundleAnalysis(options.root ?? process.cwd()) as PluginOption,
+      ],
     },
     {
       condition: options.injectAppLoading,

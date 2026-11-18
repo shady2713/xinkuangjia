@@ -242,6 +242,43 @@ function parameterTags(text) {
   return tags;
 }
 
+const TEST_CALL_NAMES = new Set([
+  'afterAll',
+  'afterEach',
+  'beforeAll',
+  'beforeEach',
+  'describe',
+  'it',
+  'test',
+]);
+
+/**
+ * 判断直接作为调用实参传入的内联回调是否可豁免重复职责注释：
+ * 1. 测试框架用例与生命周期钩子，测试标题本身已表达验证契约；
+ * 2. 未赋值给变量或属性（owner === node）、不抛未捕获异常且控制流分支少于 2 的简短内联回调，避免制造复述代码的噪音注释。
+ * 显式声明的 function、赋值给变量/属性的函数及多分支复杂回调仍须提供中文职责注释。
+ * @param node - 待检查的函数节点。
+ * @param owner - 注释承载节点。
+ * @param facts - 函数自身的控制流事实。
+ * @param sourceFile - 当前语法树。
+ * @returns 是否豁免强制职责注释。
+ */
+function exemptInlineCallback(node, owner, facts, sourceFile) {
+  if (owner !== node) return false;
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) return false;
+  if (
+    !ts.isCallExpression(node.parent) ||
+    !node.parent.arguments.includes(node)
+  ) {
+    return false;
+  }
+  const callee = node.parent.expression.getText(sourceFile).split('.')[0];
+  if (TEST_CALL_NAMES.has(callee)) {
+    return true;
+  }
+  return !facts.throws && facts.branches < 2;
+}
+
 /**
  * 解析一个脚本块并检查受改动影响的显式声明。
  * @param file - Python 提供的文件及改动行。
@@ -326,6 +363,11 @@ function checkScript(file, source, offset, language) {
       (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0;
     if (callable || structure || publicVariable) {
       const owner = ownerOf(node);
+      const facts = callable ? bodyFacts(node) : null;
+      if (callable && exemptInlineCallback(node, owner, facts, tree)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
       const doc = documentation(owner, tree);
       const start =
         tree.getLineAndCharacterOfPosition(doc.start).line + offset + 1;
@@ -349,8 +391,7 @@ function checkScript(file, source, offset, language) {
             `${label} 公开声明需要 JSDoc 块注释`,
           );
         }
-        if (callable) {
-          const facts = bodyFacts(node);
+        if (callable && facts) {
           const contract = isPublic || facts.branches >= 2;
           if (contract) {
             const tags = parameterTags(doc.text);

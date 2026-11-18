@@ -39,9 +39,14 @@ const bindProps = computed(() => {
       };
 });
 
+/**
+ * 切换深浅色主题并在浏览器支持时播放圆形扩散过渡动画。
+ *
+ * @param event 触发切换的点击事件
+ */
 function toggleTheme(event: MouseEvent) {
   const isAppearanceTransition =
-    // @ts-expect-error
+    // @ts-expect-error 读取浏览器 startViewTransition 方法引用做能力探测而非立即调用
     document.startViewTransition &&
     !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (!isAppearanceTransition || !event) {
