@@ -29,7 +29,7 @@ jobs:
         run: mvn -B -ntp -Pquality-gate verify
 
   frontend:
-    name: frontend (unit + typecheck + build)
+    name: frontend (unit + typecheck + lint + build)
     runs-on: ubuntu-latest
     env:
       # GitHub runner 默认 TZ=UTC；仓库时区相关单测期望 IANA 区域名（如 Asia/Shanghai）。
@@ -164,4 +164,4 @@ jobs:
           # 索引对齐到 BASE，工作区保持 HEAD，再 add 全部差异，等价于扫本次变更。
           git reset --mixed "$BASE"
           git add -A
-          python3 -B -X utf8 scripts/security/scan_staged_secrets.py
+          python -B -X utf8 scripts/security/scan_staged_secrets.py

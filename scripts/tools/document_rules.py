@@ -15,6 +15,7 @@ RULES = {
         ".agents/notes/*": "决策记录由笔记格式检查负责",
         ".agents/skills/*/SKILL.md": "技能主文件有独立格式",
         ".agents/skills/*/templates/*": "模板包含示例骨架，不是普通页面",
+        ".github/pull_request_template.md": "GitHub 拉取请求清单由评审章节组织，不是普通页面",
         ".gitlab/merge_request_templates/*.md": "合并请求填写模板由评审字段组织，不是普通页面",
         "docs/postmortem/*": "事故复盘使用专门骨架",
     },

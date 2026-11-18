@@ -23,6 +23,7 @@
 /部署/.env
 /部署/.env.*
 !/部署/.env.example
+/.env.dev
 /后端代码/basic-framework-boot/LOG_FILE_IS_UNDEFINED
 
 # Local Python environments and generated quality-check caches.
@@ -30,6 +31,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.eslintcache
 .stylelintcache
 LOG_FILE_IS_UNDEFINED
 

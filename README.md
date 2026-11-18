@@ -53,10 +53,9 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 
 开发运行按 Java 与管理前端 README 完成下列步骤；服务器安装按[部署说明](docs/部署/部署说明.md)准备完整项目。依赖版本、环境变量和完整命令由所属文档维护。
 
-1. 准备 MySQL、Redis 和 MinIO，核实数据库初始化文件适用于目标环境。
-2. 根据 Java 工程的 `.env.example` 建立本地 `.env`，配置数据库、缓存和对象存储。
-3. 安装前端锁定依赖，准备 Java 应用包，按顺序启动中间件、后端和管理前端。
-4. 检查登录页面、验证码、受保护接口与菜单；文件和外部短信按各自配置单独验证。
+1. 运行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply` 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并启用 `.githooks` 提交前检查；使用 [`docker-compose.dev.yml`](docker-compose.dev.yml) 或既有环境准备 MySQL、Redis 和 MinIO。
+2. 核对本地配置与目标库无误后，安装前端锁定依赖，准备 Java 应用包，按顺序启动中间件、后端和管理前端。
+3. 检查登录页面、验证码、受保护接口与菜单；文件和外部短信按各自配置单独验证。
 
 应用部署查[部署说明](docs/部署/部署说明.md)，离线交付查[离线打包说明](docs/部署/构建离线部署包说明.md)。两者分别说明构建产物、环境配置和运行验收。
 
@@ -69,6 +68,7 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 - [Java 后端架构](docs/架构/03-Java后端.md)：模块依赖、分层、认证权限、数据库与文件扩展。
 - [管理前端架构](docs/架构/01-管理前端.md)：应用入口、请求客户端、权限菜单与页面接入。
 - [脚本索引](docs/开发指南/脚本使用索引.md)：选择实际检查、测试和构建命令。
+- [Vibe Coding 开发工作流](docs/开发指南/Vibe-Coding开发工作流.md)：从需求拆解、单责切片到小批次 PR 与 CI 合并门禁的开发闭环。
 - [升级与迁移说明](docs/开发指南/升级与迁移说明.md)：#26 删除公开类型、分页排序合并与安全收紧的迁移步骤。
 - [测试策略](docs/测试与可靠性/测试策略.md)：正常、边界与失败场景，以及验证结果的适用范围。
 - [工程规则（中文）](AGENTS.zh.md)与[英文版](AGENTS.md)：开发约束、Skill 路由、注释与交付要求。
@@ -77,4 +77,4 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 
 ## CI
 
-Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 跑后端 quality-gate、前端单测/类型检查/构建与变更密钥扫描。
+Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 并行执行后端 quality-gate、前端单测/类型检查/lint/构建、文档与增量注释检查、`pytest` 工具测试及变更密钥扫描。

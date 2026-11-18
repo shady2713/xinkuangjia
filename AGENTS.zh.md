@@ -24,7 +24,7 @@ docs/                            架构、开发、测试与性能文档
 .agents/skills/                  项目专项技能及引用资料
 ```
 
-服务操作先查所属包 README；职责与集成边界查[总体架构](docs/架构/00-总体架构.md)、[Java 后端](docs/架构/03-Java后端.md)和[管理前端](docs/架构/01-管理前端.md)。
+服务操作先查所属包 README；职责、集成边界与端到端切片闭环查[总体架构](docs/架构/00-总体架构.md)、[Java 后端](docs/架构/03-Java后端.md)、[管理前端](docs/架构/01-管理前端.md)和[Vibe Coding 开发工作流](docs/开发指南/Vibe-Coding开发工作流.md)。
 
 ## 工作规则
 
@@ -62,6 +62,7 @@ docs/                            架构、开发、测试与性能文档
 ## 操作入口
 
 - 依赖、检查、构建与交付先查[脚本索引](docs/开发指南/脚本使用索引.md)；新增、移动或停用脚本时同步索引和所属 README。
+- 本地引导与开发中间件：先用 `python -B -X utf8 scripts/runtime/init_local_dev.py` 自检（加 `--apply` 生成被忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`），再用 [docker-compose.dev.yml](docker-compose.dev.yml) 启动环回绑定的 MySQL、Redis 与 MinIO。
 - 开发启动查所属包 README，启动应用前确认工作目录、环境与必需变量。
 - 部署与离线交付查[部署说明](docs/部署/部署说明.md)和[离线打包](docs/部署/构建离线部署包说明.md)，区分应用产物与环境配置。
 - 数据库初始化或数据修改须核实目标及恢复方式，不得自动把包含重建语句的 SQL 导入已有数据库。
