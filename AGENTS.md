@@ -24,7 +24,7 @@ docs/                            Architecture, development, testing and performa
 .agents/skills/                  Project-specific Skills and supporting references
 ```
 
-Start with the relevant package README for service operations. Use the [overall architecture](docs/架构/00-总体架构.md), [Java backend](docs/架构/03-Java后端.md) and [administration frontend](docs/架构/01-管理前端.md) for responsibilities and integration boundaries.
+Start with the relevant package README for service operations. Use the [overall architecture](docs/架构/00-总体架构.md), [Java backend](docs/架构/03-Java后端.md), [administration frontend](docs/架构/01-管理前端.md) and [Vibe Coding workflow](docs/开发指南/Vibe-Coding开发工作流.md) for responsibilities, integration boundaries and end-to-end delivery slices.
 
 ## Working Rules
 
@@ -62,6 +62,7 @@ For comments, fully read the Skill's required general and language-specific refe
 ## Operational Entry Points
 
 - Dependencies, checks, builds and delivery: consult the [script index](docs/开发指南/脚本使用索引.md) first. When adding, moving or retiring a script, update the index and owning README.
+- Local bootstrap and dev infrastructure: run `python -B -X utf8 scripts/runtime/init_local_dev.py` (`--apply` to materialize gitignored `.env.dev` / `.env` and set `core.hooksPath` to `.githooks`) and [docker-compose.dev.yml](docker-compose.dev.yml) for loopback-bound MySQL, Redis and MinIO.
 - Development startup: use the owning package README. Confirm the working directory, environment and required variables before starting the application.
 - Deployment and offline delivery: use [deployment](docs/部署/部署说明.md) and [offline packaging](docs/部署/构建离线部署包说明.md). Distinguish application artifacts from environment-specific configuration.
 - Database initialization and data changes require a verified target and recovery method. Never automatically import a rebuilding SQL file into an existing database.
