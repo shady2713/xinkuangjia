@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 
 import { Bell, CircleCheckBig, CircleX, MailCheck } from '@vben/icons';
 import { $t } from '@vben/locales';
+import { openWindow } from '@vben/utils';
 
 import {
   VbenButton,
@@ -69,14 +70,21 @@ function handleClick(item: NotificationItem) {
   }
 }
 
+/**
+ * 根据链接协议在安全新标签页或站内路由间跳转。
+ *
+ * @param link 目标地址或站内路径
+ * @param query 可选路由查询参数
+ * @param state 可选路由状态对象
+ */
 function navigateTo(
   link: string,
   query?: Record<string, any>,
   state?: Record<string, any>,
 ) {
   if (link.startsWith('http://') || link.startsWith('https://')) {
-    // 外部链接，在新标签页打开
-    window.open(link, '_blank');
+    // 外部链接，在新标签页安全打开
+    openWindow(link, { target: '_blank' });
   } else {
     // 内部路由链接，支持 query 参数和 state
     router.push({

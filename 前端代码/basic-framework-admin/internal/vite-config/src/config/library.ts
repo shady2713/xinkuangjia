@@ -10,6 +10,12 @@ import { defineConfig, mergeConfig } from 'vite';
 import { loadLibraryPlugins } from '../plugins/index.ts';
 import { getCommonConfig } from './common.ts';
 
+/**
+ * 创建工作区内部库包的 Vite 构建配置。
+ *
+ * @param userConfigPromise 可选库级自定义配置工厂
+ * @returns 可由 Vite 直接加载的异步配置
+ */
 function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
   return defineConfig(async (config: ConfigEnv) => {
     const options = await userConfigPromise?.(config);
@@ -19,7 +25,6 @@ function defineLibraryConfig(userConfigPromise?: DefineLibraryOptions) {
 
     const plugins = await loadLibraryPlugins({
       dts: false,
-      injectMetadata: true,
       isBuild,
       mode,
       ...library,

@@ -92,7 +92,7 @@ defineExpose({
   <div>
     <Title>
       <slot name="title">
-        {{ title || $t('authentication.welcomeBack') }} 📲
+        {{ title || $t('authentication.welcomeBack') }}
       </slot>
       <template #desc>
         <span class="text-muted-foreground">

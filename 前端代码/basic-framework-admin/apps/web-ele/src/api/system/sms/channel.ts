@@ -11,9 +11,10 @@ export namespace SystemSmsChannelApi {
     signature: string;
     remark: string;
     apiKey: string;
-    apiSecret: string;
+    apiSecret?: string;
+    apiSecretConfigured?: boolean;
     callbackUrl: string;
-    createTime?: string;
+    createTime?: number;
   }
 }
 

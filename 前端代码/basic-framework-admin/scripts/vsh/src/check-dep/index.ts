@@ -4,20 +4,20 @@ import { getPackages } from '@vben/node-utils';
 
 import depcheck from 'depcheck';
 
-// 默认配置
 const DEFAULT_CONFIG = {
-  // 需要忽略的依赖匹配
   ignoreMatches: [
     'vite',
     'vitest',
     'unbuild',
+    '@playwright/test',
+    '@vue/test-utils',
     '@vben/tsconfig',
     '@vben/vite-config',
     '@vben/tailwind-config',
     '@types/*',
     '@vben-core/design',
+    '@vben-core/typings',
   ],
-  // 需要忽略的包
   ignorePackages: [
     '@vben/commitlint-config',
     '@vben/eslint-config',
@@ -29,7 +29,6 @@ const DEFAULT_CONFIG = {
     '@vben/vite-config',
     '@vben/vsh',
   ],
-  // 需要忽略的文件模式
   ignorePatterns: ['dist', 'node_modules', 'public'],
 };
 
@@ -52,15 +51,10 @@ interface PackageInfo {
   };
 }
 
-/**
- * 清理依赖检查结果
- * @param unused - 依赖检查结果
- */
+/** 清理本地路径依赖误报。 */
 function cleanDepcheckResult(unused: DepcheckResult): void {
-  // 删除file:前缀的依赖提示，该依赖是本地依赖
   Reflect.deleteProperty(unused.missing, 'file:');
 
-  // 清理路径依赖
   Object.keys(unused.missing).forEach((key) => {
     unused.missing[key] = (unused.missing[key] || []).filter(
       (item: string) => !item.startsWith('/'),
@@ -72,9 +66,10 @@ function cleanDepcheckResult(unused: DepcheckResult): void {
 }
 
 /**
- * 格式化依赖检查结果
- * @param pkgName - 包名
- * @param unused - 依赖检查结果
+ * 输出单个包的缺失依赖或未使用依赖详情。
+ *
+ * @param pkgName 工作区包名
+ * @param unused depcheck 扫描结果
  */
 function formatDepcheckResult(pkgName: string, unused: DepcheckResult): void {
   const hasIssues =
@@ -86,30 +81,31 @@ function formatDepcheckResult(pkgName: string, unused: DepcheckResult): void {
     return;
   }
 
-  console.log('\n📦 Package:', pkgName);
+  console.error('\n[Package]', pkgName);
 
   if (Object.keys(unused.missing).length > 0) {
-    console.log('❌ Missing dependencies:');
+    console.error('[Missing dependencies]:');
     Object.entries(unused.missing).forEach(([dep, files]) => {
-      console.log(`  - ${dep}:`);
-      files.forEach((file) => console.log(`    → ${file}`));
+      console.error(`  - ${dep}:`);
+      files.forEach((file) => console.error(`    -> ${file}`));
     });
   }
 
   if (unused.dependencies.length > 0) {
-    console.log('⚠️ Unused dependencies:');
-    unused.dependencies.forEach((dep) => console.log(`  - ${dep}`));
+    console.error('[Unused dependencies]:');
+    unused.dependencies.forEach((dep) => console.error(`  - ${dep}`));
   }
 
   if (unused.devDependencies.length > 0) {
-    console.log('⚠️ Unused devDependencies:');
-    unused.devDependencies.forEach((dep) => console.log(`  - ${dep}`));
+    console.error('[Unused devDependencies]:');
+    unused.devDependencies.forEach((dep) => console.error(`  - ${dep}`));
   }
 }
 
 /**
- * 运行依赖检查
- * @param config - 配置选项
+ * 扫描工作区包依赖声明一致性；存在未声明或未使用依赖时以非零状态码失败。
+ *
+ * @param config depcheck 忽略规则配置
  */
 async function runDepcheck(config: DepcheckConfig = {}): Promise<void> {
   try {
@@ -119,50 +115,53 @@ async function runDepcheck(config: DepcheckConfig = {}): Promise<void> {
     };
 
     const { packages } = await getPackages();
-
     let hasIssues = false;
 
-    await Promise.all(
-      packages.map(async (pkg: PackageInfo) => {
-        // 跳过需要忽略的包
-        if (finalConfig.ignorePackages.includes(pkg.packageJson.name)) {
-          return;
-        }
+    /**
+     * 检查单个工作区包的依赖声明完整性。
+     *
+     * @param pkg 工作区包描述信息
+     */
+    async function inspectPackageDeps(pkg: PackageInfo): Promise<void> {
+      if (finalConfig.ignorePackages.includes(pkg.packageJson.name)) {
+        return;
+      }
 
-        const unused = await depcheck(pkg.dir, {
-          ignoreMatches: finalConfig.ignoreMatches,
-          ignorePatterns: finalConfig.ignorePatterns,
-        });
+      const unused = await depcheck(pkg.dir, {
+        ignoreMatches: finalConfig.ignoreMatches,
+        ignorePatterns: finalConfig.ignorePatterns,
+      });
 
-        cleanDepcheckResult(unused);
+      cleanDepcheckResult(unused);
 
-        const pkgHasIssues =
-          Object.keys(unused.missing).length > 0 ||
-          unused.dependencies.length > 0 ||
-          unused.devDependencies.length > 0;
+      const pkgHasIssues =
+        Object.keys(unused.missing).length > 0 ||
+        unused.dependencies.length > 0 ||
+        unused.devDependencies.length > 0;
 
-        if (pkgHasIssues) {
-          hasIssues = true;
-          formatDepcheckResult(pkg.packageJson.name, unused);
-        }
-      }),
-    );
-
-    if (!hasIssues) {
-      console.log('\n✅ Dependency check completed, no issues found');
+      if (pkgHasIssues) {
+        hasIssues = true;
+        formatDepcheckResult(pkg.packageJson.name, unused);
+      }
     }
+
+    await Promise.all(packages.map((pkg) => inspectPackageDeps(pkg)));
+
+    if (hasIssues) {
+      process.exitCode = 1;
+      return;
+    }
+    console.log('\n[OK] Dependency check completed, no issues found');
   } catch (error) {
     console.error(
-      '❌ Dependency check failed:',
+      '[ERROR] Dependency check failed:',
       error instanceof Error ? error.message : error,
     );
+    process.exitCode = 1;
   }
 }
 
-/**
- * 定义依赖检查命令
- * @param cac - CAC实例
- */
+/** 注册 `vsh check-dep` 子命令。 */
 function defineDepcheckCommand(cac: CAC): void {
   cac
     .command('check-dep')

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +8,14 @@ const appRoot = join(workspaceRoot, 'apps', 'web-ele');
 const sourceRoots = [join(appRoot, 'src'), join(workspaceRoot, 'packages')];
 const distRoot = join(appRoot, 'dist');
 const sourceOnly = process.argv.includes('--source-only');
+
+/** 单个生产 JS chunk 原始字节上限（1.2 MB），防止回归巨型单包。 */
+const MAX_JS_CHUNK_BYTES = 1_200_000;
+
+const ALLOWED_WINDOW_OPEN_FILES = new Set([
+  'packages/@core/base/shared/src/utils/__tests__/window.test.ts',
+  'packages/@core/base/shared/src/utils/window.ts',
+]);
 
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.vue']);
 const ARTIFACT_EXTENSIONS = new Set([
@@ -21,23 +29,46 @@ const ARTIFACT_EXTENSIONS = new Set([
 ]);
 
 /**
- * 扫描源码和生产产物中的高风险残留。
+ * 扫描源码和生产产物中的高风险残留与体积预算回归。
  *
- * @return 无风险时正常退出；发现问题时抛出异常并由 CI 阻断发布
+ * @returns 无风险时正常退出；发现问题时抛出异常并由 CI 阻断发布
+ * @throws 检测到高风险用法、开发配置残留或超体积预算时抛出异常
  */
 async function main() {
   const findings = [];
   for (const sourceRoot of sourceRoots) {
     for (const file of await collectFiles(sourceRoot, SOURCE_EXTENSIONS)) {
+      const relPath = displayPath(file);
       const content = await readFile(file, 'utf8');
       if (
         /\bnew\s+Function\s*\(/u.test(content) ||
         /\beval\s*\(/u.test(content)
       ) {
-        findings.push(`${displayPath(file)}：包含动态 JavaScript 执行`);
+        findings.push(`${relPath}：包含动态 JavaScript 执行`);
       }
       if (/\bv-html\s*=/u.test(content)) {
-        findings.push(`${displayPath(file)}：包含未经统一净化约束的 v-html`);
+        findings.push(`${relPath}：包含未经统一净化约束的 v-html`);
+      }
+      if (/\bdangerouslyUseHTMLString\b/u.test(content)) {
+        findings.push(
+          `${relPath}：禁止使用 dangerouslyUseHTMLString，请改用 Vue VNode`,
+        );
+      }
+      if (
+        !ALLOWED_WINDOW_OPEN_FILES.has(relPath) &&
+        /\bwindow\.open\s*\(/u.test(content)
+      ) {
+        findings.push(
+          `${relPath}：禁止直接调用 window.open，请改用 @vben/utils 的 openWindow`,
+        );
+      }
+      if (
+        relPath.startsWith('apps/') &&
+        /\bimport\.meta\.env\.VITE_APP_(?:API_ENCRYPT_|DEFAULT_)/u.test(content)
+      ) {
+        findings.push(
+          `${relPath}：禁止在应用源码直接读取构建期加密或默认凭据环境变量，请通过 @vben/hooks 运行时配置读取`,
+        );
       }
     }
   }
@@ -79,7 +110,11 @@ async function collectFiles(directory, extensions) {
   return result;
 }
 
-/** 校验生产构建参数和运行时默认配置不会携带开发地址或预填密码。 */
+/**
+ * 校验生产构建参数和运行时默认配置不会携带开发地址或预填密码。
+ *
+ * @param findings 收集扫描问题的数组
+ */
 function validateProductionConfiguration(findings) {
   const production = readEnvFile(join(appRoot, '.env.production'));
   const common = readEnvFile(join(appRoot, '.env'));
@@ -93,6 +128,10 @@ function validateProductionConfiguration(findings) {
   const runtimeConfigPath = join(appRoot, 'docker', 'app.config.js');
   const runtimeConfig = requireText(runtimeConfigPath);
   const apiURL = readJavaScriptStringField(runtimeConfig, 'VITE_GLOB_API_URL');
+  const defaultUsername = readJavaScriptStringField(
+    runtimeConfig,
+    'VITE_APP_DEFAULT_USERNAME',
+  );
   const defaultPassword = readJavaScriptStringField(
     runtimeConfig,
     'VITE_APP_DEFAULT_PASSWORD',
@@ -100,13 +139,16 @@ function validateProductionConfiguration(findings) {
   if (/localhost|127\.0\.0\.1/iu.test(apiURL)) {
     findings.push('apps/web-ele/docker/app.config.js：默认 API 地址指向本机');
   }
+  if (defaultUsername.trim()) {
+    findings.push('apps/web-ele/docker/app.config.js：不应预填登录用户名');
+  }
   if (defaultPassword.trim()) {
     findings.push('apps/web-ele/docker/app.config.js：不应预填登录密码');
   }
 }
 
 /**
- * 检查构建产物中的开发服务器地址和危险动态执行残留。
+ * 检查构建产物中的开发服务器地址、危险动态执行残留与单包体积预算。
  *
  * @param findings 收集扫描发现的问题，供主流程统一阻断发布
  * @returns 扫描结束后完成；问题追加到 findings
@@ -125,6 +167,15 @@ async function validateProductionArtifacts(findings) {
   );
 
   for (const file of artifactFiles) {
+    const ext = extname(file);
+    if (ext === '.js' || ext === '.mjs') {
+      const fileStat = await stat(file);
+      if (fileStat.size > MAX_JS_CHUNK_BYTES) {
+        findings.push(
+          `${displayPath(file)}：单 chunk 体积 ${fileStat.size} bytes 超过上限 ${MAX_JS_CHUNK_BYTES} bytes`,
+        );
+      }
+    }
     const content = await readFile(file, 'utf8');
     // 第三方依赖可能包含受控的动态构造；这里只阻断本次漏洞字段和动态执行在同一代码片段中出现。
     if (
@@ -138,6 +189,16 @@ async function validateProductionArtifacts(findings) {
       findings.push(`${displayPath(file)}：产物包含开发地址或预填凭证`);
     }
   }
+}
+
+/**
+ * 格式化输出相对前端工作区根目录的路径。
+ *
+ * @param path 目标文件绝对路径
+ * @returns 斜杠归一化的工作区相对路径
+ */
+function displayPath(path) {
+  return relative(workspaceRoot, path).replaceAll('\\', '/');
 }
 
 /** 从受控运行时配置脚本中读取一个普通字符串字段，不执行脚本。 */
@@ -178,10 +239,6 @@ function requireText(path) {
       cause: error,
     });
   }
-}
-
-function displayPath(path) {
-  return relative(workspaceRoot, path).replaceAll('\\', '/');
 }
 
 await main();

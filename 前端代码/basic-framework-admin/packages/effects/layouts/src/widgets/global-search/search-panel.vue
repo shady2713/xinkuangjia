@@ -6,7 +6,12 @@ import { useRouter } from 'vue-router';
 
 import { SearchX, X } from '@vben/icons';
 import { $t } from '@vben/locales';
-import { mapTree, traverseTreeValues, uniqueByField } from '@vben/utils';
+import {
+  mapTree,
+  openWindow,
+  traverseTreeValues,
+  uniqueByField,
+} from '@vben/utils';
 
 import { VbenIcon, VbenScrollbar } from '@vben-core/shadcn-ui';
 import { isHttpUrl } from '@vben-core/shared/utils';
@@ -86,7 +91,7 @@ function scrollIntoView() {
   }
 }
 
-// enter keyboard event
+/** 响应回车或点击选中结果，执行外链安全打开或站内路由跳转。 */
 async function handleEnter() {
   if (searchResults.value.length === 0) {
     return;
@@ -102,7 +107,7 @@ async function handleEnter() {
     handleClose();
     await nextTick();
     if (isHttpUrl(to.path)) {
-      window.open(to.path, '_blank');
+      openWindow(to.path, { target: '_blank' });
     } else {
       router.push({ path: to.path, replace: true });
     }

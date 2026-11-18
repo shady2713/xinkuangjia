@@ -97,6 +97,25 @@ def test_secret_scanner_and_java_comment_regressions() -> None:
     )
     assert any(item.rule == "secret-prefix" for item in leaked)
 
+    # TypeScript/Vue 参数与属性类型注解放行，显式字符串字面量仍必须阻断
+    ts_param = "new" + "Token"
+    assert (
+        scan_staged_secrets._scan_added_line(
+            "前端代码/basic-framework-admin/apps/web-ele/src/auth.ts",
+            10,
+            f"function settle({ts_param}: string, err?: unknown) {{",
+        )
+        == []
+    )
+    ts_field = "pass" + "word"
+    ts_literal = "hardcoded" + "Secret123"
+    ts_leaked = scan_staged_secrets._scan_added_line(
+        "前端代码/basic-framework-admin/apps/web-ele/src/auth.ts",
+        11,
+        f"const payload = {{ {ts_field}: '{ts_literal}' }};",
+    )
+    assert any(item.rule == "sensitive-assignment" for item in ts_leaked)
+
     annotated_java = (
         "/**\n * 控制器。\n *\n * @author shady2713\n */\n"
         "public class DemoController {\n"

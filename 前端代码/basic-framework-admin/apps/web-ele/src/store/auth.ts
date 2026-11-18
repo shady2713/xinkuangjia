@@ -12,17 +12,11 @@ import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
 import { ElMessage, ElNotification } from 'element-plus';
 import { defineStore } from 'pinia';
 
-import {
-  getAuthPermissionInfoApi,
-  loginApi,
-  logoutApi,
-  register,
-  smsLogin,
-} from '#/api';
+import { getAuthPermissionInfoApi, loginApi, logoutApi, smsLogin } from '#/api';
 import { $t } from '#/locales';
 import { encryptPassword } from '#/utils/sm2';
 
-/** 认证状态，负责登录、注册、令牌刷新后的用户信息和首次改密标志。 */
+/** 认证状态，负责账号密码/短信登录、会话注销、权限同步与强制改密状态。 */
 function useAuthState() {
   const accessStore = useAccessStore();
   const userStore = useUserStore();
@@ -34,73 +28,57 @@ function useAuthState() {
   const passwordChangeRequired = ref(false);
 
   /**
-   * 异步处理登录操作
-   * Asynchronously handle the login process
-   * @param type 登录类型
+   * 异步处理登录操作并同步权限路由状态。
+   *
+   * @param type 登录类型（账号密码或短信验证码）
    * @param params 登录表单数据
-   * @param onSuccess 登录成功后的回调函数
+   * @param onSuccess 登录成功后的自定义回调
    * @returns 登录后的用户信息
    */
   async function authLogin(
-    type: 'mobile' | 'register' | 'username',
-    params:
-      AuthApi.LoginParams | AuthApi.RegisterParams | AuthApi.SmsLoginParams,
+    type: 'mobile' | 'username',
+    params: AuthApi.LoginParams | AuthApi.SmsLoginParams,
     onSuccess?: () => Promise<void> | void,
   ) {
-    // 异步处理用户登录操作并获取 accessToken
     let userInfo: null | UserInfo = null;
     try {
       let loginResult: AuthApi.LoginResult;
       loginLoading.value = true;
-      switch (type) {
-        case 'mobile': {
-          loginResult = await smsLogin(params as AuthApi.SmsLoginParams);
-          break;
-        }
-        case 'register': {
-          const registerParams = params as AuthApi.RegisterParams;
-          loginResult = await register({
-            ...registerParams,
-            password: await encryptPassword(registerParams.password),
-          });
-          break;
-        }
-        default: {
-          const loginParams = params as AuthApi.LoginParams;
-          loginResult = await loginApi({
-            ...loginParams,
-            // 登录表单校验后才会进入提交，判空后再加密，避免把空值传给 SM2。
-            password: loginParams.password
-              ? await encryptPassword(loginParams.password)
-              : loginParams.password,
-          });
-        }
+      if (type === 'mobile') {
+        loginResult = await smsLogin(params as AuthApi.SmsLoginParams);
+      } else {
+        const loginParams = params as AuthApi.LoginParams;
+        loginResult = await loginApi({
+          ...loginParams,
+          password: loginParams.password
+            ? await encryptPassword(loginParams.password)
+            : loginParams.password,
+        });
       }
       const { accessToken, refreshToken } = loginResult;
 
-      // 如果成功获取到 accessToken
       if (accessToken) {
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
-        // 登录响应和权限信息都携带该标志；任一为 true 都先强制改密。
         passwordChangeRequired.value = Boolean(
           loginResult.passwordChangeRequired,
         );
 
-        // 获取用户信息并存储到 userStore、accessStore 中
         const fetchUserInfoResult = await fetchUserInfo();
-
         userInfo = fetchUserInfoResult.user;
 
-        if (accessStore.loginExpired) {
+        const wasModalExpired = accessStore.loginExpired;
+        if (wasModalExpired) {
           accessStore.setLoginExpired(false);
-        } else if (passwordChangeRequired.value) {
+        }
+
+        if (passwordChangeRequired.value) {
           ElMessage.warning('首次登录或密码被重置，请先修改密码');
           await router.push('/change-password');
-        } else {
-          onSuccess
-            ? await onSuccess?.()
-            : await router.push(preferences.app.defaultHomePath);
+        } else if (!wasModalExpired) {
+          await (onSuccess
+            ? onSuccess()
+            : router.push(preferences.app.defaultHomePath));
         }
 
         if (userInfo?.nickname) {
@@ -120,7 +98,11 @@ function useAuthState() {
     };
   }
 
-  /** 退出登录，重置所有 store 状态并跳转到登录页 */
+  /**
+   * 退出登录，通知后端吊销令牌、重置所有 store 状态并跳转到登录页。
+   *
+   * @param redirect 是否在跳转登录页时附带当前页面回跳地址
+   */
   async function logout(redirect: boolean = true) {
     try {
       const accessToken = accessStore.accessToken as string;
@@ -128,12 +110,11 @@ function useAuthState() {
         await logoutApi(accessToken);
       }
     } catch {
-      // 不做任何处理
+      // 后端注销失败不阻塞前端本地态清理
     }
     resetAllStores();
     accessStore.setLoginExpired(false);
 
-    // 回登录页带上当前路由地址
     await router.replace({
       path: LOGIN_PATH,
       query: redirect
@@ -144,18 +125,15 @@ function useAuthState() {
     });
   }
 
-  /** 获取当前用户权限信息并更新到各个 store 中 */
+  /** 获取当前用户权限信息并更新到各个 store 中。 */
   async function fetchUserInfo() {
-    // 加载
     const authPermissionInfo: AuthPermissionInfo | null =
       await getAuthPermissionInfoApi();
-    // userStore
     userStore.setUserInfo(authPermissionInfo.user);
     passwordChangeRequired.value =
       passwordChangeRequired.value ||
       Boolean(authPermissionInfo.user?.passwordChangeRequired);
     userStore.setUserRoles(authPermissionInfo.roles);
-    // accessStore
     accessStore.setAccessMenus(authPermissionInfo.menus);
     accessStore.setAccessCodes(authPermissionInfo.permissions);
     return authPermissionInfo;

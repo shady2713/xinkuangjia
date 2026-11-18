@@ -6,7 +6,11 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * 构建短信渠道新增与编辑表单配置。
+ *
+ * @returns 表单字段 Schema 数组
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -55,11 +59,24 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'required',
     },
     {
-      component: 'Input',
+      component: 'InputPassword',
       fieldName: 'apiSecret',
       label: 'API Secret',
-      componentProps: {
-        placeholder: '请输入 API Secret',
+      dependencies: {
+        triggerFields: ['id'],
+        /**
+         * 编辑已有渠道时提示密钥留空即保留原值。
+         *
+         * @param values 当前表单字段值对象
+         * @returns 动态输入框占位提示属性
+         */
+        componentProps(values) {
+          return {
+            placeholder: values.id
+              ? '留空则保持原密钥不变'
+              : '请输入 API Secret',
+          };
+        },
       },
     },
     {

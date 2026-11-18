@@ -28,23 +28,17 @@ export namespace AuthApi {
     cipherMode: 1;
   }
 
-  /** 手机验证码获取接口参数 */
+  /** 手机验证码发送接口参数 */
   export interface SmsCodeParams {
     mobile: string;
     scene: number;
+    captchaVerification?: string;
   }
 
   /** 手机验证码登录接口参数 */
   export interface SmsLoginParams {
     mobile: string;
     code: string;
-  }
-
-  /** 注册接口参数 */
-  export interface RegisterParams {
-    username: string;
-    password: string;
-    captchaVerification: string;
   }
 
   /** 重置密码接口参数 */
@@ -56,13 +50,12 @@ export namespace AuthApi {
 }
 
 /**
- * 使用账号密码登录新管理平台。
+ * 使用账号密码登录管理平台。
  *
  * @param data 登录参数，密码字段为 SM2 密文
  * @returns 访问令牌和首次改密标志
  */
 export async function loginApi(data: AuthApi.LoginParams) {
-  // 新管理平台使用独立登录入口，后端会校验账号 user__type 必须为 super_admin。
   return requestClient.post<AuthApi.LoginResult>(
     '/system/auth/super-admin-login',
     data,
@@ -95,7 +88,11 @@ export async function logoutApi(accessToken: string) {
   );
 }
 
-/** 获取权限信息 */
+/**
+ * 获取当前用户权限与菜单树信息。
+ *
+ * @returns 用户资料、角色编码、权限码与菜单树
+ */
 export async function getAuthPermissionInfoApi() {
   return requestClient.get<AuthPermissionInfo>(
     '/system/auth/get-permission-info',
@@ -113,32 +110,57 @@ export async function getSm2PublicKey() {
   );
 }
 
-/** 获取验证码 */
+/**
+ * 获取行为图形验证码题目。
+ *
+ * @param data 验证码类型请求参数
+ * @param data.captchaType 验证码组件类型标识
+ * @returns 验证码底图与滑块挑战载荷
+ */
 export async function getCaptcha(data: { captchaType: string }) {
   return baseRequestClient.post('/system/captcha/get', data);
 }
 
-/** 校验验证码 */
+/**
+ * 核验行为图形验证码轨迹。
+ *
+ * @param data 加密后的轨迹校验票据
+ * @param data.captchaVerification 轨迹核验密文字符串
+ * @returns 核验通过后的二次校验令牌响应
+ */
 export async function checkCaptcha(data: { captchaVerification: string }) {
   return baseRequestClient.post('/system/captcha/check', data);
 }
 
-/** 获取登录验证码 */
+/**
+ * 发送手机短信验证码。
+ *
+ * @param data 手机号、业务场景与图形验证码票据
+ * @returns 发送受理结果
+ */
 export async function sendSmsCode(data: AuthApi.SmsCodeParams) {
   return requestClient.post('/system/auth/send-sms-code', data);
 }
 
-/** 短信验证码登录 */
+/**
+ * 使用短信验证码登录管理平台。
+ *
+ * @param data 手机号与短信验证码
+ * @returns 访问令牌、刷新令牌与改密状态
+ */
 export async function smsLogin(data: AuthApi.SmsLoginParams) {
-  return requestClient.post('/system/auth/sms-login', data);
+  return requestClient.post<AuthApi.LoginResult>(
+    '/system/auth/sms-login',
+    data,
+  );
 }
 
-/** 注册 */
-export async function register(data: AuthApi.RegisterParams) {
-  return requestClient.post('/system/auth/register', data);
-}
-
-/** 通过短信重置密码 */
+/**
+ * 通过短信验证码重置普通账号密码。
+ *
+ * @param data 手机号、短信验证码与 SM2 密文新密码
+ * @returns 密码重置结果
+ */
 export async function smsResetPassword(data: AuthApi.ResetPasswordParams) {
   return requestClient.post('/system/auth/reset-password', data);
 }

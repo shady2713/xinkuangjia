@@ -36,7 +36,7 @@ const customConfig: Linter.Config[] = [
     },
   },
   {
-    // apps内部的一些基础规则
+    // apps 层只能通过 @vben/* 聚合出口消费能力，禁止直接跨层引用底层 @vben-core/* 包
     files: ['apps/**/**'],
     ignores: restrictedImportIgnores,
     rules: {
@@ -45,24 +45,9 @@ const customConfig: Linter.Config[] = [
         {
           patterns: [
             {
-              group: ['#/api/*'],
+              group: ['@vben-core/*'],
               message:
-                'The #/api package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/layouts/*'],
-              message:
-                'The #/layouts package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/locales/*'],
-              message:
-                'The #/locales package cannot be imported, please use the @core package itself',
-            },
-            {
-              group: ['#/stores/*'],
-              message:
-                'The #/stores package cannot be imported, please use the @core package itself',
+                'Application code cannot import @vben-core/* directly; import via @vben/* instead',
             },
           ],
         },

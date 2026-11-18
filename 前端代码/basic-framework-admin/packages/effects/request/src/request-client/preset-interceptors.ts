@@ -44,6 +44,23 @@ export const defaultResponseInterceptor = ({
   };
 };
 
+/** Promise 成功解决回调签名。 */
+type AnyResolve = (value: unknown) => void;
+
+/** Promise 失败拒绝回调签名。 */
+type AnyReject = (reason?: unknown) => void;
+
+/**
+ * 创建 401 令牌刷新与单飞队列重放响应拦截器。
+ *
+ * @param options 认证拦截器配置对象
+ * @param options.client 请求客户端实例
+ * @param options.doReAuthenticate 刷新失败或未启用刷新时的重认证回调
+ * @param options.doRefreshToken 刷新访问令牌的异步回调
+ * @param options.enableRefreshToken 是否启用无感刷新令牌
+ * @param options.formatToken 授权头格式化函数
+ * @returns 响应异常拦截器配置
+ */
 export const authenticateResponseInterceptor = ({
   client,
   doReAuthenticate,
@@ -57,55 +74,82 @@ export const authenticateResponseInterceptor = ({
   enableRefreshToken: boolean;
   formatToken: (token: string) => null | string;
 }): ResponseInterceptorConfig => {
+  /**
+   * 拦截 401 响应，协调单飞刷新令牌并重放或拒绝挂起队列。
+   *
+   * @param error Axios 响应错误对象
+   * @returns 刷新成功后重放请求的响应结果
+   * @throws 非 401 错误、禁用刷新或刷新失败时抛出对应异常
+   */
+  async function handleAuthRejected(error: any) {
+    const { config, response, data: responseData } = error;
+    if (response?.status !== 401 && responseData?.code !== 401) {
+      throw error;
+    }
+    if (!enableRefreshToken || config.__isRetryRequest) {
+      await doReAuthenticate();
+      throw error;
+    }
+    if (client.isRefreshing) {
+      /**
+       * 将并发 401 请求挂入等待队列，待刷新结束后统一结算。
+       *
+       * @param resolve Promise 成功回调
+       * @param reject Promise 失败回调
+       */
+      function enqueuePendingRequest(resolve: AnyResolve, reject: AnyReject) {
+        /**
+         * 接收刷新结果并执行重放或直接拒绝。
+         *
+         * @param newToken 刷新得到的新访问令牌
+         * @param refreshError 刷新失败时的异常对象
+         */
+        function settleQueuedRequest(newToken: string, refreshError?: unknown) {
+          if (refreshError || !newToken) {
+            reject(refreshError ?? error);
+            return;
+          }
+          config.__isRetryRequest = true;
+          config.headers.Authorization = formatToken(newToken);
+          resolve(client.request(config.url, { ...config }));
+        }
+        client.refreshTokenQueue.push(settleQueuedRequest);
+      }
+      return new Promise(enqueuePendingRequest);
+    }
+
+    client.isRefreshing = true;
+    config.__isRetryRequest = true;
+
+    try {
+      const newToken = await doRefreshToken();
+
+      const queuedCallbacks = [...client.refreshTokenQueue];
+      client.refreshTokenQueue = [];
+      for (const callback of queuedCallbacks) {
+        callback(newToken);
+      }
+
+      config.headers = config.headers || {};
+      config.headers.Authorization = formatToken(newToken);
+      return client.request(error.config.url, { ...error.config });
+    } catch (refreshError) {
+      const queuedCallbacks = [...client.refreshTokenQueue];
+      client.refreshTokenQueue = [];
+      for (const callback of queuedCallbacks) {
+        callback('', refreshError);
+      }
+      logError('request:refresh-token', refreshError);
+      await doReAuthenticate();
+
+      throw refreshError;
+    } finally {
+      client.isRefreshing = false;
+    }
+  }
+
   return {
-    rejected: async (error) => {
-      const { config, response, data: responseData } = error;
-      // 如果不是 401 错误，直接抛出异常
-      if (response?.status !== 401 && responseData?.code !== 401) {
-        throw error;
-      }
-      // 判断是否启用了 refreshToken 功能
-      // 如果没有启用或者已经是重试请求了，直接跳转到重新登录
-      if (!enableRefreshToken || config.__isRetryRequest) {
-        await doReAuthenticate();
-        throw error;
-      }
-      // 如果正在刷新 token，则将请求加入队列，等待刷新完成
-      if (client.isRefreshing) {
-        return new Promise((resolve) => {
-          client.refreshTokenQueue.push((newToken: string) => {
-            config.headers.Authorization = formatToken(newToken);
-            resolve(client.request(config.url, { ...config }));
-          });
-        });
-      }
-
-      // 标记开始刷新 token
-      client.isRefreshing = true;
-      // 标记当前请求为重试请求，避免无限循环
-      config.__isRetryRequest = true;
-
-      try {
-        const newToken = await doRefreshToken();
-
-        // 处理队列中的请求
-        client.refreshTokenQueue.forEach((callback) => callback(newToken));
-        // 清空队列
-        client.refreshTokenQueue = [];
-
-        return client.request(error.config.url, { ...error.config });
-      } catch (refreshError) {
-        // 如果刷新 token 失败，处理错误（如强制登出或跳转登录页面）
-        client.refreshTokenQueue.forEach((callback) => callback(''));
-        client.refreshTokenQueue = [];
-        logError('request:refresh-token', refreshError);
-        await doReAuthenticate();
-
-        throw refreshError;
-      } finally {
-        client.isRefreshing = false;
-      }
-    },
+    rejected: handleAuthRejected,
   };
 };
 

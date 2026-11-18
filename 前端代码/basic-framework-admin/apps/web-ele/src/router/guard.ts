@@ -1,5 +1,5 @@
 /**
- * 路由守卫，负责页面加载进度、登录态、权限路由和首次改密拦截。
+ * 路由守卫，负责页面加载进度、登录态、权限路由、安全重定向校验和首次改密拦截。
  *
  * @author shady2713
  */
@@ -22,17 +22,42 @@ import { generateAccess } from './access';
 const PASSWORD_CHANGE_PATH = '/change-password';
 
 /**
- * 通用守卫配置
- * @param router
+ * 安全解码并校验重定向路径，拒绝非法百分号编码及非站内单斜杠路径（阻断开放重定向）。
+ *
+ * @param raw 原始 query.redirect 参数值
+ * @param fallback 校验不通过时的安全默认路径
+ * @returns 安全的站内路由路径
+ */
+export function resolveSafeInternalRedirect(
+  raw: unknown,
+  fallback: string,
+): string {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return fallback;
+  }
+  let decoded = raw.trim();
+  try {
+    decoded = decodeURIComponent(decoded).trim();
+  } catch {
+    return fallback;
+  }
+  if (!/^\/(?!\/)/u.test(decoded) || /[\r\n\\]/u.test(decoded)) {
+    return fallback;
+  }
+  return decoded;
+}
+
+/**
+ * 通用进度条守卫配置。
+ *
+ * @param router Vue Router 实例
  */
 function setupCommonGuard(router: Router) {
-  // 记录已经加载的页面
   const loadedPaths = new Set<string>();
 
   router.beforeEach((to) => {
     to.meta.loaded = loadedPaths.has(to.path);
 
-    // 页面加载进度条
     if (!to.meta.loaded && preferences.transition.progress) {
       startProgress();
     }
@@ -40,11 +65,8 @@ function setupCommonGuard(router: Router) {
   });
 
   router.afterEach((to) => {
-    // 记录页面是否加载,如果已经加载，后续的页面切换动画等效果不在重复执行
-
     loadedPaths.add(to.path);
 
-    // 关闭页面加载进度条
     if (preferences.transition.progress) {
       stopProgress();
     }
@@ -52,12 +74,13 @@ function setupCommonGuard(router: Router) {
 }
 
 /**
- * 权限访问守卫配置
- * @param router
+ * 权限访问与强制改密守卫配置。
+ *
+ * @param router Vue Router 实例
  */
 function setupAccessGuard(router: Router) {
   /**
-   * 处理权限访问和首次改密拦截。
+   * 处理权限访问、站内重定向归一化与首次改密拦截。
    *
    * @param to 目标路由
    * @param from 来源路由
@@ -72,42 +95,35 @@ function setupAccessGuard(router: Router) {
     const authStore = useAuthStore();
     const dictStore = useDictStore();
 
-    // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
-        return decodeURIComponent(
-          (to.query?.redirect as string) || preferences.app.defaultHomePath,
+        return resolveSafeInternalRedirect(
+          to.query?.redirect,
+          preferences.app.defaultHomePath,
         );
       }
       return true;
     }
 
-    // accessToken 检查
     if (!accessStore.accessToken) {
-      // 明确声明忽略权限访问权限，则可以访问
       if (to.meta.ignoreAccess) {
         return true;
       }
 
-      // 没有访问权限，跳转登录页面
       if (to.fullPath !== LOGIN_PATH) {
         return {
           path: LOGIN_PATH,
-          // 如不需要，直接删除 query
           query:
             to.fullPath === preferences.app.defaultHomePath
               ? {}
               : { redirect: encodeURIComponent(to.fullPath) },
-          // 携带当前跳转的页面，登录后重新跳转该页面
           replace: true,
         };
       }
       return to;
     }
 
-    // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
-      // 后端已返回强制改密标志时，除修改密码页外一律拦截。
       if (
         authStore.passwordChangeRequired &&
         to.path !== PASSWORD_CHANGE_PATH
@@ -117,14 +133,10 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
-    // 加载字典数据（不阻塞加载）
     dictStore.setDictCacheByApi(getSimpleDictDataList);
 
-    // 生成路由表
-    // 当前登录用户拥有的角色标识列表
     let userInfo = userStore.userInfo;
     if (!userInfo) {
-      // 由于当前系统通过 fetchUserInfo 统一加载用户和权限信息，因此不再单独触发 fetchMenuListAsync
       const message = showLoadingMessage(`${$t('common.loadingMenu')}...`);
       try {
         const authPermissionInfo = await authStore.fetchUserInfo();
@@ -137,31 +149,32 @@ function setupAccessGuard(router: Router) {
     }
     const userRoles = userStore.userRoles ?? [];
 
-    // 生成菜单和路由
     const { accessibleMenus, accessibleRoutes } = await generateAccess({
       roles: userRoles,
       router,
-      // 则会在菜单中显示，但是访问会被重定向到403
       routes: accessRoutes,
     });
 
-    // 保存菜单信息和路由信息
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
     userStore.setUserRoles(userRoles);
-    // 动态路由已生成后再拦截，避免跳转到尚未注册的修改密码页。
+
     if (authStore.passwordChangeRequired && to.path !== PASSWORD_CHANGE_PATH) {
       return { path: PASSWORD_CHANGE_PATH, replace: true };
     }
 
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
+    const fallbackTarget =
+      to.path === preferences.app.defaultHomePath
         ? preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+        : to.fullPath;
+    const redirectPath = resolveSafeInternalRedirect(
+      from.query.redirect,
+      fallbackTarget,
+    );
 
     return {
-      ...router.resolve(decodeURIComponent(redirectPath)),
+      ...router.resolve(redirectPath),
       replace: true,
     };
   };
@@ -169,13 +182,12 @@ function setupAccessGuard(router: Router) {
 }
 
 /**
- * 项目守卫配置
- * @param router
+ * 注册项目路由守卫。
+ *
+ * @param router Vue Router 实例
  */
 function createRouterGuard(router: Router) {
-  /** 通用 */
   setupCommonGuard(router);
-  /** 权限访问 */
   setupAccessGuard(router);
 }
 

@@ -1,5 +1,10 @@
 import type { Linter } from 'eslint';
 
+/**
+ * 返回全局 ESLint 忽略路径配置。
+ *
+ * @returns ESLint 扁平忽略配置数组
+ */
 export async function ignores(): Promise<Linter.Config[]> {
   return [
     {
@@ -47,6 +52,7 @@ export async function ignores(): Promise<Linter.Config[]> {
         '**/*.ttf',
         '**/*.woff',
         '**/public/**',
+        '**/src/api/generated/**',
         '**/china.json',
         '**/lefthook.yml',
       ],

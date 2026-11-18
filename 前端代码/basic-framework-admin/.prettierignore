@@ -16,3 +16,4 @@ CODEOWNERS
 public
 .npmrc
 *-lock.yaml
+apps/web-ele/src/api/generated

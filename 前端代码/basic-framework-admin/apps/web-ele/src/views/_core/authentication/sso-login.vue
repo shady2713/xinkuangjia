@@ -48,7 +48,7 @@ async function init() {
   // 如果有 scope 参数，先执行一次自动授权，看看是否之前都授权过了。
   if (queryParams.scopes.length > 0) {
     const data = await doAuthorize(true, queryParams.scopes, []);
-    if (data) {
+    if (data && /^https?:\/\//iu.test(data)) {
       location.href = data;
       return;
     }
@@ -77,7 +77,11 @@ async function init() {
   );
 }
 
-/** 处理授权的提交 */
+/**
+ * 处理第三方应用 OAuth2 授权同意或拒绝提交。
+ *
+ * @param approved 用户是否同意授权
+ */
 async function handleSubmit(approved: boolean) {
   // 计算 checkedScopes + uncheckedScopes
   let checkedScopes: string[];
@@ -99,10 +103,10 @@ async function handleSubmit(approved: boolean) {
   loading.value = true;
   try {
     const data = await doAuthorize(false, checkedScopes, uncheckedScopes);
-    if (!data) {
+    if (!data || !/^https?:\/\//iu.test(data)) {
       return;
     }
-    // 跳转授权成功后的回调地址
+    // 跳转授权成功后的受信 HTTP(S) 回调地址
     location.href = data;
   } finally {
     loading.value = false;
@@ -181,7 +185,7 @@ onMounted(() => {
   <div @keydown.enter.prevent="handleSubmit(true)">
     <AuthenticationAuthTitle>
       <slot name="title">
-        {{ `${client.name} 👋🏻` }}
+        {{ client.name }}
       </slot>
       <template #desc>
         <span class="text-muted-foreground">

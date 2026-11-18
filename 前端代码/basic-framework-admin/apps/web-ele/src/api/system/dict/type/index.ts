@@ -14,12 +14,7 @@ export namespace SystemDictTypeApi {
   };
 }
 
-/** 查询字典（精简)列表 */
-export function getSimpleDictTypeList() {
-  return requestClient.get<SystemDictTypeApi.DictType[]>(
-    '/system/dict-type/list-all-simple',
-  );
-}
+export { getSimpleDictTypeList } from '#/api/core/dict';
 
 /** 查询字典列表 */
 export function getDictTypePage(params: PageParam) {

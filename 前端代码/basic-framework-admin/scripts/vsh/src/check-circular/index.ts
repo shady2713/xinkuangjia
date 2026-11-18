@@ -6,24 +6,13 @@ import { getStagedFiles } from '@vben/node-utils';
 
 import { circularDepsDetect } from 'circular-dependency-scanner';
 
-// 默认配置
 const DEFAULT_CONFIG = {
   allowedExtensions: ['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx', '.vue'],
-  ignoreDirs: [
-    'dist',
-    '.turbo',
-    'output',
-    '.cache',
-    'scripts',
-    'internal',
-    'packages/effects/request/src/',
-    'packages/@core/ui-kit/menu-ui/src/',
-    'packages/@core/ui-kit/popup-ui/src/',
-  ],
-  threshold: 0, // 循环依赖的阈值
+  ignoreDirs: ['dist', 'output', 'scripts', 'internal', 'menu-ui/src'],
+  threshold: 0,
 } as const;
 
-// 类型定义
+/** 单条循环依赖涉及的模块路径列表。 */
 type CircularDependencyResult = string[];
 
 interface CheckCircularConfig {
@@ -38,33 +27,33 @@ interface CommandOptions {
   verbose: boolean;
 }
 
-// 缓存机制
 const cache = new Map<string, CircularDependencyResult[]>();
 
 /**
- * 格式化循环依赖的输出
- * @param circles - 循环依赖结果
+ * 格式化输出检测到的运行时循环依赖链路。
+ *
+ * @param circles 循环依赖结果集合
  */
 function formatCircles(circles: CircularDependencyResult[]): void {
   if (circles.length === 0) {
-    console.log('✅ No circular dependencies found');
+    console.log('[OK] No circular dependencies found');
     return;
   }
 
-  console.log('⚠️ Circular dependencies found:');
+  console.error('[ERROR] Circular dependencies found:');
   circles.forEach((circle, index) => {
-    console.log(`\nCircular dependency #${index + 1}:`);
-    circle.forEach((file) => console.log(`  → ${file}`));
+    console.error(`\nCircular dependency #${index + 1}:`);
+    circle.forEach((file) => console.error(`  -> ${file}`));
   });
 }
 
 /**
- * 检查项目中的循环依赖
- * @param options - 检查选项
- * @param options.staged - 是否只检查暂存区文件
- * @param options.verbose - 是否显示详细信息
- * @param options.config - 自定义配置
- * @returns Promise<void>
+ * 扫描项目运行时循环依赖（忽略纯 TypeScript 类型引用），超出阈值时将进程退出码设为 1。
+ *
+ * @param options 检查配置对象
+ * @param options.config 循环依赖目录忽略与阈值配置
+ * @param options.staged 是否仅检查 Git 暂存区关联文件
+ * @param options.verbose 是否打印详细链路
  */
 async function checkCircular({
   config = {},
@@ -72,76 +61,68 @@ async function checkCircular({
   verbose,
 }: CommandOptions): Promise<void> {
   try {
-    // 合并配置
     const finalConfig = {
       ...DEFAULT_CONFIG,
       ...config,
     };
 
-    // 生成忽略模式
-    const ignorePattern = `**/{${finalConfig.ignoreDirs.join(',')}}/**`;
-
-    // 检查缓存
-    const cacheKey = `${staged}-${process.cwd()}-${ignorePattern}`;
+    const ignorePatterns = finalConfig.ignoreDirs
+      .map((dir) => dir.replaceAll('\\', '/').replaceAll(/^\/+|\/+$/gu, ''))
+      .filter(Boolean)
+      .map((dir) => `**/${dir}/**`);
+    const cacheKey = `${staged}-${process.cwd()}-${ignorePatterns.join('|')}`;
     if (cache.has(cacheKey)) {
-      const cachedResults = cache.get(cacheKey);
-      if (cachedResults) {
-        verbose && formatCircles(cachedResults);
+      const cachedResults = cache.get(cacheKey) ?? [];
+      verbose && formatCircles(cachedResults);
+      if (cachedResults.length > finalConfig.threshold) {
+        process.exitCode = 1;
       }
       return;
     }
 
-    // 检测循环依赖
     const results = await circularDepsDetect({
       absolute: staged,
       cwd: process.cwd(),
-      ignore: [ignorePattern],
+      excludeTypes: true,
+      ignore: ignorePatterns,
     });
 
+    let detectedCircles = results;
     if (staged) {
       let files = await getStagedFiles();
       const allowedExtensions = new Set(finalConfig.allowedExtensions);
-
-      // 过滤文件列表
       files = files.filter((file) => allowedExtensions.has(extname(file)));
 
       const circularFiles: CircularDependencyResult[] = [];
-
       for (const file of files) {
         for (const result of results) {
-          const resultFiles = result.flat();
-          if (resultFiles.includes(file)) {
+          if (result.flat().includes(file)) {
             circularFiles.push(result);
           }
         }
       }
-
-      // 更新缓存
-      cache.set(cacheKey, circularFiles);
-      verbose && formatCircles(circularFiles);
-    } else {
-      // 更新缓存
-      cache.set(cacheKey, results);
-      verbose && formatCircles(results);
+      detectedCircles = circularFiles;
     }
 
-    // 如果发现循环依赖，只输出警告信息
-    if (results.length > 0) {
-      console.log(
-        '\n⚠️ Warning: Circular dependencies found, please check and fix',
-      );
+    cache.set(cacheKey, detectedCircles);
+    verbose && formatCircles(detectedCircles);
+
+    if (detectedCircles.length > finalConfig.threshold) {
+      process.exitCode = 1;
     }
   } catch (error) {
     console.error(
-      '❌ Error checking circular dependencies:',
+      '[ERROR] Failed to check circular dependencies:',
       error instanceof Error ? error.message : error,
     );
+    process.exitCode = 1;
   }
 }
 
 /**
- * 定义检查循环依赖的命令
- * @param cac - CAC实例
+ * 注册 `vsh check-circular` 子命令。
+ *
+ * @param cac CAC 命令行实例
  */
 function defineCheckCircularCommand(cac: CAC): void {
   cac

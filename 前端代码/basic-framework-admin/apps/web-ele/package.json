@@ -20,7 +20,6 @@
     "#/*": "./src/*"
   },
   "dependencies": {
-    "@form-create/element-ui": "catalog:",
     "@vben/access": "workspace:*",
     "@vben/common-ui": "workspace:*",
     "@vben/constants": "workspace:*",
@@ -42,7 +41,6 @@
     "pinia": "catalog:",
     "sm-crypto": "catalog:",
     "vue": "catalog:",
-    "vue-dompurify-html": "catalog:",
     "vue-router": "catalog:"
   },
   "devDependencies": {

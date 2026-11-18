@@ -5,7 +5,8 @@ import type { Recordable } from '@vben/types';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { AuthenticationForgetPassword, z } from '@vben/common-ui';
+import { AuthenticationForgetPassword, Verification, z } from '@vben/common-ui';
+import { isCaptchaEnable } from '@vben/hooks';
 import { $t } from '@vben/locales';
 import { logError } from '@vben/utils';
 
@@ -13,17 +14,78 @@ import {
   buildRequiredMobileSchema,
   buildRequiredPasswordSchema,
 } from '#/adapter/form';
-import { sendSmsCode, smsResetPassword } from '#/api';
+import {
+  checkCaptcha,
+  getCaptcha,
+  sendSmsCode,
+  smsResetPassword,
+} from '#/api/core/auth';
 import { showSuccessMessage } from '#/utils/feedback';
 import { encryptPassword } from '#/utils/sm2';
 
 defineOptions({ name: 'ForgetPassword' });
 
 const router = useRouter();
+const captchaEnable = isCaptchaEnable();
 
 const loading = ref(false);
 const CODE_LENGTH = 4;
+const SMS_RESET_SCENE = 23;
+const captchaType = 'blockPuzzle';
 const forgetPasswordRef = ref();
+const verifyRef = ref();
+/** 验证码成功回调签名。 */
+type CaptchaResolve = (token: string) => void;
+/** 验证码取消回调签名。 */
+type CaptchaReject = (reason?: unknown) => void;
+/** 待决图形验证码成功回调引用。 */
+let pendingCaptchaResolver: CaptchaResolve | null = null;
+/** 待决图形验证码取消回调引用。 */
+let pendingCaptchaRejecter: CaptchaReject | null = null;
+
+/**
+ * 拉起图形验证码弹窗并等待用户完成核验。
+ *
+ * @returns 通过核验后的验证码票据；未开启验证码时返回 undefined
+ */
+function requestCaptchaVerification(): Promise<string | undefined> {
+  if (!captchaEnable) {
+    return Promise.resolve(undefined);
+  }
+  /**
+   * 记录 Promise 控制器并展示图形验证码弹窗。
+   *
+   * @param resolve 成功回调
+   * @param reject 取消回调
+   */
+  function openVerificationPopup(
+    resolve: CaptchaResolve,
+    reject: CaptchaReject,
+  ) {
+    pendingCaptchaResolver = resolve;
+    pendingCaptchaRejecter = reject;
+    verifyRef.value?.show();
+  }
+  return new Promise<string>(openVerificationPopup);
+}
+
+/** 图形验证码核验成功回调。 */
+function handleVerifySuccess({
+  captchaVerification,
+}: {
+  captchaVerification: string;
+}) {
+  pendingCaptchaResolver?.(captchaVerification);
+  pendingCaptchaResolver = null;
+  pendingCaptchaRejecter = null;
+}
+
+/** 关闭图形验证码弹窗时终止发码等待。 */
+function handleVerifyClose() {
+  pendingCaptchaRejecter?.(new Error('已取消验证码校验'));
+  pendingCaptchaResolver = null;
+  pendingCaptchaRejecter = null;
+}
 
 /**
  * 构建忘记密码表单字段。
@@ -51,22 +113,31 @@ function buildFormSchema(): VbenFormSchema[] {
             : $t('authentication.sendCode');
         },
         placeholder: $t('authentication.code'),
+        /**
+         * 校验手机号与图形验证码后发送重置密码短信验证码。
+         *
+         * @throws 表单未就绪或手机号格式不合法时抛出异常阻断倒计时
+         */
         handleSendCode: async () => {
           loading.value = true;
           try {
             const formApi = forgetPasswordRef.value?.getFormApi();
             if (!formApi) {
-              throw new Error('Form is not ready');
+              throw new Error('表单未初始化');
             }
             await formApi.validateField('mobile');
             const isMobileValid = await formApi.isFieldValid('mobile');
             if (!isMobileValid) {
-              throw new Error('Invalid mobile');
+              throw new Error('请输入有效的手机号码');
             }
             const { mobile } = await formApi.getValues();
-            const scene = 23;
-            await sendSmsCode({ mobile, scene });
-            showSuccessMessage('验证码发送成功');
+            const captchaVerification = await requestCaptchaVerification();
+            await sendSmsCode({
+              captchaVerification,
+              mobile,
+              scene: SMS_RESET_SCENE,
+            });
+            showSuccessMessage('验证码已提交发送');
           } finally {
             loading.value = false;
           }
@@ -158,10 +229,23 @@ async function handleSubmit(values: Recordable<any>) {
 </script>
 
 <template>
-  <AuthenticationForgetPassword
-    ref="forgetPasswordRef"
-    :form-schema="formSchema"
-    :loading="loading"
-    @submit="handleSubmit"
-  />
+  <div>
+    <AuthenticationForgetPassword
+      ref="forgetPasswordRef"
+      :form-schema="formSchema"
+      :loading="loading"
+      @submit="handleSubmit"
+    />
+    <Verification
+      v-if="captchaEnable"
+      ref="verifyRef"
+      :captcha-type="captchaType"
+      :check-captcha-api="checkCaptcha"
+      :get-captcha-api="getCaptcha"
+      :img-size="{ width: '400px', height: '200px' }"
+      mode="pop"
+      @on-close="handleVerifyClose"
+      @on-success="handleVerifySuccess"
+    />
+  </div>
 </template>

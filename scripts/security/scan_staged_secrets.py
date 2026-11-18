@@ -208,8 +208,18 @@ def _normalized_literal(raw_value: str) -> tuple[str, bool]:
     return value, quoted
 
 
+TS_TYPE_ANNOTATION_SUFFIXES = frozenset({".ts", ".tsx", ".mts", ".cts", ".vue"})
+TS_TYPE_TOKEN_RE = (
+    r"(?:string|number|boolean|null|undefined|unknown|never|void|[A-Z][A-Za-z0-9_.]*)(?:\[\])*"
+)
+TS_TYPE_ANNOTATION_RE = re.compile(
+    rf"^(?:null\s+as\s+)?{TS_TYPE_TOKEN_RE}(?:\s*\|\s*{TS_TYPE_TOKEN_RE})*"
+    r"(?:\s*(?:[,;)\]}]|=>\s*[A-Za-z0-9_.<>|\[\]\s;]+|$))"
+)
+
+
 def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool:
-    """判断敏感名称命中是否为 Python 类型注解或安全默认参数。
+    """判断敏感名称命中是否为 Python/TypeScript 类型注解或安全空值默认参数。
 
     Args:
         path: 仓库相对路径。
@@ -217,12 +227,20 @@ def _is_python_type_annotation(path: str, operator: str, raw_value: str) -> bool
         raw_value: 运算符右侧尚未规范化的文本。
 
     Returns:
-        Python 文件中的纯类型表达式，或默认值为 ``None``、``False``、空值等
-        安全占位符时返回 ``True``；固定字符串和配置赋值返回 ``False``，继续
-        执行凭据检查。
+        Python 或 TypeScript/Vue 文件中的纯类型表达式，或默认值为 ``None``、
+        ``False``、空值等安全占位符时返回 ``True``；固定字符串和配置赋值返回
+        ``False``，继续执行凭据检查。
     """
 
-    if not path.lower().endswith(".py") or operator != ":":
+    if operator != ":":
+        return False
+    suffix = PurePosixPath(path.lower()).suffix
+    stripped = raw_value.strip()
+    if suffix in TS_TYPE_ANNOTATION_SUFFIXES:
+        if any(quote in stripped for quote in ('"', "'", "`")):
+            return False
+        return bool(TS_TYPE_ANNOTATION_RE.match(stripped))
+    if suffix != ".py":
         return False
     type_expression = (
         r"[A-Za-z_][A-Za-z0-9_.]*(?:\[[A-Za-z0-9_., |\[\]]+\])?"

@@ -35,7 +35,7 @@ export async function run(options: RunOptions) {
     });
 
     if (isCancel(selectPkg) || !selectPkg) {
-      cancel('👋 Has cancelled');
+      cancel('Has cancelled');
       process.exit(0);
     }
   } else {

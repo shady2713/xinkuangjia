@@ -1,4 +1,7 @@
 <script lang="ts" setup>
+/** 用户 Excel 导入弹窗组件，提供模板下载、覆盖开关及安全 VNode 错误明细展示。 */
+import { h } from 'vue';
+
 import { useVbenModal } from '@vben/common-ui';
 import { downloadFileFromBlobPart } from '@vben/utils';
 
@@ -23,29 +26,14 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
 });
 
-/** 转义 HTML，避免用户名中的特殊字符破坏弹窗结构 */
-function escapeHtml(value: string) {
-  return value.replaceAll(
-    /[&<>"']/g,
-    (c) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-      })[c] as string,
-  );
-}
-
 const [Modal, modalApi] = useVbenModal({
+  /** 校验并上传用户导入文件；存在失败行时以安全 VNode 弹窗展示逐行明细。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
     const data = await formApi.getValues();
     try {
       const result = await importUser(data.file, data.updateSupport);
@@ -54,27 +42,35 @@ const [Modal, modalApi] = useVbenModal({
       const failureEntries = Object.entries(result?.failureUsernames ?? {});
       const failureCount = failureEntries.length;
 
-      // 关闭弹窗并刷新列表
       await modalApi.close();
       emit('success');
 
       if (failureCount > 0) {
-        // 有失败时使用 MessageBox 展示明细，避免被 Message 截断
-        const failureItems = failureEntries
-          .map(
-            ([username, msg]) =>
-              `<li>${escapeHtml(username)}：${escapeHtml(String(msg))}</li>`,
-          )
-          .join('');
+        const failureNodes = failureEntries.map(([username, msg]) =>
+          h('li', { key: username }, `${username}：${String(msg)}`),
+        );
         ElMessageBox.alert(
-          `<div>
-            <p>新增 ${createCount} 个，更新 ${updateCount} 个，失败 ${failureCount} 个。失败明细：</p>
-            <ul style="max-height: 300px; overflow-y: auto; padding-left: 20px; margin: 8px 0 0;">${failureItems}</ul>
-          </div>`,
+          h('div', [
+            h(
+              'p',
+              `新增 ${createCount} 个，更新 ${updateCount} 个，失败 ${failureCount} 个。失败明细：`,
+            ),
+            h(
+              'ul',
+              {
+                style: {
+                  margin: '8px 0 0',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  paddingLeft: '20px',
+                },
+              },
+              failureNodes,
+            ),
+          ]),
           '导入结果',
           {
             confirmButtonText: '确定',
-            dangerouslyUseHTMLString: true,
             type: 'warning',
           },
         );
@@ -89,14 +85,14 @@ const [Modal, modalApi] = useVbenModal({
   },
 });
 
-/** 文件改变时 */
+/** 选择上传文件后同步到表单状态。 */
 function handleChange(file: any) {
   if (file.raw) {
     formApi.setFieldValue('file', file.raw as File);
   }
 }
 
-/** 下载模版 */
+/** 下载用户导入模板。 */
 async function handleDownload() {
   const data = await importUserTemplate();
   downloadFileFromBlobPart({ fileName: '用户导入模板.xls', source: data });

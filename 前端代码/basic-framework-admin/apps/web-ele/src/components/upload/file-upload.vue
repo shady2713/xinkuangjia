@@ -7,7 +7,13 @@ import { computed, ref, toRefs, watch } from 'vue';
 
 import { IconifyIcon } from '@vben/icons';
 import { $t } from '@vben/locales';
-import { checkFileType, isObject, isString, logError } from '@vben/utils';
+import {
+  checkFileType,
+  isObject,
+  isString,
+  logError,
+  openWindow,
+} from '@vben/utils';
 
 import { ElButton, ElUpload } from 'element-plus';
 
@@ -46,7 +52,6 @@ const props = withDefaults(defineProps<FileUploadProps>(), {
  * change：已上传文件值变化时触发，载荷为最新文件值（字符串或字符串数组）。
  * update:value / update:modelValue：分别支持 v-model:value 和 v-model；modelValue 不为 undefined 时优先使用。
  * delete：删除某个已上传文件时触发，载荷为被删除文件的值。
- * returnText：上传前读取到文件文本内容时触发，载荷为文件原文，用于需要预览文本的场景。
  * preview：点击预览已上传文件时触发，载荷为文件地址。
  */
 const emit = defineEmits([
@@ -54,7 +59,6 @@ const emit = defineEmits([
   'update:value',
   'update:modelValue',
   'delete',
-  'returnText',
   'preview',
 ]);
 const { accept, helpText, maxNumber, maxSize } = toRefs(props);
@@ -151,7 +155,7 @@ function handleRemove(file: UploadFile) {
 function handlePreview(file: UploadFile) {
   emit('preview', file);
   if (file.url) {
-    window.open(file.url);
+    openWindow(file.url);
   }
 }
 
@@ -169,14 +173,12 @@ function handleUploadError(error: unknown) {
 }
 
 /**
- * 上传前校验
+ * 上传前校验文件数量、类型与体积边界。
+ *
  * @param file 待上传的文件
  * @returns 是否允许上传
  */
-async function beforeUpload(file: File) {
-  const fileContent = await file.text();
-  emit('returnText', fileContent);
-
+function beforeUpload(file: File) {
   // 检查文件数量限制（使用 getValue 获取实际已上传的文件数量）
   const currentFiles = getValue();
   // 数量口径分支：空值按 0、单值按 1、数组按长度，仅在当前表达式局部关闭嵌套三元规则
