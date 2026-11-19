@@ -133,7 +133,8 @@ function setupAccessGuard(router: Router) {
       return true;
     }
 
-    dictStore.setDictCacheByApi(getSimpleDictDataList);
+    // 字典加载异常由 store 内部捕获记录，避免阻断后续菜单与路由初始化
+    void dictStore.setDictCacheByApi(getSimpleDictDataList);
 
     let userInfo = userStore.userInfo;
     if (!userInfo) {
