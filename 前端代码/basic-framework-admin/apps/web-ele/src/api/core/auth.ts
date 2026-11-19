@@ -1,52 +1,32 @@
 import type { AuthPermissionInfo } from '@vben/types';
 
+import type { OpenApiSchemas } from '#/api/generated/api-types';
+
 import { baseRequestClient, requestClient } from '#/api/request';
 
 export namespace AuthApi {
-  /** 登录接口参数 */
-  export interface LoginParams {
-    password?: string;
-    username?: string;
+  /** 登录接口参数（源自后端 AuthLoginReqVO 契约） */
+  export type LoginParams = Partial<OpenApiSchemas.AuthLoginReqVO>;
+
+  /** 登录接口返回值（源自后端 AuthLoginRespVO 契约） */
+  export type LoginResult = OpenApiSchemas.AuthLoginRespVO;
+
+  /** SM2 密码传输公钥（源自后端 Sm2PublicKeyRespVO 契约） */
+  export type Sm2PublicKeyResult = OpenApiSchemas.Sm2PublicKeyRespVO;
+
+  /** 手机验证码发送接口参数（源自后端 AuthSmsSendReqVO 契约；关闭验证码时 captchaVerification 可为空） */
+  export type SmsCodeParams = Omit<
+    OpenApiSchemas.AuthSmsSendReqVO,
+    'captchaVerification'
+  > & {
     captchaVerification?: string;
-  }
+  };
 
-  /** 登录接口返回值 */
-  export interface LoginResult {
-    accessToken: string;
-    refreshToken: string;
-    userId: number;
-    expiresTime: number;
-    /** 首次登录或管理员重置密码后为 true，前端需先跳转修改密码。 */
-    passwordChangeRequired?: boolean;
-  }
+  /** 手机验证码登录接口参数（源自后端 AuthSmsLoginReqVO 契约） */
+  export type SmsLoginParams = OpenApiSchemas.AuthSmsLoginReqVO;
 
-  /** SM2 密码传输公钥 */
-  export interface Sm2PublicKeyResult {
-    /** 带 04 前缀的未压缩公钥 */
-    publicKey: string;
-    /** 1 表示 C1C3C2 */
-    cipherMode: 1;
-  }
-
-  /** 手机验证码发送接口参数 */
-  export interface SmsCodeParams {
-    mobile: string;
-    scene: number;
-    captchaVerification?: string;
-  }
-
-  /** 手机验证码登录接口参数 */
-  export interface SmsLoginParams {
-    mobile: string;
-    code: string;
-  }
-
-  /** 重置密码接口参数 */
-  export interface ResetPasswordParams {
-    password: string;
-    mobile: string;
-    code: string;
-  }
+  /** 重置密码接口参数（源自后端 AuthResetPasswordReqVO 契约） */
+  export type ResetPasswordParams = OpenApiSchemas.AuthResetPasswordReqVO;
 }
 
 /**

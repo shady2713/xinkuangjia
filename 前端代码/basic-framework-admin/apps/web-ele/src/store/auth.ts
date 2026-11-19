@@ -84,7 +84,7 @@ function useAuthState() {
         if (userInfo?.nickname) {
           ElNotification.success({
             message: `${$t('authentication.loginSuccessDesc')}:${userInfo?.nickname}`,
-            duration: 3,
+            duration: 3000,
             title: $t('authentication.loginSuccess'),
           });
         }

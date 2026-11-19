@@ -125,15 +125,19 @@ export function useUpload(directory?: string) {
       const fileName = await generateFileName(file);
       // 1.2 获取文件预签名地址
       const presignedInfo = await getFilePresignedUrl(fileName, directory);
-      // 1.3 上传文件到对象存储
+      // 1.3 上传文件到对象存储（透传后端签名绑定的 Content-Type，防止浏览器 MIME 差异触发 SigV4 403）
+      const contentType =
+        presignedInfo.contentType || file.type || 'application/octet-stream';
       await baseRequestClient.put(presignedInfo.uploadUrl, file, {
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': contentType,
         },
+        onUploadProgress,
+        timeout: 120_000,
       });
-      // 1.4 同步等待后端元数据登记成功，失败时向调用方显式抛错而非静默丢弃。
+      // 1.4 同步等待后端元数据登记成功，并返回与后端上传模式一致的 URL 字符串
       await createFile0(presignedInfo, file);
-      return { url: presignedInfo.url };
+      return presignedInfo.url;
     } else {
       // 模式二：后端上传
       return uploadFile({ file, directory }, onUploadProgress);
@@ -174,9 +178,10 @@ async function createFile0(
 }
 
 /**
- * 生成文件名称（使用算法SHA256）
+ * 返回原始文件名；实际唯一对象路径由后端 presigned-url 接口规范化生成。
  *
  * @param file 要上传的文件
+ * @returns 原始文件名
  */
 async function generateFileName(file: File) {
   return file.name;

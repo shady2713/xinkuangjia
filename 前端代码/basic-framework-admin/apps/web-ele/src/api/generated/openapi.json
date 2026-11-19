@@ -1837,6 +1837,10 @@
       "FilePresignedUrlRespVO" : {
         "description" : "管理后台 - 文件预签名地址 Response VO",
         "properties" : {
+          "contentType" : {
+            "description" : "预签名绑定的 Content-Type",
+            "type" : "string"
+          },
           "path" : {
             "description" : "文件路径",
             "type" : "string"

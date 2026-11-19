@@ -89,6 +89,11 @@ const uploadList = ref<any[]>([]); // 临时上传列表
 
 watch(
   currentValue,
+  /**
+   * 同步外部绑定值到本地文件列表并在非首次渲染时触发 change 事件。
+   *
+   * @param v 外部传入的文件地址或地址数组
+   */
   (v) => {
     if (isInnerOperate.value) {
       isInnerOperate.value = false;
@@ -126,9 +131,10 @@ watch(
       // 值为空时清空文件列表
       fileList.value = [];
     }
-    if (!isFirstRender.value) {
-      emit('change', value);
+    if (isFirstRender.value) {
       isFirstRender.value = false;
+    } else {
+      emit('change', value);
     }
   },
   {

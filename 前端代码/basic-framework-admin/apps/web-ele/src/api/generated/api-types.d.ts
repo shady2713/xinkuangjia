@@ -765,6 +765,8 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - 文件预签名地址 Response VO */
   export interface FilePresignedUrlRespVO {
+    /** 预签名绑定的 Content-Type */
+    contentType?: string;
     /** 文件路径 */
     path: string;
     /** 文件上传 URL */

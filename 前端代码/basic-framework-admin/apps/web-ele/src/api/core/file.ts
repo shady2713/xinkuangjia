@@ -77,5 +77,7 @@ export function uploadFile(
   if (!data.directory) {
     delete data.directory;
   }
-  return requestClient.upload('/infra/file/upload', data, { onUploadProgress });
+  return requestClient.upload<string>('/infra/file/upload', data, {
+    onUploadProgress,
+  });
 }

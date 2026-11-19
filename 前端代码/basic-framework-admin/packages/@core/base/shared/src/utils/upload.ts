@@ -109,8 +109,15 @@ export function isImage(
   if (!filename || accepts.length === 0) {
     return false;
   }
-  const ext = filename.split('.').pop()?.toLowerCase() || '';
-  return accepts.includes(ext);
+  const dotIndex = filename.lastIndexOf('.');
+  if (dotIndex <= 0 || dotIndex === filename.length - 1) {
+    return false;
+  }
+  const ext = filename.slice(dotIndex + 1).toLowerCase();
+  const normalizedAccepts = accepts
+    .map((item) => item.replace(/^\./u, '').toLowerCase())
+    .filter(Boolean);
+  return normalizedAccepts.includes(ext);
 }
 
 /**
@@ -124,7 +131,7 @@ export function checkFileType(file: File, accepts: string[]) {
   if (!accepts || accepts.length === 0) {
     return true;
   }
-  // 转义正则元字符并去除前导点号，防止 ".jpg" 或特殊字符破坏正则匹配语义。
+  // 转义正则元字符并去除前导点号，防止 ".jpg" 或特殊字符破坏正则匹配语义；无效白名单配置失败关闭。
   const escapedTypes = accepts
     .map((item) =>
       item
@@ -133,7 +140,7 @@ export function checkFileType(file: File, accepts: string[]) {
     )
     .filter(Boolean);
   if (escapedTypes.length === 0) {
-    return true;
+    return false;
   }
   const reg = new RegExp(String.raw`\.(?:${escapedTypes.join('|')})$`, 'iu');
   return reg.test(file.name);

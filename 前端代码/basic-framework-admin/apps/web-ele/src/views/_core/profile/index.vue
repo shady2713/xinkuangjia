@@ -62,7 +62,7 @@ onMounted(loadProfile);
             <BaseInfo :profile="profile" @success="refreshProfile" />
           </ElTabPane>
           <ElTabPane name="resetPwd" label="密码设置">
-            <ResetPwd @success="handlePasswordChanged" />
+            <ResetPwd silent-success @success="handlePasswordChanged" />
           </ElTabPane>
         </ElTabs>
       </ElCard>

@@ -16,7 +16,7 @@ import { $t } from '#/locales';
 import { useGridColumns, useGridFormSchema } from './data';
 import Detail from './modules/detail.vue';
 
-const { query } = useRoute();
+const route = useRoute();
 
 const [DetailModal, detailModalApi] = useVbenModal({
   connectedComponent: Detail,
@@ -25,7 +25,10 @@ const [DetailModal, detailModalApi] = useVbenModal({
 
 /** 导出表格 */
 async function handleExport() {
-  const data = await exportJobLog(await gridApi.formApi.getValues());
+  const data = await exportJobLog({
+    ...(await gridApi.formApi.getValues()),
+    jobId: route.query.id,
+  });
   downloadFileFromBlobPart({ fileName: '任务日志.xls', source: data });
 }
 
@@ -51,7 +54,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
             pageSize: page.pageSize,
             ...formValues,
             ...buildSortingField(sorts),
-            jobId: query.id,
+            jobId: route.query.id,
           });
         },
       },

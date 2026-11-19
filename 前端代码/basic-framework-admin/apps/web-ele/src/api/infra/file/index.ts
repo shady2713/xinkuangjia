@@ -18,9 +18,7 @@ export {
 
 export namespace InfraFileApi {
   /** 文件记录信息（源自后端 FileRespVO 契约）。 */
-  export type File = CoreInfraFileApi.File & {
-    configId?: number;
-  };
+  export type File = CoreInfraFileApi.File;
 
   /** 文件预签名上传地址响应结构。 */
   export type FilePresignedUrlRespVO = CoreInfraFileApi.FilePresignedUrlRespVO;

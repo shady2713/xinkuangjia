@@ -60,7 +60,10 @@ function handleRefresh() {
 
 /** 导出表格 */
 async function handleExport() {
-  const data = await exportUser(await gridApi.formApi.getValues());
+  const data = await exportUser({
+    ...(await gridApi.formApi.getValues()),
+    deptId: searchDeptId.value,
+  });
   downloadFileFromBlobPart({ fileName: '用户.xls', source: data });
 }
 
@@ -107,21 +110,18 @@ async function handleStatusChange(
   newStatus: number,
   row: SystemUserApi.User,
 ): Promise<boolean | undefined> {
-  return new Promise((resolve, reject) => {
-    confirm({
+  try {
+    await confirm({
       content: `你要将${row.username}的状态切换为【${getDictLabel(DICT_TYPE.COMMON_STATUS, newStatus)}】吗？`,
-    })
-      .then(async () => {
-        // 更新用户状态
-        await updateUserStatus(row.id!, newStatus);
-        // 提示并返回成功
-        ElMessage.success($t('ui.actionMessage.operationSuccess'));
-        resolve(true);
-      })
-      .catch(() => {
-        reject(new Error('取消操作'));
-      });
-  });
+    });
+    // 更新用户状态
+    await updateUserStatus(row.id!, newStatus);
+    // 提示并返回成功
+    ElMessage.success($t('ui.actionMessage.operationSuccess'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
