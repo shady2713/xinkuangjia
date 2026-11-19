@@ -27,6 +27,13 @@ export function normalizeErrorMessage(message?: null | string) {
   return message.trim().replace(REQUEST_PARAM_PREFIX_RE, '');
 }
 
+/**
+ * 从未知异常对象或响应载体中提取可读错误文案并去除参数前缀。
+ *
+ * @param error 捕获到的异常对象、响应体或错误字符串
+ * @param fallback 未提取到有效文案时的默认兜底提示
+ * @returns 规范化后的错误展示文案
+ */
 export function extractErrorMessage(error: unknown, fallback = '') {
   if (!error) {
     return fallback;
@@ -42,6 +49,7 @@ export function extractErrorMessage(error: unknown, fallback = '') {
     responseData.error,
     responseData.message,
     responseData.msg,
+    errorObject.msg,
     errorObject.message,
   ];
   for (const candidate of candidates) {

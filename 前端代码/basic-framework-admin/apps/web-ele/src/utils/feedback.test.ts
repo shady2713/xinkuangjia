@@ -27,6 +27,12 @@ function describeFeedbackUtils() {
       '系统异常',
     );
   });
+
+  it('extracts top-level msg fields returned by auth refresh rejections', () => {
+    expect(
+      extractErrorMessage({ code: 400, msg: '无效的刷新令牌' }, '操作失败'),
+    ).toBe('无效的刷新令牌');
+  });
 }
 
 describe('feedback utils', describeFeedbackUtils);

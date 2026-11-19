@@ -202,10 +202,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
     if (responseData?.code === 401) {
       return;
     }
-    const errorMessage = normalizeErrorMessage(
-      responseData?.error ?? responseData?.message ?? responseData?.msg ?? '',
-    );
-    showErrorMessage(errorMessage || msg);
+    const errorMessage = resolveErrorMessage(msg, error, responseData);
+    showErrorMessage(errorMessage);
   }
 
   client.addResponseInterceptor(
@@ -213,6 +211,39 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   );
 
   return client;
+}
+
+const AXIOS_STATUS_ERROR_RE = /^Request failed with status code \d+$/i;
+
+/**
+ * 按响应业务字段、后端异常消息字段及非通用 Axios 异常文本顺序提取用户可见的错误提示。
+ *
+ * @param fallbackMessage 拦截器提供的兜底本地化 HTTP 错误文案
+ * @param error           捕获到的请求或业务异常对象
+ * @param responseData    已解析的响应体对象（含解包后的 Blob JSON 载荷）
+ * @returns 清理参数前缀后的错误展示文案
+ */
+export function resolveErrorMessage(
+  fallbackMessage: string,
+  error: any,
+  responseData?: Record<string, any>,
+): string {
+  const resolvedData =
+    responseData ?? error?.response?.data ?? error?.data ?? {};
+  const directCandidate =
+    resolvedData?.error ??
+    resolvedData?.message ??
+    resolvedData?.msg ??
+    error?.msg;
+  let candidate = directCandidate;
+  if (
+    !candidate &&
+    typeof error?.message === 'string' &&
+    !AXIOS_STATUS_ERROR_RE.test(error.message.trim())
+  ) {
+    candidate = error.message;
+  }
+  return normalizeErrorMessage(candidate) || fallbackMessage;
 }
 
 /**
