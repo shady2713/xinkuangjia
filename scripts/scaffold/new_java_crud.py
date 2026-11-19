@@ -7,7 +7,7 @@ ServiceExceptionUtil、SLF4J）、Java 增量注释门禁与 UniqueBaseDO 软删
 
 用法：
   python -B -X utf8 scripts/scaffold/new_java_crud.py crm customer --title 客户 --unique-code
-  python -B -X utf8 scripts/scaffold/new_java_crud.py --module crm --entity customer --title 客户 --apply
+  python -B -X utf8 scripts/scaffold/new_java_crud.py --module crm --entity sales-order --title 销售订单 --apply
 
 @author shady2713
 """
@@ -24,6 +24,7 @@ sys.dont_write_bytecode = True
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SEGMENT_RE = re.compile(r"^[a-z][a-z0-9]{1,23}$")
+ENTITY_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 JAVA_KEYWORDS = frozenset(
     {
         "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
@@ -145,7 +146,7 @@ def _prepare_error_code_update(
     }
     existing_names = set(re.findall(r"\bErrorCode\s+([A-Z0-9_]+)\s*=", source))
     safe_title = _escape_java_str(clean_title)
-    entity_upper = entity.upper()
+    entity_upper = entity.replace("-", "_").upper()
     not_exists_name = f"{entity_upper}_NOT_EXISTS"
     duplicate_name = f"{entity_upper}_CODE_DUPLICATE"
 
@@ -189,13 +190,36 @@ def _prepare_error_code_update(
 
 
 def _validate_identifier(label: str, value: str) -> str:
-    """校验 Java 包段与实体路径段格式，并拒绝 Java 保留关键字。"""
+    """校验 Java 包段格式，并拒绝 Java 保留关键字。"""
     normalized = value.strip().lower()
     if not SEGMENT_RE.fullmatch(normalized):
         raise ValueError(f"{label} '{value}' 非法：必须以小写字母开头，仅含小写字母和数字，长度 2-24")
     if normalized in JAVA_KEYWORDS:
         raise ValueError(f"{label} '{normalized}' 为 Java 保留关键字，不可作为包名或实体标识")
     return normalized
+
+
+def _validate_entity_identifier(value: str) -> str:
+    """校验实体路径段命名（支持 kebab-case 多词标识，如 sales-order）并拒绝 Java 保留关键字。"""
+    normalized = value.strip().lower()
+    if not (2 <= len(normalized) <= 32) or not ENTITY_RE.fullmatch(normalized):
+        raise ValueError(
+            f"实体名 '{value}' 非法：必须以小写字母开头，仅含小写字母、数字和单个连字符，长度 2-32"
+        )
+    if normalized in JAVA_KEYWORDS or normalized.replace("-", "") in JAVA_KEYWORDS:
+        raise ValueError(f"实体名 '{normalized}' 为 Java 保留关键字，不可作为包名或实体标识")
+    return normalized
+
+
+def _entity_names(entity: str) -> tuple[str, str, str, str, str]:
+    """将规范化的实体标识拆解为包名、PascalCase、camelCase、snake_case 与 UPPER_CASE。"""
+    parts = entity.split("-")
+    entity_pkg = "".join(parts)
+    entity_pascal = "".join(part.capitalize() for part in parts)
+    entity_camel = entity_pascal[:1].lower() + entity_pascal[1:]
+    entity_snake = "_".join(parts)
+    entity_upper = entity_snake.upper()
+    return entity_pkg, entity_pascal, entity_camel, entity_snake, entity_upper
 
 
 def _render_mysql_ddl(table_name: str, title: str, use_unique_base: bool) -> str:
@@ -234,9 +258,8 @@ def _render_java_crud_files(
 ) -> tuple[str, dict[str, str]]:
     """渲染后端实体 CRUD 全套 Java 源文件与 H2 切片测试。"""
     title = _escape_java_str(title)
-    entity_pascal = entity.capitalize()
-    entity_upper = entity.upper()
-    table_name = f"{module}_{entity}"
+    entity_pkg, entity_pascal, entity_camel, entity_snake, entity_upper = _entity_names(entity)
+    table_name = f"{module}_{entity_snake}"
     perm_prefix = f"{module}:{entity}"
     base_pkg = f"com.basicframework.module.{module}"
     mod_prefix = f"后端代码/basic-framework-boot/basic-framework-module-{module}"
@@ -251,7 +274,7 @@ def _render_java_crud_files(
     )
     base_do_name = "UniqueBaseDO" if use_unique_base else "BaseDO"
 
-    do_java = f"""package {base_pkg}.dal.dataobject.{entity};
+    do_java = f"""package {base_pkg}.dal.dataobject.{entity_pkg};
 
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -288,13 +311,13 @@ public class {entity_pascal}DO extends {base_do_name} {{
 }}
 """
 
-    mapper_java = f"""package {base_pkg}.dal.mysql.{entity};
+    mapper_java = f"""package {base_pkg}.dal.mysql.{entity_pkg};
 
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
-import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}PageReqVO;
+import {base_pkg}.dal.dataobject.{entity_pkg}.{entity_pascal}DO;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
@@ -332,7 +355,7 @@ public interface {entity_pascal}Mapper extends BaseMapperX<{entity_pascal}DO> {{
 }}
 """
 
-    save_req_vo = f"""package {base_pkg}.controller.admin.{entity}.vo;
+    save_req_vo = f"""package {base_pkg}.controller.admin.{entity_pkg}.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -378,7 +401,7 @@ public class {entity_pascal}SaveReqVO {{
 }}
 """
 
-    page_req_vo = f"""package {base_pkg}.controller.admin.{entity}.vo;
+    page_req_vo = f"""package {base_pkg}.controller.admin.{entity_pkg}.vo;
 
 import com.basicframework.framework.common.pojo.PageParam;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -416,7 +439,7 @@ public class {entity_pascal}PageReqVO extends PageParam {{
 }}
 """
 
-    resp_vo = f"""package {base_pkg}.controller.admin.{entity}.vo;
+    resp_vo = f"""package {base_pkg}.controller.admin.{entity_pkg}.vo;
 
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
@@ -468,12 +491,12 @@ public class {entity_pascal}RespVO {{
 }}
 """
 
-    service_java = f"""package {base_pkg}.service.{entity};
+    service_java = f"""package {base_pkg}.service.{entity_pkg};
 
 import com.basicframework.framework.common.pojo.PageResult;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
-import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}PageReqVO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}SaveReqVO;
+import {base_pkg}.dal.dataobject.{entity_pkg}.{entity_pascal}DO;
 
 import java.util.List;
 
@@ -532,14 +555,14 @@ public interface {entity_pascal}Service {{
 }}
 """
 
-    service_impl = f"""package {base_pkg}.service.{entity};
+    service_impl = f"""package {base_pkg}.service.{entity_pkg};
 
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
-import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
-import {base_pkg}.dal.mysql.{entity}.{entity_pascal}Mapper;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}PageReqVO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}SaveReqVO;
+import {base_pkg}.dal.dataobject.{entity_pkg}.{entity_pascal}DO;
+import {base_pkg}.dal.mysql.{entity_pkg}.{entity_pascal}Mapper;
 import {base_pkg}.enums.ErrorCodeConstants;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
@@ -559,7 +582,7 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
 public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
 
     @Resource
-    private {entity_pascal}Mapper {entity}Mapper;
+    private {entity_pascal}Mapper {entity_camel}Mapper;
 
     /**
      * 创建{title}记录并落库。
@@ -573,7 +596,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
         validateCodeUnique(null, createReqVO.getCode());
         {entity_pascal}DO record = BeanUtils.toBean(createReqVO, {entity_pascal}DO.class);
         record.setId(null);
-        {entity}Mapper.insert(record);
+        {entity_camel}Mapper.insert(record);
         return record.getId();
     }}
 
@@ -588,7 +611,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
         validateExists(updateReqVO.getId());
         validateCodeUnique(updateReqVO.getId(), updateReqVO.getCode());
         {entity_pascal}DO updateObj = BeanUtils.toBean(updateReqVO, {entity_pascal}DO.class);
-        {entity}Mapper.updateById(updateObj);
+        {entity_camel}Mapper.updateById(updateObj);
     }}
 
     /**
@@ -600,7 +623,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     @Transactional(rollbackFor = Exception.class)
     public void delete{entity_pascal}(Long id) {{
         validateExists(id);
-        {entity}Mapper.deleteById(id);
+        {entity_camel}Mapper.deleteById(id);
     }}
 
     /**
@@ -611,7 +634,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete{entity_pascal}List(List<Long> ids) {{
-        {entity}Mapper.deleteByIds(ids);
+        {entity_camel}Mapper.deleteByIds(ids);
     }}
 
     /**
@@ -622,7 +645,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
      */
     @Override
     public {entity_pascal}DO get{entity_pascal}(Long id) {{
-        return {entity}Mapper.selectById(id);
+        return {entity_camel}Mapper.selectById(id);
     }}
 
     /**
@@ -633,7 +656,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
      */
     @Override
     public PageResult<{entity_pascal}DO> get{entity_pascal}Page({entity_pascal}PageReqVO pageReqVO) {{
-        return {entity}Mapper.selectPage(pageReqVO);
+        return {entity_camel}Mapper.selectPage(pageReqVO);
     }}
 
     /**
@@ -642,7 +665,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
      * @param id 主键编号
      */
     private void validateExists(Long id) {{
-        if (id == null || {entity}Mapper.selectById(id) == null) {{
+        if (id == null || {entity_camel}Mapper.selectById(id) == null) {{
             throw exception(ErrorCodeConstants.{entity_upper}_NOT_EXISTS);
         }}
     }}
@@ -654,7 +677,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
      * @param code {title}编码
      */
     private void validateCodeUnique(Long id, String code) {{
-        {entity_pascal}DO existing = {entity}Mapper.selectByCode(code);
+        {entity_pascal}DO existing = {entity_camel}Mapper.selectByCode(code);
         if (existing != null && !Objects.equals(existing.getId(), id)) {{
             throw exception(ErrorCodeConstants.{entity_upper}_CODE_DUPLICATE);
         }}
@@ -663,18 +686,18 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
 }}
 """
 
-    controller_java = f"""package {base_pkg}.controller.admin.{entity};
+    controller_java = f"""package {base_pkg}.controller.admin.{entity_pkg};
 
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.excel.core.util.ExcelUtils;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}RespVO;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
-import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}PageReqVO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}RespVO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}SaveReqVO;
+import {base_pkg}.dal.dataobject.{entity_pkg}.{entity_pascal}DO;
 import {base_pkg}.enums.ErrorCodeConstants;
-import {base_pkg}.service.{entity}.{entity_pascal}Service;
+import {base_pkg}.service.{entity_pkg}.{entity_pascal}Service;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -715,7 +738,7 @@ public class {entity_pascal}Controller {{
     private static final int MAX_EXPORT_SIZE = 10_000;
 
     @Resource
-    private {entity_pascal}Service {entity}Service;
+    private {entity_pascal}Service {entity_camel}Service;
 
     /**
      * 创建{title}记录。
@@ -727,7 +750,7 @@ public class {entity_pascal}Controller {{
     @Operation(summary = "创建{title}")
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:create')")
     public CommonResult<Long> create{entity_pascal}(@Valid @RequestBody {entity_pascal}SaveReqVO createReqVO) {{
-        return success({entity}Service.create{entity_pascal}(createReqVO));
+        return success({entity_camel}Service.create{entity_pascal}(createReqVO));
     }}
 
     /**
@@ -740,7 +763,7 @@ public class {entity_pascal}Controller {{
     @Operation(summary = "修改{title}")
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:update')")
     public CommonResult<Boolean> update{entity_pascal}(@Valid @RequestBody {entity_pascal}SaveReqVO updateReqVO) {{
-        {entity}Service.update{entity_pascal}(updateReqVO);
+        {entity_camel}Service.update{entity_pascal}(updateReqVO);
         return success(true);
     }}
 
@@ -755,7 +778,7 @@ public class {entity_pascal}Controller {{
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:delete')")
     public CommonResult<Boolean> delete{entity_pascal}(@RequestParam("id") Long id) {{
-        {entity}Service.delete{entity_pascal}(id);
+        {entity_camel}Service.delete{entity_pascal}(id);
         return success(true);
     }}
 
@@ -771,7 +794,7 @@ public class {entity_pascal}Controller {{
     public CommonResult<Boolean> delete{entity_pascal}List(
             @RequestParam("ids") @NotEmpty(message = "编号列表不能为空")
             @Size(max = 100, message = "单次最多批量删除 100 条记录") List<Long> ids) {{
-        {entity}Service.delete{entity_pascal}List(ids);
+        {entity_camel}Service.delete{entity_pascal}List(ids);
         return success(true);
     }}
 
@@ -786,7 +809,7 @@ public class {entity_pascal}Controller {{
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:query')")
     public CommonResult<{entity_pascal}RespVO> get{entity_pascal}(@RequestParam("id") Long id) {{
-        {entity_pascal}DO record = {entity}Service.get{entity_pascal}(id);
+        {entity_pascal}DO record = {entity_camel}Service.get{entity_pascal}(id);
         return success(BeanUtils.toBean(record, {entity_pascal}RespVO.class));
     }}
 
@@ -800,7 +823,7 @@ public class {entity_pascal}Controller {{
     @Operation(summary = "获得{title}分页")
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:query')")
     public CommonResult<PageResult<{entity_pascal}RespVO>> get{entity_pascal}Page(@Valid {entity_pascal}PageReqVO pageReqVO) {{
-        PageResult<{entity_pascal}DO> pageResult = {entity}Service.get{entity_pascal}Page(pageReqVO);
+        PageResult<{entity_pascal}DO> pageResult = {entity_camel}Service.get{entity_pascal}Page(pageReqVO);
         return success(BeanUtils.toBean(pageResult, {entity_pascal}RespVO.class));
     }}
 
@@ -818,7 +841,7 @@ public class {entity_pascal}Controller {{
                                            HttpServletResponse response) throws IOException {{
         exportReqVO.setPageNo(1);
         exportReqVO.setPageSize(MAX_EXPORT_SIZE);
-        PageResult<{entity_pascal}DO> pageResult = {entity}Service.get{entity_pascal}Page(exportReqVO);
+        PageResult<{entity_pascal}DO> pageResult = {entity_camel}Service.get{entity_pascal}Page(exportReqVO);
         if (pageResult.getTotal() > MAX_EXPORT_SIZE) {{
             throw exception(ErrorCodeConstants.EXPORT_SIZE_EXCEEDED);
         }}
@@ -865,7 +888,7 @@ public class {entity_pascal}Controller {{
         else ""
     )
 
-    mapper_test_java = f"""package {base_pkg}.dal.mysql.{entity};
+    mapper_test_java = f"""package {base_pkg}.dal.mysql.{entity_pkg};
 
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.annotation.IdType;
@@ -878,8 +901,8 @@ import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerIntercept
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.handler.DefaultDBFieldHandler;
 import com.basicframework.framework.mybatis.core.interceptor.SoftDeleteUniqueInnerInterceptor;
-import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
-import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import {base_pkg}.controller.admin.{entity_pkg}.vo.{entity_pascal}PageReqVO;
+import {base_pkg}.dal.dataobject.{entity_pkg}.{entity_pascal}DO;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -993,16 +1016,16 @@ class {entity_pascal}MapperTest {{
 """
 
     files = {
-        f"{main_dir}/dal/dataobject/{entity}/{entity_pascal}DO.java": do_java,
-        f"{main_dir}/dal/mysql/{entity}/{entity_pascal}Mapper.java": mapper_java,
-        f"{main_dir}/controller/admin/{entity}/vo/{entity_pascal}SaveReqVO.java": save_req_vo,
-        f"{main_dir}/controller/admin/{entity}/vo/{entity_pascal}PageReqVO.java": page_req_vo,
-        f"{main_dir}/controller/admin/{entity}/vo/{entity_pascal}RespVO.java": resp_vo,
-        f"{main_dir}/service/{entity}/{entity_pascal}Service.java": service_java,
-        f"{main_dir}/service/{entity}/{entity_pascal}ServiceImpl.java": service_impl,
-        f"{main_dir}/controller/admin/{entity}/{entity_pascal}Controller.java": controller_java,
+        f"{main_dir}/dal/dataobject/{entity_pkg}/{entity_pascal}DO.java": do_java,
+        f"{main_dir}/dal/mysql/{entity_pkg}/{entity_pascal}Mapper.java": mapper_java,
+        f"{main_dir}/controller/admin/{entity_pkg}/vo/{entity_pascal}SaveReqVO.java": save_req_vo,
+        f"{main_dir}/controller/admin/{entity_pkg}/vo/{entity_pascal}PageReqVO.java": page_req_vo,
+        f"{main_dir}/controller/admin/{entity_pkg}/vo/{entity_pascal}RespVO.java": resp_vo,
+        f"{main_dir}/service/{entity_pkg}/{entity_pascal}Service.java": service_java,
+        f"{main_dir}/service/{entity_pkg}/{entity_pascal}ServiceImpl.java": service_impl,
+        f"{main_dir}/controller/admin/{entity_pkg}/{entity_pascal}Controller.java": controller_java,
         f"{test_res_dir}/{table_name}_schema.sql": h2_sql,
-        f"{test_dir}/dal/mysql/{entity}/{entity_pascal}MapperTest.java": mapper_test_java,
+        f"{test_dir}/dal/mysql/{entity_pkg}/{entity_pascal}MapperTest.java": mapper_test_java,
     }
     return table_name, files
 
@@ -1021,7 +1044,7 @@ def scaffold_java_crud(
     Args:
         root: 仓库根目录。
         raw_module: 已有业务模块短名（例如 crm）。
-        raw_entity: 实体短名（例如 customer）。
+        raw_entity: 实体路径标识（例如 customer、sales-order）。
         title: 中文业务名称（例如 客户）。
         use_unique_base: 为 True 时继承 UniqueBaseDO 并生成含 deleted_tag 的唯一索引。
         apply: 为 True 时实际写入；默认仅预览。
@@ -1031,7 +1054,7 @@ def scaffold_java_crud(
         ValueError: 目标模块目录不存在、命名非法或目标文件已存在时抛出。
     """
     module = _validate_identifier("模块名", raw_module)
-    entity = _validate_identifier("实体名", raw_entity)
+    entity = _validate_entity_identifier(raw_entity)
     clean_title = title.strip()
     if not clean_title:
         raise ValueError("必须提供非空的中文业务标题 --title")
@@ -1082,9 +1105,9 @@ def main(argv: list[str] | None = None) -> int:
     """解析命令行参数并执行后端实体 CRUD 脚手架。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("module", nargs="?", default=None, help="已有业务模块短名（如 crm）")
-    parser.add_argument("entity", nargs="?", default=None, help="实体短名（如 customer）")
+    parser.add_argument("entity", nargs="?", default=None, help="实体路径标识（如 customer、sales-order）")
     parser.add_argument("--module", dest="module_opt", default=None, help="已有业务模块短名（命名参数形式）")
-    parser.add_argument("--entity", dest="entity_opt", default=None, help="实体短名（命名参数形式）")
+    parser.add_argument("--entity", dest="entity_opt", default=None, help="实体路径标识（命名参数形式）")
     parser.add_argument("--title", required=True, help="实体中文名称（如 客户）")
     parser.add_argument(
         "--unique-code",
@@ -1092,7 +1115,13 @@ def main(argv: list[str] | None = None) -> int:
         help="继承 UniqueBaseDO 并生成含 deleted_tag 的唯一编码索引",
     )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
-    parser.add_argument("--apply", action="store_true", help="实际写入文件（默认仅预览）")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只读预览拟生成文件与建表 DDL，不写入磁盘（默认）",
+    )
+    mode_group.add_argument("--apply", action="store_true", help="实际写入文件（默认仅预览）")
     args = parser.parse_args(argv)
 
     raw_module = args.module_opt or args.module

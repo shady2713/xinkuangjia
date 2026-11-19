@@ -4,7 +4,7 @@
 
 ## 目录与 Maven 聚合接入
 
-优先在仓库根运行 `python -B -X utf8 scripts/scaffold/new_java_module.py --name <biz> --apply` 生成标准模块目录、错误码号段与 POM 注册；手工调整时核对下列结构：
+优先在仓库根运行 `python -B -X utf8 scripts/scaffold/new_java_module.py --name <biz> --apply` 生成标准模块目录、错误码号段与 POM 注册；模块内新建标准单表 CRUD 可继续运行 `python -B -X utf8 scripts/scaffold/new_java_crud.py <biz> <entity> --title <中文名> --apply`（支持 `sales-order` 等 kebab-case 多词实体，并可通过 `--unique-code` 启用 `UniqueBaseDO` 软删唯一键契约）；手工调整时核对下列结构：
 
 1. 在 `后端代码/basic-framework-boot/` 下创建模块目录 `basic-framework-module-<biz>`，包根固定为 `com.basicframework.module.<biz>`（`BasicFrameworkServerApplication` 默认扫描 `com.basicframework.module`）。
 2. 在三处 POM 与错误码登记表同步，不把业务规则塞入 `core` 或 `server`：
@@ -23,7 +23,7 @@ basic-framework-module-<biz>/
     │   │   └── <feature>/vo/    # SaveReqVO、PageReqVO、RespVO
     │   ├── convert/             # MapStruct 或 BeanUtils 转换
     │   ├── dal/
-    │   │   ├── dataobject/      # 继承 BaseDO 的持久化实体（严禁直接出现在 Controller 入参或返回签名）
+    │   │   ├── dataobject/      # 继承 BaseDO 或 UniqueBaseDO 的持久化实体（严禁直接出现在 Controller 入参或返回签名）
     │   │   └── mysql/           # 继承 BaseMapperX 的 Mapper
     │   ├── enums/               # 错误码 ErrorCodeConstants 与业务枚举
     │   └── service/             # 业务接口与 ServiceImpl（异常统一走 ServiceExceptionUtil）
@@ -37,6 +37,7 @@ basic-framework-module-<biz>/
 - **HTTP 模型隔离（ArchUnit 强门禁）**：Controller 上所有带 `@RequestMapping` 派生注解的方法，参数与返回类型（包括 `CommonResult<T>`、`PageResult<T>` 的泛型实参）必须为 VO 或基础类型，不得暴露 `dal.dataobject.*DO`。
 - **异常与日志（ArchUnit 强门禁）**：`com.basicframework.module..` 禁止直接 `throw new RuntimeException(...)` 或使用 `java.util.logging`，统一使用 `ServiceExceptionUtil.exception(...)` 与 SLF4J `@Slf4j`。
 - **公开端点白名单（ArchUnit 强门禁）**：默认全部管理接口受登录与 `@PreAuthorize("@ss.hasPermission('<biz>:<resource>:<action>')")` 保护；禁止类级 `@PermitAll`，确需公开的方法必须同步登记至 `FootgunRules.PERMIT_ALL_ALLOWLIST`。
+- **持久化实体与软删唯一键（`UniqueBaseDO`）**：无业务唯一约束的表继承 `BaseDO`；存在唯一业务编码/账号等唯一约束的表继承 `UniqueBaseDO`（附加 `deleted_tag bigint NOT NULL DEFAULT 0` 并建立 `(唯一列, deleted_tag)` 唯一索引），由 `SoftDeleteUniqueInnerInterceptor` 在逻辑删除时自动改写 `deleted_tag = id`，避免软删后无法重建同名记录或并发误判。
 - **前后端契约与三处标识对齐**：
   1. 后端 `@PreAuthorize("@ss.hasPermission('order:contract:create')")`；
   2. 数据库 `basic_framework.sql` 的建表 DDL（含唯一索引表的 `deleted_tag`）及 `system_menu` 菜单行的 `component`、按钮行的 `permission`（由 `SchemaDoRbacParityTest` 强制核对）；

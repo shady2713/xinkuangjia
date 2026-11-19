@@ -9,6 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from scripts.code.java import check_staged_java_comments
 from scripts.common.quality_common import DEFAULT_ROOT
 from scripts.security import scan_staged_secrets
@@ -184,3 +185,43 @@ def test_secret_scanner_and_java_comment_regressions() -> None:
         )
         == []
     )
+
+
+def test_verify_slice_frontend_plan_covers_typecheck_api_check_and_quality_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """前端切片运行时计划必须覆盖 typecheck、api:check 以及前端 quality Python 测试。"""
+    repo = _init_git_repo(tmp_path / "web-repo")
+    monkeypatch.setattr(verify_slice.shutil, "which", lambda name: "pnpm" if "pnpm" in name else None)
+
+    ts_file = repo / "前端代码/basic-framework-admin/apps/web-ele/src/demo.ts"
+    ts_file.parent.mkdir(parents=True)
+    ts_file.write_text("export const demo = 1;\n", encoding="utf-8", newline="\n")
+    quality_py = repo / "前端代码/basic-framework-admin/scripts/quality/verify_workspace_constraints.py"
+    quality_py.parent.mkdir(parents=True)
+    quality_py.write_text('"""约束检查。"""\n', encoding="utf-8", newline="\n")
+
+    plan = verify_slice.build_slice_plan(
+        repo,
+        [
+            "前端代码/basic-framework-admin/apps/web-ele/src/demo.ts",
+            "前端代码/basic-framework-admin/scripts/quality/verify_workspace_constraints.py",
+        ],
+        base="HEAD",
+        skip_runtime=False,
+    )
+    step_map = {step.name: step for step in plan.steps}
+    assert "web-slice-eslint" in step_map
+    assert step_map["web-slice-typecheck"].command == ("pnpm", "check:type")
+    assert step_map["web-slice-api-check"].command == ("pnpm", "api:check")
+    assert step_map["web-quality-python-tests"].command[-2:] == ("-p", "test_*.py")
+
+    # 仅变更生成的 OpenAPI 快照（无 .ts 源码）也必须触发 api:check
+    openapi_only = verify_slice.build_slice_plan(
+        repo,
+        ["前端代码/basic-framework-admin/apps/web-ele/src/api/generated/openapi.json"],
+        base="HEAD",
+        skip_runtime=False,
+    )
+    openapi_steps = [step.name for step in openapi_only.steps]
+    assert openapi_steps == ["web-slice-api-check"]

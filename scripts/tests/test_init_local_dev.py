@@ -86,13 +86,17 @@ def check_ci_doc_alignment(workflow_data: dict, index_text: str, readme_text: st
 
 
 def test_dry_run_never_writes_files_or_exposes_secrets(tmp_path: Path) -> None:
-    """默认只读模式不得写入本地环境文件，且命令行拒绝单独使用 --force。"""
+    """默认只读模式与显式 --dry-run 不得写入本地环境文件，且拒绝 --apply 冲突或单独 --force。"""
     repo = _prepare_fake_repo(tmp_path / "repo")
-    exit_code = init_local_dev.main(["--root", str(repo)])
-    assert exit_code == 0
+    assert init_local_dev.main(["--root", str(repo)]) == 0
+    assert init_local_dev.main(["--root", str(repo), "--dry-run"]) == 0
     assert not (repo / ".env.dev").exists()
     assert not (repo / "后端代码" / "basic-framework-boot" / ".env").exists()
     assert init_local_dev.main(["--root", str(repo), "--force"]) == 2
+    assert init_local_dev.main(["--root", str(repo), "--dry-run", "--force"]) == 2
+    with pytest.raises(SystemExit) as conflict:
+        init_local_dev.main(["--root", str(repo), "--dry-run", "--apply"])
+    assert conflict.value.code == 2
 
 
 def test_apply_generates_valid_sm2_key_and_preserves_existing_files(
@@ -135,6 +139,14 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
     services = compose["services"]
     assert {"mysql", "redis", "minio", "minio-init"} <= set(services)
+    assert services["mysql"]["image"] == "mysql:8.0.46"
+    assert services["redis"]["image"] == "redis:7.4.10-alpine"
+    assert services["minio"]["image"] == "minio/minio:RELEASE.2025-09-07T16-13-09Z"
+    assert services["minio-init"]["image"] == "minio/mc:RELEASE.2025-08-13T08-35-41Z"
+    assert services["minio"]["ports"] == [
+        "127.0.0.1:${MINIO_API_PORT:-19000}:9000",
+        "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001",
+    ]
     for service_name, service in services.items():
         for port_mapping in service.get("ports", []):
             assert str(port_mapping).startswith("127.0.0.1:"), (
