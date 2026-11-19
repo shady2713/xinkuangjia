@@ -16,16 +16,26 @@ const accessStore = useAccessStore();
 const userInfo = computed(() => userStore.userInfo);
 const userRoles = computed(() => userStore.userRoles);
 
-const quickLinks = [
-  { title: '用户管理', path: '/system/user', description: '管理系统用户账号' },
-  { title: '角色管理', path: '/system/role', description: '配置角色与权限' },
-  {
-    title: '部门管理',
-    path: '/system/dept',
-    description: '组织架构与部门管理',
-  },
-  { title: '字典管理', path: '/system/dict', description: '维护系统字典数据' },
-].filter((link) => accessStore.getMenuByPath(link.path));
+const quickLinks = computed(() =>
+  [
+    {
+      title: '用户管理',
+      path: '/system/user',
+      description: '管理系统用户账号',
+    },
+    { title: '角色管理', path: '/system/role', description: '配置角色与权限' },
+    {
+      title: '部门管理',
+      path: '/system/dept',
+      description: '组织架构与部门管理',
+    },
+    {
+      title: '字典管理',
+      path: '/system/dict',
+      description: '维护系统字典数据',
+    },
+  ].filter((link) => accessStore.getMenuByPath(link.path)),
+);
 
 function navigateTo(path: string) {
   router.push(path);
@@ -113,8 +123,8 @@ function getGreeting(): string {
               <span class="info-value">Basic Framework Admin</span>
             </div>
             <div class="info-item">
-              <span class="info-label">框架版本</span>
-              <span class="info-value">5.6.0</span>
+              <span class="info-label">架构定位</span>
+              <span class="info-value">Spring Boot 3.5 + Vue 3</span>
             </div>
             <div class="info-item">
               <span class="info-label">前端框架</span>

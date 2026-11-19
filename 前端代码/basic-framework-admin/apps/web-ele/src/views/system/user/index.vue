@@ -65,7 +65,7 @@ async function handleExport() {
 }
 
 /** 选择部门 */
-const searchDeptId = ref<number | undefined>(undefined);
+const searchDeptId = ref<number | string | undefined>(undefined);
 async function handleDeptSelect(dept: SystemDeptApi.Dept) {
   searchDeptId.value = dept.id;
   handleRefresh();

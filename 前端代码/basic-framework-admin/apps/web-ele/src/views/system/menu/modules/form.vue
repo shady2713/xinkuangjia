@@ -48,6 +48,11 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 弹窗开关切换时初始化菜单表单数据并加载编辑详情。
+   *
+   * @param isOpen 弹窗是否处于打开状态
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;
@@ -68,7 +73,7 @@ const [Modal, modalApi] = useVbenModal({
     formData.value = data;
     modalApi.lock();
     try {
-      formData.value = await getMenu(data.id);
+      formData.value = await getMenu(isEdit);
       // 设置到 values
       await formApi.setValues(formData.value);
     } finally {

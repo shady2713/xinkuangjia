@@ -116,7 +116,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
               class="size-full"
             />
           </div>
-          <span class="flex-auto">{{ $t(row.name) }}</span>
+          <span class="flex-auto">{{ row.name }}</span>
           <div class="items-center justify-end"></div>
         </div>
       </template>

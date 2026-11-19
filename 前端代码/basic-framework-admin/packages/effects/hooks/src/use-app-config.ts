@@ -89,15 +89,6 @@ export function getDefaultLoginCredentials(
   };
 }
 
-/**
- * 判断多租户开关是否启用。
- *
- * @returns 当前单租户基线固定返回 false
- */
-export function isTenantEnable(): boolean {
-  return false;
-}
-
 /** 返回运行时配置字段；服务端渲染等无浏览器场景返回 undefined。 */
 function getRuntimeConfigValue(key: keyof VbenAdminProAppConfigRaw) {
   return typeof window === 'undefined'

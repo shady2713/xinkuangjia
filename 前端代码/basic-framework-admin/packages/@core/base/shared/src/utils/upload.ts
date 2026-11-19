@@ -91,17 +91,9 @@ export function getFileNameFromUrl(url: null | string | undefined): string {
 }
 
 /**
- * 默认图片类型
+ * 默认安全光栅图片类型（与后端 FileTypeUtils 白名单一致，显式排除 svg 以防存储型 XSS）。
  */
-export const defaultImageAccepts = [
-  'bmp',
-  'gif',
-  'jpeg',
-  'jpg',
-  'png',
-  'svg',
-  'webp',
-];
+export const defaultImageAccepts = ['bmp', 'gif', 'jpeg', 'jpg', 'png', 'webp'];
 
 /**
  * 判断文件是否为图片
@@ -132,8 +124,18 @@ export function checkFileType(file: File, accepts: string[]) {
   if (!accepts || accepts.length === 0) {
     return true;
   }
-  const newTypes = accepts.join('|');
-  const reg = new RegExp(`${String.raw`\.(` + newTypes})$`, 'i');
+  // 转义正则元字符并去除前导点号，防止 ".jpg" 或特殊字符破坏正则匹配语义。
+  const escapedTypes = accepts
+    .map((item) =>
+      item
+        .replace(/^\./u, '')
+        .replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`),
+    )
+    .filter(Boolean);
+  if (escapedTypes.length === 0) {
+    return true;
+  }
+  const reg = new RegExp(String.raw`\.(?:${escapedTypes.join('|')})$`, 'iu');
   return reg.test(file.name);
 }
 

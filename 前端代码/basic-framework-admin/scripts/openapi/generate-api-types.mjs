@@ -70,7 +70,16 @@ function renderTsType(schema) {
     case 'boolean': {
       return 'boolean';
     }
-    case 'integer':
+    case 'integer': {
+      // Java Long 由 NumberSerializer 在超出 JS 安全整数范围时序列化为 string；LocalDateTime 毫秒时间戳始终为 number。
+      if (
+        schema.format === 'int64' &&
+        schema['x-java-type'] !== 'LocalDateTime-epoch-ms'
+      ) {
+        return 'number | string';
+      }
+      return 'number';
+    }
     case 'number': {
       return 'number';
     }

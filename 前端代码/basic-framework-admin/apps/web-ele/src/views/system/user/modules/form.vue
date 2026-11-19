@@ -42,14 +42,16 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemUserApi.User;
-    // 新增用户时对密码进行 SM2 加密；编辑用户不提交密码字段。
-    if (!formData.value?.id && data.password) {
-      data.password = await encryptPassword(data.password);
-    }
     try {
-      await (formData.value?.id ? updateUser(data) : createUser(data));
+      // 提交表单（置于 try 内确保 getValues 或 SM2 加密异常时也能解锁弹窗）
+      const data = (await formApi.getValues()) as SystemUserApi.User;
+      // 新增用户时对密码进行 SM2 加密；编辑用户不提交密码字段。
+      if (!formData.value?.id && data.password) {
+        data.password = await encryptPassword(data.password);
+      }
+      await (formData.value?.id
+        ? updateUser(data as any)
+        : createUser(data as any));
       // 关闭并提示
       await modalApi.close();
       emit('success');

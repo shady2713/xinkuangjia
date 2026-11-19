@@ -177,8 +177,9 @@ setupVbenVxeTable({
           inlinePrompt: true,
           activeText: $t('common.enabled'),
           inactiveText: $t('common.disabled'),
-          activeValue: 1,
-          inactiveValue: 0,
+          // 与后端 CommonStatusEnum 对齐：0 启用、1 停用。
+          activeValue: 0,
+          inactiveValue: 1,
           ...props,
           modelValue: row[column.field],
           loading: row[loadingKey] ?? false,

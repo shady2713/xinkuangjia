@@ -39,14 +39,14 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     // 提交表单
     const data = (await formApi.getValues()) as SystemDeptApi.Dept;
-    // 表单清空选择器时可能返回空字符串，先按外部输入收窄后统一为 null。
+    // 表单清空选择器时可能返回空字符串，先按外部输入收窄后统一清空。
     const leaderUserId: unknown = data.leaderUserId;
     if (
       leaderUserId === undefined ||
       leaderUserId === null ||
       leaderUserId === ''
     ) {
-      data.leaderUserId = null;
+      data.leaderUserId = undefined;
     }
     try {
       await (formData.value?.id ? updateDept(data) : createDept(data));

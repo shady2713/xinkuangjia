@@ -43,14 +43,19 @@ function resolveTokenRowKey(row: SystemOAuth2TokenApi.OAuth2Token) {
   return row.id;
 }
 
-const { checkedIds, handleDelete, handleDeleteBatch, handleRowCheckboxChange } =
-  useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, number>({
-    batchDeleteApi: deleteOAuth2TokenList,
-    deleteApi: deleteOAuth2Token,
-    getDeleteName: formatTokenDeleteName,
-    getRowKey: resolveTokenRowKey,
-    refresh: handleRefresh,
-  });
+const {
+  checkedIds,
+  clearCheckedIds,
+  handleDelete,
+  handleDeleteBatch,
+  handleRowCheckboxChange,
+} = useCrudDeleteActions<SystemOAuth2TokenApi.OAuth2Token, number | string>({
+  batchDeleteApi: deleteOAuth2TokenList,
+  deleteApi: deleteOAuth2Token,
+  getDeleteName: formatTokenDeleteName,
+  getRowKey: resolveTokenRowKey,
+  refresh: handleRefresh,
+});
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: {
@@ -85,6 +90,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridEvents: {
     checkboxAll: handleRowCheckboxChange,
     checkboxChange: handleRowCheckboxChange,
+    proxyQuery: clearCheckedIds,
   },
 });
 </script>

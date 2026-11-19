@@ -33,6 +33,7 @@ describe('fileDownloader', () => {
       method: 'GET',
       responseType: 'blob',
       responseReturn: 'body',
+      timeout: 120_000,
     });
   });
 
@@ -55,7 +56,19 @@ describe('fileDownloader', () => {
       method: 'GET',
       responseType: 'blob',
       responseReturn: 'body',
+      timeout: 120_000,
     });
+  });
+
+  it('should reject when server returns HTTP 200 JSON error payload inside a Blob', async () => {
+    const url = 'https://example.com/export';
+    const errorBlob = new Blob(
+      [JSON.stringify({ code: 403, msg: '无权限导出' })],
+      { type: 'application/json;charset=utf-8' },
+    );
+    mockAxiosInstance.get.mockResolvedValueOnce(errorBlob);
+
+    await expect(fileDownloader.download(url)).rejects.toThrow('无权限导出');
   });
 
   it('should handle errors gracefully', async () => {
@@ -111,6 +124,7 @@ describe('fileDownloader use other method', () => {
       method: 'GET',
       responseType: 'blob',
       responseReturn: 'body',
+      timeout: 120_000,
     });
   });
 
@@ -137,6 +151,7 @@ describe('fileDownloader use other method', () => {
         method: 'POST',
         responseType: 'blob',
         responseReturn: 'body',
+        timeout: 120_000,
       },
     );
   });

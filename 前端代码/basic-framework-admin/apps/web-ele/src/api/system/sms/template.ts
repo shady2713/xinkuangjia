@@ -1,26 +1,27 @@
+/**
+ * 短信模板管理接口封装，类型直接复用后端 OpenAPI 契约。
+ *
+ * @author shady2713
+ */
 import type { PageParam, PageResult } from '@vben/request';
+
+import type { OpenApiSchemas } from '#/api/generated/api-types';
 
 import { requestClient } from '#/api/request';
 
 export namespace SystemSmsTemplateApi {
-  /** 短信模板 */
-  export interface Template {
-    id?: number;
-    type: number;
-    status: number;
-    code: string;
-    name: string;
-    content: string;
-    params: string[];
-    remark: string;
-    apiTemplateId: string;
-    channelId: number;
-    channelCode: string;
-    createTime?: string;
-  }
+  /** 短信模板（源自后端 SmsTemplateRespVO 契约） */
+  export type Template = Omit<OpenApiSchemas.SmsTemplateRespVO, 'id'> & {
+    id?: number | string;
+  };
 }
 
-/** 查询短信模板列表 */
+/**
+ * 分页查询短信模板列表。
+ *
+ * @param params 分页与筛选参数
+ * @returns 短信模板分页结果
+ */
 export function getSmsTemplatePage(params: PageParam) {
   return requestClient.get<PageResult<SystemSmsTemplateApi.Template>>(
     '/system/sms-template/page',
@@ -28,40 +29,44 @@ export function getSmsTemplatePage(params: PageParam) {
   );
 }
 
-/** 查询短信模板详情 */
-export function getSmsTemplate(id: number) {
+/**
+ * 查询短信模板详情。
+ *
+ * @param id 短信模板编号
+ * @returns 短信模板详情
+ */
+export function getSmsTemplate(id: number | string) {
   return requestClient.get<SystemSmsTemplateApi.Template>(
     `/system/sms-template/get?id=${id}`,
   );
 }
 
-/** 新增短信模板 */
-export function createSmsTemplate(data: SystemSmsTemplateApi.Template) {
+/**
+ * 新增短信模板。
+ *
+ * @param data 短信模板保存请求
+ * @returns 新建短信模板编号
+ */
+export function createSmsTemplate(data: OpenApiSchemas.SmsTemplateSaveReqVO) {
   return requestClient.post('/system/sms-template/create', data);
 }
 
-/** 修改短信模板 */
-export function updateSmsTemplate(data: SystemSmsTemplateApi.Template) {
+/**
+ * 修改短信模板。
+ *
+ * @param data 短信模板保存请求
+ * @returns 修改结果
+ */
+export function updateSmsTemplate(data: OpenApiSchemas.SmsTemplateSaveReqVO) {
   return requestClient.put('/system/sms-template/update', data);
 }
 
-/** 删除短信模板 */
-export function deleteSmsTemplate(id: number) {
-  return requestClient.delete(`/system/sms-template/delete?id=${id}`);
-}
-
 /**
- * 发送测试短信
- * @param data 测试短信请求体
- * @param data.mobile 接收测试短信的手机号
- * @param data.templateCode 短信模板编码
- * @param data.templateParams 模板变量
- * @returns 后端发送结果
+ * 删除单个短信模板。
+ *
+ * @param id 短信模板编号
+ * @returns 删除结果
  */
-export function sendSms(data: {
-  mobile: string;
-  templateCode: string;
-  templateParams: Record<string, object>;
-}) {
-  return requestClient.post('/system/sms-template/send-sms', data);
+export function deleteSmsTemplate(id: number | string) {
+  return requestClient.delete(`/system/sms-template/delete?id=${id}`);
 }

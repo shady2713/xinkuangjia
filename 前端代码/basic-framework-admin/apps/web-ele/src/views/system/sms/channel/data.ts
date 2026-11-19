@@ -133,10 +133,13 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * 构建短信渠道列表的表格列配置。
+ *
+ * @returns 表格列定义数组
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
-    { type: 'checkbox', width: 40 },
     {
       field: 'id',
       title: '编号',

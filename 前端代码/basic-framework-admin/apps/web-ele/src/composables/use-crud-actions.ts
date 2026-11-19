@@ -5,11 +5,12 @@ import { ref } from 'vue';
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 
 import { $t } from '#/locales';
-import { showError, showSuccessMessage } from '#/utils/feedback';
+import { showSuccessMessage } from '#/utils/feedback';
 
 type RowKey = number | string;
 
-type RowWithId<Id extends RowKey = number> = {
+/** 含可选主键字段的表格行基础约束。 */
+type RowWithId<Id extends RowKey = RowKey> = {
   id?: Id;
 };
 
@@ -46,7 +47,7 @@ type UseCrudDeleteActionsOptions<Row, Id extends RowKey> = DeleteOptions<
 /** 含批量删除的完整 CRUD 操作配置；行主键读取函数可省略。 */
 type UseCrudActionsOptions<
   Row extends RowWithId<Id>,
-  Id extends RowKey = number,
+  Id extends RowKey = RowKey,
 > = {
   /** 打开新增弹窗时使用的空行数据工厂。 */
   createData?: () => null | Row;
@@ -83,7 +84,13 @@ async function deleteRow<Row, Id extends RowKey>({
   }
 }
 
-export function useCrudDeleteActions<Row, Id extends RowKey = number>(
+/**
+ * 封装表格单行删除、批量删除与勾选状态清理操作。
+ *
+ * @param options 删改接口、主键提取与列表刷新配置
+ * @returns 勾选主键集合及删除、勾选事件处理函数
+ */
+export function useCrudDeleteActions<Row, Id extends RowKey = RowKey>(
   options: UseCrudDeleteActionsOptions<Row, Id>,
 ) {
   const { batchDeleteApi, getRowKey, refresh } = options;
@@ -93,6 +100,7 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
     await deleteRow({ ...options, row });
   }
 
+  /** 校验当前勾选记录，经二次确认后执行批量删除并刷新列表。 */
   async function handleDeleteBatch() {
     checkedIds.value = checkedIds.value.filter(
       (id) => id !== undefined && id !== null && String(id) !== '',
@@ -120,8 +128,6 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
       checkedIds.value = [];
       showSuccessMessage($t('ui.actionMessage.deleteSuccess', ['']).trim());
       refresh();
-    } catch (error) {
-      showError(error, $t('ui.actionMessage.deleteFailed', ['']));
     } finally {
       loadingInstance.close();
     }
@@ -156,7 +162,13 @@ export function useCrudDeleteActions<Row, Id extends RowKey = number>(
   };
 }
 
-export function useCrudItemActions<Row, Id extends RowKey = number>(
+/**
+ * 封装不含批量删除的常规单行新增、编辑与删除操作。
+ *
+ * @param options 弹窗实例、新增数据工厂与单行删除配置
+ * @returns 新增、编辑与单行删除处理函数
+ */
+export function useCrudItemActions<Row, Id extends RowKey = RowKey>(
   options: UseCrudItemActionsOptions<Row, Id>,
 ) {
   const { createData, modalApi } = options;
@@ -187,7 +199,7 @@ export function useCrudItemActions<Row, Id extends RowKey = number>(
  */
 export function useCrudActions<
   Row extends RowWithId<Id>,
-  Id extends RowKey = number,
+  Id extends RowKey = RowKey,
 >(options: UseCrudActionsOptions<Row, Id>) {
   const {
     batchDeleteApi,
