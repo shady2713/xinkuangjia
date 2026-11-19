@@ -223,7 +223,11 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .bucket(config.getBucket())
                 .key(path)
                 .build();
-        return client.getObject(getRequest);
+        try {
+            return client.getObject(getRequest);
+        } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException ex) {
+            return null;
+        }
     }
 
     /**

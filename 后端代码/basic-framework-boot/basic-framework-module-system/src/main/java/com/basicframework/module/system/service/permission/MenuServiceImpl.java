@@ -163,14 +163,33 @@ public class MenuServiceImpl implements MenuService {
         if (menuMapper.selectCountByParentId(id) > 0) {
             throw exception(ErrorCodeConstants.MENU_EXISTS_CHILDREN);
         }
-        // 校验删除的菜单是否存在
-        if (menuMapper.selectById(id) == null) {
+        // 校验删除的菜单是否存在，并防止非超管删除自身不具备权限的菜单节点
+        MenuDO existing = menuMapper.selectById(id);
+        if (existing == null) {
             throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
         }
+        validateOperatorMenuDeleteAuthority(existing);
         // 标记删除
         menuMapper.deleteById(id);
         // 删除授予给角色的权限
         getPermissionService().processMenuDeleted(id);
+    }
+
+    /**
+     * 校验非超管操作员仅可删除自身已持有权限的菜单节点。
+     *
+     * @param existing 待删除菜单记录
+     */
+    private void validateOperatorMenuDeleteAuthority(MenuDO existing) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null || isOperatorSuperAdmin()) {
+            return;
+        }
+        String permission = StrUtil.nullToEmpty(existing.getPermission()).trim();
+        if (StrUtil.isNotBlank(permission)
+                && !getPermissionService().hasAnyPermissions(operatorId, permission)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
     }
 
     /**
@@ -183,12 +202,16 @@ public class MenuServiceImpl implements MenuService {
     @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为 Spring Cache 不支持按照 ids 批量删除
     public void deleteMenuList(List<Long> ids) {
-        // 校验是否还有子菜单
-        ids.forEach(id -> {
+        // 校验是否还有子菜单，并核验操作员对目标菜单的删除权限
+        for (Long id : ids) {
             if (menuMapper.selectCountByParentId(id) > 0) {
                 throw exception(ErrorCodeConstants.MENU_EXISTS_CHILDREN);
             }
-        });
+            MenuDO existing = menuMapper.selectById(id);
+            if (existing != null) {
+                validateOperatorMenuDeleteAuthority(existing);
+            }
+        }
 
         // 标记删除
         menuMapper.deleteByIds(ids);
@@ -257,8 +280,20 @@ public class MenuServiceImpl implements MenuService {
      * 判断菜单Disabled 是否满足业务条件。
      */
     private boolean isMenuDisabled(MenuDO node, Map<Long, MenuDO> menuMap, Set<Long> disabledMenuCache) {
+        return isMenuDisabled(node, menuMap, disabledMenuCache, new HashSet<>());
+    }
+
+    /**
+     * 带访问路径环路保护的菜单禁用判定，防止异常父子环路触发栈溢出。
+     */
+    private boolean isMenuDisabled(MenuDO node, Map<Long, MenuDO> menuMap,
+                                   Set<Long> disabledMenuCache, Set<Long> visiting) {
         // 如果已经判定是禁用的节点，直接结束
         if (disabledMenuCache.contains(node.getId())) {
+            return true;
+        }
+        if (!visiting.add(node.getId())) {
+            disabledMenuCache.add(node.getId());
             return true;
         }
 
@@ -276,7 +311,7 @@ public class MenuServiceImpl implements MenuService {
 
         // 3. 继续遍历 parent 节点
         MenuDO parent = menuMap.get(parentId);
-        if (parent == null || isMenuDisabled(parent, menuMap, disabledMenuCache)) {
+        if (parent == null || isMenuDisabled(parent, menuMap, disabledMenuCache, visiting)) {
             disabledMenuCache.add(node.getId());
             return true;
         }
@@ -361,6 +396,25 @@ public class MenuServiceImpl implements MenuService {
         if (!MenuTypeEnum.DIR.getType().equals(menu.getType())
                 && !MenuTypeEnum.MENU.getType().equals(menu.getType())) {
             throw exception(ErrorCodeConstants.MENU_PARENT_NOT_DIR_OR_MENU);
+        }
+        // 校验多跳父子环路，防止将菜单挂到自身后代节点下。
+        if (childId != null) {
+            MenuDO current = menu;
+            Set<Long> visited = new HashSet<>();
+            visited.add(current.getId());
+            for (int i = 0; i < Short.MAX_VALUE; i++) {
+                Long ancestorId = current.getParentId();
+                if (Objects.equals(childId, ancestorId)) {
+                    throw exception(ErrorCodeConstants.MENU_PARENT_ERROR);
+                }
+                if (ancestorId == null || ID_ROOT.equals(ancestorId) || !visited.add(ancestorId)) {
+                    break;
+                }
+                current = menuMapper.selectById(ancestorId);
+                if (current == null) {
+                    break;
+                }
+            }
         }
     }
 

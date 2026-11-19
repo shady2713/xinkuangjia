@@ -161,6 +161,7 @@ public class AuthController {
      */
     @GetMapping("/get-permission-info")
     @PreAuthorize("isAuthenticated()")
+    @com.basicframework.framework.datapermission.core.annotation.DataPermission(enable = false)
     @Operation(summary = "获取登录用户的权限信息")
     public CommonResult<AuthPermissionInfoRespVO> getPermissionInfo() {
         AdminUserDO user = userService.getUser(getLoginUserId());

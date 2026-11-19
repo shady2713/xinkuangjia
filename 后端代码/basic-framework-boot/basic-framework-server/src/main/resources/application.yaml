@@ -9,7 +9,7 @@ spring:
     multipart:
       # 单文件 50MB；请求体 55MB，为 multipart 边界和表单字段预留少量开销。
       # 与前端 nginx.conf 的 client_max_body_size 以及 FileController 的有界读取上限保持一致；
-      # 当前容器 Xmx 为 512m，禁止恢复无上限（-1）或盲目放大堆来支撑大文件。
+      # 容器按 -XX:MaxRAMPercentage=75.0 动态分配堆内存，禁止恢复无上限（-1）以防上传内存放大。
       max-file-size: 50MB
       max-request-size: 55MB
   jackson:

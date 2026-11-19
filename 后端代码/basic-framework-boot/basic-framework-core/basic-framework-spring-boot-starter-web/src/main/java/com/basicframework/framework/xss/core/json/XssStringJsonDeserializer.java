@@ -52,7 +52,7 @@ public class XssStringJsonDeserializer extends StringDeserializer {
         }
         String uri = request.getRequestURI();
         if (properties.getExcludeUrls().stream().anyMatch(excludeUrl -> pathMatcher.match(excludeUrl, uri))) {
-            return p.getText();
+            return super.deserialize(p, ctxt);
         }
 
         // 2. 真正使用 xssCleaner 进行过滤

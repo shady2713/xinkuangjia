@@ -259,14 +259,8 @@ class SchemaDoRbacParityTest {
                     continue;
                 }
                 String upper = trimmed.toUpperCase(Locale.ROOT);
-                if (upper.startsWith("PRIMARY KEY")
-                        || upper.startsWith("INDEX ")
-                        || upper.startsWith("KEY ")
-                        || upper.startsWith("CONSTRAINT ")
-                        || upper.startsWith("FOREIGN KEY")) {
-                    continue;
-                }
-                if (upper.startsWith("UNIQUE ")) {
+                if (upper.startsWith("UNIQUE ")
+                        || (upper.startsWith("CONSTRAINT ") && upper.contains(" UNIQUE"))) {
                     Matcher ukMatcher = UNIQUE_INDEX_PATTERN.matcher(trimmed);
                     if (ukMatcher.find()) {
                         Set<String> ukCols = new TreeSet<>();
@@ -276,6 +270,13 @@ class SchemaDoRbacParityTest {
                         }
                         uniqueIndexes.add(ukCols);
                     }
+                    continue;
+                }
+                if (upper.startsWith("PRIMARY KEY")
+                        || upper.startsWith("INDEX ")
+                        || upper.startsWith("KEY ")
+                        || upper.startsWith("CONSTRAINT ")
+                        || upper.startsWith("FOREIGN KEY")) {
                     continue;
                 }
                 Matcher colMatcher = COLUMN_LINE_PATTERN.matcher(trimmed);

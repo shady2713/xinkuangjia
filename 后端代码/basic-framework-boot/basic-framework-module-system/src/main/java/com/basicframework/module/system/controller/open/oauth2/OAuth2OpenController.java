@@ -31,7 +31,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * 第三方开放 OAuth2 令牌接口。
  *
- * <p>接口路径、表单参数和返回字段严格对齐《AI场景识别接口文档》中的认证接口。</p>
+ * <p>提供标准 OAuth2 {@code client_credentials} 令牌签发与查询能力。</p>
  *
  * @author 李杰
  */

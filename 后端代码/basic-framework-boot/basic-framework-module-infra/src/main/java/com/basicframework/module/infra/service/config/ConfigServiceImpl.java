@@ -68,10 +68,15 @@ public class ConfigServiceImpl implements ConfigService {
         // 校验参数配置 key 的唯一性
         validateConfigKeyUnique(updateReqVO.getId(), updateReqVO.getKey());
 
-        // 更新参数配置；不可见配置回传脱敏占位符时保留原值，避免仅修改备注时覆盖敏感值。
+        // 更新参数配置；不可见配置回传脱敏占位符时仅允许在保持不可见状态下保留原值，严禁借改 visible=true 套取明文。
         ConfigDO updateObj = ConfigConvert.INSTANCE.convert(updateReqVO);
         if (!Boolean.TRUE.equals(existing.getVisible())
                 && HIDDEN_CONFIG_VALUE_MASK.equals(updateReqVO.getValue())) {
+            if (Boolean.TRUE.equals(updateReqVO.getVisible())) {
+                throw com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception0(
+                        com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST.getCode(),
+                        "将隐藏参数改为可见时必须提供新的参数值");
+            }
             updateObj.setValue(existing.getValue());
         }
         configMapper.updateById(updateObj);

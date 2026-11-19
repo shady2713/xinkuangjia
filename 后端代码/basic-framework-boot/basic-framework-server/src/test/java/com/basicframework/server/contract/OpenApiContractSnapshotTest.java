@@ -207,6 +207,13 @@ class OpenApiContractSnapshotTest {
                 pObj.put("required", pv.required());
                 pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners));
                 queryOrPathParams.add(pObj);
+            } else if (containsMultipartFile(rawType)) {
+                Map<String, Object> bodyObj = new LinkedHashMap<>();
+                bodyObj.put("required", true);
+                bodyObj.put("content", Map.of(
+                        "multipart/form-data", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners))
+                ));
+                requestBody = bodyObj;
             } else if (param.isAnnotationPresent(RequestParam.class)) {
                 RequestParam rp = param.getAnnotation(RequestParam.class);
                 String name = StrUtil.blankToDefault(rp.value(), StrUtil.blankToDefault(rp.name(), fallbackName));
@@ -217,18 +224,9 @@ class OpenApiContractSnapshotTest {
                 pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners));
                 queryOrPathParams.add(pObj);
             } else if (!isSimpleScalar(rawType)) {
-                if (containsMultipartFile(rawType)) {
-                    Map<String, Object> bodyObj = new LinkedHashMap<>();
-                    bodyObj.put("required", true);
-                    bodyObj.put("content", Map.of(
-                            "multipart/form-data", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners))
-                    ));
-                    requestBody = bodyObj;
-                } else {
-                    // 注册查询 VO Schema 供前端类型复用，同时按 springdoc.default-flat-param-object=true 展平为独立查询参数。
-                    resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners);
-                    appendFlattenedQueryParams(rawType, queryOrPathParams, schemas, schemaOwners);
-                }
+                // 注册查询 VO Schema 供前端类型复用，同时按 springdoc.default-flat-param-object=true 展平为独立查询参数。
+                resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners);
+                appendFlattenedQueryParams(rawType, queryOrPathParams, schemas, schemaOwners);
             } else {
                 Map<String, Object> pObj = new LinkedHashMap<>();
                 pObj.put("name", fallbackName);

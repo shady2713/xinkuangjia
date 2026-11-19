@@ -215,6 +215,7 @@ public class FileServiceImpl implements FileService {
         response.setPath(path);
         response.setUploadUrl(uploadUrl);
         response.setUrl(visitUrl);
+        response.setContentType(expectedContentType);
         return response;
     }
 

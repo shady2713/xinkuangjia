@@ -64,18 +64,16 @@ public class JobServiceImpl implements JobService {
         // 1.2 校验 JobHandler 是否存在
         validateJobHandlerExists(createReqVO.getHandlerName());
 
-        // 2. 插入 JobDO
+        // 2. 插入 JobDO（直接置为 NORMAL，待事务提交后再注册 Quartz 调度，避免回滚残留僵尸触发器）
         JobDO job = BeanUtils.toBean(createReqVO, JobDO.class);
-        job.setStatus(JobStatusEnum.INIT.getStatus());
+        job.setStatus(JobStatusEnum.NORMAL.getStatus());
         fillJobMonitorTimeoutEmpty(job);
         jobMapper.insert(job);
 
-        // 3.1 添加 Job 到 Quartz 中
-        schedulerManager.addJob(job.getId(), job.getHandlerName(), job.getHandlerParam(), job.getCronExpression(),
-                createReqVO.getRetryCount(), createReqVO.getRetryInterval());
-        // 3.2 更新 JobDO
-        JobDO updateObj = JobDO.builder().id(job.getId()).status(JobStatusEnum.NORMAL.getStatus()).build();
-        jobMapper.updateById(updateObj);
+        // 3. 事务提交后再添加 Job 到 Quartz 中
+        runSchedulerAfterCommit(() -> schedulerManager.addJob(
+                job.getId(), job.getHandlerName(), job.getHandlerParam(), job.getCronExpression(),
+                createReqVO.getRetryCount(), createReqVO.getRetryInterval()));
         return job.getId();
     }
 
@@ -239,10 +237,14 @@ public class JobServiceImpl implements JobService {
         List<JobDO> jobs = jobMapper.selectByIds(ids);
         jobMapper.deleteByIds(ids);
 
-        // 事务提交后统一删除 Quartz 中对应的任务
+        // 事务提交后逐条删除 Quartz 中对应的任务，单条失败不中断其余任务清理
         runSchedulerAfterCommit(() -> {
             for (JobDO job : jobs) {
-                schedulerManager.deleteJob(job.getHandlerName());
+                try {
+                    schedulerManager.deleteJob(job.getHandlerName());
+                } catch (SchedulerException ex) {
+                    log.error("[deleteJobList][删除 Quartz 任务({}) 失败]", job.getHandlerName(), ex);
+                }
             }
         });
     }

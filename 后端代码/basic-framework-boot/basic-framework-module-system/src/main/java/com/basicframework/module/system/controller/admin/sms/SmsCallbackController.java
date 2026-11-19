@@ -47,7 +47,7 @@ public class SmsCallbackController {
      * 请求头，签名覆盖 {@code ALIYUN\n时间戳\n原始请求体}；只有验签通过才交给业务服务解析。</p>
      *
      * @param request HTTP 请求
-     * @return 阿里云协议响应；验签失败时 HTTP 状态为 401，未配置密钥为 503，处理失败为 500
+     * @return 阿里云协议响应；未配置密钥或验签失败统一返回 HTTP 403，处理失败为 500
      */
     @PostMapping("/aliyun")
     @PermitAll
@@ -78,7 +78,7 @@ public class SmsCallbackController {
      * 请求头，签名覆盖 {@code TENCENT\n时间戳\n原始请求体}；只有验签通过才交给业务服务解析。</p>
      *
      * @param request HTTP 请求
-     * @return 腾讯云协议响应；验签失败时 HTTP 状态为 401，未配置密钥为 503，处理失败为 500
+     * @return 腾讯云协议响应；未配置密钥或验签失败统一返回 HTTP 403，处理失败为 500
      */
     @PostMapping("/tencent")
     @PermitAll

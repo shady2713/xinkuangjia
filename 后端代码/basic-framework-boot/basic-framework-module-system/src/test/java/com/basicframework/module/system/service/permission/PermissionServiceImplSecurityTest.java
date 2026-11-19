@@ -78,6 +78,7 @@ class PermissionServiceImplSecurityTest {
         RoleDO operatorRole = new RoleDO();
         operatorRole.setId(2L);
         operatorRole.setCode("sub_admin");
+        operatorRole.setRoleType(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
         operatorRole.setStatus(CommonStatusEnum.ENABLE.getStatus());
         doReturn(List.of(operatorRole)).when(permissionService).getEnableUserRoleListByUserIdFromCache(20L);
         when(roleService.hasAnySuperAdmin(Set.of(2L))).thenReturn(false);
@@ -108,6 +109,7 @@ class PermissionServiceImplSecurityTest {
         RoleDO operatorRole = new RoleDO();
         operatorRole.setId(2L);
         operatorRole.setCode("dept_admin");
+        operatorRole.setRoleType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         operatorRole.setStatus(CommonStatusEnum.ENABLE.getStatus());
         doReturn(List.of(operatorRole)).when(permissionService).getEnableUserRoleListByUserIdFromCache(20L);
         when(roleService.hasAnySuperAdmin(Set.of(2L))).thenReturn(false);
@@ -117,11 +119,21 @@ class PermissionServiceImplSecurityTest {
         operatorPerm.setDeptIds(Set.of(100L));
         doReturn(operatorPerm).when(permissionService).getDeptDataPermission(20L);
 
+        AdminUserDO operatorUser = new AdminUserDO();
+        operatorUser.setId(20L);
+        operatorUser.setDeptId(100L);
+        when(userService.getUser(20L)).thenReturn(operatorUser);
+        when(deptService.getChildDeptIdListFromCache(100L)).thenReturn(Set.of(101L));
+
         assertThatThrownBy(() -> permissionService.assignRoleDataScope(5L, DataScopeEnum.ALL.getScope(), Set.of()))
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
         assertThatThrownBy(() -> permissionService.assignRoleDataScope(
                 5L, DataScopeEnum.DEPT_CUSTOM.getScope(), Set.of(100L, 999L)))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> permissionService.assignRoleDataScope(
+                5L, DataScopeEnum.DEPT_AND_CHILD.getScope(), Set.of()))
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
         verify(roleService, never()).updateRoleDataScope(org.mockito.ArgumentMatchers.any(),

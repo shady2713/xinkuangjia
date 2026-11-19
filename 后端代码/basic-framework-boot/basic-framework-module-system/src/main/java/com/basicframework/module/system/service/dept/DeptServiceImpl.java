@@ -116,6 +116,11 @@ public class DeptServiceImpl implements DeptService {
         // 校验自己存在并归属当前平台
         DeptDO existing = validateDeptExists(updateReqVO.getId());
         validateDeptPlatform(existing);
+        // 禁止无全量数据权限的操作员将子部门提升为顶级根部门。
+        if (DeptDO.PARENT_ID_ROOT.equals(updateReqVO.getParentId())
+                && (existing == null || !DeptDO.PARENT_ID_ROOT.equals(existing.getParentId()))) {
+            validateRootDeptCreationAuthority(updateReqVO.getParentId());
+        }
         // 校验父部门的有效性
         validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
         // 校验部门名的唯一性
@@ -280,25 +285,29 @@ public class DeptServiceImpl implements DeptService {
             throw exception(DEPT_PARENT_NOT_EXITS);
         }
         validateDeptPlatform(parentDept);
-        // 3. 递归校验父部门，如果父部门是自己的子部门，则报错，避免形成环路
+        // 3. 忽略数据权限递归校验真实祖先链，避免 DEPT_CUSTOM 隐藏中间节点绕过环路检测。
         if (id == null) { // id 为空，说明新增，不需要考虑环路
             return;
         }
-        for (int i = 0; i < Short.MAX_VALUE; i++) {
-            // 3.1 校验环路
-            parentId = parentDept.getParentId();
-            if (Objects.equals(id, parentId)) {
-                throw exception(DEPT_PARENT_IS_CHILD);
+        final DeptDO initialParent = parentDept;
+        DataPermissionUtils.executeIgnore(() -> {
+            DeptDO current = initialParent;
+            Set<Long> visited = new HashSet<>();
+            visited.add(current.getId());
+            for (int i = 0; i < Short.MAX_VALUE; i++) {
+                Long nextParentId = current.getParentId();
+                if (Objects.equals(id, nextParentId)) {
+                    throw exception(DEPT_PARENT_IS_CHILD);
+                }
+                if (nextParentId == null || DeptDO.PARENT_ID_ROOT.equals(nextParentId) || !visited.add(nextParentId)) {
+                    break;
+                }
+                current = deptMapper.selectById(nextParentId);
+                if (current == null) {
+                    break;
+                }
             }
-            // 3.2 继续递归下一级父部门
-            if (parentId == null || DeptDO.PARENT_ID_ROOT.equals(parentId)) {
-                break;
-            }
-            parentDept = deptMapper.selectById(parentId);
-            if (parentDept == null) {
-                break;
-            }
-        }
+        });
     }
 
     /**
@@ -430,12 +439,13 @@ public class DeptServiceImpl implements DeptService {
         }
         // 获得科室信息
         Map<Long, DeptDO> deptMap = getDeptMap(ids);
-        // 校验
+        // 校验存在性、平台归属与启用状态
         ids.forEach(id -> {
             DeptDO dept = deptMap.get(id);
             if (dept == null) {
                 throw exception(DEPT_NOT_FOUND);
             }
+            validateDeptPlatform(dept);
             if (!CommonStatusEnum.ENABLE.getStatus().equals(dept.getStatus())) {
                 throw exception(DEPT_NOT_ENABLE, dept.getName());
             }

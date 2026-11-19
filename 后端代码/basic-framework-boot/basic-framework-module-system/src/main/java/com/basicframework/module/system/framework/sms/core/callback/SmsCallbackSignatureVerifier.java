@@ -25,8 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * 签名或时间戳缺失、时间戳超出允许偏差、签名不匹配时均返回 {@link SmsCallbackVerificationResult#INVALID}；
  * 渠道未配置密钥时返回 {@link SmsCallbackVerificationResult#NOT_CONFIGURED}，两种结果都不得继续写入回执状态。</p>
  *
- * <p>时间戳窗口用于限制重放，不额外存储一次性随机数：短信回执按日志编号幂等更新，
- * 窗口内重复提交只会写入相同状态；若后续要求严格防重放，需要接入共享存储登记 nonce。</p>
+ * <p>时间戳窗口叠加签名摘要去重缓存用于限制重放：在有效时间窗内相同签名仅接受一次，
+ * 优先写入 Redis {@code SETNX}，未配置 Redis 时退化为带 TTL 上限的进程内缓存。</p>
  *
  * @author shady2713
  */

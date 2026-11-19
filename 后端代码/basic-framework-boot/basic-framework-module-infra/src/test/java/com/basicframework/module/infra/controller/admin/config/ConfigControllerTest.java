@@ -87,6 +87,19 @@ class ConfigControllerTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(CONFIG_CAN_NOT_UPDATE_SYSTEM_KEY.getCode()));
 
+        ConfigSaveReqVO flipVisibleReq = new ConfigSaveReqVO();
+        flipVisibleReq.setId(1L);
+        flipVisibleReq.setCategory("system");
+        flipVisibleReq.setName("初始密码");
+        flipVisibleReq.setKey("system.user.init-password");
+        flipVisibleReq.setValue(ConfigService.HIDDEN_CONFIG_VALUE_MASK);
+        flipVisibleReq.setVisible(true);
+        when(configMapper.selectByKey("system.user.init-password")).thenReturn(existing);
+
+        assertThatThrownBy(() -> service.updateConfig(flipVisibleReq))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(400));
+
         ConfigSaveReqVO keepSecretReq = new ConfigSaveReqVO();
         keepSecretReq.setId(1L);
         keepSecretReq.setCategory("system");
@@ -94,7 +107,6 @@ class ConfigControllerTest {
         keepSecretReq.setKey("system.user.init-password");
         keepSecretReq.setValue(ConfigService.HIDDEN_CONFIG_VALUE_MASK);
         keepSecretReq.setVisible(false);
-        when(configMapper.selectByKey("system.user.init-password")).thenReturn(existing);
 
         service.updateConfig(keepSecretReq);
 
