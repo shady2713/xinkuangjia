@@ -3,11 +3,13 @@ package com.basicframework.module.infra.controller.admin.file;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadReqVO;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.service.file.FileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -114,6 +116,60 @@ class FileControllerTest {
 
         verify(response).setStatus(HttpStatus.NOT_FOUND.value());
         verify(fileService, never()).getFileContent(any());
+        verify(fileService, never()).openFileContent(any());
+    }
+
+    /** 验证流式完整下载会输出 Content-Length 与 Accept-Ranges: bytes 响应头。 */
+    @Test
+    void getFileContentSetsContentLengthAndAcceptRangesOnFullDownload() throws Exception {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/admin-api/infra/file/content/20261119/clip.mp4");
+        byte[] data = "0123456789".getBytes(StandardCharsets.UTF_8);
+        when(fileService.openFileContent("20261119/clip.mp4"))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream(data), 10L));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        controller.getFileContent(request, response);
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.getHeader("Accept-Ranges")).isEqualTo("bytes");
+        assertThat(response.getContentLengthLong()).isEqualTo(10L);
+        assertThat(response.getContentAsByteArray()).isEqualTo(data);
+    }
+
+    /** 验证单段 Range 请求返回 206 部分内容，越界 Range 返回 416 及总长度提示。 */
+    @Test
+    void getFileContentSupportsSingleRangeAndRejectsOutOfBoundsRange() throws Exception {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+        byte[] data = "0123456789".getBytes(StandardCharsets.UTF_8);
+
+        HttpServletRequest partialReq = mock(HttpServletRequest.class);
+        when(partialReq.getRequestURI()).thenReturn("/admin-api/infra/file/content/20261119/clip.mp4");
+        when(partialReq.getHeader("Range")).thenReturn("bytes=2-5");
+        when(fileService.openFileContent("20261119/clip.mp4"))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream(data), 10L))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream(data), 10L));
+
+        MockHttpServletResponse partialResp = new MockHttpServletResponse();
+        controller.getFileContent(partialReq, partialResp);
+        assertThat(partialResp.getStatus()).isEqualTo(HttpStatus.PARTIAL_CONTENT.value());
+        assertThat(partialResp.getHeader("Content-Range")).isEqualTo("bytes 2-5/10");
+        assertThat(partialResp.getContentLengthLong()).isEqualTo(4L);
+        assertThat(partialResp.getContentAsString()).isEqualTo("2345");
+
+        HttpServletRequest badReq = mock(HttpServletRequest.class);
+        when(badReq.getRequestURI()).thenReturn("/admin-api/infra/file/content/20261119/clip.mp4");
+        when(badReq.getHeader("Range")).thenReturn("bytes=50-60");
+        MockHttpServletResponse badResp = new MockHttpServletResponse();
+        controller.getFileContent(badReq, badResp);
+        assertThat(badResp.getStatus()).isEqualTo(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE.value());
+        assertThat(badResp.getHeader("Content-Range")).isEqualTo("bytes */10");
+        assertThat(badResp.getContentAsByteArray()).isEmpty();
     }
 
 }

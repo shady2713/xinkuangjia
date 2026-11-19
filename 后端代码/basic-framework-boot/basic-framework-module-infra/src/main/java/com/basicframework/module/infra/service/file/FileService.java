@@ -5,8 +5,11 @@ import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateR
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import jakarta.validation.constraints.NotEmpty;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -105,9 +108,21 @@ public interface FileService {
      * @return 文件内容输入流；记录不存在、已删除或存储对象缺失时返回 null
      * @throws Exception 读取存储失败时抛出
      */
-    default java.io.InputStream openFileContentStream(String path) throws Exception {
+    default InputStream openFileContentStream(String path) throws Exception {
         byte[] content = getFileContent(path);
-        return content != null ? new java.io.ByteArrayInputStream(content) : null;
+        return content != null ? new ByteArrayInputStream(content) : null;
+    }
+
+    /**
+     * 按对象路径以流式方式打开未软删除文件的内容流及字节长度。
+     *
+     * @param path 文件路径
+     * @return 文件内容流与长度封装；记录不存在、已删除或存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    default FileContentStream openFileContent(String path) throws Exception {
+        InputStream stream = openFileContentStream(path);
+        return stream != null ? new FileContentStream(stream, null) : null;
     }
 
 }

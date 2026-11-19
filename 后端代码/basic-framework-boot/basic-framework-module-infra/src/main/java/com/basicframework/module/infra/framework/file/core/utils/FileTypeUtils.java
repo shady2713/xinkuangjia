@@ -11,7 +11,10 @@ import org.apache.tika.Tika;
 import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.mime.MimeTypes;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Locale;
 import java.util.Set;
 
@@ -226,21 +229,42 @@ public final class FileTypeUtils {
         return semicolonIndex >= 0 ? raw.substring(0, semicolonIndex).trim() : raw;
     }
 
+    /** 流式嗅探魔数时保留的头部最大字节数。 */
+    private static final int MIME_HEADER_BYTES = 4096;
+
+    /** 流式分段拷贝使用的缓冲区大小。 */
+    private static final int STREAM_BUFFER_BYTES = 8192;
+
+    /** Range 请求头前缀。 */
+    private static final String RANGE_BYTES_PREFIX = "bytes=";
+
     /**
-     * 将文件内容写回响应；仅安全光栅图片走 inline，其余一律走 attachment 并附带防嗅探响应头。
+     * 解析安全的下载响应 MIME 类型，强制将 SVG/HTML/XHTML 降级为二进制流以防脚本执行。
      *
-     * @param response 响应对象
-     * @param filename 文件名
-     * @param content 文件内容
-     * @throws IOException 响应写出失败时抛出
+     * @param sampleBytes 文件完整内容或头部采样字节
+     * @param filename    文件名
+     * @return 安全的标准 MIME 类型
      */
-    public static void writeAttachment(HttpServletResponse response, String filename, byte[] content) throws IOException {
-        String contentOnlyMime = normalizeMimeType(getMineType(content));
-        String mineType = ("image/svg+xml".equals(contentOnlyMime)
+    private static String resolveSafeMimeType(byte[] sampleBytes, String filename) {
+        String contentOnlyMime = normalizeMimeType(getMineType(sampleBytes));
+        if ("image/svg+xml".equals(contentOnlyMime)
                 || "text/html".equals(contentOnlyMime)
-                || "application/xhtml+xml".equals(contentOnlyMime))
-                ? "application/octet-stream"
-                : normalizeMimeType(getMineType(content, filename));
+                || "application/xhtml+xml".equals(contentOnlyMime)) {
+            return "application/octet-stream";
+        }
+        return normalizeMimeType(getMineType(sampleBytes, filename));
+    }
+
+    /**
+     * 写出统一的下载安全响应头与长度/断点续传支持头。
+     *
+     * @param response      响应对象
+     * @param filename      文件名
+     * @param mineType      安全 MIME 类型
+     * @param contentLength 本次响应体总字节数，未知时为 {@code null}
+     */
+    private static void writeCommonHeaders(HttpServletResponse response, String filename,
+                                           String mineType, Long contentLength) {
         if ("text/plain".equals(mineType)) {
             response.setContentType("text/plain; charset=utf-8");
         } else {
@@ -254,10 +278,23 @@ public final class FileTypeUtils {
         } else {
             response.setHeader("Content-Disposition", "attachment;filename=" + HttpUtils.encodeUtf8(filename));
         }
-        if (StrUtil.containsIgnoreCase(mineType, "video")) {
+        if (contentLength != null && contentLength >= 0) {
             response.setHeader("Accept-Ranges", "bytes");
-            response.setHeader("Content-Length", String.valueOf(content.length));
+            response.setContentLengthLong(contentLength);
         }
+    }
+
+    /**
+     * 将文件内容写回响应；仅安全光栅图片走 inline，其余一律走 attachment 并附带防嗅探响应头。
+     *
+     * @param response 响应对象
+     * @param filename 文件名
+     * @param content 文件内容
+     * @throws IOException 响应写出失败时抛出
+     */
+    public static void writeAttachment(HttpServletResponse response, String filename, byte[] content) throws IOException {
+        String mineType = resolveSafeMimeType(content, filename);
+        writeCommonHeaders(response, filename, mineType, (long) content.length);
         IoUtil.write(response.getOutputStream(), false, content);
     }
 
@@ -270,31 +307,161 @@ public final class FileTypeUtils {
      * @throws IOException 响应写出失败时抛出
      */
     public static void writeAttachment(HttpServletResponse response, String filename,
-                                       java.io.InputStream inputStream) throws IOException {
-        java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(inputStream, 8192);
-        buffered.mark(4096);
-        byte[] header = buffered.readNBytes(4096);
+                                       InputStream inputStream) throws IOException {
+        writeAttachment(response, filename, inputStream, null, null);
+    }
+
+    /**
+     * 以流式方式写出文件内容，并在已知长度时输出 {@code Content-Length}、{@code Accept-Ranges} 及单段 206/416 响应。
+     *
+     * @param response      响应对象
+     * @param filename      文件名
+     * @param inputStream   文件内容流（调用方负责关闭）
+     * @param contentLength 文件总字节数，未知时可为 {@code null}
+     * @param rangeHeader   请求头 {@code Range}，为空时返回完整流
+     * @throws IOException 响应写出失败时抛出
+     */
+    public static void writeAttachment(HttpServletResponse response, String filename,
+                                       InputStream inputStream, Long contentLength,
+                                       String rangeHeader) throws IOException {
+        BufferedInputStream buffered = new BufferedInputStream(inputStream, STREAM_BUFFER_BYTES);
+        buffered.mark(STREAM_BUFFER_BYTES);
+        byte[] header = buffered.readNBytes(MIME_HEADER_BYTES);
         buffered.reset();
 
-        String contentOnlyMime = normalizeMimeType(getMineType(header));
-        String mineType = ("image/svg+xml".equals(contentOnlyMime)
-                || "text/html".equals(contentOnlyMime)
-                || "application/xhtml+xml".equals(contentOnlyMime))
-                ? "application/octet-stream"
-                : normalizeMimeType(getMineType(header, filename));
-        if ("text/plain".equals(mineType)) {
-            response.setContentType("text/plain; charset=utf-8");
-        } else {
-            response.setContentType(mineType);
+        String mineType = resolveSafeMimeType(header, filename);
+        if (contentLength != null && isSingleBytesRangeRequest(rangeHeader)) {
+            if (contentLength <= 0) {
+                writeUnsatisfiableRange(response, 0L);
+                return;
+            }
+            long[] range = parseSingleRange(rangeHeader, contentLength);
+            if (range == null) {
+                writeUnsatisfiableRange(response, contentLength);
+                return;
+            }
+            long start = range[0];
+            long end = range[1];
+            long partLength = end - start + 1;
+            writeCommonHeaders(response, filename, mineType, partLength);
+            response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
+            response.setHeader("Content-Range", "bytes " + start + "-" + end + "/" + contentLength);
+            buffered.skipNBytes(start);
+            copyFixedLength(buffered, response.getOutputStream(), partLength);
+            return;
         }
-        response.setHeader("X-Content-Type-Options", "nosniff");
-        response.setHeader("Content-Security-Policy", "sandbox");
-        if (isImage(mineType)) {
-            response.setHeader("Content-Disposition", "inline;filename=" + HttpUtils.encodeUtf8(filename));
-        } else {
-            response.setHeader("Content-Disposition", "attachment;filename=" + HttpUtils.encodeUtf8(filename));
-        }
+        writeCommonHeaders(response, filename, mineType, contentLength);
         buffered.transferTo(response.getOutputStream());
+    }
+
+    /**
+     * 判断请求头是否为单个 {@code bytes=} 范围请求（多段范围按 RFC 9110 回退为整文件响应）。
+     *
+     * @param rangeHeader 原始 Range 请求头
+     * @return 为单段字节范围请求时返回 true
+     */
+    private static boolean isSingleBytesRangeRequest(String rangeHeader) {
+        if (StrUtil.isBlank(rangeHeader) || rangeHeader.contains(",")) {
+            return false;
+        }
+        return rangeHeader.trim().toLowerCase(Locale.ROOT).startsWith(RANGE_BYTES_PREFIX);
+    }
+
+    /**
+     * 输出 HTTP 416 Range Not Satisfiable 响应及完整长度提示头。
+     *
+     * @param response      响应对象
+     * @param contentLength 资源真实总长度
+     */
+    private static void writeUnsatisfiableRange(HttpServletResponse response, long contentLength) {
+        response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+        response.setHeader("Accept-Ranges", "bytes");
+        response.setHeader("Content-Range", "bytes */" + contentLength);
+    }
+
+    /**
+     * 解析单个 {@code bytes=start-end} / {@code bytes=start-} / {@code bytes=-suffix} 闭区间字节范围。
+     *
+     * @param rangeHeader 原始 Range 请求头
+     * @param totalLength 资源总字节长度（必须大于 0）
+     * @return 起止偏移闭区间 {@code [start, end]}；语法非法或越界时返回 {@code null}
+     */
+    private static long[] parseSingleRange(String rangeHeader, long totalLength) {
+        String spec = rangeHeader.trim().substring(RANGE_BYTES_PREFIX.length()).trim();
+        int dash = spec.indexOf('-');
+        if (dash < 0) {
+            return null;
+        }
+        String startPart = spec.substring(0, dash).trim();
+        String endPart = spec.substring(dash + 1).trim();
+        if (startPart.isEmpty() && endPart.isEmpty()) {
+            return null;
+        }
+        if (startPart.isEmpty()) {
+            long suffixLength = parseNonNegativeLong(endPart);
+            if (suffixLength <= 0) {
+                return null;
+            }
+            long start = Math.max(0L, totalLength - suffixLength);
+            return new long[]{start, totalLength - 1};
+        }
+        long start = parseNonNegativeLong(startPart);
+        if (start < 0 || start >= totalLength) {
+            return null;
+        }
+        if (endPart.isEmpty()) {
+            return new long[]{start, totalLength - 1};
+        }
+        long parsedEnd = parseNonNegativeLong(endPart);
+        if (parsedEnd < start) {
+            return null;
+        }
+        return new long[]{start, Math.min(parsedEnd, totalLength - 1)};
+    }
+
+    /**
+     * 解析纯 ASCII 非负十进制整数，防止正负号、小数或溢出被放行。
+     *
+     * @param value 待解析字符串
+     * @return 非负长整数；格式非法或溢出时返回 {@code -1L}
+     */
+    private static long parseNonNegativeLong(String value) {
+        if (StrUtil.isEmpty(value)) {
+            return -1L;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (ch < '0' || ch > '9') {
+                return -1L;
+            }
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException ex) {
+            return -1L;
+        }
+    }
+
+    /**
+     * 按固定字节上限将输入流分段写入输出流，避免超范围传输或额外分配大数组。
+     *
+     * @param in          已定位到起始偏移的输入流
+     * @param out         响应输出流
+     * @param bytesToCopy 期望拷贝的字节数
+     * @throws IOException 读写失败时抛出
+     */
+    private static void copyFixedLength(InputStream in, OutputStream out, long bytesToCopy) throws IOException {
+        byte[] buffer = new byte[STREAM_BUFFER_BYTES];
+        long remaining = bytesToCopy;
+        while (remaining > 0) {
+            int maxRead = (int) Math.min(buffer.length, remaining);
+            int read = in.read(buffer, 0, maxRead);
+            if (read < 0) {
+                break;
+            }
+            out.write(buffer, 0, read);
+            remaining -= read;
+        }
     }
 
     /**

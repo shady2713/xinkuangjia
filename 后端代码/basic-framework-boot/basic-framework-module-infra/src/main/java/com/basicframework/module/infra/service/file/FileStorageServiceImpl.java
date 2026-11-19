@@ -4,6 +4,7 @@ package com.basicframework.module.infra.service.file;
 import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileClientFactory;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.enums.FileStorageEnum;
@@ -12,6 +13,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.Objects;
 
@@ -125,8 +127,20 @@ public class FileStorageServiceImpl implements FileStorageService {
      * @throws Exception 读取失败时抛出
      */
     @Override
-    public java.io.InputStream openContentStream(String path) throws Exception {
+    public InputStream openContentStream(String path) throws Exception {
         return fileClient.openContentStream(path);
+    }
+
+    /**
+     * 以流式方式打开指定对象的内容流及字节长度元数据。
+     *
+     * @param path 对象路径
+     * @return 对象内容流与长度封装，不存在时返回 null
+     * @throws Exception 读取失败时抛出
+     */
+    @Override
+    public FileContentStream openContent(String path) throws Exception {
+        return fileClient.openContent(path);
     }
 
     /**

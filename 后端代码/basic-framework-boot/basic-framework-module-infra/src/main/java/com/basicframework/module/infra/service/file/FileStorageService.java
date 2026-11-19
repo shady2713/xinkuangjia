@@ -1,6 +1,7 @@
 /** 唯一对象存储服务契约，隔离底层客户端。 */
 package com.basicframework.module.infra.service.file;
 
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 
@@ -71,6 +72,18 @@ public interface FileStorageService {
     default InputStream openContentStream(String path) throws Exception {
         byte[] content = getContent(path);
         return content != null ? new ByteArrayInputStream(content) : null;
+    }
+
+    /**
+     * 以流式方式打开文件内容及元长度，避免大文件整包载入堆内存并保留字节大小元数据。
+     *
+     * @param path 对象路径
+     * @return 文件内容流与长度封装，不存在时返回 null
+     * @throws Exception 读取失败时抛出
+     */
+    default FileContentStream openContent(String path) throws Exception {
+        InputStream stream = openContentStream(path);
+        return stream != null ? new FileContentStream(stream, null) : null;
     }
 
     /**
