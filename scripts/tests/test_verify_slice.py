@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 from scripts.code.java import check_staged_java_comments
+from scripts.common.quality_common import DEFAULT_ROOT
 from scripts.security import scan_staged_secrets
 from scripts.workflow import verify_slice
 
@@ -74,11 +76,49 @@ def test_verify_slice_identifies_java_modules_web_python_and_docs(tmp_path: Path
     assert "python-slice-pytest" in runtime_map
     if "maven-slice-test" in runtime_map:
         assert "-am" in runtime_map["maven-slice-test"].command
+        assert "-Dsurefire.failIfNoSpecifiedTests=false" in runtime_map["maven-server-contracts"].command
 
-    branch_plan = verify_slice.build_slice_plan(repo, changed, base="main", skip_runtime=True)
+    # 在 main 分支仅带未提交工作区改动执行 --base main，不得漏检工作区注释
+    dirty_main_plan = verify_slice.build_slice_plan(repo, changed, base="main", skip_runtime=True)
+    dirty_main_steps = {step.name for step in dirty_main_plan.steps}
+    assert {"java-comments", "python-comments", "web-comments", "docs-gates"} <= dirty_main_steps
+    assert "branch-comments" not in dirty_main_steps
+
+    # 切出特性分支提交部分文件并保留其他未提交改动时，须同时检查分支提交与工作区增量
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", "feat/slice"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "add", java_file.as_posix()], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-m", "add demo java"],
+        check=True,
+        capture_output=True,
+    )
+    branch_changed = verify_slice.collect_changed_files(repo, "main")
+    branch_plan = verify_slice.build_slice_plan(repo, branch_changed, base="main", skip_runtime=True)
     branch_map = {step.name: step for step in branch_plan.steps}
     assert "branch-comments" in branch_map
     assert "--base" in branch_map["branch-comments"].command
+    assert "python-comments" in branch_map
+    assert "web-comments" in branch_map
+
+
+def test_check_worktree_python_comments_uses_cwd_repo(tmp_path: Path) -> None:
+    """check_worktree_python_comments 必须按工作目录定位目标 Git 仓库而非脚本所在主仓。"""
+    repo = _init_git_repo(tmp_path / "isolated-repo")
+    bad_py = repo / "mod_bad.py"
+    bad_py.write_text("def no_doc():\n    return 1\n", encoding="utf-8", newline="\n")
+    script = DEFAULT_ROOT / "scripts" / "code" / "python" / "check_worktree_python_comments.py"
+
+    proc = subprocess.run(
+        [sys.executable, "-B", "-X", "utf8", str(script)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=30,
+    )
+    assert proc.returncode == 1
+    assert "mod_bad.py" in (proc.stdout + proc.stderr)
 
 
 def test_secret_scanner_and_java_comment_regressions() -> None:

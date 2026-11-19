@@ -148,6 +148,10 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     assert redis_cmd[:2] == ["/bin/sh", "-c"]
     assert "exec redis-server" in redis_cmd[2]
     assert "$$REDIS_PASSWORD" in redis_cmd[2]
+    # MinIO 容器健康检查不得依赖镜像已移除的 curl，应使用内置 mc ready local
+    minio_health_test = services["minio"]["healthcheck"]["test"]
+    assert minio_health_test == ["CMD", "mc", "ready", "local"]
+    assert "curl" not in " ".join(minio_health_test)
     # MinIO 初始化容器必须为开发桶设置匿名下载策略，避免本地上传文件预览 403
     minio_init_ep = "\n".join(services["minio-init"]["entrypoint"])
     assert "mc anonymous set download" in minio_init_ep

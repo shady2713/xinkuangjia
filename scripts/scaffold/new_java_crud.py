@@ -60,6 +60,132 @@ class JavaCrudPlan:
     created_files: tuple[str, ...]
     ddl_sql: str
     applied: bool
+    updated_files: tuple[str, ...] = ()
+
+
+def _format_java_int(number: int) -> str:
+    """将十进制错误码格式化为带下划线分隔的 10 位 Java 整数字面量。"""
+    raw = f"{number:010d}"
+    return f"{raw[0]}_{raw[1:4]}_{raw[4:7]}_{raw[7:10]}"
+
+
+def _resolve_module_range(resolved_root: Path, module: str) -> tuple[int, int]:
+    """从 ServiceErrorCodeRange.java 解析目标业务模块的 [begin, end) 错误码号段。"""
+    range_path = (
+        resolved_root
+        / "后端代码"
+        / "basic-framework-boot"
+        / "basic-framework-core"
+        / "basic-framework-common"
+        / "src/main/java/com/basicframework/framework/common/exception/enums/ServiceErrorCodeRange.java"
+    )
+    if not range_path.is_file():
+        raise ValueError(f"找不到错误码号段注册表：{range_path.relative_to(resolved_root).as_posix()}")
+    source = range_path.read_text(encoding="utf-8")
+    constants: dict[str, int] = {}
+    for match in re.finditer(
+        r"public\s+static\s+final\s+int\s+([A-Z0-9_]+)\s*=\s*([0-9_]+)\s*;",
+        source,
+    ):
+        constants[match.group(1)] = int(match.group(2).replace("_", ""))
+
+    for match in re.finditer(
+        r'"([a-z0-9_]+)"\s*,\s*new\s+int\[\]\s*\{\s*([A-Z0-9_]+)\s*,\s*([A-Z0-9_]+)\s*\}',
+        source,
+    ):
+        mod_name, begin_const, end_const = match.groups()
+        if mod_name == module and begin_const in constants and end_const in constants:
+            return constants[begin_const], constants[end_const]
+    raise ValueError(f"模块 '{module}' 未在 ServiceErrorCodeRange.MODULE_RANGES 中登记号段")
+
+
+def _next_unused_code(used_codes: set[int], begin_code: int, end_code: int, preferred: int) -> int:
+    """优先取期望编码，否则在模块号段 [begin_code, end_code) 内查找最小可用编码。"""
+    if begin_code <= preferred < end_code and preferred not in used_codes:
+        return preferred
+    for candidate in range(begin_code, end_code):
+        if candidate not in used_codes:
+            return candidate
+    raise ValueError(f"模块号段 [{begin_code}, {end_code}) 已耗尽，无法分配新错误码")
+
+
+def _allocate_entity_error_block(used_codes: set[int], begin_code: int, end_code: int) -> int:
+    """在模块子域号段中分配不冲突的千位起点编码（至少容纳 2 个连续实体错误码）。"""
+    for block_start in range(begin_code + 1_000, end_code - 1, 1_000):
+        if not any(block_start <= code < block_start + 1_000 for code in used_codes):
+            return block_start
+    for candidate in range(begin_code, end_code - 1):
+        if candidate not in used_codes and (candidate + 1) not in used_codes:
+            return candidate
+    raise ValueError(f"模块号段 [{begin_code}, {end_code}) 无连续可用错误码空间")
+
+
+def _prepare_error_code_update(
+    resolved_root: Path, module: str, entity: str, clean_title: str
+) -> tuple[str, str | None]:
+    """检查并准备向模块 ErrorCodeConstants.java 追加实体错误码及 EXPORT_SIZE_EXCEEDED。"""
+    error_code_path = (
+        resolved_root
+        / "后端代码"
+        / "basic-framework-boot"
+        / f"basic-framework-module-{module}"
+        / f"src/main/java/com/basicframework/module/{module}/enums/ErrorCodeConstants.java"
+    )
+    if not error_code_path.is_file():
+        raise ValueError(
+            f"目标模块缺少错误码定义文件：{error_code_path.relative_to(resolved_root).as_posix()}"
+        )
+    rel_path = error_code_path.relative_to(resolved_root).as_posix()
+    source = error_code_path.read_text(encoding="utf-8")
+    begin_code, end_code = _resolve_module_range(resolved_root, module)
+
+    used_codes = {
+        int(raw.replace("_", ""))
+        for raw in re.findall(r"new\s+ErrorCode\s*\(\s*([0-9_]+)", source)
+    }
+    existing_names = set(re.findall(r"\bErrorCode\s+([A-Z0-9_]+)\s*=", source))
+    safe_title = _escape_java_str(clean_title)
+    entity_upper = entity.upper()
+    not_exists_name = f"{entity_upper}_NOT_EXISTS"
+    duplicate_name = f"{entity_upper}_CODE_DUPLICATE"
+
+    snippets: list[str] = []
+    if "EXPORT_SIZE_EXCEEDED" not in existing_names:
+        export_code = _next_unused_code(used_codes, begin_code, end_code, begin_code + 999)
+        used_codes.add(export_code)
+        snippets.append(
+            f"    /** 单次导出数据条数上限错误码。 */\n"
+            f'    ErrorCode EXPORT_SIZE_EXCEEDED = new ErrorCode({_format_java_int(export_code)}, "单次最多导出 10000 条数据，请缩小查询范围");'
+        )
+
+    missing_entity_names = [
+        name for name in (not_exists_name, duplicate_name) if name not in existing_names
+    ]
+    if missing_entity_names:
+        block_start = _allocate_entity_error_block(used_codes, begin_code, end_code)
+        not_exists_code = block_start
+        duplicate_code = block_start + 1
+        used_codes.update({not_exists_code, duplicate_code})
+        if not_exists_name in missing_entity_names:
+            snippets.append(
+                f"    /** {safe_title}记录不存在错误码。 */\n"
+                f'    ErrorCode {not_exists_name} = new ErrorCode({_format_java_int(not_exists_code)}, "{safe_title}不存在");'
+            )
+        if duplicate_name in missing_entity_names:
+            snippets.append(
+                f"    /** {safe_title}编码重复错误码。 */\n"
+                f'    ErrorCode {duplicate_name} = new ErrorCode({_format_java_int(duplicate_code)}, "{safe_title}编码已存在");'
+            )
+
+    if not snippets:
+        return rel_path, None
+
+    closing_index = source.rfind("}")
+    if closing_index < 0:
+        raise ValueError(f"ErrorCodeConstants.java 缺少类结束大括号：{rel_path}")
+    prefix = source[:closing_index].rstrip()
+    updated_source = prefix + "\n\n" + "\n\n".join(snippets) + "\n\n}\n"
+    return rel_path, updated_source
 
 
 def _validate_identifier(label: str, value: str) -> str:
@@ -292,6 +418,8 @@ public class {entity_pascal}PageReqVO extends PageParam {{
 
     resp_vo = f"""package {base_pkg}.controller.admin.{entity}.vo;
 
+import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
+import cn.idev.excel.annotation.ExcelProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -304,30 +432,37 @@ import java.time.LocalDateTime;
  */
 @Schema(description = "管理后台 - {title} Response VO")
 @Data
+@ExcelIgnoreUnannotated
 public class {entity_pascal}RespVO {{
 
     /** 主键编号。 */
     @Schema(description = "主键编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
+    @ExcelProperty("主键编号")
     private Long id;
 
     /** {title}编码。 */
     @Schema(description = "{title}编码", requiredMode = Schema.RequiredMode.REQUIRED, example = "CODE_001")
+    @ExcelProperty("{title}编码")
     private String code;
 
     /** {title}名称。 */
     @Schema(description = "{title}名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "示例名称")
+    @ExcelProperty("{title}名称")
     private String name;
 
     /** 状态（0 正常 1 停用）。 */
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
+    @ExcelProperty("状态")
     private Integer status;
 
     /** 备注说明。 */
     @Schema(description = "备注", example = "备注信息")
+    @ExcelProperty("备注")
     private String remark;
 
     /** 创建时间。 */
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @ExcelProperty("创建时间")
     private LocalDateTime createTime;
 
 }}
@@ -399,13 +534,13 @@ public interface {entity_pascal}Service {{
 
     service_impl = f"""package {base_pkg}.service.{entity};
 
-import com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
 import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
 import {base_pkg}.dal.mysql.{entity}.{entity_pascal}Mapper;
+import {base_pkg}.enums.ErrorCodeConstants;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -413,7 +548,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Objects;
 
-import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception0;
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 
 /**
  * {title}业务服务实现类。
@@ -508,7 +643,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
      */
     private void validateExists(Long id) {{
         if (id == null || {entity}Mapper.selectById(id) == null) {{
-            throw exception0(GlobalErrorCodeConstants.NOT_FOUND.getCode(), "{title}不存在");
+            throw exception(ErrorCodeConstants.{entity_upper}_NOT_EXISTS);
         }}
     }}
 
@@ -521,7 +656,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     private void validateCodeUnique(Long id, String code) {{
         {entity_pascal}DO existing = {entity}Mapper.selectByCode(code);
         if (existing != null && !Objects.equals(existing.getId(), id)) {{
-            throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "{title}编码已存在");
+            throw exception(ErrorCodeConstants.{entity_upper}_CODE_DUPLICATE);
         }}
     }}
 
@@ -531,7 +666,6 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     controller_java = f"""package {base_pkg}.controller.admin.{entity};
 
 import com.basicframework.framework.common.pojo.CommonResult;
-import com.basicframework.framework.common.pojo.PageParam;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.excel.core.util.ExcelUtils;
@@ -539,6 +673,7 @@ import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}RespVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
 import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import {base_pkg}.enums.ErrorCodeConstants;
 import {base_pkg}.service.{entity}.{entity_pascal}Service;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -562,6 +697,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.util.List;
 
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 
 /**
@@ -574,6 +710,9 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 @RequestMapping("/{module}/{entity}")
 @Validated
 public class {entity_pascal}Controller {{
+
+    /** 单次 Excel 导出上限，避免无边界加载全部数据。 */
+    private static final int MAX_EXPORT_SIZE = 10_000;
 
     @Resource
     private {entity_pascal}Service {entity}Service;
@@ -677,10 +816,14 @@ public class {entity_pascal}Controller {{
     @PreAuthorize("@ss.hasPermission('{perm_prefix}:export')")
     public void export{entity_pascal}Excel(@Valid {entity_pascal}PageReqVO exportReqVO,
                                            HttpServletResponse response) throws IOException {{
-        exportReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
-        List<{entity_pascal}DO> list = {entity}Service.get{entity_pascal}Page(exportReqVO).getList();
+        exportReqVO.setPageNo(1);
+        exportReqVO.setPageSize(MAX_EXPORT_SIZE);
+        PageResult<{entity_pascal}DO> pageResult = {entity}Service.get{entity_pascal}Page(exportReqVO);
+        if (pageResult.getTotal() > MAX_EXPORT_SIZE) {{
+            throw exception(ErrorCodeConstants.EXPORT_SIZE_EXCEEDED);
+        }}
         ExcelUtils.write(response, "{title}.xlsx", "数据", {entity_pascal}RespVO.class,
-                BeanUtils.toBean(list, {entity_pascal}RespVO.class));
+                BeanUtils.toBean(pageResult.getList(), {entity_pascal}RespVO.class));
     }}
 
 }}
@@ -903,16 +1046,24 @@ def scaffold_java_crud(
 
     table_name, files = _render_java_crud_files(module, entity, clean_title, use_unique_base)
     ddl_sql = _render_mysql_ddl(table_name, clean_title, use_unique_base)
+    error_code_rel, updated_error_code = _prepare_error_code_update(
+        resolved_root, module, entity, clean_title
+    )
 
     for rel_path in files:
         if (resolved_root / rel_path).exists():
             raise ValueError(f"目标文件已存在，拒绝覆盖：{rel_path}")
 
+    updated_files = (error_code_rel,) if updated_error_code is not None else ()
     if apply:
         for rel_path, content in files.items():
             target = resolved_root / rel_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8", newline="\n")
+        if updated_error_code is not None:
+            (resolved_root / error_code_rel).write_text(
+                updated_error_code, encoding="utf-8", newline="\n"
+            )
 
     return JavaCrudPlan(
         module=module,
@@ -923,6 +1074,7 @@ def scaffold_java_crud(
         created_files=tuple(sorted(files)),
         ddl_sql=ddl_sql,
         applied=apply,
+        updated_files=updated_files,
     )
 
 
@@ -965,8 +1117,23 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[{mode_label}] 后端 CRUD：{plan.module}/{plan.entity}（表 `{plan.table_name}`）")
     for path in plan.created_files:
         print(f"  + {path}")
+    for path in plan.updated_files:
+        print(f"  ~ {path}")
     print("\n-- 配套 MySQL 建表 DDL 预览 --")
     print(plan.ddl_sql.rstrip())
+    print("\n-- 后续收口步骤 --")
+    print("1. 将上方建表 DDL 合入 数据库文件/basic_framework.sql")
+    print(
+        f"2. 运行 python -B -X utf8 scripts/scaffold/new_web_crud.py {plan.module} {plan.entity} "
+        f"--title {plan.title} --apply 并将输出菜单 SQL 合入 数据库文件/basic_framework.sql"
+    )
+    print(
+        "3. 运行 cd 后端代码/basic-framework-boot && mvn -B -ntp -pl basic-framework-server -am "
+        "-Dtest=SchemaDoRbacParityTest,OpenApiContractSnapshotTest "
+        "-Dsurefire.failIfNoSpecifiedTests=false -Dopenapi.update=true test"
+    )
+    print("4. 运行 cd 前端代码/basic-framework-admin && pnpm api:gen")
+    print("5. 运行 python -B -X utf8 scripts/workflow/verify_slice.py --base main")
     return 0
 
 

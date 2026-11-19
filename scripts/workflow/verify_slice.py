@@ -131,6 +131,62 @@ def collect_changed_files(root: Path, base: str = "HEAD") -> list[str]:
     return sorted(paths)
 
 
+def _collect_worktree_changed_files(root: Path) -> list[str]:
+    """收集工作区相对 HEAD 的未提交、已暂存与未跟踪文件，用于补充分支基线遗漏的本地改动。
+
+    Args:
+        root: 仓库根目录。
+    Returns:
+        升序去重后的仓库相对 POSIX 路径列表。
+    """
+    resolved = root.resolve()
+    diff_proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD", "--"],
+        cwd=resolved,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if diff_proc.returncode != 0:
+        return []
+    untracked_proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"],
+        cwd=resolved,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    paths = {
+        raw.decode("utf-8", errors="replace")
+        for raw in (diff_proc.stdout + untracked_proc.stdout).split(b"\0")
+        if raw
+    }
+    return sorted(paths)
+
+
+def _has_committed_diff(root: Path, effective_base: str) -> bool:
+    """判断指定有效基线到 HEAD 之间是否存在已提交改动，避免同提交空比较引发假绿。
+
+    Args:
+        root: 仓库根目录。
+        effective_base: 经 merge-base 解析后的基线引用或提交标识。
+    Returns:
+        存在已提交差异时返回 True，否则返回 False。
+    """
+    if effective_base == "HEAD":
+        return False
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "diff", "--name-only", effective_base, "HEAD", "--"],
+        cwd=root.resolve(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=30,
+    )
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
 def resolve_java_modules(root: Path, changed_files: list[str]) -> list[str]:
     """根据改动文件向上查找所属 Maven 子模块相对目录。
 
@@ -214,6 +270,26 @@ def build_slice_plan(
         or Path(p).name in {"package.json", "pom.xml", "pyproject.toml", "document_rules.py"}
     ]
 
+    worktree_changed = (
+        changed_files
+        if effective_base == "HEAD"
+        else _collect_worktree_changed_files(resolved)
+    )
+    wt_java_files = [
+        p
+        for p in worktree_changed
+        if p.startswith("后端代码/basic-framework-boot/") and p.endswith(".java") and (resolved / p).is_file()
+    ]
+    wt_web_files = [
+        p
+        for p in worktree_changed
+        if p.startswith("前端代码/basic-framework-admin/")
+        and Path(p).suffix.lower() in WEB_SOURCE_SUFFIXES
+        and not p.endswith(".d.ts")
+        and (resolved / p).is_file()
+    ]
+    wt_python_files = [p for p in worktree_changed if p.endswith(".py") and (resolved / p).is_file()]
+
     steps: list[SliceStep] = []
     if _has_staged_changes(resolved):
         steps.append(
@@ -224,8 +300,12 @@ def build_slice_plan(
             )
         )
 
-    if effective_base != "HEAD" and (java_files or python_files or web_files):
-        # 显式对比分支基线时必须透传 --base，覆盖分支已提交但工作区干净的增量声明。
+    if (
+        effective_base != "HEAD"
+        and _has_committed_diff(resolved, effective_base)
+        and (java_files or python_files or web_files)
+    ):
+        # 对比分支基线时覆蓋 base..HEAD 已提交的增量声明；未提交的工作区改动仍在下方补齐。
         steps.append(
             SliceStep(
                 name="branch-comments",
@@ -243,49 +323,49 @@ def build_slice_plan(
                 ),
             )
         )
-    else:
-        if java_files:
-            steps.append(
-                SliceStep(
-                    name="java-comments",
-                    cwd=str(resolved),
-                    command=(
-                        py_exe,
-                        "-B",
-                        "-X",
-                        "utf8",
-                        "scripts/code/java/check_worktree_java_comments.py",
-                    ),
-                )
+
+    if wt_java_files:
+        steps.append(
+            SliceStep(
+                name="java-comments",
+                cwd=str(resolved),
+                command=(
+                    py_exe,
+                    "-B",
+                    "-X",
+                    "utf8",
+                    "scripts/code/java/check_worktree_java_comments.py",
+                ),
             )
-        if python_files:
-            steps.append(
-                SliceStep(
-                    name="python-comments",
-                    cwd=str(resolved),
-                    command=(
-                        py_exe,
-                        "-B",
-                        "-X",
-                        "utf8",
-                        "scripts/code/python/check_worktree_python_comments.py",
-                    ),
-                )
+        )
+    if wt_python_files:
+        steps.append(
+            SliceStep(
+                name="python-comments",
+                cwd=str(resolved),
+                command=(
+                    py_exe,
+                    "-B",
+                    "-X",
+                    "utf8",
+                    "scripts/code/python/check_worktree_python_comments.py",
+                ),
             )
-        if web_files:
-            steps.append(
-                SliceStep(
-                    name="web-comments",
-                    cwd=str(resolved),
-                    command=(
-                        py_exe,
-                        "-B",
-                        "-X",
-                        "utf8",
-                        "scripts/code/web/check_worktree_web_comments.py",
-                    ),
-                )
+        )
+    if wt_web_files:
+        steps.append(
+            SliceStep(
+                name="web-comments",
+                cwd=str(resolved),
+                command=(
+                    py_exe,
+                    "-B",
+                    "-X",
+                    "utf8",
+                    "scripts/code/web/check_worktree_web_comments.py",
+                ),
             )
+        )
 
     if doc_files:
         steps.append(
@@ -360,6 +440,7 @@ def build_slice_plan(
                                 "-am",
                                 "-Dtest=SchemaDoRbacParityTest,OpenApiContractSnapshotTest,FootgunArchitectureTest",
                                 "-DfailIfNoTests=false",
+                                "-Dsurefire.failIfNoSpecifiedTests=false",
                                 "test",
                             ),
                         )

@@ -289,6 +289,8 @@ def _render_module_files(
     """渲染新业务模块的标准文件集合（含 OpenAPI 分组配置与号段单测）。"""
     upper = module_name.upper()
     title_name = module_name.capitalize()
+    export_code = f"{begin_code + 999:010d}"
+    export_literal = f"{export_code[0]}_{export_code[1:4]}_{export_code[4:7]}_{export_code[7:10]}"
     sample_code = f"{begin_code + 1_000:010d}"
     sample_literal = f"{sample_code[0]}_{sample_code[1:4]}_{sample_code[4:7]}_{sample_code[7:10]}"
     base_pkg_dir = f"src/main/java/com/basicframework/module/{module_name}"
@@ -377,6 +379,9 @@ import com.basicframework.framework.common.exception.ErrorCode;
  * @author basic-framework
  */
 public interface ErrorCodeConstants {{
+
+    /** 单次导出数据条数上限错误码。 */
+    ErrorCode EXPORT_SIZE_EXCEEDED = new ErrorCode({export_literal}, "单次最多导出 10000 条数据，请缩小查询范围");
 
     /** 示例记录不存在错误码，首个真实实体落地后可按业务子域扩展或替换。 */
     ErrorCode {upper}_RECORD_NOT_EXISTS = new ErrorCode({sample_literal}, "{module_name} 记录不存在");
