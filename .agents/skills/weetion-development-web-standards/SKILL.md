@@ -39,7 +39,6 @@ description: "在 basic-framework 仓库开发、修改、测试或评审 Web（
 | 弹窗 | [弹窗](references/vben-modal.md) | [弹窗模板](assets/modal-template.md) |
 | 抽屉 | [抽屉](references/vben-drawer.md) | [抽屉模板](assets/drawer-template.md) |
 | 页面容器 | [页面](references/vben-page.md) | [页面模板](assets/page-template.md) |
-| 省略文本 | [省略文本](references/vben-ellipsis-text.md) | [模板](assets/ellipsis-text-template.md) |
 | 提示 | [提示](references/vben-alert.md) | [模板](assets/alert-template.md) |
 
 完整 CRUD 使用 [默认模板](assets/crud-template.md)；需求整理可参考 [需求模板](assets/quick-start-template.md)。仅加载本次涉及的组件资料，不将 CRUD 专项目录和模板强加给所有 Web 修改。

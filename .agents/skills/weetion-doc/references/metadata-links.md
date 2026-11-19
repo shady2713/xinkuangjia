@@ -40,7 +40,7 @@ kind: "package-reference"
 
 ## 类别体系
 
-每个类别恰好对应一个明确模板，每个模板也对应一个类别；使用本技能内已有类别，或按下方规则完整定义的项目扩展类别。按文档用途、内容和真实接口分类，不根据固定目录或文件名推断。包组导览、类型变更确认、发布比较和历史格式参考承担不同用途，不能因为路径相似而混用。包 README 按以下事实判断：
+每个类别恰好对应一个明确模板，每个模板也对应一个类别；使用本技能内已有类别，或按下方规则完整定义的项目扩展类别。按文档用途、内容和真实接口分类，不根据固定目录或文件名推断。包 README 按以下事实判断：
 
 1. 介绍包组或模块组、提供直接下属包导览的 README → `package-group`。
 2. 包清单、构建或发布配置表明它组合多个组件形成分发包或预设 → `package-bundle`。
@@ -53,9 +53,6 @@ kind: "package-reference"
 | `package-reference` | 插件、服务或其他功能包的 README | [package-reference.md](../templates/package-reference.md) | 功能包约定：遵循[包 README 评审标准](review.md#package-readme-review)，说明接入、配置、行为及限制。 |
 | `package-library` | 供调用方引入的库 README | [package-library.md](../templates/package-library.md) | 库约定：依赖获取、公开入口、调用方式及边界。 |
 | `package-bundle` | 组合多个组件的分发包或预设 README | [package-bundle.md](../templates/package-bundle.md) | 组合包约定：实际安装和启用方式、组成关系、冲突及移除行为。 |
-| `persistence-change` | 持久化格式变更确认记录 | [persistence-change.md](../templates/persistence-change.md) | 变更确认：来源版本、前后约定、兼容性决策及迁移验证；未验证结论明确标注。 |
-| `persistence-release` | 明确发布版本间的持久化结构比较 | [persistence-release.md](../templates/persistence-release.md) | 历史观察：比较版本、范围、差异和来源证据；不以结构比较证明兼容性或迁移安全。 |
-| `persistence-format` | 选定历史持久化格式的参考记录 | [persistence-format.md](../templates/persistence-format.md) | 格式参考：可定位的历史来源、完整结构及必要依赖定义、核验结果与覆盖缺口。 |
 
 选择包模板前，先读取目标项目的包清单、公开入口、加载机制和构建配置，按真实使用方式核实类别。安装、依赖获取和调用命令取自项目实际工具，不由类别名称推导。
 

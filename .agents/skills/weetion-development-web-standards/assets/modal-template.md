@@ -318,7 +318,7 @@ const [Modal, modalApi] = useVbenModal({
 </template>
 
 <script setup lang="ts">
-import { ElButton } from 'element-plus';
+import { ElButton, ElMessage } from 'element-plus';
 import { useVbenModal } from '@vben/common-ui';
 import { reactive } from 'vue';
 import UserForm from './user-form.vue';
@@ -340,10 +340,10 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.lock(true);
       const formData = modalApi.getData();
       await updateUser(formData);
-      message.success('Saved successfully');
+      ElMessage.success('Saved successfully');
       modalApi.close();
     } catch (error) {
-      message.error('Save failed');
+      ElMessage.error('Save failed');
     } finally {
       modalApi.unlock();
     }

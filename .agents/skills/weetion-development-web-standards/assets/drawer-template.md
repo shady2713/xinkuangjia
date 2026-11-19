@@ -350,7 +350,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
 </template>
 
 <script setup lang="ts">
-import { ElButton } from 'element-plus';
+import { ElButton, ElMessage } from 'element-plus';
 import { useVbenDrawer } from '@vben/common-ui';
 import { reactive } from 'vue';
 import UserForm from './user-form.vue';
@@ -372,10 +372,10 @@ const [Drawer, drawerApi] = useVbenDrawer({
       drawerApi.lock(true);
       const formData = drawerApi.getData();
       await updateUser(formData);
-      message.success('Saved successfully');
+      ElMessage.success('Saved successfully');
       drawerApi.close();
     } catch (error) {
-      message.error('Save failed');
+      ElMessage.error('Save failed');
     } finally {
       drawerApi.unlock();
     }

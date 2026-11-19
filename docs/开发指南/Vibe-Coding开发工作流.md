@@ -54,7 +54,7 @@ flowchart LR
 
 ### 3. 调用方与契约同步实现（Consumer-Sync Implementation）
 
-- 新建模块与标准 CRUD 优先运行黄金脚手架（`python -B -X utf8 scripts/scaffold/new_java_module.py` 与 `python -B -X utf8 scripts/scaffold/new_web_crud.py`），减少样板手写漂移。
+- 新建模块与标准 CRUD 优先运行黄金脚手架（`scripts/scaffold/new_java_module.py`、`scripts/scaffold/new_java_crud.py` 与 `scripts/scaffold/new_web_crud.py`），减少样板手写漂移。
 - 后端遵循 [weetion-development-java-standards](../../.agents/skills/weetion-development-java-standards/SKILL.md) 与模块脚手架规范：Controller 入参与返回值使用 VO/DTO，禁止暴露 `dal.dataobject.*DO`；`core` 禁止反向依赖业务 `module` 或 `server`；DDL、DO 与 `system_menu` 权限码由 `SchemaDoRbacParityTest` 统一校验。
 - 前后端接口契约以 `OpenApiContractSnapshotTest` 导出的 `openapi.json` 为唯一事实源，前端通过 `pnpm api:gen` 同步 `api-types.d.ts` 并由 `pnpm api:check` 拦截手工漂移；所有含 `tsconfig.json` 与 `src/` 的工作区包必须声明 `scripts.typecheck`，禁止空 `catch`、裸 `@ts-ignore`、裸 `window.open(` 与残留的 `it.skip`。
 - 内部契约（环境变量、接口 URL、权限标识、脚本入口）变更时，在同一提交内同步 `.env.example`、调用方测试与[脚本使用索引](脚本使用索引.md)，防止配置与文档漂移。

@@ -25,7 +25,6 @@ description: 用于创建、修改、评审和整理仓库 Markdown 文档及包
 | 编写包 README | [元数据与类别映射](references/metadata-links.md#the-kind-system)及[元数据要求](references/metadata-links.md#readme-metadata)，确定真实用途后只打开对应的一份[模板](templates/) |
 | 评审文档 | [评审标准](references/review.md)，沿本次范围核对事实、缺失信息和验证证据 |
 | 整库或专题文档审计 | 仅在任务明确包含该范围时读[审计流程](references/document-rules.md#audit-the-corpus)，不由局部编辑自动扩展 |
-| 持久化格式变更、发布比较或历史格式记录 | 按下方类别入口选择对应模板；普通文档和 README 不加载这三类模板 |
 | 专项精简或表达校正 | [表达与语义保留规则](references/style.md#clear-technical-expression)，示例仅在需要校准时读取 |
 | 专项清理创作过程残留 | [残留清理 Skill](../weetion-doc-trim-cot-leakage/SKILL.md) |
 | 调查删除、合并或降低复杂度的机会 | [简化调查 Skill](../weetion-doc-find-simplifications/SKILL.md)，不由普通编辑自动开展 |

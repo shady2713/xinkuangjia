@@ -44,4 +44,4 @@ basic-framework-module-<biz>/
 
 ## 持久化 SQL 切片验证
 
-新增或修改 `LambdaQueryWrapperX`、`MPJLambdaWrapperX` 或自定义 SQL 时，参考 [ConfigMapperTest](../../../../后端代码/basic-framework-boot/basic-framework-module-infra/src/test/java/com/basicframework/module/infra/dal/mysql/config/ConfigMapperTest.java) 使用 `h2`（`MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE,KEY,USER`）编写毫秒级 Mapper 切片测试，覆盖插入审计字段、分页过滤和逻辑删除边界，避免仅靠 Mockito 漏检列名拼写与 SQL 语法错误。
+新增或修改 `LambdaQueryWrapperX` 或自定义 SQL 时，参考 [ConfigMapperTest](../../../../后端代码/basic-framework-boot/basic-framework-module-infra/src/test/java/com/basicframework/module/infra/dal/mysql/config/ConfigMapperTest.java) 使用 `h2`（`MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE,KEY,USER`）编写毫秒级 Mapper 切片测试，覆盖插入审计字段、分页过滤和逻辑删除边界，避免仅靠 Mockito 漏检列名拼写与 SQL 语法错误。

@@ -103,9 +103,9 @@ def test_normal_structure_and_crlf(tmp_path: Path) -> None:
     assert not structure_findings(page().replace("\n", "\r\n"), "入口.md", rules)
 
 
-def test_merge_request_template_has_its_own_structure(tmp_path: Path) -> None:
-    """合并请求模板使用填写骨架，普通页面已有开发者章节仍须折叠。"""
-    template = ".gitlab/merge_request_templates/Default.md"
+def test_pull_request_template_has_its_own_structure(tmp_path: Path) -> None:
+    """拉取请求模板使用填写骨架，普通页面已有开发者章节仍须折叠。"""
+    template = ".github/pull_request_template.md"
     write(tmp_path, template, "## 理解实现\n\n待填写。\n")
     write(tmp_path, "docs/文件名.md", "## 理解实现\n\n待填写。\n")
     assert not structures(tmp_path, [template])[1]
@@ -213,18 +213,8 @@ def test_readme_limitations_toc_and_order(tmp_path: Path) -> None:
     assert any(item.rule == "readme-order" for item in readme(source, "README.md", rules))
 
 
-def test_model_scope_is_explicit(tmp_path: Path) -> None:
-    """只有明确登记的模型包才强制模型体验，普通包不承担该章节。"""
-    rules = replace(load_rules(tmp_path), model_readmes=("model/README.md",))
-    assert not readme(page("package-library"), "other/README.md", rules)
-    assert any(
-        item.rule == "readme-model"
-        for item in readme(page("package-library"), "model/README.md", rules)
-    )
-
-
 def test_group_template_has_no_runtime_sections(tmp_path: Path) -> None:
-    """包组采用独立模板，可有开发笔记，不强加模型与限制。"""
+    """包组采用独立模板，可有开发笔记，不强加运行时限制。"""
     source = "---\ndescription: 包组导览\nkind: package-group\n---\n" + page().replace(
         "## 使用", "## 包"
     ).replace("## 开发笔记", "## 相关文档\n\n[文档](#包)\n\n-----\n\n## 开发笔记")
