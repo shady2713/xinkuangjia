@@ -3,6 +3,7 @@ package com.basicframework.framework.excel.core.convert;
 import cn.hutool.core.convert.Convert;
 import com.basicframework.framework.dict.core.DictFrameworkUtils;
 import com.basicframework.framework.excel.core.annotations.DictFormat;
+import com.basicframework.framework.excel.core.util.ExcelUtils;
 import cn.idev.excel.converters.Converter;
 import cn.idev.excel.enums.CellDataTypeEnum;
 import cn.idev.excel.metadata.GlobalConfiguration;
@@ -87,8 +88,8 @@ public class DictConvert implements Converter<Object> {
             log.error("[convertToExcelData][type({}) 转换不了 label({})]", type, value);
             return new WriteCellData<>("");
         }
-        // 生成 Excel 小表格
-        return new WriteCellData<>(label);
+        // 生成 Excel 小表格并中和潜在公式引导字符
+        return new WriteCellData<>(ExcelUtils.neutralizeFormula(label));
     }
 
     /**

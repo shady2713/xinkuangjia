@@ -1,8 +1,12 @@
 package com.basicframework.framework.excel.core.util;
 
 import cn.idev.excel.FastExcelFactory;
+import cn.idev.excel.converters.Converter;
 import cn.idev.excel.converters.longconverter.LongStringConverter;
 import cn.idev.excel.enums.CellDataTypeEnum;
+import cn.idev.excel.metadata.GlobalConfiguration;
+import cn.idev.excel.metadata.data.WriteCellData;
+import cn.idev.excel.metadata.property.ExcelContentProperty;
 import com.basicframework.framework.excel.core.handler.ColumnWidthMatchStyleStrategy;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,7 +45,26 @@ public class ExcelUtils {
                 .autoCloseStream(false) // 不要自动关闭，交给 Servlet 自己处理
                 .registerWriteHandler(new ColumnWidthMatchStyleStrategy()) // 基于 column 长度，自动适配。最大 255 宽度
                 .registerConverter(new LongPlainStringWriteConverter()) // 覆盖默认 LongNumberConverter 键，防止 64 位雪花主键丢失精度
+                .registerConverter(new FormulaNeutralizingStringWriteConverter()) // 对公式引导字符前置单引号，防止 CSV/Excel 公式注入
                 .sheet(sheetName).doWrite(data);
+    }
+
+    /**
+     * 对以 {@code =}、{@code +}、{@code -}、{@code @}、制表符或回车符开头的字符串前置单引号，
+     * 防止导出的电子表格在客户端打开时被当作公式执行。
+     *
+     * @param value 待写出的单元格文本
+     * @return 安全转义后的文本（空值原样返回）
+     */
+    public static String neutralizeFormula(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return "'" + value;
+        }
+        return value;
     }
 
     /**
@@ -76,6 +99,47 @@ public class ExcelUtils {
         @Override
         public CellDataTypeEnum supportExcelTypeKey() {
             return null;
+        }
+
+    }
+
+    /**
+     * 在写出字符串单元格前中和公式注入前缀，并覆盖 FastExcel 默认 {@code (String.class, null)} 转换器。
+     */
+    private static final class FormulaNeutralizingStringWriteConverter implements Converter<String> {
+
+        /**
+         * 声明支持的 Java 字段类型为 {@link String}。
+         *
+         * @return {@code String.class}
+         */
+        @Override
+        public Class<?> supportJavaTypeKey() {
+            return String.class;
+        }
+
+        /**
+         * 返回 {@code null} 以绑定 FastExcel 默认写出字符串转换器映射键。
+         *
+         * @return 固定返回 {@code null}
+         */
+        @Override
+        public CellDataTypeEnum supportExcelTypeKey() {
+            return null;
+        }
+
+        /**
+         * 将字符串值经过公式前缀中和后写入 Excel 单元格。
+         *
+         * @param value               字段字符串值
+         * @param contentProperty     单元格元数据属性
+         * @param globalConfiguration 全局导出配置
+         * @return 处理后的文本单元格数据
+         */
+        @Override
+        public WriteCellData<String> convertToExcelData(String value, ExcelContentProperty contentProperty,
+                                                        GlobalConfiguration globalConfiguration) {
+            return new WriteCellData<>(value == null ? "" : neutralizeFormula(value));
         }
 
     }

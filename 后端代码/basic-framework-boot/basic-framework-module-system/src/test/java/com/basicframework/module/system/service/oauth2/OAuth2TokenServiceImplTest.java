@@ -1,6 +1,7 @@
 package com.basicframework.module.system.service.oauth2;
 
 import com.basicframework.framework.common.enums.CommonStatusEnum;
+import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.config.SecurityProperties;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
@@ -10,6 +11,7 @@ import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2AccessTokenMapper;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2RefreshTokenMapper;
 import com.basicframework.module.system.dal.redis.oauth2.OAuth2AccessTokenRedisDAO;
+import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
 import com.basicframework.module.system.service.user.AdminUserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.UNAUTHORIZED;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -290,6 +293,40 @@ class OAuth2TokenServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(UNAUTHORIZED.getCode()));
         verify(oauth2AccessTokenMapper, never()).insert(any(OAuth2AccessTokenDO.class));
+    }
+
+    /** 验证管理后台按编号强踢接口拒绝吊销客户端凭据、会员及跨平台管理员令牌。 */
+    @Test
+    void removeAccessTokenByIdRejectsNonAdminAndCrossPlatformTokens() {
+        OAuth2AccessTokenDO clientCredToken = buildAccessToken("cc-token");
+        clientCredToken.setId(10L);
+        clientCredToken.setUserType(0);
+        when(oauth2AccessTokenMapper.selectById(10L)).thenReturn(clientCredToken);
+
+        OAuth2AccessTokenDO memberToken = buildAccessToken("member-token");
+        memberToken.setId(11L);
+        memberToken.setUserType(UserTypeEnum.MEMBER.getValue());
+        when(oauth2AccessTokenMapper.selectById(11L)).thenReturn(memberToken);
+
+        OAuth2AccessTokenDO superAdminToken = buildAccessToken("sa-token");
+        superAdminToken.setId(12L);
+        superAdminToken.setUserType(UserTypeEnum.ADMIN.getValue());
+        superAdminToken.setUserId(99L);
+        when(oauth2AccessTokenMapper.selectById(12L)).thenReturn(superAdminToken);
+        when(adminUserService.getUserTypeOrDefault(99L)).thenReturn(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
+
+        String businessPlatform = AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
+        assertThatThrownBy(() -> tokenService.removeAccessTokenById(10L, businessPlatform))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> tokenService.removeAccessTokenById(11L, businessPlatform))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> tokenService.removeAccessTokenById(12L, businessPlatform))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(oauth2AccessTokenMapper, never()).deleteByIds(any());
+        verify(oauth2AccessTokenRedisDAO, never()).deleteList(any());
     }
 
     /**
