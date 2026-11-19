@@ -55,10 +55,25 @@ class FootgunArchitectureTest {
     static final ArchRule businessModulesMustNotCrossDependOnInternals =
             FootgunRules.businessModulesMustNotCrossDependOnInternals();
 
-    /** 所有 @Transactional 方法必须显式声明 rollbackFor。 */
+    /** 所有方法级 @Transactional 必须显式声明 rollbackFor。 */
     @ArchTest
     static final ArchRule transactionalMustDeclareRollbackFor =
             FootgunRules.transactionalMustDeclareRollbackFor();
+
+    /** 所有类级 @Transactional 必须显式声明 rollbackFor。 */
+    @ArchTest
+    static final ArchRule classLevelTransactionalMustDeclareRollbackFor =
+            FootgunRules.classLevelTransactionalMustDeclareRollbackFor();
+
+    /** 禁止类级使用 @DSTransactional 绕过事务缓存同步。 */
+    @ArchTest
+    static final ArchRule noDynamicDatasourceTransactionalOnClasses =
+            FootgunRules.noDynamicDatasourceTransactionalOnClasses();
+
+    /** 禁止方法级使用 @DSTransactional 绕过事务缓存同步。 */
+    @ArchTest
+    static final ArchRule noDynamicDatasourceTransactionalOnMethods =
+            FootgunRules.noDynamicDatasourceTransactionalOnMethods();
 
     /** 控制器 HTTP 端点签名不得直接暴露持久化 DO。 */
     @ArchTest

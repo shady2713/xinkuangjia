@@ -19,7 +19,7 @@
 
     <properties>
         <!-- 系统管理与认证权限核心模块行覆盖率硬性水位线。 -->
-        <quality.coverage.minimum>0.20</quality.coverage.minimum>
+        <quality.coverage.minimum>0.25</quality.coverage.minimum>
     </properties>
 
     <dependencies>

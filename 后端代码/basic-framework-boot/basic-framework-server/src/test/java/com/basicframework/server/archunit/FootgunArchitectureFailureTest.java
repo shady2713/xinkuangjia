@@ -1,6 +1,7 @@
 package com.basicframework.server.archunit;
 
 import com.basicframework.framework.footgun.ForbiddenCoreModuleDependency;
+import com.basicframework.module.infra.service.footgun.ForbiddenClassLevelTxService;
 import com.basicframework.module.infra.service.footgun.ForbiddenCrossModuleAndUnqualifiedTxService;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenDoExposureController;
 import com.basicframework.module.system.controller.admin.footgun.ForbiddenMapperAccessController;
@@ -10,6 +11,7 @@ import com.basicframework.module.system.dal.dataobject.footgun.ForbiddenFootgunD
 import com.basicframework.module.system.dal.mysql.footgun.ForbiddenFootgunMapper;
 import com.basicframework.module.system.service.footgun.ForbiddenGenericExceptionAndJulUsage;
 import com.basicframework.module.system.service.footgun.ForbiddenStandardStreamUsage;
+import com.basicframework.module.system.web.footgun.ForbiddenNonControllerPkgEndpoint;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.EvaluationResult;
@@ -130,5 +132,44 @@ class FootgunArchitectureFailureTest {
         assertViolated(
                 FootgunRules.noLegacyLoggingApis().evaluate(classes),
                 "ForbiddenGenericExceptionAndJulUsage");
+    }
+
+    /** 放在 ..controller.. 包之外的 @RestController 未声明权限必须失败。 */
+    @Test
+    void nonControllerPackageEndpointWithoutAuthFails() {
+        JavaClasses classes = importFixtures(ForbiddenNonControllerPkgEndpoint.class);
+        assertViolated(
+                FootgunRules.controllerEndpointsMustDeclareAuthorization().evaluate(classes),
+                "hiddenUnprotected");
+    }
+
+    /** 在 @PreAuthorize 中使用 permitAll() 表达式绕过白名单必须失败。 */
+    @Test
+    void preAuthorizePermitAllBypassFails() {
+        JavaClasses classes = importFixtures(ForbiddenNonControllerPkgEndpoint.class);
+        assertViolated(
+                FootgunRules.controllerEndpointsMustDeclareAuthorization().evaluate(classes),
+                "preAuthBypass");
+    }
+
+    /** 类级 @Transactional 省略 rollbackFor 必须失败。 */
+    @Test
+    void classLevelUnqualifiedTransactionalFails() {
+        JavaClasses classes = importFixtures(ForbiddenClassLevelTxService.class);
+        assertViolated(
+                FootgunRules.classLevelTransactionalMustDeclareRollbackFor().evaluate(classes),
+                "ForbiddenClassLevelTxService");
+    }
+
+    /** 类级与方法级使用 @DSTransactional 必须失败。 */
+    @Test
+    void dynamicDatasourceTransactionalFails() {
+        JavaClasses classes = importFixtures(ForbiddenClassLevelTxService.class);
+        assertViolated(
+                FootgunRules.noDynamicDatasourceTransactionalOnClasses().evaluate(classes),
+                "ForbiddenClassLevelTxService");
+        assertViolated(
+                FootgunRules.noDynamicDatasourceTransactionalOnMethods().evaluate(classes),
+                "ForbiddenClassLevelTxService");
     }
 }
