@@ -20,7 +20,8 @@ window._VBEN_ADMIN_PRO_APP_CONF_ = {
   VITE_APP_TITLE: '管理平台',
   // 应用命名空间；用于隔离 Pinia 等必须保留的业务状态，不用于保存界面偏好。
   VITE_APP_NAMESPACE: 'admin-platform-ele',
-  // Pinia 生产持久化的客户端混淆密钥；该值对浏览器可见，不能作为真正的安全密钥。
+  // Pinia 本地持久化可选混淆密钥：留空时生产直写 localStorage 不执行空密钥伪 AES 加密；
+  // 该值对浏览器可见不能替代服务端保密，XSS 防护依赖严格 CSP script-src 'self' 策略。
   VITE_APP_STORE_SECURE_KEY: '',
 
   // ==================== 接口、认证与登录 ====================

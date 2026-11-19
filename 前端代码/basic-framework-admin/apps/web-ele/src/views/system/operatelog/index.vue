@@ -27,7 +27,7 @@ function handleRefresh() {
 /** 导出表格 */
 async function handleExport() {
   const data = await exportOperateLog(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '操作日志.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '操作日志.xlsx', source: data });
 }
 
 /** 查看操作日志详情 */

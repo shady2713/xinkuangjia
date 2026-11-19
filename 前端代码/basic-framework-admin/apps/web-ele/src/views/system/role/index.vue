@@ -47,7 +47,7 @@ function handleRefresh() {
 /** 导出表格 */
 async function handleExport() {
   const data = await exportRole(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '角色.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '角色.xlsx', source: data });
 }
 
 const {

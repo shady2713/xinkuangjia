@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 字典数据表格组件，负责按字典类型分页展示、维护与导出字典数据项。 */
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { SystemDictDataApi } from '#/api/system/dict/data';
 
@@ -45,7 +46,7 @@ async function handleExport() {
     ...(await gridApi.formApi.getValues()),
     dictType: props.dictType,
   });
-  downloadFileFromBlobPart({ fileName: '字典数据.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '字典数据.xlsx', source: data });
 }
 
 const {

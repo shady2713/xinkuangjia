@@ -49,7 +49,7 @@ function handleRefresh() {
 /** 导出表格 */
 async function handleExport() {
   const data = await exportJob(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '定时任务.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '定时任务.xlsx', source: data });
 }
 
 /** 查看任务详情 */
