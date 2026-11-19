@@ -127,13 +127,35 @@ def test_java_module_and_crud_scaffolds_pass_java_comment_gate_and_scale_past_te
     with pytest.raises(ValueError, match="保留名称"):
         new_java_module.scaffold_java_module(repo, "system", apply=False)
 
-    # 在 crm 模块生成后端单表 CRUD（继承 UniqueBaseDO）并实跑 Java 注释检查器
+    # 在 crm 模块生成后端单表 CRUD（继承 UniqueBaseDO）并实跑 Java 注释检查器与契约回归断言
+    with pytest.raises(ValueError, match="保留关键字"):
+        new_java_crud.scaffold_java_crud(repo, "crm", "class", title="分类", apply=False)
     crud_plan = new_java_crud.scaffold_java_crud(
         repo, "crm", "customer", title="客户", use_unique_base=True, apply=True
     )
     assert crud_plan.applied is True
     assert "deleted_tag" in crud_plan.ddl_sql
     assert "uk_code_deleted_tag" in crud_plan.ddl_sql
+    mapper_test_src = (
+        repo
+        / "后端代码/basic-framework-boot/basic-framework-module-crm"
+        / "src/test/java/com/basicframework/module/crm/dal/mysql/customer/CustomerMapperTest.java"
+    ).read_text(encoding="utf-8")
+    assert "MybatisSqlSessionFactoryBuilder" in mapper_test_src
+    assert "MybatisAutoConfiguration" not in mapper_test_src
+    controller_src = (
+        repo
+        / "后端代码/basic-framework-boot/basic-framework-module-crm"
+        / "src/main/java/com/basicframework/module/crm/controller/admin/customer/CustomerController.java"
+    ).read_text(encoding="utf-8")
+    assert '/export-excel' in controller_src
+    service_impl_src = (
+        repo
+        / "后端代码/basic-framework-boot/basic-framework-module-crm"
+        / "src/main/java/com/basicframework/module/crm/service/customer/CustomerServiceImpl.java"
+    ).read_text(encoding="utf-8")
+    assert "record.setId(null);" in service_impl_src
+    assert "validateCodeUnique" in service_impl_src
 
     java_files = [
         repo / rel
@@ -192,6 +214,16 @@ def test_web_crud_scaffold_passes_real_web_comments_check_crud_and_schema_regex(
         "crm:customer:export",
     }
     assert len(role_menu_matches) == 6
+    index_vue_src = (
+        repo / "前端代码/basic-framework-admin/apps/web-ele/src/views/crm/customer/index.vue"
+    ).read_text(encoding="utf-8")
+    assert "#/composables/use-crud-actions" in index_vue_src
+    assert "refresh: handleRefresh" in index_vue_src
+    assert "onRefresh:" not in index_vue_src
+    data_ts_src = (
+        repo / "前端代码/basic-framework-admin/apps/web-ele/src/views/crm/customer/data.ts"
+    ).read_text(encoding="utf-8")
+    assert "fieldName: 'code'" in data_ts_src
 
     # 2. 将生成的 TS/Vue 文件送入真实的 Node web-comments 规则检查器，必须 0 违规
     web_targets = [

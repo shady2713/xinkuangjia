@@ -24,6 +24,28 @@ sys.dont_write_bytecode = True
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SEGMENT_RE = re.compile(r"^[a-z][a-z0-9]{1,23}$")
+JAVA_KEYWORDS = frozenset(
+    {
+        "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char",
+        "class", "const", "continue", "default", "do", "double", "else", "enum",
+        "extends", "false", "final", "finally", "float", "for", "goto", "if",
+        "implements", "import", "instanceof", "int", "interface", "long", "native",
+        "new", "null", "package", "private", "protected", "public", "record",
+        "return", "short", "static", "strictfp", "super", "switch", "synchronized",
+        "this", "throw", "throws", "transient", "true", "try", "var", "void",
+        "volatile", "while", "yield",
+    }
+)
+
+
+def _escape_java_str(text: str) -> str:
+    """转义 Java 字符串字面量中的反斜杠、双引号与换行符。"""
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "").replace("\n", "")
+
+
+def _escape_sql_str(text: str) -> str:
+    """转义 MySQL 字符串字面量中的单引号与反斜杠。"""
+    return text.replace("\\", "\\\\").replace("'", "''").replace("\r", "").replace("\n", "")
 
 
 @dataclass(frozen=True)
@@ -41,15 +63,18 @@ class JavaCrudPlan:
 
 
 def _validate_identifier(label: str, value: str) -> str:
-    """校验 Java 包段与实体路径段格式。"""
+    """校验 Java 包段与实体路径段格式，并拒绝 Java 保留关键字。"""
     normalized = value.strip().lower()
     if not SEGMENT_RE.fullmatch(normalized):
         raise ValueError(f"{label} '{value}' 非法：必须以小写字母开头，仅含小写字母和数字，长度 2-24")
+    if normalized in JAVA_KEYWORDS:
+        raise ValueError(f"{label} '{normalized}' 为 Java 保留关键字，不可作为包名或实体标识")
     return normalized
 
 
 def _render_mysql_ddl(table_name: str, title: str, use_unique_base: bool) -> str:
     """生成与 SchemaDoRbacParityTest 严格对齐的 MySQL 8 建表 DDL。"""
+    safe_title = _escape_sql_str(title)
     extra_col = (
         "  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一索引消歧标识（未删除为 0，已删除为 id）',\n"
         if use_unique_base
@@ -60,11 +85,11 @@ def _render_mysql_ddl(table_name: str, title: str, use_unique_base: bool) -> str
         if use_unique_base
         else ""
     )
-    return f"""-- {title}表结构（可同步并入 数据库文件/basic_framework.sql）
+    return f"""-- {safe_title}表结构（可同步并入 数据库文件/basic_framework.sql）
 CREATE TABLE `{table_name}` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键编号',
-  `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '{title}编码',
-  `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '{title}名称',
+  `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '{safe_title}编码',
+  `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '{safe_title}名称',
   `status` tinyint NOT NULL DEFAULT 0 COMMENT '状态（0正常 1停用）',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
   `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
@@ -74,7 +99,7 @@ CREATE TABLE `{table_name}` (
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
 {extra_col}  PRIMARY KEY (`id`) USING BTREE,
 {extra_uk}  INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '{title}表';
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '{safe_title}表';
 """
 
 
@@ -82,6 +107,7 @@ def _render_java_crud_files(
     module: str, entity: str, title: str, use_unique_base: bool
 ) -> tuple[str, dict[str, str]]:
     """渲染后端实体 CRUD 全套 Java 源文件与 H2 切片测试。"""
+    title = _escape_java_str(title)
     entity_pascal = entity.capitalize()
     entity_upper = entity.upper()
     table_name = f"{module}_{entity}"
@@ -373,20 +399,21 @@ public interface {entity_pascal}Service {{
 
     service_impl = f"""package {base_pkg}.service.{entity};
 
+import com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
 import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
 import {base_pkg}.dal.mysql.{entity}.{entity_pascal}Mapper;
-import {base_pkg}.enums.ErrorCodeConstants;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
-import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception0;
 
 /**
  * {title}业务服务实现类。
@@ -408,13 +435,15 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create{entity_pascal}({entity_pascal}SaveReqVO createReqVO) {{
+        validateCodeUnique(null, createReqVO.getCode());
         {entity_pascal}DO record = BeanUtils.toBean(createReqVO, {entity_pascal}DO.class);
+        record.setId(null);
         {entity}Mapper.insert(record);
         return record.getId();
     }}
 
     /**
-     * 校验存在性后更新{title}记录。
+     * 校验存在性与编码唯一性后更新{title}记录。
      *
      * @param updateReqVO 更新参数
      */
@@ -422,6 +451,7 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     @Transactional(rollbackFor = Exception.class)
     public void update{entity_pascal}({entity_pascal}SaveReqVO updateReqVO) {{
         validateExists(updateReqVO.getId());
+        validateCodeUnique(updateReqVO.getId(), updateReqVO.getCode());
         {entity_pascal}DO updateObj = BeanUtils.toBean(updateReqVO, {entity_pascal}DO.class);
         {entity}Mapper.updateById(updateObj);
     }}
@@ -472,13 +502,26 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     }}
 
     /**
-     * 校验目标{title}记录存在，不存在时抛出模块业务异常。
+     * 校验目标{title}记录存在，不存在时抛出业务异常。
      *
      * @param id 主键编号
      */
     private void validateExists(Long id) {{
         if (id == null || {entity}Mapper.selectById(id) == null) {{
-            throw exception(ErrorCodeConstants.{module.upper()}_RECORD_NOT_EXISTS);
+            throw exception0(GlobalErrorCodeConstants.NOT_FOUND.getCode(), "{title}不存在");
+        }}
+    }}
+
+    /**
+     * 校验活跃记录中{title}编码唯一，避免唯一索引冲突泄漏底层 SQL 异常。
+     *
+     * @param id   当前记录主键（新增时为空）
+     * @param code {title}编码
+     */
+    private void validateCodeUnique(Long id, String code) {{
+        {entity_pascal}DO existing = {entity}Mapper.selectByCode(code);
+        if (existing != null && !Objects.equals(existing.getId(), id)) {{
+            throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "{title}编码已存在");
         }}
     }}
 
@@ -488,8 +531,10 @@ public class {entity_pascal}ServiceImpl implements {entity_pascal}Service {{
     controller_java = f"""package {base_pkg}.controller.admin.{entity};
 
 import com.basicframework.framework.common.pojo.CommonResult;
+import com.basicframework.framework.common.pojo.PageParam;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.excel.core.util.ExcelUtils;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}RespVO;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}SaveReqVO;
@@ -499,6 +544,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -513,6 +559,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.util.List;
 
 import static com.basicframework.framework.common.pojo.CommonResult.success;
@@ -618,10 +665,33 @@ public class {entity_pascal}Controller {{
         return success(BeanUtils.toBean(pageResult, {entity_pascal}RespVO.class));
     }}
 
+    /**
+     * 导出{title} Excel 文件。
+     *
+     * @param exportReqVO 筛选条件
+     * @param response    HTTP 响应对象
+     * @throws IOException 写出 Excel 流失败时抛出
+     */
+    @GetMapping("/export-excel")
+    @Operation(summary = "导出{title} Excel")
+    @PreAuthorize("@ss.hasPermission('{perm_prefix}:export')")
+    public void export{entity_pascal}Excel(@Valid {entity_pascal}PageReqVO exportReqVO,
+                                           HttpServletResponse response) throws IOException {{
+        exportReqVO.setPageSize(PageParam.PAGE_SIZE_NONE);
+        List<{entity_pascal}DO> list = {entity}Service.get{entity_pascal}Page(exportReqVO).getList();
+        ExcelUtils.write(response, "{title}.xlsx", "数据", {entity_pascal}RespVO.class,
+                BeanUtils.toBean(list, {entity_pascal}RespVO.class));
+    }}
+
 }}
 """
 
-    h2_extra_col = "    deleted_tag BIGINT NOT NULL DEFAULT 0,\n" if use_unique_base else ""
+    h2_extra_lines = (
+        "    deleted_tag BIGINT NOT NULL DEFAULT 0,\n"
+        f"    CONSTRAINT uk_{table_name}_code_deleted_tag UNIQUE (code, deleted_tag)\n"
+        if use_unique_base
+        else ""
+    )
     h2_sql = f"""CREATE TABLE IF NOT EXISTS {table_name} (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(64) NOT NULL DEFAULT '',
@@ -633,13 +703,33 @@ public class {entity_pascal}Controller {{
     updater VARCHAR(64) DEFAULT '',
     update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted SMALLINT NOT NULL DEFAULT 0{(',' if use_unique_base else '')}
-{h2_extra_col.rstrip(',\n')}
+{h2_extra_lines.rstrip()}
 );
 """
+
+    unique_reinsert_block = (
+        f"""
+            // 软删除后应允许重建同名编码，验证 SoftDeleteUniqueInnerInterceptor 消歧语义
+            {entity_pascal}DO recreated = new {entity_pascal}DO();
+            recreated.setCode("{entity_upper}_001");
+            recreated.setName("重建{title}");
+            recreated.setStatus(0);
+            mapper.insert(recreated);
+            assertNotNull(recreated.getId());
+            assertNotNull(mapper.selectByCode("{entity_upper}_001"));
+"""
+        if use_unique_base
+        else ""
+    )
 
     mapper_test_java = f"""package {base_pkg}.dal.mysql.{entity};
 
 import com.baomidou.mybatisplus.annotation.DbType;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.MybatisSqlSessionFactoryBuilder;
+import com.baomidou.mybatisplus.core.config.GlobalConfig;
+import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.basicframework.framework.common.pojo.PageResult;
@@ -647,94 +737,113 @@ import com.basicframework.framework.mybatis.core.handler.DefaultDBFieldHandler;
 import com.basicframework.framework.mybatis.core.interceptor.SoftDeleteUniqueInnerInterceptor;
 import {base_pkg}.controller.admin.{entity}.vo.{entity_pascal}PageReqVO;
 import {base_pkg}.dal.dataobject.{entity}.{entity_pascal}DO;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.h2.Driver;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mybatis.spring.annotation.MapperScan;
-import org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.jdbc.Sql;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.SimpleDriverDataSource;
+import org.springframework.jdbc.datasource.init.DatabasePopulatorUtils;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+
+import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * {title} Mapper H2 MySQL 模式 SQL 切片测试。
+ * {title} Mapper H2 MySQL 模式 SQL 切片测试（复用纯 MyBatis-Plus 会话工厂，无 Spring 容器开销）。
  *
  * @author basic-framework
  */
-@SpringBootTest(classes = {{
-        DataSourceAutoConfiguration.class,
-        MybatisAutoConfiguration.class,
-        com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration.class,
-        {entity_pascal}MapperTest.TestConfig.class
-}})
-@TestPropertySource(properties = {{
-        "spring.datasource.url=jdbc:h2:mem:{table_name}_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "mybatis-plus.global-config.db-config.logic-delete-field=deleted",
-        "mybatis-plus.global-config.db-config.logic-delete-value=1",
-        "mybatis-plus.global-config.db-config.logic-not-delete-value=0"
-}})
-@Sql(scripts = "/sql/{table_name}_schema.sql")
 class {entity_pascal}MapperTest {{
 
-    @Autowired
-    private {entity_pascal}Mapper mapper;
+    /** 共享内存库的 MyBatis 会话工厂。 */
+    private static SqlSessionFactory sqlSessionFactory;
+
+    /** 隔离的 H2 内存数据源。 */
+    private static DataSource dataSource;
 
     /**
-     * 验证插入、分页筛选与逻辑删除后不可查询的基本持久化链路。
+     * 初始化 H2 MySQL 兼容模式数据源与 MyBatis-Plus 逻辑删除、软删唯一键消歧及审计填充拦截器。
+     */
+    @BeforeAll
+    static void setUpSessionFactory() {{
+        String jdbcUrl = "jdbc:h2:mem:{table_name}_" + UUID.randomUUID()
+                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE,KEY,USER;DB_CLOSE_DELAY=-1";
+        dataSource = new SimpleDriverDataSource(new Driver(), jdbcUrl, "sa", "");
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        populator.setSqlScriptEncoding(StandardCharsets.UTF_8.name());
+        populator.addScript(new ClassPathResource("sql/{table_name}_schema.sql"));
+        DatabasePopulatorUtils.execute(populator, dataSource);
+
+        MybatisConfiguration configuration = new MybatisConfiguration(
+                new Environment("test", new JdbcTransactionFactory(), dataSource));
+        configuration.setMapUnderscoreToCamelCase(true);
+
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new SoftDeleteUniqueInnerInterceptor());
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.H2));
+        configuration.addInterceptor(interceptor);
+
+        GlobalConfig globalConfig = GlobalConfigUtils.defaults();
+        globalConfig.setBanner(false);
+        globalConfig.setMetaObjectHandler(new DefaultDBFieldHandler());
+        GlobalConfig.DbConfig dbConfig = globalConfig.getDbConfig();
+        dbConfig.setIdType(IdType.AUTO);
+        dbConfig.setLogicDeleteField("deleted");
+        dbConfig.setLogicDeleteValue("1");
+        dbConfig.setLogicNotDeleteValue("0");
+        GlobalConfigUtils.setGlobalConfig(configuration, globalConfig);
+        configuration.addMapper({entity_pascal}Mapper.class);
+
+        sqlSessionFactory = new MybatisSqlSessionFactoryBuilder().build(configuration);
+    }}
+
+    /**
+     * 每个用例前清空数据表，避免用例间数据串扰。
+     *
+     * @throws Exception 清空表失败时抛出
+     */
+    @BeforeEach
+    void cleanTable() throws Exception {{
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {{
+            statement.execute("TRUNCATE TABLE {table_name}");
+        }}
+    }}
+
+    /**
+     * 验证插入、分页筛选、逻辑删除后不可查询以及软删唯一键重建语义。
      */
     @Test
     void shouldInsertPageAndSoftDelete() {{
-        {entity_pascal}DO entity = new {entity_pascal}DO();
-        entity.setCode("{entity_upper}_001");
-        entity.setName("示例{title}");
-        entity.setStatus(0);
-        mapper.insert(entity);
-        assertNotNull(entity.getId());
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {{
+            {entity_pascal}Mapper mapper = session.getMapper({entity_pascal}Mapper.class);
+            {entity_pascal}DO entity = new {entity_pascal}DO();
+            entity.setCode("{entity_upper}_001");
+            entity.setName("示例{title}");
+            entity.setStatus(0);
+            mapper.insert(entity);
+            assertNotNull(entity.getId());
 
-        {entity_pascal}PageReqVO pageReqVO = new {entity_pascal}PageReqVO();
-        pageReqVO.setName("示例");
-        PageResult<{entity_pascal}DO> page = mapper.selectPage(pageReqVO);
-        assertEquals(1L, page.getTotal());
+            {entity_pascal}PageReqVO pageReqVO = new {entity_pascal}PageReqVO();
+            pageReqVO.setName("示例");
+            PageResult<{entity_pascal}DO> page = mapper.selectPage(pageReqVO);
+            assertEquals(1L, page.getTotal());
 
-        mapper.deleteById(entity.getId());
-        assertNull(mapper.selectById(entity.getId()));
-    }}
-
-    /** H2 切片测试最小 MyBatis-Plus 装配配置。 */
-    @Configuration
-    @MapperScan("{base_pkg}.dal.mysql.{entity}")
-    static class TestConfig {{
-
-        /** 注册分页与软删唯一键消歧拦截器。 */
-        @Bean
-        MybatisPlusInterceptor mybatisPlusInterceptor() {{
-            MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-            interceptor.addInnerInterceptor(new SoftDeleteUniqueInnerInterceptor());
-            interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
-            return interceptor;
+            mapper.deleteById(entity.getId());
+            assertNull(mapper.selectById(entity.getId()));{unique_reinsert_block}
         }}
-
-        /** 注册审计字段自动填充处理器。 */
-        @Bean
-        DefaultDBFieldHandler defaultDBFieldHandler() {{
-            return new DefaultDBFieldHandler();
-        }}
-
-        /** 触发 SqlSessionFactory 注入以校验 Mapper 扫描有效。 */
-        @Bean
-        String verifiedSessionFactory(SqlSessionFactory factory) {{
-            return factory.getClass().getName();
-        }}
-
     }}
 
 }}

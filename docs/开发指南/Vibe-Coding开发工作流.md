@@ -50,7 +50,7 @@ flowchart LR
 ### 2. 单责切片与隔离分支（Slice & Isolate）
 
 - 遵循“一事一分支、一事一 PR”：将跨栈大改动拆分为文件边界清晰、可独立回滚的小切片（非生成文件净变更默认控制在 `<= 600` 行，架构级变更须在 PR 描述中显式标注 `[slice-override]` 说明原因）；复杂需求使用 [weetion-task-cards](../../.agents/skills/weetion-task-cards/SKILL.md) 拆卡跟踪。
-- 首次接入或新克隆环境先执行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply`，按 [`后端代码/basic-framework-boot/.env.example`](../../后端代码/basic-framework-boot/.env.example) 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`，再按需通过 [`docker-compose.dev.yml`](../../docker-compose.dev.yml) 拉起环回绑定的本地 MySQL、Redis 与 MinIO；需要确定性联调账号时运行 `python -B -X utf8 scripts/runtime/seed_local_dev.py --apply`。
+- 首次接入或新克隆环境先执行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply`，按 [`后端代码/basic-framework-boot/.env.example`](../../后端代码/basic-framework-boot/.env.example) 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`，再按需通过 [`docker-compose.dev.yml`](../../docker-compose.dev.yml) 拉起环回绑定的本地 MySQL、Redis 与 MinIO；需要本地演示组织与初始化 `admin` 联调口令时，运行 `python -B -X utf8 scripts/runtime/seed_local_dev.py --apply --admin-password-hash <bcrypt-hash>`。
 
 ### 3. 调用方与契约同步实现（Consumer-Sync Implementation）
 

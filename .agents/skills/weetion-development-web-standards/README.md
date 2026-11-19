@@ -51,7 +51,7 @@ kind: "package-reference"
 python -B -X utf8 ../../.agents/skills/weetion-development-web-standards/scripts/check_crud.py apps/web-ele/src/api/system/push apps/web-ele/src/views/system/push
 ```
 
-脚本检查必需文件、相对导入与明显 `any` 使用，并定位所属应用进行类型检查。若依赖或应用配置缺失导致类型检查跳过，不能把末尾成功提示当作类型验证通过，需补齐环境并执行应用实际类型命令。
+脚本检查必需文件、相对导入、日期渲染器与明显 `any` 使用，并定位所属应用执行 `vue-tsc` 类型检查；若 `tsconfig.json` 或 `pnpm` 缺失则按失败关闭（退出码 `2`），不静默跳过。
 
 然后按[专项流程](references/crud-workflow.md#4-代码质量检查必须在输出总结前完成不得跳过)核对组件 API、请求参数和跨文件类型；相关 lint、注释、类型与测试命令以工程配置和[脚本索引](../../../docs/开发指南/脚本使用索引.md)为准。列表、新增、编辑、取消、校验失败、删除确认及权限边界需有适用的业务证据，脚本通过不能替代它们。
 

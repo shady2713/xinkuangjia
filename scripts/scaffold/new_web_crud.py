@@ -3,7 +3,8 @@
 
 默认只读预览（--dry-run），仅在显式传入 --apply 时写入文件。
 生成代码严格遵循 Vue Vben Admin 5 + Element Plus 规范、weetion/comments 中文注释门禁、
-OpenApiSchemas 类型契约、epoch-ms 时间戳与 SchemaDoRbacParityTest 菜单 SQL 契约。
+64 位主键与 epoch-ms 时间戳契约，以及 SchemaDoRbacParityTest 菜单 SQL 契约；
+同步后端 OpenAPI 快照并运行 pnpm api:gen 后，可直接替换接口模型为 OpenApiSchemas。
 
 用法：
   python -B -X utf8 scripts/scaffold/new_web_crud.py crm customer --title 客户
@@ -83,6 +84,16 @@ def resolve_next_menu_ids(root: Path) -> tuple[int, int]:
     return max(next_menu, 6000), max(next_role_menu, 6000)
 
 
+def _escape_ts_single(text: str) -> str:
+    """转义 TypeScript 单引号字符串字面量。"""
+    return text.replace("\\", "\\\\").replace("'", "\\'").replace("\r", "").replace("\n", "")
+
+
+def _escape_sql_single(text: str) -> str:
+    """转义 MySQL 单引号字符串字面量。"""
+    return text.replace("\\", "\\\\").replace("'", "''").replace("\r", "").replace("\n", "")
+
+
 def _render_menu_sql(
     module: str,
     entity: str,
@@ -92,6 +103,7 @@ def _render_menu_sql(
     role_menu_id: int,
 ) -> str:
     """生成与 SchemaDoRbacParityTest 正则完全兼容的单行标准 INSERT 菜单与超管授权 SQL。"""
+    title = _escape_sql_single(title)
     comp_name = f"{_to_pascal(module)}{_to_pascal(entity)}"
     perm_prefix = f"{module}:{entity}"
     ts = "2026-01-01 00:00:00"
@@ -123,6 +135,7 @@ def _render_menu_sql(
 
 def _render_crud_files(module: str, entity: str, title: str) -> dict[str, str]:
     """生成通过 weetion/comments、vue-tsc 与 check_crud.py 的完整前端 CRUD 文件集。"""
+    title = _escape_ts_single(title)
     ns_name = f"{_to_pascal(module)}{_to_pascal(entity)}Api"
     entity_pascal = _to_pascal(entity)
     comp_name = f"{_to_pascal(module)}{entity_pascal}"
@@ -140,6 +153,7 @@ export namespace {ns_name} {{
   /** {title}信息模型（64 位主键支持 number | string，时间戳为毫秒级数值）。 */
   export interface {entity_pascal} {{
     id?: number | string;
+    code: string;
     name: string;
     status: number;
     remark?: string;
@@ -273,6 +287,12 @@ export function useFormSchema(): VbenFormSchema[] {{
     }},
     {{
       component: 'Input',
+      fieldName: 'code',
+      label: '{title}编码',
+      rules: 'required',
+    }},
+    {{
+      component: 'Input',
       fieldName: 'name',
       label: '{title}名称',
       rules: 'required',
@@ -341,6 +361,11 @@ export function useGridColumns(): VxeTableGridOptions<{ns_name}.{entity_pascal}>
       field: 'id',
       title: '编号',
       minWidth: 100,
+    }},
+    {{
+      field: 'code',
+      title: '{title}编码',
+      minWidth: 140,
     }},
     {{
       field: 'name',
@@ -498,7 +523,7 @@ import {{
   export{entity_pascal},
   get{entity_pascal}Page,
 }} from '#/api/{module}/{entity}';
-import {{ useCrudActions }} from '#/composables';
+import {{ useCrudActions }} from '#/composables/use-crud-actions';
 import {{ $t }} from '#/locales';
 
 import {{ useGridColumns, useGridFormSchema }} from './data';
@@ -562,7 +587,7 @@ const {{
   deleteApi: delete{entity_pascal},
   getDeleteName,
   modalApi: formModalApi,
-  onRefresh: handleRefresh,
+  refresh: handleRefresh,
 }});
 
 const [Grid, gridApi] = useVbenVxeGrid({{

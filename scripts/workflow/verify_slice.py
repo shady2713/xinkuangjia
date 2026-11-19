@@ -155,7 +155,7 @@ def resolve_java_modules(root: Path, changed_files: list[str]) -> list[str]:
 
 
 def _find_related_web_tests(web_dir: Path, web_files: list[str]) -> list[str]:
-    """收集本次前端改动中直接修改或与源码同名的 Vitest 测试文件。"""
+    """收集本次前端改动中直接修改、同级或同目录 __tests__ 下对应的 Vitest 测试文件。"""
     tests: set[str] = set()
     for rel in web_files:
         inner = Path(rel).relative_to("前端代码/basic-framework-admin")
@@ -165,6 +165,9 @@ def _find_related_web_tests(web_dir: Path, web_files: list[str]) -> list[str]:
         sibling = web_dir / inner.with_suffix(".test.ts")
         if sibling.is_file():
             tests.add(sibling.relative_to(web_dir).as_posix())
+        nested = web_dir / inner.parent / "__tests__" / f"{inner.stem}.test.ts"
+        if nested.is_file():
+            tests.add(nested.relative_to(web_dir).as_posix())
     return sorted(tests)
 
 
@@ -302,9 +305,13 @@ def build_slice_plan(
         )
 
     if not skip_runtime:
-        if any(p.startswith("scripts/") for p in python_files):
+        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files):
             py_tests = [p for p in python_files if p.startswith("scripts/tests/test_")]
-            pytest_targets = py_tests if py_tests else ["scripts/tests"]
+            has_non_test_py = any(
+                p.startswith(("scripts/", ".agents/skills/")) and not p.startswith("scripts/tests/")
+                for p in python_files
+            )
+            pytest_targets = ["scripts/tests"] if has_non_test_py or not py_tests else py_tests
             steps.append(
                 SliceStep(
                     name="python-slice-pytest",
@@ -312,36 +319,81 @@ def build_slice_plan(
                     command=(py_exe, "-B", "-X", "utf8", "-m", "pytest", "-q", *pytest_targets),
                 )
             )
-        mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
-        if java_modules and mvn_bin:
-            steps.append(
-                SliceStep(
-                    name="maven-slice-test",
-                    cwd=str(boot_dir),
-                    command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "-am", "test"),
-                )
-            )
-        pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
-        if web_files and pnpm_bin:
-            rel_web = [
-                Path(p).relative_to("前端代码/basic-framework-admin").as_posix() for p in web_files
-            ]
-            steps.append(
-                SliceStep(
-                    name="web-slice-eslint",
-                    cwd=str(web_dir),
-                    command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
-                )
-            )
-            web_tests = _find_related_web_tests(web_dir, web_files)
-            if web_tests:
+        if java_modules:
+            mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
+            if mvn_bin is None:
                 steps.append(
                     SliceStep(
-                        name="web-slice-vitest",
-                        cwd=str(web_dir),
-                        command=(pnpm_bin, "test:unit", *web_tests),
+                        name="maven-slice-test",
+                        cwd=str(boot_dir),
+                        command=(
+                            py_exe,
+                            "-c",
+                            "import sys; sys.stderr.write('错误：检测到 Java 模块改动但环境中未安装 mvn，拒绝静默跳过\\n'); sys.exit(2)",
+                        ),
                     )
                 )
+            else:
+                steps.append(
+                    SliceStep(
+                        name="maven-slice-test",
+                        cwd=str(boot_dir),
+                        command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "-am", "test"),
+                    )
+                )
+                has_module_or_sql = any(m.startswith("basic-framework-module-") for m in java_modules)
+                if has_module_or_sql and "basic-framework-server" not in java_modules:
+                    steps.append(
+                        SliceStep(
+                            name="maven-server-contracts",
+                            cwd=str(boot_dir),
+                            command=(
+                                mvn_bin,
+                                "-B",
+                                "-ntp",
+                                "-pl",
+                                "basic-framework-server",
+                                "-am",
+                                "-Dtest=SchemaDoRbacParityTest,OpenApiContractSnapshotTest,FootgunArchitectureTest",
+                                "-DfailIfNoTests=false",
+                                "test",
+                            ),
+                        )
+                    )
+        if web_files:
+            pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
+            if pnpm_bin is None:
+                steps.append(
+                    SliceStep(
+                        name="web-slice-eslint",
+                        cwd=str(web_dir),
+                        command=(
+                            py_exe,
+                            "-c",
+                            "import sys; sys.stderr.write('错误：检测到前端源码改动但环境中未安装 pnpm，拒绝静默跳过\\n'); sys.exit(2)",
+                        ),
+                    )
+                )
+            else:
+                rel_web = [
+                    Path(p).relative_to("前端代码/basic-framework-admin").as_posix() for p in web_files
+                ]
+                steps.append(
+                    SliceStep(
+                        name="web-slice-eslint",
+                        cwd=str(web_dir),
+                        command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
+                    )
+                )
+                web_tests = _find_related_web_tests(web_dir, web_files)
+                if web_tests:
+                    steps.append(
+                        SliceStep(
+                            name="web-slice-vitest",
+                            cwd=str(web_dir),
+                            command=(pnpm_bin, "test:unit", *web_tests),
+                        )
+                    )
 
     return SlicePlan(
         base=base,

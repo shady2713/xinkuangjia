@@ -65,7 +65,12 @@ def load_local_env_defaults(root: Path) -> dict[str, str]:
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
         key, value = stripped.split("=", 1)
-        values[key.strip()] = value.strip()
+        cleaned = value.strip()
+        if cleaned and cleaned[0] in {'"', "'"} and cleaned[-1] == cleaned[0] and len(cleaned) >= 2:
+            cleaned = cleaned[1:-1]
+        elif " #" in cleaned:
+            cleaned = cleaned.split(" #", 1)[0].strip()
+        values[key.strip()] = cleaned
     return values
 
 
@@ -84,29 +89,27 @@ def render_local_demo_seed_sql(
     Raises:
         ValueError: 传入的密码哈希不符合标准 BCrypt 格式时抛出。
     """
-    sql = """-- 本地研发可选演示种子数据（仅限隔离的本机开发库使用，幂等可重复执行）
-REPLACE INTO `system_dept`
+    sql = """-- 本地研发可选演示种子数据（仅限隔离的本机开发库使用，幂等且不覆盖基线默认组织）
+INSERT IGNORE INTO `system_dept`
     (`id`, `name`, `parent_id`, `sort`, `leader_user_id`, `phone`, `email`, `status`,
      `creator`, `create_time`, `updater`, `update_time`, `deleted`, `role_type`)
 VALUES
-    (100, '总公司', 0, 0, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin'),
-    (101, '研发中心', 100, 1, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin'),
-    (102, '平台架构组', 101, 1, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin'),
-    (103, '质量保障组', 101, 2, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin');
+    (900, '本地研发演示部', 100, 90, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin'),
+    (901, '本地质量保障组', 900, 1, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin');
 
-REPLACE INTO `system_post`
+INSERT IGNORE INTO `system_post`
     (`id`, `code`, `name`, `sort`, `status`, `remark`,
      `creator`, `create_time`, `updater`, `update_time`, `deleted`, `deleted_tag`)
 VALUES
-    (1, 'arch', '架构师', 1, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0),
-    (2, 'dev', '研发工程师', 2, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0);
+    (900, 'demo_arch', '演示架构师', 90, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0),
+    (901, 'demo_dev', '演示研发工程师', 91, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0);
 
-REPLACE INTO `system_role`
+INSERT IGNORE INTO `system_role`
     (`id`, `name`, `code`, `role_type`, `sort`, `data_scope`, `data_scope_dept_ids`, `status`,
      `type`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `deleted_tag`)
 VALUES
-    (2, '业务管理员', 'business_admin', 'business_admin', 2, 3, '', 0, 2,
-     '本部门数据权限演示角色', 'admin', NOW(), 'admin', NOW(), b'0', 0);
+    (900, '本地演示业务角色', 'demo_business_role', 'business_admin', 90, 3, '', 0, 2,
+     '本部门数据权限本地演示角色', 'admin', NOW(), 'admin', NOW(), b'0', 0);
 """
     if admin_password_hash is not None:
         cleaned_hash = admin_password_hash.strip()
@@ -148,21 +151,40 @@ def execute_mysql_seed(
     if not is_loopback_host(host):
         raise ValueError(f"安全阻断：seed_local_dev.py 仅允许连接本机回环地址，拒绝主机 '{host}'")
     mysql_bin = shutil.which("mysql") or shutil.which("mysql.exe")
-    if mysql_bin is None:
-        raise ValueError("未找到 mysql 命令行客户端，请改用 --output 导出 SQL 文件后手动导入")
     env = os.environ.copy()
     db_pass = password or env.get("DB_PASSWORD", "")
-    if db_pass:
-        env["MYSQL_PWD"] = db_pass
-    completed = subprocess.run(
-        [
+    if mysql_bin is not None:
+        if db_pass:
+            env["MYSQL_PWD"] = db_pass
+        cmd = [
             mysql_bin,
             f"--host={host}",
             f"--port={port}",
             f"--user={user}",
             "--default-character-set=utf8mb4",
             database,
-        ],
+        ]
+    else:
+        docker_bin = shutil.which("docker") or shutil.which("docker.exe")
+        compose_file = DEFAULT_ROOT / "docker-compose.dev.yml"
+        if docker_bin is None or not compose_file.is_file():
+            raise ValueError("未找到 mysql 或 docker 命令行客户端，请改用 --output 导出 SQL 文件后手动导入")
+        cmd = [
+            docker_bin,
+            "compose",
+            "-f",
+            str(compose_file),
+            "exec",
+            "-T",
+            *(["-e", f"MYSQL_PWD={db_pass}"] if db_pass else []),
+            "mysql",
+            "mysql",
+            f"--user={user}",
+            "--default-character-set=utf8mb4",
+            database,
+        ]
+    completed = subprocess.run(
+        cmd,
         input=sql_text,
         text=True,
         encoding="utf-8",
@@ -235,13 +257,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.apply:
         try:
+            effective_pass = default_pass if args.user == default_user else os.environ.get("MYSQL_PWD", "")
             code = execute_mysql_seed(
                 host=args.host,
                 port=args.port,
                 user=args.user,
                 database=args.database,
                 sql_text=sql_text,
-                password=default_pass,
+                password=effective_pass,
             )
             if code == 0 and args.admin_password_hash is None:
                 print(
