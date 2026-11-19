@@ -33,3 +33,10 @@ updates:
       actions-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  # Python 质量检查工具依赖：tools/quality/requirements.txt。
+  - package-ecosystem: pip
+    directory: /tools/quality
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

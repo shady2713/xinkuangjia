@@ -143,6 +143,14 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     assert services["mysql"]["environment"]["MYSQL_ROOT_PASSWORD"].startswith("${")
     assert services["redis"]["environment"]["REDIS_PASSWORD"].startswith("${")
     assert services["minio"]["environment"]["MINIO_ROOT_PASSWORD"].startswith("${")
+    # Redis 启动命令必须通过 /bin/sh 展开环境变量，不能在 exec 数组中传入字面量 ${REDIS_PASSWORD}
+    redis_cmd = services["redis"]["command"]
+    assert redis_cmd[:2] == ["/bin/sh", "-c"]
+    assert "exec redis-server" in redis_cmd[2]
+    assert "$$REDIS_PASSWORD" in redis_cmd[2]
+    # MinIO 初始化容器必须为开发桶设置匿名下载策略，避免本地上传文件预览 403
+    minio_init_ep = "\n".join(services["minio-init"]["entrypoint"])
+    assert "mc anonymous set download" in minio_init_ep
 
 
 def test_ci_workflow_and_documentation_have_no_drift() -> None:

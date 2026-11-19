@@ -65,7 +65,8 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         0 表示通过，1 表示存在阻断项。
     """
-    args = argv if argv is not None else sys.argv[1:]
+    args = [item for item in (argv if argv is not None else sys.argv[1:]) if item != "--skip-typecheck"]
+    skip_typecheck = "--skip-typecheck" in (argv if argv is not None else sys.argv[1:])
     if len(args) < 2 or not args[0].strip() or not args[1].strip():
         print("请提供实际的 <api-path> 与 <views-path>", file=sys.stderr)
         return 1
@@ -76,14 +77,19 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"开始检查 CRUD 模块：api={api_path.as_posix()} views={view_path.as_posix()}")
 
-    # 步骤 1：TypeScript 类型检查
-    typecheck_dir = find_typecheck_dir(view_path)
-    pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
-    if typecheck_dir is None:
-        print(f"警告：未找到 {view_path.as_posix()} 所属应用包的 tsconfig.json，跳过类型检查")
-    elif pnpm_bin is None:
-        print("警告：未找到 pnpm，跳过类型检查")
-    else:
+    # 步骤 1：TypeScript 类型检查（缺少 tsconfig 或 pnpm 时默认失败关闭返回 2）
+    if not skip_typecheck:
+        typecheck_dir = find_typecheck_dir(view_path)
+        pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
+        if typecheck_dir is None:
+            print(
+                f"错误：未找到 {view_path.as_posix()} 所属应用包的 tsconfig.json，无法验证类型",
+                file=sys.stderr,
+            )
+            return 2
+        if pnpm_bin is None:
+            print("错误：未找到 pnpm，无法执行类型检查", file=sys.stderr)
+            return 2
         completed = subprocess.run(
             [pnpm_bin, "exec", "vue-tsc", "--noEmit", "--skipLibCheck"],
             cwd=typecheck_dir,
@@ -121,7 +127,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("通过：未发现越界相对路径")
 
-    # 步骤 4：提示显式 any 使用
+    # 步骤 4：拦截未注册的失效表格渲染器（如 CellDatetime）并提示显式 any
+    invalid_renderers = scan_lines([view_path], "CellDatetime")
+    if invalid_renderers:
+        print("错误：检测到未注册的表格渲染器 CellDatetime，请改用 formatter: 'formatDateTime'：", file=sys.stderr)
+        for item in invalid_renderers:
+            print(f"  {item}", file=sys.stderr)
+        errors += 1
+
     any_hits = scan_lines([api_path, view_path], ": any")
     if any_hits:
         print("提示：发现 ': any' 类型注解，建议收窄为明确接口类型：")

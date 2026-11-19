@@ -69,6 +69,17 @@ def test_verify_slice_identifies_java_modules_web_python_and_docs(tmp_path: Path
     assert step_names == ["java-comments", "python-comments", "web-comments", "docs-gates"]
     assert verify_slice.main(["--root", str(repo), "--plan"]) == 0
 
+    runtime_plan = verify_slice.build_slice_plan(repo, changed, base="HEAD", skip_runtime=False)
+    runtime_map = {step.name: step for step in runtime_plan.steps}
+    assert "python-slice-pytest" in runtime_map
+    if "maven-slice-test" in runtime_map:
+        assert "-am" in runtime_map["maven-slice-test"].command
+
+    branch_plan = verify_slice.build_slice_plan(repo, changed, base="main", skip_runtime=True)
+    branch_map = {step.name: step for step in branch_plan.steps}
+    assert "branch-comments" in branch_map
+    assert "--base" in branch_map["branch-comments"].command
+
 
 def test_secret_scanner_and_java_comment_regressions() -> None:
     """回归验证权限码冒号、JSON 结构头不误报且真实凭据与注解花括号方法正常判定。"""

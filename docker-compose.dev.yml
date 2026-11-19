@@ -33,11 +33,9 @@ services:
     image: redis:7.2-alpine
     restart: unless-stopped
     command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - "$${REDIS_PASSWORD}"
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
@@ -78,7 +76,8 @@ services:
       - -c
       - |
         mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" &&
-        mc mb --ignore-existing "local/$${MINIO_BUCKET:-basic-framework}"
+        mc mb --ignore-existing "local/$${MINIO_BUCKET:-basic-framework}" &&
+        mc anonymous set download "local/$${MINIO_BUCKET:-basic-framework}"
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}

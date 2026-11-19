@@ -139,8 +139,8 @@ def read_blobs(root: Path, oids: list[str], env: dict[str, str] | None = None) -
     if any(re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", oid) is None for oid in identifiers):
         raise CheckError("暂存对象标识无效")
     result: dict[str, bytes] = {}
-    for start in range(0, len(identifiers), 32):
-        batch = identifiers[start : start + 32]
+    for start in range(0, len(identifiers), 512):
+        batch = identifiers[start : start + 512]
         output = read_git(
             root, "cat-file", "--batch", env=env, data=("\n".join(batch) + "\n").encode("ascii")
         )
