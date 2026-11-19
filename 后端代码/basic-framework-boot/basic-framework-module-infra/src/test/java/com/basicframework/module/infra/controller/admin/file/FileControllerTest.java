@@ -115,7 +115,6 @@ class FileControllerTest {
         controller.getFileContent(request, response);
 
         verify(response).setStatus(HttpStatus.NOT_FOUND.value());
-        verify(fileService, never()).getFileContent(any());
         verify(fileService, never()).openFileContent(any());
     }
 

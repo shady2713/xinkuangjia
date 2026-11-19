@@ -25,7 +25,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -498,31 +497,6 @@ public class FileServiceImpl implements FileService {
             throw exception(ErrorCodeConstants.FILE_NOT_EXISTS);
         }
         return fileDO;
-    }
-
-    /**
-     * 从对象存储读取文件内容。
-     *
-     * @param path 对象路径
-     * @return 文件字节内容
-     * @throws Exception 对象存储读取失败时抛出
-     */
-    @Override
-    public byte[] getFileContent(String path) throws Exception {
-        return fileStorageService.getContent(path);
-    }
-
-    /**
-     * 先核验数据库元数据记录仍存在且未软删除，再流式打开底层存储内容，避免大文件整包载入堆内存。
-     *
-     * @param path 对象路径
-     * @return 文件内容输入流；记录不存在、已删除或存储对象缺失时返回 null
-     * @throws Exception 读取存储失败时抛出
-     */
-    @Override
-    public InputStream openFileContentStream(String path) throws Exception {
-        FileContentStream content = openFileContent(path);
-        return content != null ? content.inputStream() : null;
     }
 
     /**

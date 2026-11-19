@@ -30,11 +30,10 @@ public class SecurityProperties {
     @NotEmpty(message = "Token Header 不能为空")
     private String tokenHeader = "Authorization";
     /**
-     * HTTP 请求时，访问令牌的请求参数
+     * HTTP 请求时，访问令牌的请求参数；置空或全空白字符串时可完全禁用通过 URL 查询参数传递令牌。
      *
-     * 初始目的：解决 WebSocket 无法通过 header 传参，只能通过 token 参数拼接
+     * 初始目的：解决 WebSocket 无法通过 header 传参，只能通过 token 参数拼接。
      */
-    @NotEmpty(message = "Token Parameter 不能为空")
     private String tokenParameter = "token";
 
     /**

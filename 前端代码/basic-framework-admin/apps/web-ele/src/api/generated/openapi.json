@@ -805,21 +805,6 @@
         },
         "type" : "object"
       },
-      "CommonResult_OAuth2UserInfoRespVO" : {
-        "properties" : {
-          "code" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "data" : {
-            "$ref" : "#/components/schemas/OAuth2UserInfoRespVO"
-          },
-          "msg" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "CommonResult_OperateLogRespVO" : {
         "properties" : {
           "code" : {
@@ -2771,108 +2756,6 @@
           }
         },
         "required" : [ "accessToken", "expiresIn", "refreshToken", "scope", "tokenType" ],
-        "type" : "object"
-      },
-      "OAuth2UserInfoRespVO" : {
-        "description" : "管理后台 - OAuth2 获得用户基本信息 Response VO",
-        "properties" : {
-          "avatar" : {
-            "description" : "用户头像",
-            "type" : "string"
-          },
-          "dept" : {
-            "$ref" : "#/components/schemas/OAuth2UserInfoRespVO_Dept"
-          },
-          "email" : {
-            "description" : "用户邮箱",
-            "type" : "string"
-          },
-          "id" : {
-            "description" : "用户编号",
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "mobile" : {
-            "description" : "手机号码",
-            "type" : "string"
-          },
-          "nickname" : {
-            "description" : "用户昵称",
-            "type" : "string"
-          },
-          "posts" : {
-            "items" : {
-              "$ref" : "#/components/schemas/OAuth2UserInfoRespVO_Post"
-            },
-            "type" : "array"
-          },
-          "sex" : {
-            "description" : "用户性别，参见 SexEnum 枚举类",
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "username" : {
-            "description" : "用户账号",
-            "type" : "string"
-          }
-        },
-        "required" : [ "id", "nickname", "username" ],
-        "type" : "object"
-      },
-      "OAuth2UserInfoRespVO_Dept" : {
-        "description" : "部门",
-        "properties" : {
-          "id" : {
-            "description" : "部门编号",
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "name" : {
-            "description" : "部门名称",
-            "type" : "string"
-          }
-        },
-        "required" : [ "id", "name" ],
-        "type" : "object"
-      },
-      "OAuth2UserInfoRespVO_Post" : {
-        "description" : "岗位",
-        "properties" : {
-          "id" : {
-            "description" : "岗位编号",
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "name" : {
-            "description" : "岗位名称",
-            "type" : "string"
-          }
-        },
-        "required" : [ "id", "name" ],
-        "type" : "object"
-      },
-      "OAuth2UserUpdateReqVO" : {
-        "description" : "管理后台 - OAuth2 更新用户基本信息 Request VO",
-        "properties" : {
-          "email" : {
-            "description" : "用户邮箱",
-            "type" : "string"
-          },
-          "mobile" : {
-            "description" : "手机号",
-            "type" : "string"
-          },
-          "nickname" : {
-            "description" : "用户昵称",
-            "type" : "string"
-          },
-          "sex" : {
-            "description" : "用户性别，参见 SexEnum 枚举类",
-            "format" : "int32",
-            "type" : "integer"
-          }
-        },
-        "required" : [ "nickname" ],
         "type" : "object"
       },
       "OperateLogPageReqVO" : {
@@ -7529,54 +7412,6 @@
         },
         "summary" : "获得访问令牌分页",
         "tags" : [ "管理后台 - OAuth2.0 令牌" ]
-      }
-    },
-    "/admin-api/system/oauth2/user/get" : {
-      "get" : {
-        "operationId" : "OAuth2UserController_getUserInfo",
-        "responses" : {
-          "200" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CommonResult_OAuth2UserInfoRespVO"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "获得用户基本信息",
-        "tags" : [ "管理后台 - OAuth2.0 用户" ]
-      }
-    },
-    "/admin-api/system/oauth2/user/update" : {
-      "put" : {
-        "operationId" : "OAuth2UserController_updateUserInfo",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/OAuth2UserUpdateReqVO"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "200" : {
-            "content" : {
-              "application/json" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/CommonResult_Boolean"
-                }
-              }
-            },
-            "description" : "OK"
-          }
-        },
-        "summary" : "更新用户基本信息",
-        "tags" : [ "管理后台 - OAuth2.0 用户" ]
       }
     },
     "/admin-api/system/operate-log/export-excel" : {

@@ -1,5 +1,6 @@
 package com.basicframework.module.system.controller.admin.sms;
 
+import cn.hutool.extra.servlet.JakartaServletUtil;
 import com.basicframework.framework.common.util.servlet.ServletUtils;
 
 import com.basicframework.module.system.controller.admin.sms.vo.callback.AliyunSmsCallbackRespVO;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.function.Supplier;
 
 /**
  * 短信供应商状态回执入口。
@@ -54,21 +57,12 @@ public class SmsCallbackController {
     @Operation(summary = "阿里云短信的回调",
             description = "参见 https://help.aliyun.com/zh/sms/developer-reference/smsreport-http")
     public ResponseEntity<AliyunSmsCallbackRespVO> receiveAliyunSmsStatus(HttpServletRequest request) {
-        try {
-            String text = ServletUtils.getBody(request);
-            SmsCallbackVerificationResult verification = smsCallbackSignatureVerifier.verify(
-                    SmsChannelEnum.ALIYUN.getCode(), request, text);
-            if (verification != SmsCallbackVerificationResult.PASS) {
-                log.warn("[receiveAliyunSmsStatus][短信回执验签未通过({})]", verification);
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(AliyunSmsCallbackRespVO.failure());
-            }
-            smsSendService.receiveSmsStatus(SmsChannelEnum.ALIYUN.getCode(), text);
-            return ResponseEntity.ok(AliyunSmsCallbackRespVO.success());
-        } catch (Exception ex) {
-            log.warn("[receiveAliyunSmsStatus][短信回执处理失败]", ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(AliyunSmsCallbackRespVO.failure());
-        }
+        return handleSmsCallback(
+                request,
+                SmsChannelEnum.ALIYUN.getCode(),
+                "receiveAliyunSmsStatus",
+                AliyunSmsCallbackRespVO::success,
+                AliyunSmsCallbackRespVO::failure);
     }
 
     /**
@@ -85,21 +79,63 @@ public class SmsCallbackController {
     @Operation(summary = "腾讯云短信的回调",
             description = "参见 https://cloud.tencent.com/document/product/382/59178")
     public ResponseEntity<TencentSmsCallbackRespVO> receiveTencentSmsStatus(HttpServletRequest request) {
+        return handleSmsCallback(
+                request,
+                SmsChannelEnum.TENCENT.getCode(),
+                "receiveTencentSmsStatus",
+                TencentSmsCallbackRespVO::success,
+                TencentSmsCallbackRespVO::failure);
+    }
+
+    /**
+     * 统一执行短信回执的原始报文读取、HMAC 验签与瞬时异常重放指纹释放逻辑。
+     *
+     * @param request         HTTP 回调请求
+     * @param channelCode     渠道编码
+     * @param logAction       日志方法名
+     * @param successSupplier 成功响应构造器
+     * @param failureSupplier 失败响应构造器
+     * @param <T>             供应商回执响应类型
+     * @return 对应 HTTP 响应实体
+     */
+    private <T> ResponseEntity<T> handleSmsCallback(HttpServletRequest request,
+                                                    String channelCode,
+                                                    String logAction,
+                                                    Supplier<T> successSupplier,
+                                                    Supplier<T> failureSupplier) {
+        String text = null;
+        boolean verified = false;
         try {
-            String text = ServletUtils.getBody(request);
+            text = readRequestBody(request);
             SmsCallbackVerificationResult verification = smsCallbackSignatureVerifier.verify(
-                    SmsChannelEnum.TENCENT.getCode(), request, text);
+                    channelCode, request, text);
             if (verification != SmsCallbackVerificationResult.PASS) {
-                log.warn("[receiveTencentSmsStatus][短信回执验签未通过({})]", verification);
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(TencentSmsCallbackRespVO.failure());
+                log.warn("[{}][短信回执验签未通过({})]", logAction, verification);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(failureSupplier.get());
             }
-            smsSendService.receiveSmsStatus(SmsChannelEnum.TENCENT.getCode(), text);
-            return ResponseEntity.ok(TencentSmsCallbackRespVO.success());
+            verified = true;
+            smsSendService.receiveSmsStatus(channelCode, text);
+            return ResponseEntity.ok(successSupplier.get());
         } catch (Exception ex) {
-            log.warn("[receiveTencentSmsStatus][短信回执处理失败]", ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(TencentSmsCallbackRespVO.failure());
+            if (verified) {
+                smsCallbackSignatureVerifier.releaseReplayFingerprint(channelCode, request, text);
+            }
+            log.warn("[{}][短信回执处理失败]", logAction, ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(failureSupplier.get());
         }
+    }
+
+    /**
+     * 读取回调原始请求体，同时兼容 JSON 与表单/纯文本等多种供应商内容类型。
+     *
+     * @param request HTTP 回调请求
+     * @return 原始请求体字符串
+     */
+    private static String readRequestBody(HttpServletRequest request) {
+        if (ServletUtils.isJsonRequest(request)) {
+            return ServletUtils.getBody(request);
+        }
+        return JakartaServletUtil.getBody(request);
     }
 
 }
