@@ -13,7 +13,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Controller;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -61,7 +61,7 @@ class SchemaDoRbacParityTest {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern MENU_INSERT_PATTERN = Pattern.compile(
-            "INSERT\\s+INTO\\s+`system_menu`\\s+VALUES\\s*\\((\\d+),\\s*'[^']*',\\s*'([^']*)',\\s*\\d+,\\s*'([^']*)'");
+            "INSERT\\s+INTO\\s+`system_menu`\\s+VALUES\\s*\\((\\d+),\\s*'[^']*',\\s*'([^']*)',\\s*\\d+,\\s*'([^']*)',\\s*\\d+,\\s*(\\d+),");
 
     private static final Pattern ROLE_MENU_INSERT_PATTERN = Pattern.compile(
             "INSERT\\s+INTO\\s+`system_role_menu`\\s+VALUES\\s*\\(\\d+,\\s*1,\\s*(\\d+),");
@@ -131,7 +131,7 @@ class SchemaDoRbacParityTest {
         assertTrue(mismatches.isEmpty(), String.join("\n", mismatches));
     }
 
-    /** 校验所有控制器 @PreAuthorize 权限标识均已在 system_menu 注册并授予超级管理员角色。 */
+    /** 校验所有控制器（含类级与方法级）@PreAuthorize 权限标识与 system_menu / 超级管理员及业务管理员角色严格对齐。 */
     @Test
     void allControllerPermissionsExistInBaselineMenuAndSuperAdminRole() throws Exception {
         String sql = Files.readString(resolveBaselineSqlPath(), StandardCharsets.UTF_8);
@@ -141,49 +141,120 @@ class SchemaDoRbacParityTest {
             superAdminRoleMenuIds.add(Long.parseLong(rmMatcher.group(1)));
         }
 
+        Set<Long> allMenuIds = new LinkedHashSet<>();
+        List<long[]> menuParentLinks = new ArrayList<>();
+        Set<Long> superAdminMenuIds = new LinkedHashSet<>();
+        Set<String> invalidPlatforms = new TreeSet<>();
         Map<String, List<Long>> permToMenuIds = new HashMap<>();
+        List<Map.Entry<Long, String>> businessAdminMenuPerms = new ArrayList<>();
+
         Matcher menuMatcher = MENU_INSERT_PATTERN.matcher(sql);
         while (menuMatcher.find()) {
             long menuId = Long.parseLong(menuMatcher.group(1));
             String perm = menuMatcher.group(2);
             String menuType = menuMatcher.group(3);
-            if (!perm.isEmpty() && "super_admin".equals(menuType)) {
-                permToMenuIds.computeIfAbsent(perm, k -> new ArrayList<>()).add(menuId);
+            long parentId = Long.parseLong(menuMatcher.group(4));
+            allMenuIds.add(menuId);
+            menuParentLinks.add(new long[]{menuId, parentId});
+            if (!"super_admin".equals(menuType) && !"business_admin".equals(menuType)) {
+                invalidPlatforms.add(menuId + ":" + menuType);
+            }
+            if ("super_admin".equals(menuType)) {
+                superAdminMenuIds.add(menuId);
+                if (!perm.isEmpty()) {
+                    permToMenuIds.computeIfAbsent(perm, k -> new ArrayList<>()).add(menuId);
+                }
+            } else if ("business_admin".equals(menuType) && !perm.isEmpty()) {
+                businessAdminMenuPerms.add(Map.entry(menuId, perm));
             }
         }
+        assertTrue(invalidPlatforms.isEmpty(), "system_menu 存在非法平台标识: " + invalidPlatforms);
+        List<String> orphanMenus = new ArrayList<>();
+        for (long[] link : menuParentLinks) {
+            if (link[1] != 0L && !allMenuIds.contains(link[1])) {
+                orphanMenus.add("menuId=" + link[0] + " -> missing parentId=" + link[1]);
+            }
+        }
+        assertTrue(orphanMenus.isEmpty(), "system_menu 存在孤儿父节点引用: " + orphanMenus);
+        Set<Long> unboundSuperAdminMenuRows = new TreeSet<>();
+        for (Long superAdminMenuId : superAdminMenuIds) {
+            if (!superAdminRoleMenuIds.contains(superAdminMenuId)) {
+                unboundSuperAdminMenuRows.add(superAdminMenuId);
+            }
+        }
+        assertTrue(unboundSuperAdminMenuRows.isEmpty(),
+                "super_admin 菜单或目录未绑定至超级管理员角色(role_id=1): " + unboundSuperAdminMenuRows);
 
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
-        scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Controller.class));
+        Set<String> declaredControllerPerms = new TreeSet<>();
         Set<String> missingInMenu = new TreeSet<>();
         Set<String> unboundToSuperAdmin = new TreeSet<>();
 
-        for (BeanDefinition bd : scanner.findCandidateComponents("com.basicframework.module")) {
+        for (BeanDefinition bd : scanner.findCandidateComponents("com.basicframework")) {
             Class<?> controllerClass = Class.forName(bd.getBeanClassName());
             if (controllerClass.getPackageName().contains(".footgun")) {
                 continue;
+            }
+            PreAuthorize classPreAuth = controllerClass.getAnnotation(PreAuthorize.class);
+            if (classPreAuth != null) {
+                verifyControllerPermissions(classPreAuth, controllerClass.getSimpleName() + "#<class>",
+                        permToMenuIds, superAdminRoleMenuIds, declaredControllerPerms, missingInMenu, unboundToSuperAdmin);
             }
             for (Method method : controllerClass.getDeclaredMethods()) {
                 PreAuthorize preAuth = method.getAnnotation(PreAuthorize.class);
                 if (preAuth == null) {
                     continue;
                 }
-                Matcher funcMatcher = PERMISSION_FUNC_PATTERN.matcher(preAuth.value());
-                while (funcMatcher.find()) {
-                    Matcher quoteMatcher = SINGLE_QUOTED_PATTERN.matcher(funcMatcher.group(1));
-                    while (quoteMatcher.find()) {
-                        String perm = quoteMatcher.group(1);
-                        List<Long> menuIds = permToMenuIds.get(perm);
-                        if (menuIds == null || menuIds.isEmpty()) {
-                            missingInMenu.add(perm + " (" + controllerClass.getSimpleName() + "#" + method.getName() + ")");
-                        } else if (menuIds.stream().noneMatch(superAdminRoleMenuIds::contains)) {
-                            unboundToSuperAdmin.add(perm + " -> menuIds=" + menuIds);
-                        }
-                    }
-                }
+                verifyControllerPermissions(preAuth, controllerClass.getSimpleName() + "#" + method.getName(),
+                        permToMenuIds, superAdminRoleMenuIds, declaredControllerPerms, missingInMenu, unboundToSuperAdmin);
             }
         }
         assertTrue(missingInMenu.isEmpty(), "控制器使用了未在 system_menu 注册的权限码: " + missingInMenu);
         assertTrue(unboundToSuperAdmin.isEmpty(), "权限菜单未绑定至超级管理员角色(role_id=1): " + unboundToSuperAdmin);
+        List<String> staleBusinessAdminPerms = new ArrayList<>();
+        for (Map.Entry<Long, String> entry : businessAdminMenuPerms) {
+            if (!declaredControllerPerms.contains(entry.getValue())) {
+                staleBusinessAdminPerms.add("menuId=" + entry.getKey() + ":" + entry.getValue());
+            }
+        }
+        assertTrue(staleBusinessAdminPerms.isEmpty(),
+                "business_admin 菜单声明了控制器不存在的权限码: " + staleBusinessAdminPerms);
+    }
+
+    /**
+     * 提取 {@code @PreAuthorize} 中的全部权限码并核验其在超管基线菜单及角色授权中的存在性。
+     *
+     * @param preAuth               权限注解
+     * @param sourceLocation        来源类名与方法位置
+     * @param permToMenuIds         超管菜单权限索引
+     * @param superAdminRoleMenuIds 超管角色已绑定菜单集合
+     * @param declaredPerms         控制器实际声明的权限码集合（出参）
+     * @param missingInMenu         未登记菜单的权限码集合（出参）
+     * @param unboundToSuperAdmin   未授予超管角色的权限码集合（出参）
+     */
+    private static void verifyControllerPermissions(
+            PreAuthorize preAuth,
+            String sourceLocation,
+            Map<String, List<Long>> permToMenuIds,
+            Set<Long> superAdminRoleMenuIds,
+            Set<String> declaredPerms,
+            Set<String> missingInMenu,
+            Set<String> unboundToSuperAdmin) {
+        Matcher funcMatcher = PERMISSION_FUNC_PATTERN.matcher(preAuth.value());
+        while (funcMatcher.find()) {
+            Matcher quoteMatcher = SINGLE_QUOTED_PATTERN.matcher(funcMatcher.group(1));
+            while (quoteMatcher.find()) {
+                String perm = quoteMatcher.group(1);
+                declaredPerms.add(perm);
+                List<Long> menuIds = permToMenuIds.get(perm);
+                if (menuIds == null || menuIds.isEmpty()) {
+                    missingInMenu.add(perm + " (" + sourceLocation + ")");
+                } else if (menuIds.stream().noneMatch(superAdminRoleMenuIds::contains)) {
+                    unboundToSuperAdmin.add(perm + " -> menuIds=" + menuIds);
+                }
+            }
+        }
     }
 
     /** 校验所有业务模块 ErrorCodeConstants 编码全局唯一且严格位于各自模块分配区间内。 */

@@ -64,7 +64,7 @@
     "quality:workspace:test": "python -B -X utf8 -m unittest discover -s ./scripts/quality/tests -p test_workspace_constraints.py",
     "quality:prod-scan": "node ./scripts/quality/scan-production.mjs",
     "quality:source-scan": "node ./scripts/quality/scan-production.mjs --source-only",
-    "quality:verify": "pnpm run quality:workspace && pnpm run quality:source-scan && pnpm run quality:mermaid && pnpm run check:type && pnpm run lint && pnpm run test:unit && pnpm run build:ele && pnpm run quality:prod-scan && pnpm run test:e2e",
+    "quality:verify": "pnpm run api:check && pnpm run quality:workspace && pnpm run quality:development && pnpm run graph:modules:check && pnpm run check:circular && pnpm run check:dep && pnpm run quality:source-scan && pnpm run quality:mermaid && pnpm run quality:test && pnpm run quality:analysis:test && pnpm run quality:workspace:test && pnpm run quality:development:test && pnpm run quality:delivery:test && pnpm run check:type && pnpm run lint && pnpm run test:unit && pnpm run build:ele && pnpm run quality:prod-scan && pnpm run test:e2e",
     "reinstall": "pnpm clean --del-lock && pnpm install",
     "test:unit": "vitest run --dom",
     "test:e2e": "turbo run test:e2e",

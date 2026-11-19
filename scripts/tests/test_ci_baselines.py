@@ -225,6 +225,15 @@ def test_frontend_job_runs_lint_after_install() -> None:
         < runs.index("pnpm build:ele")
         < runs.index("pnpm quality:prod-scan")
     )
+    joined_runs = "\n".join(item or "" for item in runs)
+    for test_cmd in (
+        "pnpm quality:test",
+        "pnpm quality:analysis:test",
+        "pnpm quality:workspace:test",
+        "pnpm quality:development:test",
+        "pnpm quality:delivery:test",
+    ):
+        assert test_cmd in joined_runs
 
 
 def test_pr_slice_size_guard_blocks_oversized_pr_without_override(tmp_path: Path) -> None:
@@ -253,19 +262,25 @@ def test_pr_slice_size_guard_blocks_oversized_pr_without_override(tmp_path: Path
     deletion_ok = run_shell(guard_script, repo, {"BASE_SHA": base_with_legacy, "PR_BODY": "prune"})
     assert deletion_ok.returncode == 0, deletion_ok.stdout + deletion_ok.stderr
 
-    # 3. 业务源码新增超过 600 行且无 [slice-override] 必须失败
+    # 3. 业务源码新增超过 600 行且无规范独立 [slice-override] 行时必须失败
     src = repo / "src" / "Oversized.java"
     src.write_text("\n".join(f"// line {i}" for i in range(650)) + "\n", encoding="utf-8")
     commit_all(repo, "oversized")
-    blocked = run_shell(guard_script, repo, {"BASE_SHA": base_with_legacy, "PR_BODY": "missing rationale"})
-    assert blocked.returncode == 1
-    assert "exceed 600-line slice budget" in blocked.stderr
+    for invalid_body in (
+        "missing rationale",
+        "We must not abuse [slice-override] in prose.",
+        "[slice-override]",
+        "[slice-override]:   ",
+    ):
+        blocked = run_shell(guard_script, repo, {"BASE_SHA": base_with_legacy, "PR_BODY": invalid_body})
+        assert blocked.returncode == 1
+        assert "exceed 600-line slice budget" in blocked.stderr
 
-    # 4. PR 描述显式附带 [slice-override] 时放行
+    # 4. PR 描述单独成行附带 `[slice-override]: <原因>` 时放行
     allowed = run_shell(
         guard_script,
         repo,
-        {"BASE_SHA": base_with_legacy, "PR_BODY": "Architecture baseline [slice-override]"},
+        {"BASE_SHA": base_with_legacy, "PR_BODY": "Summary\r\n[slice-override]: Architecture baseline migration"},
     )
     assert allowed.returncode == 0, allowed.stdout + allowed.stderr
 

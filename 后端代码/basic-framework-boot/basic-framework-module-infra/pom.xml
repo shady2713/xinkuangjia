@@ -16,6 +16,11 @@
         infra 模块，提供参数配置、统一对象存储、Quartz 定时任务与 API 访问日志等基础设施管理能力。
     </description>
 
+    <properties>
+        <!-- 基础设施与对象存储/任务调度核心模块行覆盖率硬性水位线。 -->
+        <quality.coverage.minimum>0.28</quality.coverage.minimum>
+    </properties>
+
     <dependencies>
         <!-- Web 相关 -->
         <dependency>

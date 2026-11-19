@@ -33,7 +33,7 @@
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
         <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
         <!-- 全局最低行覆盖率基线；高内聚模块在自身 pom.xml 中声明更高的覆盖率水位线。 -->
-        <quality.coverage.minimum>0.06</quality.coverage.minimum>
+        <quality.coverage.minimum>0.10</quality.coverage.minimum>
         <!-- maven-surefire-plugin 暂时无法通过 bom 的依赖查找（兼容老版本 IDEA 2024 及以前版本） -->
         <lombok.version>1.18.48</lombok.version>
         <spring.boot.version>3.5.16</spring.boot.version>

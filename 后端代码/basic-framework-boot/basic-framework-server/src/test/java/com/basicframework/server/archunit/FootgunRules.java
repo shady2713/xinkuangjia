@@ -12,14 +12,18 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
 import com.tngtech.archunit.library.GeneralCodingRules;
 import jakarta.annotation.security.PermitAll;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 /**
  * 后端确定性架构门禁规则，供质量门禁测试与反向失败夹具复用。
@@ -48,6 +52,14 @@ final class FootgunRules {
             "com.basicframework.module.system.controller.admin.sms.SmsCallbackController#receiveTencentSmsStatus"
     );
 
+    /** {@code @DSTransactional} 全限定注解名（会绕过 Spring 事务感知缓存同步）。 */
+    private static final String DS_TRANSACTIONAL_ANNOTATION =
+            "com.baomidou.dynamic.datasource.annotation.DSTransactional";
+
+    /** 匹配试图通过 {@code @PreAuthorize} 放行全部请求的绕过表达式。 */
+    private static final Pattern PRE_AUTHORIZE_BYPASS_PATTERN = Pattern.compile(
+            "(?is).*\\bpermitAll\\s*\\(.*|^\\s*true\\s*$");
+
     /** 跨模块严禁直接访问的对方模块内部包名段。 */
     private static final Set<String> MODULE_INTERNAL_SEGMENTS = Set.of(
             "controller", "service", "dal", "convert", "framework", "mq", "job"
@@ -68,13 +80,32 @@ final class FootgunRules {
     }
 
     /**
+     * 判断类是否位于 {@code ..controller..} 包或标注了 {@code @Controller} / {@code @RestController}。
+     *
+     * @return Spring 控制器类匹配谓词
+     */
+    private static DescribedPredicate<JavaClass> isSpringControllerClass() {
+        DescribedPredicate<JavaClass> inControllerPackage =
+                JavaClass.Predicates.resideInAPackage("..controller..");
+        return new DescribedPredicate<JavaClass>("位于 controller 包或标注 @Controller/@RestController") {
+            @Override
+            public boolean test(JavaClass javaClass) {
+                return inControllerPackage.test(javaClass)
+                        || javaClass.isAnnotatedWith(Controller.class)
+                        || javaClass.isMetaAnnotatedWith(Controller.class)
+                        || javaClass.isAnnotatedWith(RestController.class);
+            }
+        };
+    }
+
+    /**
      * 控制器不得直接依赖 mapper / dal.mysql / dal.redis 持久化包。
      *
      * @return 分层规则
      */
     static ArchRule controllersMustNotDependOnPersistence() {
         return noClasses()
-                .that().resideInAPackage("..controller..")
+                .that(isSpringControllerClass())
                 .should().dependOnClassesThat()
                 .resideInAnyPackage("..dal.mysql..", "..dal.redis..", "..mybatis.core.mapper..")
                 .because("控制器不得直接依赖 mapper 或 dal 持久化包，应经过 service 层");
@@ -164,28 +195,41 @@ final class FootgunRules {
     }
 
     /**
-     * 控制器中的每一个 HTTP 路由端点都必须显式标注 {@code @PreAuthorize} 或 {@code @PermitAll}，封死漏鉴权盲区。
+     * 控制器中的每一个 HTTP 路由端点都必须显式标注 {@code @PreAuthorize} 或 {@code @PermitAll}，封死漏鉴权与表达式绕过盲区。
      *
      * @return 端点显式授权声明规则
      */
     static ArchRule controllerEndpointsMustDeclareAuthorization() {
         return methods()
-                .that().areDeclaredInClassesThat().resideInAPackage("..controller..")
+                .that().areDeclaredInClassesThat().resideInAPackage("com.basicframework..")
                 .and(isRequestMappingEndpoint())
-                .should(new ArchCondition<JavaMethod>("显式标注 @PreAuthorize 或 @PermitAll") {
+                .should(new ArchCondition<JavaMethod>("显式标注非绕过的 @PreAuthorize 或 @PermitAll") {
                     @Override
                     public void check(JavaMethod method, ConditionEvents events) {
-                        boolean hasPreAuthorize = method.isAnnotatedWith(PreAuthorize.class)
-                                || method.getOwner().isAnnotatedWith(PreAuthorize.class);
+                        String methodPreAuth = method.tryGetAnnotationOfType(PreAuthorize.class)
+                                .map(PreAuthorize::value)
+                                .orElse(null);
+                        String ownerPreAuth = method.getOwner().tryGetAnnotationOfType(PreAuthorize.class)
+                                .map(PreAuthorize::value)
+                                .orElse(null);
+                        boolean hasPreAuthorize = methodPreAuth != null || ownerPreAuth != null;
                         boolean hasPermitAll = method.isAnnotatedWith(PermitAll.class);
                         if (!hasPreAuthorize && !hasPermitAll) {
                             events.add(SimpleConditionEvent.violated(
                                     method,
                                     "HTTP 端点未显式声明 @PreAuthorize 或 @PermitAll：" + method.getFullName()));
+                            return;
+                        }
+                        if ((methodPreAuth != null && PRE_AUTHORIZE_BYPASS_PATTERN.matcher(methodPreAuth).matches())
+                                || (ownerPreAuth != null && PRE_AUTHORIZE_BYPASS_PATTERN.matcher(ownerPreAuth).matches())) {
+                            events.add(SimpleConditionEvent.violated(
+                                    method,
+                                    "@PreAuthorize 禁止使用 permitAll() 或恒真表达式绕过公开端点白名单："
+                                            + method.getFullName()));
                         }
                     }
                 })
-                .because("所有 HTTP 端点必须显式声明 @PreAuthorize 或受审 @PermitAll，禁止依赖默认兜底");
+                .because("所有 HTTP 端点必须显式声明有效 @PreAuthorize 或受审 @PermitAll，禁止位置躲避或 SpEL 恒真绕过");
     }
 
     /**
@@ -263,7 +307,7 @@ final class FootgunRules {
     }
 
     /**
-     * 所有 {@code @Transactional} 声明都必须显式指定非空的 {@code rollbackFor}，防止受检异常默认不回滚。
+     * 所有方法级 {@code @Transactional} 声明都必须显式指定非空的 {@code rollbackFor}，防止受检异常默认不回滚。
      *
      * @return 事务回滚异常显式声明规则
      */
@@ -286,6 +330,54 @@ final class FootgunRules {
     }
 
     /**
+     * 所有类级 {@code @Transactional} 声明同样必须显式指定非空的 {@code rollbackFor}。
+     *
+     * @return 类级事务回滚异常显式声明规则
+     */
+    static ArchRule classLevelTransactionalMustDeclareRollbackFor() {
+        return classes()
+                .that().resideInAPackage("com.basicframework..")
+                .and().areAnnotatedWith(Transactional.class)
+                .should(new ArchCondition<JavaClass>("在类级 @Transactional 中显式指定 rollbackFor") {
+                    @Override
+                    public void check(JavaClass javaClass, ConditionEvents events) {
+                        Transactional tx = javaClass.getAnnotationOfType(Transactional.class);
+                        if (tx.rollbackFor().length == 0 && tx.rollbackForClassName().length == 0) {
+                            events.add(SimpleConditionEvent.violated(
+                                    javaClass,
+                                    "类级 @Transactional 未显式声明 rollbackFor = Exception.class：" + javaClass.getName()));
+                        }
+                    }
+                })
+                .allowEmptyShould(true)
+                .because("所有类级 @Transactional 必须显式声明 rollbackFor，避免受检异常提交半成品数据");
+    }
+
+    /**
+     * 禁止在类上声明 {@code @DSTransactional}，防止绕过 Spring 事务同步与事务感知缓存管理。
+     *
+     * @return 禁止类级 DSTransactional 规则
+     */
+    static ArchRule noDynamicDatasourceTransactionalOnClasses() {
+        return noClasses()
+                .that().resideInAPackage("com.basicframework..")
+                .should().beAnnotatedWith(DS_TRANSACTIONAL_ANNOTATION)
+                .because("禁止使用 @DSTransactional，否则会绕过 Spring 事务同步器与 TimeoutRedisCacheManager 事务感知缓存");
+    }
+
+    /**
+     * 禁止在方法上声明 {@code @DSTransactional}，防止绕过 Spring 事务同步与事务感知缓存管理。
+     *
+     * @return 禁止方法级 DSTransactional 规则
+     */
+    static ArchRule noDynamicDatasourceTransactionalOnMethods() {
+        return noMethods()
+                .that().areDeclaredInClassesThat().resideInAPackage("com.basicframework..")
+                .should().beAnnotatedWith(DS_TRANSACTIONAL_ANNOTATION)
+                .because("禁止使用 @DSTransactional，否则会绕过 Spring 事务同步器与 TimeoutRedisCacheManager 事务感知缓存");
+    }
+
+    /**
      * 判断方法是否声明了 Spring MVC 路由映射注解。
      */
     private static DescribedPredicate<JavaMethod> isRequestMappingEndpoint() {
@@ -305,7 +397,7 @@ final class FootgunRules {
      */
     static ArchRule controllerEndpointsMustNotExposeDataObjects() {
         return methods()
-                .that().areDeclaredInClassesThat().resideInAPackage("..controller..")
+                .that().areDeclaredInClassesThat().resideInAPackage("com.basicframework..")
                 .and(isRequestMappingEndpoint())
                 .should(new ArchCondition<JavaMethod>("不在 HTTP 参数或返回类型中暴露 dal.dataobject 类型") {
                     @Override

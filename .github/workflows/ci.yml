@@ -59,6 +59,13 @@ jobs:
           pnpm quality:workspace
           pnpm quality:development
           pnpm graph:modules:check
+      - name: Quality tooling tests
+        run: |
+          pnpm quality:test
+          pnpm quality:analysis:test
+          pnpm quality:workspace:test
+          pnpm quality:development:test
+          pnpm quality:delivery:test
       - name: Circular & dependency check
         run: |
           pnpm check:circular
@@ -135,8 +142,12 @@ jobs:
             ':!docs/开发指南/模块依赖关系图.md' \
             | awk '$1 ~ /^[0-9]+$/ { sum += $1 } END { print sum + 0 }')"
           echo "Non-generated PR added lines: $ADDED_LINES"
-          if [ "$ADDED_LINES" -gt 600 ] && [[ "${PR_BODY:-}" != *"[slice-override]"* ]]; then
-            echo "PR non-generated additions ($ADDED_LINES lines) exceed 600-line slice budget; split into smaller PRs or add [slice-override] rationale in PR body." >&2
+          HAS_SLICE_OVERRIDE=0
+          if printf '%s\n' "${PR_BODY:-}" | tr -d '\r' | grep -Eq '^[[:space:]]*\[slice-override\][[:space:]]*:[[:space:]]*[^[:space:]].*$'; then
+            HAS_SLICE_OVERRIDE=1
+          fi
+          if [ "$ADDED_LINES" -gt 600 ] && [ "$HAS_SLICE_OVERRIDE" -ne 1 ]; then
+            echo "PR non-generated additions ($ADDED_LINES lines) exceed 600-line slice budget; split into smaller PRs or add a standalone '[slice-override]: <rationale>' line in PR body." >&2
             exit 1
           fi
 
