@@ -15,9 +15,6 @@ import {
 import { getDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 
-let userList: OpenApiSchemas.UserSimpleRespVO[] = [];
-getSimpleUserList().then((data) => (userList = data));
-
 /**
  * 构建部门新增/编辑表单字段定义。
  *
@@ -95,7 +92,8 @@ export function useFormSchema(): VbenFormSchema[] {
         placeholder: '请选择负责人',
         clearable: true,
       },
-      rules: z.number().nullish(),
+      // 兼容后端雪花长整型序列化为 string 的情况
+      rules: z.union([z.number(), z.string()]).nullish(),
     },
     {
       fieldName: 'phone',
@@ -128,11 +126,49 @@ export function useFormSchema(): VbenFormSchema[] {
   ];
 }
 
+/** 读取部门负责人映射所需用户列表的函数签名。 */
+type UserListGetter = () => OpenApiSchemas.UserSimpleRespVO[];
+
 /**
- * 部门列表的表格列配置
- * @returns 表格列定义
+ * 默认返回空用户列表，避免未传入响应式读取器时产生未定义异常。
+ *
+ * @returns 空用户数组
  */
-export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['columns'] {
+function emptyUserList(): OpenApiSchemas.UserSimpleRespVO[] {
+  return [];
+}
+
+/**
+ * 将部门负责人编号格式化为用户昵称，空值或未匹配时显示连字符。
+ *
+ * @param cellValue 单元格中的负责人编号
+ * @param users 当前已加载的精简用户列表
+ * @returns 负责人昵称或 `-`
+ */
+function formatLeaderNickname(
+  cellValue: unknown,
+  users: OpenApiSchemas.UserSimpleRespVO[],
+): string {
+  if (cellValue === null || cellValue === undefined || cellValue === '') {
+    return '-';
+  }
+  return (
+    users.find(
+      // 统一转字符串匹配 number/string 两种雪花 ID 格式
+      (user) => String(user.id) === String(cellValue),
+    )?.nickname || '-'
+  );
+}
+
+/**
+ * 构建部门列表表格列配置，通过响应式读取器映射负责人昵称，避免模块加载顶层发起无异常捕获请求。
+ *
+ * @param getUserList 返回当前已加载用户列表的函数
+ * @returns 表格列定义数组
+ */
+export function useGridColumns(
+  getUserList: UserListGetter = emptyUserList,
+): VxeTableGridOptions<SystemDeptApi.Dept>['columns'] {
   return [
     { type: 'checkbox', width: 40, fixed: 'left' },
     {
@@ -146,12 +182,9 @@ export function useGridColumns(): VxeTableGridOptions<SystemDeptApi.Dept>['colum
       field: 'leaderUserId',
       title: '负责人',
       minWidth: 150,
-      // 把负责人编号显示成用户昵称
+      /** 格式化当前行负责人昵称。 */
       formatter: ({ cellValue }) =>
-        userList.find(
-          // 按单元格中的用户编号匹配负责人昵称
-          (user) => String(user.id) === String(cellValue),
-        )?.nickname || '-',
+        formatLeaderNickname(cellValue, getUserList()),
     },
     {
       field: 'sort',
