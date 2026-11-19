@@ -82,6 +82,18 @@ public interface FileClient extends AutoCloseable {
     }
 
     /**
+     * 以流式方式打开对象内容及元长度，供下载响应输出 {@code Content-Length} 与范围请求校验。
+     *
+     * @param path 相对路径
+     * @return 对象内容与长度封装，不存在时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    default FileContentStream openContent(String path) throws Exception {
+        InputStream stream = openContentStream(path);
+        return stream != null ? new FileContentStream(stream, null) : null;
+    }
+
+    /**
      * 复制对象到新的路径。
      *
      * @param sourcePath 来源对象路径，例如 frames/20260515/a.jpg

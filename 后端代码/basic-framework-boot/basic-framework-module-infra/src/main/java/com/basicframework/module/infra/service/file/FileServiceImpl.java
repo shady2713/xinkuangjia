@@ -13,6 +13,7 @@ import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresign
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.dal.mysql.file.FileMapper;
 import com.basicframework.module.infra.enums.ErrorCodeConstants;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils;
@@ -24,6 +25,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -518,11 +520,32 @@ public class FileServiceImpl implements FileService {
      * @throws Exception 读取存储失败时抛出
      */
     @Override
-    public java.io.InputStream openFileContentStream(String path) throws Exception {
-        if (fileMapper.selectByPath(path) == null) {
+    public InputStream openFileContentStream(String path) throws Exception {
+        FileContentStream content = openFileContent(path);
+        return content != null ? content.inputStream() : null;
+    }
+
+    /**
+     * 先核验数据库元数据记录仍存在且未软删除，再流式打开底层存储内容并补齐字节长度。
+     *
+     * @param path 对象路径
+     * @return 文件内容流与权威字节长度；记录不存在、已删除或存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    @Override
+    public FileContentStream openFileContent(String path) throws Exception {
+        FileDO file = fileMapper.selectByPath(path);
+        if (file == null) {
             return null;
         }
-        return fileStorageService.openContentStream(path);
+        FileContentStream content = fileStorageService.openContent(path);
+        if (content == null) {
+            return null;
+        }
+        if (content.contentLength() != null || file.getSize() == null) {
+            return content;
+        }
+        return new FileContentStream(content.inputStream(), file.getSize());
     }
 
 }

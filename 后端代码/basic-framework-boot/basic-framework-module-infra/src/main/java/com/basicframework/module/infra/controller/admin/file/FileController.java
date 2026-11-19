@@ -12,6 +12,7 @@ import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresign
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileRespVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadReqVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.basicframework.module.infra.service.file.FileService;
 import com.google.common.annotations.VisibleForTesting;
@@ -240,14 +241,15 @@ public class FileController {
             return;
         }
 
-        // 流式读取内容，校验元数据未软删除且避免大文件整包进入 JVM 堆内存。
-        try (InputStream contentStream = fileService.openFileContentStream(path)) {
-            if (contentStream == null) {
+        // 流式读取内容，校验元数据未软删除且透传 Content-Length 与 Range 断点续传头。
+        try (FileContentStream content = fileService.openFileContent(path)) {
+            if (content == null) {
                 log.warn("[getFileContent][path({}) 文件不存在或已删除]", path);
                 response.setStatus(HttpStatus.NOT_FOUND.value());
                 return;
             }
-            writeAttachment(response, path, contentStream);
+            writeAttachment(response, path, content.inputStream(), content.contentLength(),
+                    request.getHeader("Range"));
         }
     }
 

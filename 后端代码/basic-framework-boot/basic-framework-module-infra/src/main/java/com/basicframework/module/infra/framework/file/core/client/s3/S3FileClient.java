@@ -6,6 +6,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import com.basicframework.framework.common.util.http.HttpUtils;
 import com.basicframework.module.infra.framework.file.core.client.AbstractFileClient;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -34,6 +35,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
@@ -251,16 +253,32 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
      * 以流式方式打开 S3 对象输入流，避免大文件整包载入堆内存。
      *
      * @param path 对象路径
-     * @return S3 对象内容流；调用方负责关闭
+     * @return S3 对象内容流；不存在返回 null，调用方负责关闭
      */
     @Override
-    public java.io.InputStream openContentStream(String path) {
+    public InputStream openContentStream(String path) {
+        FileContentStream content = openContent(path);
+        return content != null ? content.inputStream() : null;
+    }
+
+    /**
+     * 以流式方式打开 S3 对象输入流并透传对象存储返回的实际字节长度。
+     *
+     * @param path 对象路径
+     * @return S3 对象内容流与长度封装；不存在返回 null
+     */
+    @Override
+    public FileContentStream openContent(String path) {
         GetObjectRequest getRequest = GetObjectRequest.builder()
                 .bucket(config.getBucket())
                 .key(path)
                 .build();
         try {
-            return client.getObject(getRequest);
+            ResponseInputStream<GetObjectResponse> responseStream = client.getObject(getRequest);
+            Long contentLength = responseStream.response() != null
+                    ? responseStream.response().contentLength()
+                    : null;
+            return new FileContentStream(responseStream, contentLength);
         } catch (NoSuchKeyException ex) {
             return null;
         }
