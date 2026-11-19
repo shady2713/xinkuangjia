@@ -1,5 +1,6 @@
 package com.basicframework.module.system.service.oauth2;
 
+import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.config.SecurityProperties;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
@@ -240,6 +241,57 @@ class OAuth2TokenServiceImplTest {
         verify(oauth2RefreshTokenMapper).deleteByRefreshToken("refresh-token");
     }
 
+    /** 验证已停用管理员不得通过刷新令牌换发新的访问令牌，并删除其残留刷新令牌。 */
+    @Test
+    void refreshAccessTokenRejectsDisabledAdminUserAndDeletesRefreshToken() {
+        OAuth2RefreshTokenDO refreshToken = buildRefreshToken("refresh-token");
+        when(oauth2RefreshTokenMapper.selectByRefreshToken("refresh-token")).thenReturn(refreshToken);
+        when(oauth2AccessTokenMapper.selectListByRefreshToken("refresh-token"))
+                .thenReturn(List.of(buildAccessToken("old-access-token")));
+        when(oauth2AccessTokenRedisDAO.isActive("old-access-token")).thenReturn(true);
+
+        AdminUserDO disabledUser = buildAdminUser();
+        disabledUser.setStatus(CommonStatusEnum.DISABLE.getStatus());
+        when(adminUserService.getUser(USER_ID)).thenReturn(disabledUser);
+
+        assertThatThrownBy(() -> tokenService.refreshAccessToken(
+                "refresh-token", OAuth2ClientConstants.CLIENT_ID_SYSTEM))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(UNAUTHORIZED.getCode()));
+        verify(oauth2RefreshTokenMapper).deleteById(refreshToken.getId());
+        verify(oauth2AccessTokenMapper, never()).insert(any(OAuth2AccessTokenDO.class));
+    }
+
+    /** 验证已删除管理员不得通过刷新令牌换发新的访问令牌，且不会触发空指针异常。 */
+    @Test
+    void refreshAccessTokenRejectsDeletedAdminUserAndDeletesRefreshToken() {
+        OAuth2RefreshTokenDO refreshToken = buildRefreshToken("refresh-token");
+        when(oauth2RefreshTokenMapper.selectByRefreshToken("refresh-token")).thenReturn(refreshToken);
+        when(oauth2AccessTokenMapper.selectListByRefreshToken("refresh-token"))
+                .thenReturn(List.of(buildAccessToken("old-access-token")));
+        when(oauth2AccessTokenRedisDAO.isActive("old-access-token")).thenReturn(true);
+        when(adminUserService.getUser(USER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> tokenService.refreshAccessToken(
+                "refresh-token", OAuth2ClientConstants.CLIENT_ID_SYSTEM))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(UNAUTHORIZED.getCode()));
+        verify(oauth2RefreshTokenMapper).deleteById(refreshToken.getId());
+        verify(oauth2AccessTokenMapper, never()).insert(any(OAuth2AccessTokenDO.class));
+    }
+
+    /** 验证签发访问令牌时若用户已被删除，统一返回 401 而非空指针异常。 */
+    @Test
+    void createAccessTokenRejectsDeletedAdminUserWithoutNpe() {
+        when(adminUserService.getUser(USER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> tokenService.createAccessToken(
+                USER_ID, 2, OAuth2ClientConstants.CLIENT_ID_SYSTEM, null))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(UNAUTHORIZED.getCode()));
+        verify(oauth2AccessTokenMapper, never()).insert(any(OAuth2AccessTokenDO.class));
+    }
+
     /**
      * 构造内部会话客户端。
      *
@@ -263,6 +315,7 @@ class OAuth2TokenServiceImplTest {
         AdminUserDO user = new AdminUserDO();
         user.setId(USER_ID);
         user.setNickname("测试用户");
+        user.setStatus(CommonStatusEnum.ENABLE.getStatus());
         return user;
     }
 

@@ -3,6 +3,7 @@ package com.basicframework.module.system.service.oauth2;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants;
@@ -154,6 +155,14 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (refreshTokenDO.getExpiresTime().isBefore(LocalDateTime.now())) {
             oauth2RefreshTokenMapper.deleteById(refreshTokenDO.getId());
             throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "刷新令牌已过期");
+        }
+        // 已停用或已删除的管理员账号不得继续通过刷新令牌换发新的访问令牌
+        if (UserTypeEnum.ADMIN.getValue().equals(refreshTokenDO.getUserType())) {
+            AdminUserDO user = adminUserService.getUser(refreshTokenDO.getUserId());
+            if (user == null || !CommonStatusEnum.ENABLE.getStatus().equals(user.getStatus())) {
+                oauth2RefreshTokenMapper.deleteById(refreshTokenDO.getId());
+                throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
+            }
         }
 
         // 创建访问令牌
@@ -374,6 +383,9 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         }
         if (userType.equals(UserTypeEnum.ADMIN.getValue())) {
             AdminUserDO user = adminUserService.getUser(userId);
+            if (user == null) {
+                throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
+            }
             return MapUtil.builder(LoginUser.INFO_KEY_NICKNAME, user.getNickname())
                     .put(LoginUser.INFO_KEY_DEPT_ID, user.getDeptId() != null ? user.getDeptId().toString() : null).build();
         } else if (userType.equals(UserTypeEnum.MEMBER.getValue())) {

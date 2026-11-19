@@ -166,6 +166,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         userMapper.updateById(updateObj);
         // 2.2 更新岗位
         updateUserPost(updateReqVO, updateObj);
+        // 2.3 状态变化时立即发布变更事件（停用账号将触发令牌失效监听）
+        if (updateReqVO.getStatus() != null && !Objects.equals(oldUser.getStatus(), updateReqVO.getStatus())) {
+            applicationContext.publishEvent(new UserStatusChangedEvent(
+                    updateReqVO.getId(), UserTypeEnum.ADMIN.getValue(), updateReqVO.getStatus()));
+        }
 
         // 3. 记录操作日志上下文
         // 避免前端未传递 avatar 字段时，操作日志 diff 误报为删除头像

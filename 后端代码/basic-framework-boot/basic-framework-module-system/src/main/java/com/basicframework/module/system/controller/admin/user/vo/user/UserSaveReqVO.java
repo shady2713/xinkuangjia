@@ -1,7 +1,9 @@
 package com.basicframework.module.system.controller.admin.user.vo.user;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.validation.EmailEx;
+import com.basicframework.framework.common.validation.InEnum;
 import com.basicframework.framework.common.validation.Mobile;
 import com.basicframework.framework.common.validation.Username;
 import com.basicframework.module.system.framework.operatelog.core.DeptParseFunction;
@@ -119,6 +121,7 @@ public class UserSaveReqVO {
      * 用户状态，参见 CommonStatusEnum 枚举类。
      */
     @Schema(description = "用户状态，参见 CommonStatusEnum 枚举类", example = "0")
+    @InEnum(value = CommonStatusEnum.class, message = "修改状态必须是 {value}")
     @DiffLogField(name = "用户状态")
     private Integer status;
 
