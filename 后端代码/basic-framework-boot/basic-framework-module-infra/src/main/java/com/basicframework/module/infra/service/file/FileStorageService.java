@@ -2,6 +2,7 @@
 package com.basicframework.module.infra.service.file;
 
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
+import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -23,6 +24,14 @@ public interface FileStorageService {
      * @throws RuntimeException 存储访问失败时抛出
      */
     FileObjectPage listObjects(String continuationToken);
+
+    /**
+     * 查询单个已上传对象的实际元数据（通过 HEAD 请求获取，不读取对象体）。
+     *
+     * @param path 对象相对路径
+     * @return 对象元数据摘要；对象不存在时返回 {@code null}
+     */
+    FileObjectStat statObject(String path);
 
     /**
      * 上传文件。

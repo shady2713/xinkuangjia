@@ -33,6 +33,17 @@ public interface FileClient extends AutoCloseable {
     }
 
     /**
+     * 查询单个对象在存储端的元数据（仅执行 HEAD 请求，不读取对象字节流）。
+     *
+     * @param path 对象相对路径
+     * @return 对象元数据摘要；对象不存在时返回 {@code null}
+     * @throws RuntimeException 当前存储不支持元数据查询或访问失败时抛出
+     */
+    default FileObjectStat statObject(String path) {
+        throw new UnsupportedOperationException("当前存储不支持对象元数据查询");
+    }
+
+    /**
      * 上传文件
      *
      * @param content 文件流

@@ -5,6 +5,7 @@ import com.basicframework.module.infra.framework.file.config.MinioFileProperties
 import com.basicframework.module.infra.framework.file.core.client.FileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileClientFactory;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
+import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.enums.FileStorageEnum;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -43,6 +44,17 @@ public class FileStorageServiceImpl implements FileStorageService {
     @Override
     public FileObjectPage listObjects(String continuationToken) {
         return fileClient.listObjects(continuationToken);
+    }
+
+    /**
+     * 委托唯一存储客户端通过 HEAD 请求获取单个对象的实际元信息。
+     *
+     * @param path 对象路径
+     * @return 对象元数据摘要；对象不存在时返回 {@code null}
+     */
+    @Override
+    public FileObjectStat statObject(String path) {
+        return fileClient.statObject(path);
     }
 
     /**

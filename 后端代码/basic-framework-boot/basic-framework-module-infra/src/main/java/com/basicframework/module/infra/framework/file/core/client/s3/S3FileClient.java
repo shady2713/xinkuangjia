@@ -7,6 +7,7 @@ import cn.hutool.http.HttpUtil;
 import com.basicframework.framework.common.util.http.HttpUtils;
 import com.basicframework.module.infra.framework.file.core.client.AbstractFileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
+import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -20,9 +21,13 @@ import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
@@ -44,10 +49,41 @@ import java.util.List;
  */
 public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 
+    /** 默认预签名读取地址有效期。 */
     private static final Duration EXPIRATION_DEFAULT = Duration.ofHours(24);
+    /** 前端预签名直传地址的最长有效窗口，过期后需重新签发，缩短泄露暴露面。 */
+    private static final Duration PRESIGN_PUT_EXPIRATION = Duration.ofMinutes(15);
 
     private S3Client client;
     private S3Presigner presigner;
+
+    /**
+     * 通过 S3 HEAD 请求读取单个已存在对象的字节大小与内容类型，不传输对象内容。
+     *
+     * @param path 对象相对路径
+     * @return 对象元数据快照；对象不存在时返回 {@code null}
+     */
+    @Override
+    public FileObjectStat statObject(String path) {
+        HeadObjectRequest request = HeadObjectRequest.builder()
+                .bucket(config.getBucket())
+                .key(path)
+                .overrideConfiguration(builder -> builder.apiCallTimeout(Duration.ofSeconds(3))
+                        .apiCallAttemptTimeout(Duration.ofSeconds(2)))
+                .build();
+        try {
+            HeadObjectResponse response = client.headObject(request);
+            long size = response.contentLength() != null ? response.contentLength() : 0L;
+            return new FileObjectStat(size, response.contentType());
+        } catch (NoSuchKeyException ex) {
+            return null;
+        } catch (S3Exception ex) {
+            if (ex.statusCode() == 404) {
+                return null;
+            }
+            throw ex;
+        }
+    }
 
     /**
      * 分页读取当前桶对象大小，单次请求最多 1000 条且总超时为 3 秒。
@@ -225,7 +261,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .build();
         try {
             return client.getObject(getRequest);
-        } catch (software.amazon.awssdk.services.s3.model.NoSuchKeyException ex) {
+        } catch (NoSuchKeyException ex) {
             return null;
         }
     }
@@ -320,7 +356,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
-     * 生成有效期为 24 小时并约束 {@code Content-Type} 的对象上传预签名地址。
+     * 生成有效期为 15 分钟并约束 {@code Content-Type} 的对象上传预签名地址。
      *
      * @param path        对象路径
      * @param contentType 允许上传的 MIME 类型，为空时不追加该签名约束
@@ -329,7 +365,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     @Override
     public String presignPutUrl(String path, String contentType) {
         return presigner.presignPutObject(PutObjectPresignRequest.builder()
-                        .signatureDuration(EXPIRATION_DEFAULT)
+                        .signatureDuration(PRESIGN_PUT_EXPIRATION)
                         .putObjectRequest(b -> {
                             b.bucket(config.getBucket()).key(path);
                             if (StrUtil.isNotBlank(contentType)) {
