@@ -40,4 +40,40 @@ class ServletUtilsTest {
         assertThat(ServletUtils.getClientIP(loopback)).isEqualTo("127.0.0.1");
     }
 
+    /** 验证多级反向代理场景下按从右向左剔除私网代理并忽略左侧客户端伪造的 XFF 前缀。 */
+    @Test
+    void extractsRightmostPublicIpAndIgnoresSpoofedXffPrefix() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("172.18.0.5");
+        request.addHeader("X-Forwarded-For", "1.2.3.4, 203.0.113.50, 10.0.0.2, 172.18.0.5");
+        request.addHeader("X-Real-IP", "10.0.0.2");
+
+        assertThat(ServletUtils.getClientIP(request)).isEqualTo("203.0.113.50");
+    }
+
+    /** 验证内网客户端经过多层代理转发时全部节点均为私网 IP，应回退最左侧合法地址。 */
+    @Test
+    void fallsBackToLeftmostValidIntranetIpWhenAllXffHopsAreTrustedProxies() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("172.18.0.5");
+        request.addHeader("X-Forwarded-For", "10.1.2.3, 192.168.10.1, 172.18.0.5");
+
+        assertThat(ServletUtils.getClientIP(request)).isEqualTo("10.1.2.3");
+    }
+
+    /** 验证包含非法字符串或超长注入载荷的 XFF / X-Real-IP 会被拒绝并回退直连地址或合法 IPv6。 */
+    @Test
+    void rejectsMalformedForwardedHeadersAndSupportsIpv6Clients() {
+        MockHttpServletRequest malformed = new MockHttpServletRequest();
+        malformed.setRemoteAddr("172.18.0.5");
+        malformed.addHeader("X-Forwarded-For", "unknown, not-an-ip, 999.999.999.999");
+        malformed.addHeader("X-Real-IP", "evil-host.example.com");
+        assertThat(ServletUtils.getClientIP(malformed)).isEqualTo("172.18.0.5");
+
+        MockHttpServletRequest ipv6Client = new MockHttpServletRequest();
+        ipv6Client.setRemoteAddr("fd00:10::5");
+        ipv6Client.addHeader("X-Forwarded-For", "2001:db8::1, 172.18.0.5");
+        assertThat(ServletUtils.getClientIP(ipv6Client)).isEqualTo("2001:db8::1");
+    }
+
 }
