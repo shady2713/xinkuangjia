@@ -1,6 +1,6 @@
 package com.basicframework.module.infra.dal.dataobject.job;
 
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 
 import com.basicframework.module.infra.enums.job.JobStatusEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
@@ -23,7 +23,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class JobDO extends BaseDO {
+public class JobDO extends UniqueBaseDO {
 
     /**
      * 任务编号

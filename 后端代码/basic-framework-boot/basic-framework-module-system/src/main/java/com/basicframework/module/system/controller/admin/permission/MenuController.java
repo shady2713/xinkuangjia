@@ -16,6 +16,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -108,7 +110,7 @@ public class MenuController {
     @Operation(summary = "批量删除菜单")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PreAuthorize("@ss.hasPermission('system:menu:delete')")
-    public CommonResult<Boolean> deleteMenuList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteMenuList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         ids.forEach(this::validateMenuPlatform);
         menuService.deleteMenuList(ids);
         return success(true);

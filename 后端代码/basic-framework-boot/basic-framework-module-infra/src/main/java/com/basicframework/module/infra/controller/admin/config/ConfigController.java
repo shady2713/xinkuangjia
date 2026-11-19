@@ -125,7 +125,7 @@ public class ConfigController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('infra:config:query')")
     public CommonResult<ConfigRespVO> getConfig(@RequestParam("id") Long id) {
-        return success(ConfigConvert.INSTANCE.convert(configService.getConfig(id)));
+        return success(maskInvisibleValue(ConfigConvert.INSTANCE.convert(configService.getConfig(id))));
     }
 
     /**
@@ -157,7 +157,11 @@ public class ConfigController {
     @PreAuthorize("@ss.hasPermission('infra:config:query')")
     public CommonResult<PageResult<ConfigRespVO>> getConfigPage(@Valid ConfigPageReqVO pageReqVO) {
         PageResult<ConfigDO> page = configService.getConfigPage(pageReqVO);
-        return success(ConfigConvert.INSTANCE.convertPage(page));
+        PageResult<ConfigRespVO> respPage = ConfigConvert.INSTANCE.convertPage(page);
+        if (respPage != null && respPage.getList() != null) {
+            respPage.getList().forEach(ConfigController::maskInvisibleValue);
+        }
+        return success(respPage);
     }
 
     /**
@@ -179,9 +183,25 @@ public class ConfigController {
         if (page.getTotal() > MAX_EXPORT_SIZE) {
             throw exception(EXPORT_SIZE_EXCEEDED);
         }
+        List<ConfigRespVO> exportList = ConfigConvert.INSTANCE.convertList(page.getList());
+        if (exportList != null) {
+            exportList.forEach(ConfigController::maskInvisibleValue);
+        }
         // 输出
-        ExcelUtils.write(response, "参数配置.xls", "数据", ConfigRespVO.class,
-                ConfigConvert.INSTANCE.convertList(page.getList()));
+        ExcelUtils.write(response, "参数配置.xls", "数据", ConfigRespVO.class, exportList);
+    }
+
+    /**
+     * 对不可见参数配置脱敏其参数值，防止通过详情、分页或导出接口泄露内部敏感配置。
+     *
+     * @param respVO 参数响应对象
+     * @return 处理后的参数响应对象
+     */
+    private static ConfigRespVO maskInvisibleValue(ConfigRespVO respVO) {
+        if (respVO != null && !Boolean.TRUE.equals(respVO.getVisible())) {
+            respVO.setValue(ConfigService.HIDDEN_CONFIG_VALUE_MASK);
+        }
+        return respVO;
     }
 
 }

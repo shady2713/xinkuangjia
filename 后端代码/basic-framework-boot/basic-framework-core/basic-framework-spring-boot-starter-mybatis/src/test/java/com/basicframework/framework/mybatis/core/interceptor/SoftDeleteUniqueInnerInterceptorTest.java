@@ -60,6 +60,20 @@ class SoftDeleteUniqueInnerInterceptorTest {
     }
 
     /**
+     * 验证将 {@code deleted} 显式置为 {@code 0} 或 {@code false} 的恢复/常规更新不得篡改 {@code deleted_tag = id}。
+     */
+    @Test
+    void doesNotAppendDeletedTagWhenSettingDeletedToZeroOrFalse() {
+        String restoreInt = interceptor.parserSingle(
+                "UPDATE sample_unique_entity SET deleted = 0 WHERE id = 42", null);
+        String restoreBool = interceptor.parserSingle(
+                "UPDATE sample_unique_entity SET deleted = false WHERE id = 42", null);
+
+        assertThat(restoreInt).doesNotContainIgnoringCase("deleted_tag");
+        assertThat(restoreBool).doesNotContainIgnoringCase("deleted_tag");
+    }
+
+    /**
      * 含唯一键消歧字段的测试实体。
      */
     @TableName("sample_unique_entity")

@@ -5,6 +5,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.crypto.digest.HmacAlgorithm;
 import com.basicframework.module.system.framework.sms.config.SmsCallbackProperties;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,6 +14,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 短信回调签名校验器。
@@ -45,6 +47,12 @@ public final class SmsCallbackSignatureVerifier {
      */
     private static final Duration DEFAULT_TIMESTAMP_TOLERANCE = Duration.ofMinutes(5);
 
+    /** 回调签名重放去重 Redis 键前缀。 */
+    private static final String REPLAY_KEY_PREFIX = "sms:callback:replay:";
+
+    /** 无 Redis 降级场景下内存去重表最大容量上限，避免内存无界增长。 */
+    private static final int MAX_LOCAL_REPLAY_ENTRIES = 10_000;
+
     /**
      * 渠道编码到签名密钥的只读快照，key 统一转为大写。
      */
@@ -56,11 +64,29 @@ public final class SmsCallbackSignatureVerifier {
     private final Duration timestampTolerance;
 
     /**
-     * 使用配置创建校验器。
+     * 分布式重放去重用的 Redis 模板；测试环境未装配时回退到进程内有界去重表。
+     */
+    private final StringRedisTemplate stringRedisTemplate;
+
+    /** 进程内重放去重缓存（键 -> 过期时间毫秒），仅在无 Redis 时启用。 */
+    private final ConcurrentHashMap<String, Long> localReplayCache = new ConcurrentHashMap<>();
+
+    /**
+     * 使用配置创建校验器（默认使用进程内重放去重）。
      *
      * @param properties 短信回调配置；密钥为空时所有渠道按未配置处理
      */
     public SmsCallbackSignatureVerifier(SmsCallbackProperties properties) {
+        this(properties, null);
+    }
+
+    /**
+     * 使用配置与可选 Redis 客户端创建校验器。
+     *
+     * @param properties          短信回调配置；密钥为空时所有渠道按未配置处理
+     * @param stringRedisTemplate 可选 Redis 客户端，用于多实例共享签名重放窗口去重
+     */
+    public SmsCallbackSignatureVerifier(SmsCallbackProperties properties, StringRedisTemplate stringRedisTemplate) {
         Map<String, String> configuredSecrets = properties.getSecrets() == null
                 ? Collections.emptyMap() : properties.getSecrets();
         Map<String, String> normalizedSecrets = new HashMap<>(configuredSecrets.size());
@@ -74,6 +100,7 @@ public final class SmsCallbackSignatureVerifier {
         Duration tolerance = properties.getTimestampTolerance();
         this.timestampTolerance = tolerance == null || tolerance.isNegative()
                 ? DEFAULT_TIMESTAMP_TOLERANCE : tolerance;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     /**
@@ -116,7 +143,46 @@ public final class SmsCallbackSignatureVerifier {
         if (!MessageDigest.isEqual(expectedBytes, actualBytes)) {
             return SmsCallbackVerificationResult.INVALID;
         }
+        // 在时间戳容差窗口内登记签名指纹，阻断窗口内重复重放同一回调请求。
+        if (!registerReplayFingerprint(channelCode, timestamp, expectedSignature, now)) {
+            return SmsCallbackVerificationResult.INVALID;
+        }
         return SmsCallbackVerificationResult.PASS;
+    }
+
+    /**
+     * 登记回调签名指纹，若在去重窗口内已处理过相同请求则返回 {@code false}。
+     *
+     * @param channelCode       渠道编码
+     * @param timestamp         回调时间戳字符串
+     * @param expectedSignature 已验证通过的签名摘要
+     * @param nowMillis         当前毫秒时间戳
+     * @return 首次出现返回 true，重放返回 false
+     */
+    private boolean registerReplayFingerprint(String channelCode, String timestamp,
+                                              String expectedSignature, long nowMillis) {
+        Duration ttl = timestampTolerance.multipliedBy(2);
+        if (ttl.isZero() || ttl.isNegative()) {
+            ttl = DEFAULT_TIMESTAMP_TOLERANCE.multipliedBy(2);
+        }
+        String fingerprint = DigestUtil.sha256Hex(channelCode.toUpperCase(Locale.ROOT) + ":" + timestamp + ":" + expectedSignature);
+        if (stringRedisTemplate != null) {
+            Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(REPLAY_KEY_PREFIX + fingerprint, "1", ttl);
+            return Boolean.TRUE.equals(acquired);
+        }
+        // 清理过期项并限制容量，防止降级模式内存增长。
+        if (localReplayCache.size() >= MAX_LOCAL_REPLAY_ENTRIES) {
+            localReplayCache.entrySet().removeIf(entry -> entry.getValue() <= nowMillis);
+        }
+        long expiresAt = nowMillis + ttl.toMillis();
+        Long existing = localReplayCache.putIfAbsent(fingerprint, expiresAt);
+        if (existing == null) {
+            return true;
+        }
+        if (existing <= nowMillis) {
+            return localReplayCache.replace(fingerprint, existing, expiresAt);
+        }
+        return false;
     }
 
     /**

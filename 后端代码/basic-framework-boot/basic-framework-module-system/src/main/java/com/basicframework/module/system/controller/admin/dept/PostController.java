@@ -17,6 +17,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -106,7 +108,7 @@ public class PostController {
     @DeleteMapping("delete-list")
     @Operation(summary = "批量删除岗位")
     @PreAuthorize("@ss.hasPermission('system:post:delete')")
-    public CommonResult<Boolean> deletePostList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deletePostList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         postService.deletePostList(ids);
         return success(true);
     }

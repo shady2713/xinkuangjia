@@ -17,6 +17,9 @@ import java.util.List;
  */
 public interface ConfigService {
 
+    /** 不可见配置返回给管理端时的脱敏占位符，与更新保值逻辑保持一致。 */
+    String HIDDEN_CONFIG_VALUE_MASK = "******";
+
     /**
      * 创建参数配置
      *

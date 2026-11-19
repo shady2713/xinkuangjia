@@ -29,4 +29,17 @@ public interface FileMapper extends BaseMapperX<FileDO> {
                 .orderByDesc(FileDO::getId));
     }
 
+    /**
+     * 按对象路径查询未逻辑删除的最新文件记录，用于下载前校验文件仍处于有效状态。
+     *
+     * @param path 对象存储相对路径
+     * @return 活跃文件元数据；不存在或已软删时返回 null
+     */
+    default FileDO selectByPath(String path) {
+        return selectOne(new LambdaQueryWrapperX<FileDO>()
+                .eq(FileDO::getPath, path)
+                .orderByDesc(FileDO::getId)
+                .last("LIMIT 1"));
+    }
+
 }

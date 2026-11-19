@@ -29,6 +29,17 @@ public interface OAuth2TokenService {
     OAuth2AccessTokenDO createAccessToken(Long userId, Integer userType, String clientId, List<String> scopes);
 
     /**
+     * 为 {@code client_credentials} 模式创建访问令牌，遵循 RFC 6749 第 4.4.3 节不签发刷新令牌。
+     *
+     * @param clientId 客户端标识
+     * @param scopes   授权范围
+     * @return 访问令牌信息（{@code refreshToken} 为空串）
+     */
+    default OAuth2AccessTokenDO createClientAccessToken(String clientId, List<String> scopes) {
+        return createAccessToken(0L, 0, clientId, scopes);
+    }
+
+    /**
      * 使用刷新令牌换取新的访问令牌。
      *
      * @param refreshToken 刷新令牌

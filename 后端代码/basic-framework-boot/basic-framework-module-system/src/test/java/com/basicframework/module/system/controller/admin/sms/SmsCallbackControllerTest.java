@@ -91,29 +91,29 @@ class SmsCallbackControllerTest {
         verify(smsSendService).receiveSmsStatus("TENCENT", TENCENT_BODY);
     }
 
-    /** 验证阿里云回调缺少签名时返回 401，且不触达回执写入。 */
+    /** 验证阿里云回调缺少签名时统一返回 403，且不触达回执写入。 */
     @Test
     void rejectsAliyunCallbackWithoutSignature() {
         ResponseEntity<AliyunSmsCallbackRespVO> response = controller.receiveAliyunSmsStatus(
                 jsonRequest(ALIYUN_BODY, currentEpochSecond(), null));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());
         verifyNoInteractions(smsSendService);
     }
 
-    /** 验证腾讯云回调签名错误时返回 401，且不触达回执写入。 */
+    /** 验证腾讯云回调签名错误时统一返回 403，且不触达回执写入。 */
     @Test
     void rejectsTencentCallbackWithWrongSignature() {
         ResponseEntity<TencentSmsCallbackRespVO> response = controller.receiveTencentSmsStatus(
                 jsonRequest(TENCENT_BODY, currentEpochSecond(), "0000000000000000"));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).isEqualTo(TencentSmsCallbackRespVO.failure());
         verifyNoInteractions(smsSendService);
     }
 
-    /** 验证渠道未配置密钥时返回 503，避免匿名回调被当作合法来源。 */
+    /** 验证渠道未配置密钥时统一返回 403，避免暴露渠道配置状态。 */
     @Test
     void rejectsCallbackWhenSecretNotConfigured() {
         SmsCallbackProperties properties = new SmsCallbackProperties();
@@ -124,7 +124,7 @@ class SmsCallbackControllerTest {
         ResponseEntity<TencentSmsCallbackRespVO> response = controller.receiveTencentSmsStatus(
                 signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_TEST_HMAC_KEY));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).isEqualTo(TencentSmsCallbackRespVO.failure());
         verifyNoInteractions(smsSendService);
     }

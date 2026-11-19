@@ -35,6 +35,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -57,6 +58,7 @@ import static com.basicframework.framework.security.core.util.SecurityFrameworkU
  */
 @Tag(name = "管理后台 - 认证")
 @RestController
+@Validated
 @RequestMapping("/system/auth")
 @Slf4j
 public class AuthController {

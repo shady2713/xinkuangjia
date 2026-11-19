@@ -28,8 +28,10 @@ import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 import com.basicframework.module.system.enums.security.UserTokenInvalidationReasonEnum;
 import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
+import com.basicframework.module.system.framework.security.login.LoginFailureLockService;
 import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
 import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
@@ -92,6 +94,9 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Resource
     private SecurityAuditService securityAuditService;
+
+    @Resource
+    private ObjectProvider<LoginFailureLockService> loginFailureLockServiceProvider;
 
     /**
      * 创建用户。
@@ -219,14 +224,15 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     public void updateUserProfile(Long id, UserProfileUpdateReqVO reqVO) {
-        // 校验正确性
-        validateUserExists(id);
-        validateEmailUnique(id, reqVO.getEmail());
-        validateMobileUnique(id, reqVO.getMobile());
-        // 执行更新
-        AdminUserDO updateUser = BeanUtils.toBean(reqVO, AdminUserDO.class);
-        updateUser.setId(id);
-        userMapper.updateById(updateUser);
+        // 个人资料自助修改需忽略部门数据权限，防止 deptId 为空用户被锁死且确保手机号/邮箱全库唯一。
+        DataPermissionUtils.executeIgnore(() -> {
+            validateUserExists(id);
+            validateEmailUnique(id, reqVO.getEmail());
+            validateMobileUnique(id, reqVO.getMobile());
+            AdminUserDO updateUser = BeanUtils.toBean(reqVO, AdminUserDO.class);
+            updateUser.setId(id);
+            userMapper.updateById(updateUser);
+        });
     }
 
     /**
@@ -237,14 +243,26 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
-        // 旧密码允许历史 bcrypt(md5(明文)) 格式通过，保证存量账号可完成迁移。
+        String lockKey = "profile-pwd:" + id;
+        LoginFailureLockService lockService = loginFailureLockServiceProvider != null
+                ? loginFailureLockServiceProvider.getIfAvailable() : null;
+        if (lockService != null) {
+            lockService.assertNotLocked(lockKey);
+        }
+        // 旧密码允许历史 bcrypt(md5(明文)) 格式通过，且自助改密忽略部门数据权限以免空部门用户无法完成强制改密。
         AdminUserDO user;
         try {
-            user = validateOldPassword(id, reqVO.getOldPassword());
+            user = DataPermissionUtils.executeIgnore(() -> validateOldPassword(id, reqVO.getOldPassword()));
         } catch (ServiceException ex) {
+            if (lockService != null) {
+                lockService.recordFailure(lockKey);
+            }
             securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE,
                     LoginResultEnum.PASSWORD_VERIFY_FAILED, id, null);
             throw ex;
+        }
+        if (lockService != null) {
+            lockService.clearFailures(lockKey);
         }
         try {
             validatePasswordPolicy(reqVO.getNewPassword());
@@ -259,7 +277,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setPassword(encodePassword(reqVO.getNewPassword()));
         // 用户自行修改密码后不再要求强制改密。
         updateObj.setPasswordChangeRequired(false);
-        userMapper.updateById(updateObj);
+        DataPermissionUtils.executeIgnore(() -> userMapper.updateById(updateObj));
 
         // 先吊销旧令牌，再写审计，避免审计写入失败导致旧会话继续有效。
         publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
@@ -512,7 +530,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (id == null) {
             return AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
         }
-        AdminUserDO user = userMapper.selectById(id);
+        AdminUserDO user = DataPermissionUtils.executeIgnore(() -> userMapper.selectById(id));
         // 老数据没有 user_type 时，默认归入当前业务管理平台，避免历史账号登录异常。
         return AdminPlatformTypeEnum.defaultType(user == null ? null : user.getUserType());
     }
@@ -711,6 +729,35 @@ public class AdminUserServiceImpl implements AdminUserService {
     private void validateUserPlatform(AdminUserDO user, String userType) {
         // 平台类型是账号对象级权限边界，不允许任何管理端操作跨平台访问用户。
         if (!AdminPlatformTypeEnum.isSame(user.getUserType(), userType)) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        validateOperatorCanManageTarget(user);
+    }
+
+    /**
+     * 校验非超管操作员不得越权修改、重置、禁用或删除持有 {@code super_admin} 角色的账号。
+     *
+     * <p>防止同属 {@code super_admin} 管理平台的普通子管理员通过用户管理或导入接口接管超级管理员账号。</p>
+     *
+     * @param target 目标用户
+     */
+    private void validateOperatorCanManageTarget(AdminUserDO target) {
+        if (target == null || target.getId() == null) {
+            return;
+        }
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null || Objects.equals(operatorId, target.getId())) {
+            return;
+        }
+        PermissionService permissionService = permissionServiceProvider != null
+                ? permissionServiceProvider.getIfAvailable() : null;
+        if (permissionService == null) {
+            return;
+        }
+        boolean targetIsSuperAdmin = permissionService.hasAnyRoles(
+                target.getId(), RoleCodeEnum.SUPER_ADMIN.getCode());
+        if (targetIsSuperAdmin
+                && !permissionService.hasAnyRoles(operatorId, RoleCodeEnum.SUPER_ADMIN.getCode())) {
             throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }

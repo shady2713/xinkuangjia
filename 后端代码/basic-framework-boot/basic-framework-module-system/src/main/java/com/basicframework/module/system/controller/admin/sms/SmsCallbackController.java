@@ -22,8 +22,8 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * 短信供应商状态回执入口。
  *
- * <p>回调保持匿名访问，但写入回执状态前必须通过按渠道密钥计算的 HMAC-SHA256 验签；
- * 验签失败返回 401，渠道未配置密钥返回 503，两种情况都不会解析请求体或写入回执状态。
+ * <p>回调保持匿名访问，但写入回执状态前必须通过按渠道密钥计算的 HMAC-SHA256 验签与重放窗口校验；
+ * 渠道未配置密钥、验签失败或重放请求均按失败关闭统一返回 HTTP 403，不暴露渠道配置状态且不写入回执。
  * 验签通过后按供应商协议返回固定响应，解析或落库失败返回 HTTP 500 触发重试。</p>
  *
  * @author 李杰
@@ -60,7 +60,7 @@ public class SmsCallbackController {
                     SmsChannelEnum.ALIYUN.getCode(), request, text);
             if (verification != SmsCallbackVerificationResult.PASS) {
                 log.warn("[receiveAliyunSmsStatus][短信回执验签未通过({})]", verification);
-                return ResponseEntity.status(resolveRejectStatus(verification))
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(AliyunSmsCallbackRespVO.failure());
             }
             smsSendService.receiveSmsStatus(SmsChannelEnum.ALIYUN.getCode(), text);
@@ -91,7 +91,7 @@ public class SmsCallbackController {
                     SmsChannelEnum.TENCENT.getCode(), request, text);
             if (verification != SmsCallbackVerificationResult.PASS) {
                 log.warn("[receiveTencentSmsStatus][短信回执验签未通过({})]", verification);
-                return ResponseEntity.status(resolveRejectStatus(verification))
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(TencentSmsCallbackRespVO.failure());
             }
             smsSendService.receiveSmsStatus(SmsChannelEnum.TENCENT.getCode(), text);
@@ -100,17 +100,6 @@ public class SmsCallbackController {
             log.warn("[receiveTencentSmsStatus][短信回执处理失败]", ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(TencentSmsCallbackRespVO.failure());
         }
-    }
-
-    /**
-     * 将验签拒绝结果映射为 HTTP 状态。
-     *
-     * @param result 验签结果，调用方保证不是 {@link SmsCallbackVerificationResult#PASS}
-     * @return 未配置密钥时为 503，其余拒绝为 401
-     */
-    private static HttpStatus resolveRejectStatus(SmsCallbackVerificationResult result) {
-        return result == SmsCallbackVerificationResult.NOT_CONFIGURED
-                ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.UNAUTHORIZED;
     }
 
 }

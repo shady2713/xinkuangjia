@@ -17,6 +17,8 @@ import org.quartz.SchedulerException;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
 import java.util.List;
@@ -95,17 +97,23 @@ public class JobServiceImpl implements JobService {
         if (!Objects.equals(job.getStatus(), JobStatusEnum.NORMAL.getStatus())) {
             throw exception(JOB_UPDATE_ONLY_NORMAL_STATUS);
         }
-        // 1.3 校验 JobHandler 是否存在
-        validateJobHandlerExists(updateReqVO.getHandlerName());
+        // 1.3 处理器名称作为 Quartz JobKey 唯一标识，更新时禁止修改，避免数据库与调度器失步产生僵尸触发器。
+        if (!Objects.equals(job.getHandlerName(), updateReqVO.getHandlerName())) {
+            throw exception(JOB_HANDLER_CAN_NOT_UPDATE);
+        }
+        // 1.4 校验 JobHandler 是否存在
+        validateJobHandlerExists(job.getHandlerName());
 
         // 2. 更新 JobDO
         JobDO updateObj = BeanUtils.toBean(updateReqVO, JobDO.class);
+        updateObj.setHandlerName(job.getHandlerName());
         fillJobMonitorTimeoutEmpty(updateObj);
         jobMapper.updateById(updateObj);
 
-        // 3. 更新 Job 到 Quartz 中
-        schedulerManager.updateJob(job.getHandlerName(), updateReqVO.getHandlerParam(), updateReqVO.getCronExpression(),
-                updateReqVO.getRetryCount(), updateReqVO.getRetryInterval());
+        // 3. 在事务提交后同步更新 Quartz 调度器，避免数据库回滚时留下与 DB 不一致的触发器。
+        runSchedulerAfterCommit(() -> schedulerManager.updateJob(
+                job.getHandlerName(), updateReqVO.getHandlerParam(), updateReqVO.getCronExpression(),
+                updateReqVO.getRetryCount(), updateReqVO.getRetryInterval()));
     }
 
     /**
@@ -148,12 +156,14 @@ public class JobServiceImpl implements JobService {
         JobDO updateObj = JobDO.builder().id(id).status(status).build();
         jobMapper.updateById(updateObj);
 
-        // 更新状态 Job 到 Quartz 中
-        if (JobStatusEnum.NORMAL.getStatus().equals(status)) { // 开启
-            schedulerManager.resumeJob(job.getHandlerName());
-        } else { // 暂停
-            schedulerManager.pauseJob(job.getHandlerName());
-        }
+        // 更新状态 Job 到 Quartz 中（事务提交后同步，避免事务回滚产生状态漂移）
+        runSchedulerAfterCommit(() -> {
+            if (JobStatusEnum.NORMAL.getStatus().equals(status)) { // 开启
+                schedulerManager.resumeJob(job.getHandlerName());
+            } else { // 暂停
+                schedulerManager.pauseJob(job.getHandlerName());
+            }
+        });
     }
 
     /**
@@ -212,8 +222,8 @@ public class JobServiceImpl implements JobService {
         // 更新
         jobMapper.deleteById(id);
 
-        // 删除 Job 到 Quartz 中
-        schedulerManager.deleteJob(job.getHandlerName());
+        // 删除 Job 到 Quartz 中（事务提交后同步，避免数据库回滚但任务已从调度器移除）
+        runSchedulerAfterCommit(() -> schedulerManager.deleteJob(job.getHandlerName()));
     }
 
     /**
@@ -229,10 +239,51 @@ public class JobServiceImpl implements JobService {
         List<JobDO> jobs = jobMapper.selectByIds(ids);
         jobMapper.deleteByIds(ids);
 
-        // 删除 Job 到 Quartz 中
-        for (JobDO job : jobs) {
-            schedulerManager.deleteJob(job.getHandlerName());
+        // 事务提交后统一删除 Quartz 中对应的任务
+        runSchedulerAfterCommit(() -> {
+            for (JobDO job : jobs) {
+                schedulerManager.deleteJob(job.getHandlerName());
+            }
+        });
+    }
+
+    /**
+     * 调度器操作函数式接口，允许透传 {@link SchedulerException}。
+     */
+    @FunctionalInterface
+    private interface SchedulerAction {
+
+        /**
+         * 执行 Quartz 调度器同步动作。
+         *
+         * @throws SchedulerException Quartz 操作失败时抛出
+         */
+        void execute() throws SchedulerException;
+
+    }
+
+    /**
+     * 若当前存在活动 Spring 事务，则在事务成功提交后再同步 Quartz 调度器；无事务上下文时立即执行。
+     *
+     * @param action Quartz 调度器同步动作
+     * @throws SchedulerException 无事务直接执行且 Quartz 操作失败时抛出
+     */
+    private void runSchedulerAfterCommit(SchedulerAction action) throws SchedulerException {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                /** 事务提交后执行调度器同步，记录异常避免吞掉故障信号。 */
+                @Override
+                public void afterCommit() {
+                    try {
+                        action.execute();
+                    } catch (SchedulerException ex) {
+                        log.error("[runSchedulerAfterCommit][事务提交后同步 Quartz 调度器失败]", ex);
+                    }
+                }
+            });
+            return;
         }
+        action.execute();
     }
 
     /**

@@ -59,12 +59,21 @@ public class ConfigServiceImpl implements ConfigService {
     @Override
     public void updateConfig(ConfigSaveReqVO updateReqVO) {
         // 校验自己存在
-        validateConfigExists(updateReqVO.getId());
+        ConfigDO existing = validateConfigExists(updateReqVO.getId());
+        // 系统内置配置键由代码契约引用，不允许在编辑时被改名。
+        if (ConfigTypeEnum.SYSTEM.getType().equals(existing.getType())
+                && !java.util.Objects.equals(existing.getConfigKey(), updateReqVO.getKey())) {
+            throw exception(CONFIG_CAN_NOT_UPDATE_SYSTEM_KEY);
+        }
         // 校验参数配置 key 的唯一性
         validateConfigKeyUnique(updateReqVO.getId(), updateReqVO.getKey());
 
-        // 更新参数配置
+        // 更新参数配置；不可见配置回传脱敏占位符时保留原值，避免仅修改备注时覆盖敏感值。
         ConfigDO updateObj = ConfigConvert.INSTANCE.convert(updateReqVO);
+        if (!Boolean.TRUE.equals(existing.getVisible())
+                && HIDDEN_CONFIG_VALUE_MASK.equals(updateReqVO.getValue())) {
+            updateObj.setValue(existing.getValue());
+        }
         configMapper.updateById(updateObj);
     }
 

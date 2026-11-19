@@ -429,7 +429,36 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     public void assignRoleDataScope(Long roleId, Integer dataScope, Set<Long> dataScopeDeptIds) {
         validateRolePlatform(roleId);
+        validateOperatorDataScopeAuthority(dataScope, dataScopeDeptIds);
         roleService.updateRoleDataScope(roleId, dataScope, dataScopeDeptIds);
+    }
+
+    /**
+     * 校验非超管操作员授予角色的数据权限范围不得超越自身数据权限边界。
+     *
+     * @param dataScope        目标数据范围
+     * @param dataScopeDeptIds 指定部门数据范围集合
+     */
+    private void validateOperatorDataScopeAuthority(Integer dataScope, Set<Long> dataScopeDeptIds) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            return;
+        }
+        Set<Long> operatorRoleIds = convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId);
+        if (roleService.hasAnySuperAdmin(operatorRoleIds)) {
+            return;
+        }
+        DeptDataPermissionRespDTO operatorPerm = getDeptDataPermission(operatorId);
+        if (Boolean.TRUE.equals(operatorPerm.getAll())) {
+            return;
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.ALL.getScope())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_CUSTOM.getScope())
+                && (CollUtil.isEmpty(dataScopeDeptIds) || !operatorPerm.getDeptIds().containsAll(dataScopeDeptIds))) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
     }
 
     /**
@@ -530,6 +559,13 @@ public class PermissionServiceImpl implements PermissionService {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         boolean operatorIsSuperAdmin = operatorId == null
                 || roleService.hasAnySuperAdmin(convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId));
+        // 非超管操作员禁止修改超级管理员的角色集合（包括传入空集合摘除超管角色）。
+        if (!operatorIsSuperAdmin) {
+            Set<Long> dbRoleIds = convertSet(userRoleMapper.selectListByUserId(userId), UserRoleDO::getRoleId);
+            if (roleService.hasAnySuperAdmin(dbRoleIds)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
         for (RoleDO role : roleService.getRoleList(roleIds)) {
             if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType)) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);

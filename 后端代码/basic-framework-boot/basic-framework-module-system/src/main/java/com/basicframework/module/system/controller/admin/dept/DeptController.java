@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 
 import static com.basicframework.framework.common.pojo.CommonResult.success;
@@ -97,7 +99,7 @@ public class DeptController {
     @Operation(summary = "批量删除部门")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PreAuthorize("@ss.hasPermission('system:dept:delete')")
-    public CommonResult<Boolean> deleteDeptList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteDeptList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         deptService.deleteDeptList(ids);
         return success(true);
     }

@@ -95,6 +95,11 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
                     && ObjectUtil.notEqual(accessToken.getUserType(), userType)) {
                 throw new AccessDeniedException("错误的用户类型");
             }
+            // 管理后台接口禁止使用无真实后台用户的客户端凭据占位令牌（userId <= 0），防止越权访问 isAuthenticated() 端点。
+            if (com.basicframework.framework.common.enums.UserTypeEnum.ADMIN.getValue().equals(userType)
+                    && (accessToken.getUserId() == null || accessToken.getUserId() <= 0)) {
+                throw new AccessDeniedException("客户端凭据令牌无权访问管理后台接口");
+            }
             // 构建登录用户并透传权限和附加信息。
             LoginUser loginUser = new LoginUser();
             loginUser.setId(accessToken.getUserId());

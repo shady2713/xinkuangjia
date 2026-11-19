@@ -240,14 +240,15 @@ public class FileController {
             return;
         }
 
-        // 读取内容
-        byte[] content = fileService.getFileContent(path);
-        if (content == null) {
-            log.warn("[getFileContent][path({}) 文件不存在]", path);
-            response.setStatus(HttpStatus.NOT_FOUND.value());
-            return;
+        // 流式读取内容，校验元数据未软删除且避免大文件整包进入 JVM 堆内存。
+        try (InputStream contentStream = fileService.openFileContentStream(path)) {
+            if (contentStream == null) {
+                log.warn("[getFileContent][path({}) 文件不存在或已删除]", path);
+                response.setStatus(HttpStatus.NOT_FOUND.value());
+                return;
+            }
+            writeAttachment(response, path, contentStream);
         }
-        writeAttachment(response, path, content);
     }
 
     /**

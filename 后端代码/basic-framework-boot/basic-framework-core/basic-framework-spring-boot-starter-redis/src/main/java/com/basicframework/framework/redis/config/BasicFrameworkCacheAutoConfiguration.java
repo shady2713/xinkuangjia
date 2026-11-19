@@ -84,8 +84,10 @@ public class BasicFrameworkCacheAutoConfiguration {
         RedisConnectionFactory connectionFactory = Objects.requireNonNull(redisTemplate.getConnectionFactory());
         RedisCacheWriter cacheWriter = RedisCacheWriter.nonLockingRedisCacheWriter(connectionFactory,
                 BatchStrategies.scan(basic_frameworkCacheProperties.getRedisScanBatchSize()));
-        // 创建 RedisCacheManager 对象
-        return new TimeoutRedisCacheManager(cacheWriter, redisCacheConfiguration);
+        // 启用事务感知，确保 @Transactional 内的 @CacheEvict/@CachePut 在事务提交后生效，避免回滚脏缓存。
+        TimeoutRedisCacheManager cacheManager = new TimeoutRedisCacheManager(cacheWriter, redisCacheConfiguration);
+        cacheManager.setTransactionAware(true);
+        return cacheManager;
     }
 
 }

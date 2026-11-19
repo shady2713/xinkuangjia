@@ -101,6 +101,7 @@ class OpenApiContractSnapshotTest {
     /** 构建排序稳定、跨平台字节一致的 OpenAPI 3.0.3 JSON 文本。 */
     static String buildDeterministicOpenApiJson() throws Exception {
         Map<String, Object> schemas = new TreeMap<>();
+        Map<String, Class<?>> schemaOwners = new LinkedHashMap<>();
         Map<String, Map<String, Object>> paths = new TreeMap<>();
 
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
@@ -135,7 +136,7 @@ class OpenApiContractSnapshotTest {
                         String fullPath = normalizeUrlPath(apiPrefix, basePath, subPath);
                         Map<String, Object> pathItem = paths.computeIfAbsent(fullPath, k -> new TreeMap<>());
                         for (String httpMethod : mapping.httpMethods) {
-                            pathItem.put(httpMethod, buildOperationObject(controller, method, tagName, schemas));
+                            pathItem.put(httpMethod, buildOperationObject(controller, method, tagName, schemas, schemaOwners));
                         }
                     }
                 }
@@ -160,7 +161,8 @@ class OpenApiContractSnapshotTest {
 
     /** 构建单个 Spring MVC 控制器端点对应的 OpenAPI Operation 节点。 */
     private static Map<String, Object> buildOperationObject(Class<?> controller, Method method,
-                                                            String tagName, Map<String, Object> schemas) {
+                                                            String tagName, Map<String, Object> schemas,
+                                                            Map<String, Class<?>> schemaOwners) {
         Map<String, Object> op = new LinkedHashMap<>();
         op.put("tags", List.of(tagName));
         op.put("operationId", controller.getSimpleName() + "_" + method.getName());
@@ -193,7 +195,7 @@ class OpenApiContractSnapshotTest {
                 Map<String, Object> bodyObj = new LinkedHashMap<>();
                 bodyObj.put("required", rb.required());
                 bodyObj.put("content", Map.of(
-                        "application/json", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas))
+                        "application/json", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners))
                 ));
                 requestBody = bodyObj;
             } else if (param.isAnnotationPresent(PathVariable.class)) {
@@ -203,7 +205,7 @@ class OpenApiContractSnapshotTest {
                 pObj.put("name", name);
                 pObj.put("in", "path");
                 pObj.put("required", pv.required());
-                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas));
+                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners));
                 queryOrPathParams.add(pObj);
             } else if (param.isAnnotationPresent(RequestParam.class)) {
                 RequestParam rp = param.getAnnotation(RequestParam.class);
@@ -212,30 +214,27 @@ class OpenApiContractSnapshotTest {
                 pObj.put("name", name);
                 pObj.put("in", "query");
                 pObj.put("required", rp.required());
-                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas));
+                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners));
                 queryOrPathParams.add(pObj);
             } else if (!isSimpleScalar(rawType)) {
                 if (containsMultipartFile(rawType)) {
                     Map<String, Object> bodyObj = new LinkedHashMap<>();
                     bodyObj.put("required", true);
                     bodyObj.put("content", Map.of(
-                            "multipart/form-data", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas))
+                            "multipart/form-data", Map.of("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners))
                     ));
                     requestBody = bodyObj;
                 } else {
-                    Map<String, Object> pObj = new LinkedHashMap<>();
-                    pObj.put("name", fallbackName);
-                    pObj.put("in", "query");
-                    pObj.put("required", false);
-                    pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas));
-                    queryOrPathParams.add(pObj);
+                    // 注册查询 VO Schema 供前端类型复用，同时按 springdoc.default-flat-param-object=true 展平为独立查询参数。
+                    resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners);
+                    appendFlattenedQueryParams(rawType, queryOrPathParams, schemas, schemaOwners);
                 }
             } else {
                 Map<String, Object> pObj = new LinkedHashMap<>();
                 pObj.put("name", fallbackName);
                 pObj.put("in", "query");
                 pObj.put("required", false);
-                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas));
+                pObj.put("schema", resolveTypeSchema(param.getParameterizedType(), schemas, schemaOwners));
                 queryOrPathParams.add(pObj);
             }
         }
@@ -250,34 +249,83 @@ class OpenApiContractSnapshotTest {
         Map<String, Object> response200 = new LinkedHashMap<>();
         response200.put("description", "OK");
         if (method.getReturnType() != void.class && method.getReturnType() != Void.class) {
+            Type responseType = unwrapResponseEntity(method.getGenericReturnType());
             response200.put("content", Map.of(
-                    "application/json", Map.of("schema", resolveTypeSchema(method.getGenericReturnType(), schemas))
+                    "application/json", Map.of("schema", resolveTypeSchema(responseType, schemas, schemaOwners))
             ));
         }
         op.put("responses", Map.of("200", response200));
         return op;
     }
 
+    /** 剥离 Spring {@code ResponseEntity<T>} 外壳，暴露真实 JSON 响应体契约类型。 */
+    private static Type unwrapResponseEntity(Type returnType) {
+        if (returnType instanceof ParameterizedType pt
+                && pt.getRawType() instanceof Class<?> raw
+                && org.springframework.http.ResponseEntity.class.isAssignableFrom(raw)
+                && pt.getActualTypeArguments().length == 1) {
+            return pt.getActualTypeArguments()[0];
+        }
+        return returnType;
+    }
+
+    /** 将查询对象 VO 的所有非隐藏字段按字母序展平为 OpenAPI query parameters。 */
+    private static void appendFlattenedQueryParams(Class<?> clazz, List<Map<String, Object>> target,
+                                                   Map<String, Object> schemas,
+                                                   Map<String, Class<?>> schemaOwners) {
+        Map<String, Map<String, Object>> flattened = new TreeMap<>();
+        List<Class<?>> hierarchy = new ArrayList<>();
+        for (Class<?> cur = clazz; cur != null && cur != Object.class; cur = cur.getSuperclass()) {
+            hierarchy.add(0, cur);
+        }
+        for (Class<?> cur : hierarchy) {
+            for (Field field : cur.getDeclaredFields()) {
+                if (field.isSynthetic()
+                        || Modifier.isStatic(field.getModifiers())
+                        || Modifier.isTransient(field.getModifiers())
+                        || field.isAnnotationPresent(JsonIgnore.class)) {
+                    continue;
+                }
+                Schema fieldSchemaAnn = field.getAnnotation(Schema.class);
+                if (fieldSchemaAnn != null && fieldSchemaAnn.hidden()) {
+                    continue;
+                }
+                Map<String, Object> pObj = new LinkedHashMap<>();
+                pObj.put("name", field.getName());
+                pObj.put("in", "query");
+                pObj.put("required", isRequiredField(field, fieldSchemaAnn));
+                pObj.put("schema", resolveTypeSchema(field.getGenericType(), schemas, schemaOwners));
+                flattened.put(field.getName(), pObj);
+            }
+        }
+        target.addAll(flattened.values());
+    }
+
     /** 递归将 Java 反射类型解析为 OpenAPI Schema 定义或组件引用。 */
-    private static Map<String, Object> resolveTypeSchema(Type type, Map<String, Object> schemas) {
+    private static Map<String, Object> resolveTypeSchema(Type type, Map<String, Object> schemas,
+                                                         Map<String, Class<?>> schemaOwners) {
         if (type instanceof WildcardType wt) {
             Type[] upper = wt.getUpperBounds();
-            return upper.length > 0 ? resolveTypeSchema(upper[0], schemas) : Map.of("type", "object");
+            return upper.length > 0 ? resolveTypeSchema(upper[0], schemas, schemaOwners) : Map.of("type", "object");
         }
         if (type instanceof ParameterizedType pt) {
             Class<?> raw = (Class<?>) pt.getRawType();
+            if (org.springframework.http.ResponseEntity.class.isAssignableFrom(raw)
+                    && pt.getActualTypeArguments().length == 1) {
+                return resolveTypeSchema(pt.getActualTypeArguments()[0], schemas, schemaOwners);
+            }
             Type[] args = pt.getActualTypeArguments();
             if (Collection.class.isAssignableFrom(raw)) {
                 Map<String, Object> arr = new LinkedHashMap<>();
                 arr.put("type", "array");
-                arr.put("items", args.length > 0 ? resolveTypeSchema(args[0], schemas) : Map.of("type", "object"));
+                arr.put("items", args.length > 0 ? resolveTypeSchema(args[0], schemas, schemaOwners) : Map.of("type", "object"));
                 return arr;
             }
             if (Map.class.isAssignableFrom(raw)) {
                 Map<String, Object> mapSchema = new LinkedHashMap<>();
                 mapSchema.put("type", "object");
                 if (args.length > 1) {
-                    mapSchema.put("additionalProperties", resolveTypeSchema(args[1], schemas));
+                    mapSchema.put("additionalProperties", resolveTypeSchema(args[1], schemas, schemaOwners));
                 }
                 return mapSchema;
             }
@@ -285,7 +333,7 @@ class OpenApiContractSnapshotTest {
             String schemaName = buildParameterizedSchemaName(raw, args);
             if (!schemas.containsKey(schemaName)) {
                 schemas.put(schemaName, Map.of("type", "object"));
-                schemas.put(schemaName, introspectBeanSchema(raw, pt, schemas));
+                schemas.put(schemaName, introspectBeanSchema(raw, pt, schemas, schemaOwners));
             }
             return Map.of("$ref", "#/components/schemas/" + schemaName);
         }
@@ -294,16 +342,23 @@ class OpenApiContractSnapshotTest {
                 if (clazz == byte[].class) {
                     return Map.of("type", "string", "format", "byte");
                 }
-                return Map.of("type", "array", "items", resolveTypeSchema(clazz.getComponentType(), schemas));
+                return Map.of("type", "array", "items", resolveTypeSchema(clazz.getComponentType(), schemas, schemaOwners));
             }
             Map<String, Object> scalar = scalarSchema(clazz);
             if (scalar != null) {
                 return scalar;
             }
             String schemaName = uniqueModelName(clazz);
+            Class<?> previousOwner = schemaOwners.putIfAbsent(schemaName, clazz);
+            if (previousOwner != null && !previousOwner.equals(clazz)) {
+                throw new IllegalStateException(
+                        "检测到 OpenAPI Schema 重名冲突 '" + schemaName + "': "
+                                + previousOwner.getName() + " 与 " + clazz.getName()
+                                + "，请为不同模块的 VO 使用带模块前缀的唯一类名");
+            }
             if (!schemas.containsKey(schemaName)) {
                 schemas.put(schemaName, Map.of("type", "object"));
-                schemas.put(schemaName, introspectBeanSchema(clazz, null, schemas));
+                schemas.put(schemaName, introspectBeanSchema(clazz, null, schemas, schemaOwners));
             }
             return Map.of("$ref", "#/components/schemas/" + schemaName);
         }
@@ -312,7 +367,8 @@ class OpenApiContractSnapshotTest {
 
     /** 扫描 VO/DTO 类继承链上的持久化/序列化属性并生成对象 Schema。 */
     private static Map<String, Object> introspectBeanSchema(Class<?> clazz, ParameterizedType genericSelf,
-                                                            Map<String, Object> schemas) {
+                                                            Map<String, Object> schemas,
+                                                            Map<String, Class<?>> schemaOwners) {
         Map<String, Type> typeVarMap = new LinkedHashMap<>();
         if (genericSelf != null) {
             var typeParams = clazz.getTypeParameters();
@@ -350,7 +406,7 @@ class OpenApiContractSnapshotTest {
                             .toArray(Type[]::new);
                     fieldType = new ResolvedParameterizedType((Class<?>) fpt.getRawType(), resolvedArgs);
                 }
-                Map<String, Object> propSchema = new LinkedHashMap<>(resolveTypeSchema(fieldType, schemas));
+                Map<String, Object> propSchema = new LinkedHashMap<>(resolveTypeSchema(fieldType, schemas, schemaOwners));
                 if (fieldSchemaAnn != null && StrUtil.isNotBlank(fieldSchemaAnn.description()) && !propSchema.containsKey("$ref")) {
                     propSchema.put("description", fieldSchemaAnn.description());
                 }

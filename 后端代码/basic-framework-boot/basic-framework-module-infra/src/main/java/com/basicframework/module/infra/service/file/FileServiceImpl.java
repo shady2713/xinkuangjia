@@ -207,8 +207,9 @@ public class FileServiceImpl implements FileService {
         }
         String path = generateUploadPath(normalizedName, directory);
 
-        // 同时返回上传地址和访问地址，前端上传后可以直接使用访问地址预览。
-        String uploadUrl = fileStorageService.presignPutUrl(path);
+        // 同时返回上传地址和访问地址；预签名绑定预期 Content-Type 防止直传篡改内容类型。
+        String expectedContentType = FileTypeUtils.getMineType(normalizedName);
+        String uploadUrl = fileStorageService.presignPutUrl(path, expectedContentType);
         String visitUrl = fileStorageService.presignGetUrl(path, null);
         FilePresignedUrlRespVO response = new FilePresignedUrlRespVO();
         response.setPath(path);
@@ -341,6 +342,21 @@ public class FileServiceImpl implements FileService {
     @Override
     public byte[] getFileContent(String path) throws Exception {
         return fileStorageService.getContent(path);
+    }
+
+    /**
+     * 先核验数据库元数据记录仍存在且未软删除，再流式打开底层存储内容，避免大文件整包载入堆内存。
+     *
+     * @param path 对象路径
+     * @return 文件内容输入流；记录不存在、已删除或存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    @Override
+    public java.io.InputStream openFileContentStream(String path) throws Exception {
+        if (fileMapper.selectByPath(path) == null) {
+            return null;
+        }
+        return fileStorageService.openContentStream(path);
     }
 
 }

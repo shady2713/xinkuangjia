@@ -212,6 +212,21 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
+     * 以流式方式打开 S3 对象输入流，避免大文件整包载入堆内存。
+     *
+     * @param path 对象路径
+     * @return S3 对象内容流；调用方负责关闭
+     */
+    @Override
+    public java.io.InputStream openContentStream(String path) {
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(config.getBucket())
+                .key(path)
+                .build();
+        return client.getObject(getRequest);
+    }
+
+    /**
      * 通过 S3 服务端复制对象，避免业务图片复制依赖公网 URL。
      *
      * @param sourcePath 来源对象路径
@@ -297,9 +312,26 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
      */
     @Override
     public String presignPutUrl(String path) {
+        return presignPutUrl(path, null);
+    }
+
+    /**
+     * 生成有效期为 24 小时并约束 {@code Content-Type} 的对象上传预签名地址。
+     *
+     * @param path        对象路径
+     * @param contentType 允许上传的 MIME 类型，为空时不追加该签名约束
+     * @return 上传预签名地址
+     */
+    @Override
+    public String presignPutUrl(String path, String contentType) {
         return presigner.presignPutObject(PutObjectPresignRequest.builder()
-                .signatureDuration(EXPIRATION_DEFAULT)
-                .putObjectRequest(b -> b.bucket(config.getBucket()).key(path)).build())
+                        .signatureDuration(EXPIRATION_DEFAULT)
+                        .putObjectRequest(b -> {
+                            b.bucket(config.getBucket()).key(path);
+                            if (StrUtil.isNotBlank(contentType)) {
+                                b.contentType(contentType);
+                            }
+                        }).build())
                 .url().toString();
     }
 

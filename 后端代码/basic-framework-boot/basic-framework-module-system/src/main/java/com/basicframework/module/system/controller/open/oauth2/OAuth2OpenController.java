@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +37,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
  */
 @Tag(name = "开放接口 - OAuth2 令牌")
 @RestController
+@Validated
 @RequestMapping("/system/oauth2")
 public class OAuth2OpenController {
 
@@ -81,8 +83,9 @@ public class OAuth2OpenController {
         OAuth2AccessTokenDO accessToken = oauth2GrantService.grantClientCredentials(clientId, scopes);
 
         long expiresIn = Math.max(0, ChronoUnit.SECONDS.between(LocalDateTime.now(), accessToken.getExpiresTime()));
+        String refreshToken = StrUtil.isNotBlank(accessToken.getRefreshToken()) ? accessToken.getRefreshToken() : null;
         return success(new OAuth2OpenTokenRespVO(
-                accessToken.getAccessToken(), accessToken.getRefreshToken(), "Bearer", expiresIn,
+                accessToken.getAccessToken(), refreshToken, "Bearer", expiresIn,
                 String.join(" ", scopes)));
     }
 

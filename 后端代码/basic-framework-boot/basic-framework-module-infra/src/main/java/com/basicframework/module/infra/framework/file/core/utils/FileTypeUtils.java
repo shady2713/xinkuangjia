@@ -262,6 +262,42 @@ public final class FileTypeUtils {
     }
 
     /**
+     * 以流式方式将文件内容写回响应，仅缓冲头部 4KB 用于 MIME 魔数识别，避免大文件整包载入堆内存。
+     *
+     * @param response    响应对象
+     * @param filename    文件名
+     * @param inputStream 文件内容流（调用方负责关闭）
+     * @throws IOException 响应写出失败时抛出
+     */
+    public static void writeAttachment(HttpServletResponse response, String filename,
+                                       java.io.InputStream inputStream) throws IOException {
+        java.io.BufferedInputStream buffered = new java.io.BufferedInputStream(inputStream, 8192);
+        buffered.mark(4096);
+        byte[] header = buffered.readNBytes(4096);
+        buffered.reset();
+
+        String contentOnlyMime = normalizeMimeType(getMineType(header));
+        String mineType = ("image/svg+xml".equals(contentOnlyMime)
+                || "text/html".equals(contentOnlyMime)
+                || "application/xhtml+xml".equals(contentOnlyMime))
+                ? "application/octet-stream"
+                : normalizeMimeType(getMineType(header, filename));
+        if ("text/plain".equals(mineType)) {
+            response.setContentType("text/plain; charset=utf-8");
+        } else {
+            response.setContentType(mineType);
+        }
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Content-Security-Policy", "sandbox");
+        if (isImage(mineType)) {
+            response.setHeader("Content-Disposition", "inline;filename=" + HttpUtils.encodeUtf8(filename));
+        } else {
+            response.setHeader("Content-Disposition", "attachment;filename=" + HttpUtils.encodeUtf8(filename));
+        }
+        buffered.transferTo(response.getOutputStream());
+    }
+
+    /**
      * 判断 MIME 类型是否属于安全光栅图片（不含 SVG）。
      *
      * @param mineType MIME 类型

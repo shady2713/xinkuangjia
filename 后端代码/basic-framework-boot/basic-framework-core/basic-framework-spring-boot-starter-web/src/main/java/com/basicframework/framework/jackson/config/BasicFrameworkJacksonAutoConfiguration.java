@@ -81,15 +81,23 @@ public class BasicFrameworkJacksonAutoConfiguration {
     }
 
     /**
-     * 初始化全局 JsonUtils，直接使用主 ObjectMapper
+     * 初始化全局 JsonUtils，使用独立且不含 Web XSS 清洗器的 ObjectMapper，
+     * 避免在 HTTP 线程内读写 Redis 或内部 JSON 时把 {@code &} 等字符转义破坏。
      *
-     * @param objectMapper 框架注入的主 ObjectMapper
+     * @param timestampSupportModuleBean 时间与 Long 精度模块
      * @return 初始化后的 JsonUtils 实例
      */
     @Bean
     @SuppressWarnings("InstantiationOfUtilityClass")
-    public JsonUtils jsonUtils(ObjectMapper objectMapper) {
-        JsonUtils.init(objectMapper);
+    public JsonUtils jsonUtils(Module timestampSupportModuleBean) {
+        ObjectMapper internalMapper = new ObjectMapper();
+        internalMapper.configure(com.fasterxml.jackson.databind.SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        internalMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        internalMapper.setSerializationInclusion(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL);
+        internalMapper.registerModules(
+                new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule(),
+                timestampSupportModuleBean);
+        JsonUtils.init(internalMapper);
         log.debug("[init][初始化 JsonUtils 成功]");
         return new JsonUtils();
     }

@@ -88,7 +88,10 @@ public class PostServiceImpl implements PostService {
     @Override
     public void deletePost(Long id) {
         // 校验岗位存在
-        validatePostExists(id);
+        PostDO post = validatePostExists(id);
+        if (CollUtil.isNotEmpty(userPostMapper.selectListByPostIds(Collections.singletonList(id)))) {
+            throw exception(POST_IS_REFERENCED, post.getName());
+        }
         // 删除岗位
         postMapper.deleteById(id);
     }
@@ -100,6 +103,21 @@ public class PostServiceImpl implements PostService {
      */
     @Override
     public void deletePostList(List<Long> ids) {
+        if (CollUtil.isEmpty(ids)) {
+            return;
+        }
+        List<PostDO> posts = postMapper.selectByIds(ids);
+        Map<Long, PostDO> postMap = convertMap(posts, PostDO::getId);
+        for (Long id : ids) {
+            if (!postMap.containsKey(id)) {
+                throw exception(POST_NOT_FOUND);
+            }
+        }
+        var userPosts = userPostMapper.selectListByPostIds(ids);
+        if (CollUtil.isNotEmpty(userPosts)) {
+            PostDO referenced = postMap.get(userPosts.get(0).getPostId());
+            throw exception(POST_IS_REFERENCED, referenced != null ? referenced.getName() : String.valueOf(userPosts.get(0).getPostId()));
+        }
         postMapper.deleteByIds(ids);
     }
 
@@ -158,14 +176,17 @@ public class PostServiceImpl implements PostService {
      * 校验岗位存在。
      *
      * @param id 岗位编号
+     * @return 岗位记录，编号为空时返回 null
      */
-    private void validatePostExists(Long id) {
+    private PostDO validatePostExists(Long id) {
         if (id == null) {
-            return;
+            return null;
         }
-        if (postMapper.selectById(id) == null) {
+        PostDO post = postMapper.selectById(id);
+        if (post == null) {
             throw exception(POST_NOT_FOUND);
         }
+        return post;
     }
 
     /**

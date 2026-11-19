@@ -45,13 +45,14 @@ public class XssStringJsonDeserializer extends StringDeserializer {
      */
     @Override
     public String deserialize(JsonParser p, DeserializationContext ctxt) throws IOException {
-        // 1. 白名单 URL 的处理
+        // 1. 非 HTTP 请求上下文（如 Redis、异步任务或单元测试直接反序列化）不执行 XSS 清洗，避免破坏内部数据。
         HttpServletRequest request = ServletUtils.getRequest();
-        if (request != null) {
-            String uri = ServletUtils.getRequest().getRequestURI();
-            if (properties.getExcludeUrls().stream().anyMatch(excludeUrl -> pathMatcher.match(excludeUrl, uri))) {
-                return p.getText();
-            }
+        if (request == null) {
+            return super.deserialize(p, ctxt);
+        }
+        String uri = request.getRequestURI();
+        if (properties.getExcludeUrls().stream().anyMatch(excludeUrl -> pathMatcher.match(excludeUrl, uri))) {
+            return p.getText();
         }
 
         // 2. 真正使用 xssCleaner 进行过滤
