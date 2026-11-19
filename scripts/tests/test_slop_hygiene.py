@@ -321,3 +321,19 @@ def test_text_hygiene_rejects_conflict_markers_and_replacement_char() -> None:
         (3, "replacement-char"),
         (4, "merge-conflict-marker"),
     ]
+
+
+def test_web_skill_templates_have_no_console_calls_and_match_crud_contract() -> None:
+    """前端开发 Skill 模板不得包含 console.log 且 CRUD 默认模板须与脚手架契约一致。"""
+    assets_dir = DEFAULT_ROOT / ".agents" / "skills" / "weetion-development-web-standards" / "assets"
+    asset_files = sorted(assets_dir.glob("*.md"))
+    assert asset_files
+    for asset_file in asset_files:
+        content = asset_file.read_text(encoding="utf-8")
+        assert "console.log(" not in content, f"{asset_file.name} 存在触发 ESLint 报错的 console.log("
+
+    crud_template = (assets_dir / "crud-template.md").read_text(encoding="utf-8")
+    assert "useVbenModal" in crud_template
+    assert "useVbenDrawer" not in crud_template
+    assert "number | string" in crud_template
+    assert "[module]:[entity]:create" in crud_template

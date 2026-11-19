@@ -19,8 +19,8 @@ import { useVbenDrawer } from '@vben/common-ui';
 const [Drawer, drawerApi] = useVbenDrawer({
   title: 'Title',
   onConfirm: async () => {
-    // 确认操作
-    console.log('Confirmed');
+    await submitConfirmAction();
+    await drawerApi.close();
   },
 });
 ```
@@ -42,7 +42,7 @@ import { useVbenDrawer } from '@vben/common-ui';
 const [Drawer, drawerApi] = useVbenDrawer({
   title: 'Notice',
   onConfirm: async () => {
-    console.log('Confirm action');
+    await drawerApi.close();
   },
 });
 </script>
@@ -66,7 +66,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
   connectedComponent: DrawerContent,
   onConfirm: async () => {
     const data = drawerApi.getData();
-    console.log('Submit data:', data);
+    await saveDrawerData(data);
   },
 });
 
@@ -199,9 +199,9 @@ drawerApi.setData({
   name: 'John',
 });
 
-// 获取数据
+// 获取数据并用于表单或状态回填
 const data = drawerApi.getData();
-console.log(data);
+applyDrawerData(data);
 ```
 
 ### 锁定/解锁
@@ -224,18 +224,24 @@ const [Drawer, drawerApi] = useVbenDrawer({
 
   // 打开/关闭状态变化
   onOpenChange: (isOpen) => {
-    console.log('Drawer state:', isOpen);
+    if (!isOpen) {
+      resetDrawerState();
+    }
   },
 
   // 打开动画完成
   onOpened: () => {
-    console.log('Opened');
+    focusInitialField();
   },
 
   // 关闭前确认
-  onBeforeClose: () => {
-    const confirm = window.confirm('Are you sure to close?');
-    return confirm; // 返回 false 可阻止关闭
+  onBeforeClose: async () => {
+    try {
+      await confirm('Are you sure to close?');
+      return true;
+    } catch {
+      return false; // 返回 false 可阻止关闭
+    }
   },
 
   // 确认按钮
@@ -243,7 +249,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     try {
       drawerApi.lock(true);
       await submitData();
-      drawerApi.close();
+      await drawerApi.close();
     } finally {
       drawerApi.unlock();
     }
@@ -251,12 +257,12 @@ const [Drawer, drawerApi] = useVbenDrawer({
 
   // 取消按钮
   onCancel: () => {
-    console.log('Cancelled');
+    resetDraftState();
   },
 
   // 关闭动画完成
   onClosed: () => {
-    console.log('Closed');
+    cleanupTransientState();
   },
 });
 ```
@@ -315,7 +321,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     </div>
 
     <template #close-icon>
-      <CloseCircleOutlined />
+      <ElIcon><Close /></ElIcon>
     </template>
   </Drawer>
 </template>

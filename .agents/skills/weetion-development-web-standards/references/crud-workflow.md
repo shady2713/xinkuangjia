@@ -18,7 +18,7 @@
 
 ### 2. 阅读参考文档（生成前必须先读）
 
-**优先阅读默认 CRUD 模板：`../assets/crud-template.md`**
+**优先阅读默认 CRUD 模板：`../assets/crud-template.md`（优先使用 `python -B -X utf8 scripts/scaffold/new_web_crud.py` 生成标准骨架：`useVbenModal` + 三段式权限 `[module]:[entity]:<action>` + `number | string` 64 位主键 + `useCrudActions`）**
 
 **在生成任何组件之前，必须先阅读对应文档。禁止凭记忆生成。**
 

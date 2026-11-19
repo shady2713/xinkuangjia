@@ -161,12 +161,12 @@ const [Grid, gridApi] = useVbenVxeGrid({
   },
 });
 
-const handleEdit = (row: any) => {
-  console.log('Edit', row);
+const handleEdit = (row: TableRow) => {
+  formModalApi.setData(row).open();
 };
 
-const handleDelete = (row: any) => {
-  console.log('Delete', row);
+const handleDelete = async (row: TableRow) => {
+  await deleteTableRow(row.id);
 };
 </script>
 ```
@@ -408,11 +408,11 @@ const [Grid, gridApi] = useVbenVxeGrid({
 });
 
 const handleAdd = () => {
-  console.log('Add');
+  formModalApi.setData(null).open();
 };
 
-const handleExport = () => {
-  console.log('Export');
+const handleExport = async () => {
+  await exportTableData();
 };
 
 const handleRefresh = () => {

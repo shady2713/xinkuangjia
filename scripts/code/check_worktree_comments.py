@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""统一执行工作区 Java 与 Python 增量注释检查。
+"""统一执行工作区 Java、Python 与 Web 增量注释检查。
 
 @author 李杰
 """
@@ -14,6 +14,7 @@ from typing import Sequence
 CHECKERS = (
     "java/check_worktree_java_comments.py",
     "python/check_worktree_python_comments.py",
+    "web/check_worktree_web_comments.py",
 )
 
 

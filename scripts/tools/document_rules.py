@@ -6,7 +6,7 @@
 """
 
 RULES = {
-    "path_prefixes": ["docs/", "scripts/", "tools/", ".agents/", "前端/", "后端/", "前端代码/", "后端代码/", "部署/", "数据库文件/"],
+    "path_prefixes": ["docs/", "scripts/", "tools/", ".agents/", "前端代码/", "后端代码/", "数据库文件/"],
     "path_placeholders": ["相对路径", "文件名", "目录名"],
     "structure_exclusions": {
         "AGENTS.md": "智能体指令有独立格式",

@@ -1,27 +1,58 @@
 # CRUD 页面与表单组合模板
 
-`[Module]`、`[module]` 是待替换的业务标识，不是可直接编译的名称。以下展示页面、表单和数据配置；生成完整模块时还须按 [CRUD 流程](../references/crud-workflow.md)补齐实际 API 类型、请求封装及后端菜单授权。默认管理应用为 Element Plus，优先对照 `apps/web-ele/src/views/system/post` 的现有组合；不要向应用添加 Ant Design 依赖。示例复用已有系统翻译键，新增业务文案是否国际化按用户要求决定。
+`[Module]`、`[module]` 与 `[entity]` 为待替换业务标识，禁止直接照搬未替换的占位符。生成新模块 CRUD 页面时，**优先使用 `python -B -X utf8 scripts/scaffold/new_web_crud.py <module> <entity> --title <中文名> --apply`** 一键产出与脚手架、门禁完全一致的文件，再按真实字段调整；手工编写时对照本模板与 `apps/web-ele/src/views/system/post/` 实现。所有 `<script>` 与 `.ts` 模块顶层均须包含完整中文职责注释以通过 `weetion/comments` 门禁。
 
 ## index.vue - 主页面
 
 ```vue
 <script lang="ts" setup>
+/**
+ * [Title]管理列表页，提供分页查询、弹窗新增编辑与单条/批量删除。
+ */
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { [Module]Api } from '#/api/[module]';
+import type { [Module][Entity]Api } from '#/api/[module]/[entity]';
 
-import { Page, useVbenDrawer } from '@vben/common-ui';
-import { ElMessage } from 'element-plus';
+import { Page, useVbenModal } from '@vben/common-ui';
+import { buildSortingField } from '@vben/request';
+import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { delete[Module], get[Module]List } from '#/api/[module]';
+import {
+  delete[Entity],
+  delete[Entity]List,
+  get[Entity]Page,
+} from '#/api/[module]/[entity]';
+import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
-import { useColumns, useGridFormSchema } from './data';
+import { useGridColumns, useGridFormSchema } from './data';
 import Form from './modules/form.vue';
 
-const [FormDrawer, formDrawerApi] = useVbenDrawer({
+const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
   destroyOnClose: true,
+});
+
+/** 清空勾选后重新加载当前分页列表。 */
+function handleRefresh() {
+  clearCheckedIds();
+  gridApi.query();
+}
+
+const {
+  checkedIds,
+  clearCheckedIds,
+  getGridEvents,
+  handleCreate,
+  handleDelete,
+  handleDeleteBatch,
+  handleEdit,
+} = useCrudActions<[Module][Entity]Api.[Entity]>({
+  batchDeleteApi: delete[Entity]List,
+  deleteApi: delete[Entity],
+  getDeleteName: (row) => row.name || '',
+  modalApi: formModalApi,
+  refresh: handleRefresh,
 });
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -30,54 +61,39 @@ const [Grid, gridApi] = useVbenVxeGrid({
     submitOnChange: true,
   },
   gridOptions: {
-    columns: useColumns(),
+    columns: useGridColumns(),
     height: 'auto',
+    keepSource: true,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) => {
-          return await get[Module]List({
+        /** 按当前页、筛选条件与排序参数查询分页列表。 */
+        query: async ({ page, sorts }, formValues) => {
+          return await get[Entity]Page({
             pageNo: page.currentPage,
             pageSize: page.pageSize,
             ...formValues,
+            ...buildSortingField(sorts),
           });
         },
       },
+    },
+    rowConfig: {
+      keyField: 'id',
+      isHover: true,
     },
     toolbarConfig: {
       refresh: true,
       zoom: true,
       search: true,
     },
-  } as VxeTableGridOptions<[Module]Api.[Module]>,
+  } as VxeTableGridOptions<[Module][Entity]Api.[Entity]>,
+  gridEvents: getGridEvents(),
 });
-
-/** 将目标记录传给编辑抽屉，不修改列表行本身。 */
-function onEdit(row: [Module]Api.[Module]) {
-  formDrawerApi.setData(row).open();
-}
-
-/** 弹窗确认后删除有效编号对应的记录；请求错误由请求客户端提示。 */
-async function onDelete(row: [Module]Api.[Module]) {
-  if (row.id == null) return;
-  await delete[Module](row.id);
-  ElMessage.success($t('ui.actionMessage.deleteSuccess', [row.name]));
-  await onRefresh();
-}
-
-/** 重新读取当前筛选下的分页数据。 */
-function onRefresh() {
-  return gridApi.query();
-}
-
-/** 使用空记录打开新增表单，避免继承上一条编辑记录。 */
-function onCreate() {
-  formDrawerApi.setData({}).open();
-}
 </script>
 
 <template>
   <Page auto-content-height>
-    <FormDrawer @success="onRefresh" />
+    <FormModal @success="handleRefresh" />
     <Grid>
       <template #toolbar-tools>
         <TableAction
@@ -86,8 +102,16 @@ function onCreate() {
               label: $t('ui.actionTitle.create'),
               type: 'primary',
               icon: ACTION_ICON.ADD,
-              auth: ['[module]:create'],
-              onClick: onCreate,
+              auth: ['[module]:[entity]:create'],
+              onClick: handleCreate,
+            },
+            {
+              label: $t('ui.actionTitle.deleteBatch'),
+              type: 'danger',
+              icon: ACTION_ICON.DELETE,
+              auth: ['[module]:[entity]:delete'],
+              disabled: isEmpty(checkedIds),
+              onClick: handleDeleteBatch,
             },
           ]"
         />
@@ -100,18 +124,18 @@ function onCreate() {
               type: 'primary',
               link: true,
               icon: ACTION_ICON.EDIT,
-              auth: ['[module]:update'],
-              onClick: onEdit.bind(null, row),
+              auth: ['[module]:[entity]:update'],
+              onClick: handleEdit.bind(null, row),
             },
             {
               label: $t('common.delete'),
               type: 'danger',
               link: true,
               icon: ACTION_ICON.DELETE,
-              auth: ['[module]:delete'],
+              auth: ['[module]:[entity]:delete'],
               popConfirm: {
                 title: $t('ui.actionMessage.deleteConfirm', [row.name]),
-                confirm: onDelete.bind(null, row),
+                confirm: handleDelete.bind(null, row),
               },
             },
           ]"
@@ -122,88 +146,112 @@ function onCreate() {
 </template>
 ```
 
-## modules/form.vue - 表单组件
+## modules/form.vue - 表单弹窗组件
 
 ```vue
 <script lang="ts" setup>
-import type { [Module]Api } from '#/api/[module]';
+/**
+ * [Title]新增与编辑弹窗组件，支持 64 位雪花主键。
+ */
+import type { [Module][Entity]Api } from '#/api/[module]/[entity]';
 
 import { computed, nextTick, ref } from 'vue';
-import { useVbenDrawer } from '@vben/common-ui';
+
+import { useVbenModal } from '@vben/common-ui';
+import { ElMessage } from 'element-plus';
 
 import { useVbenForm } from '#/adapter/form';
-import { create[Module], update[Module] } from '#/api/[module]';
+import { create[Entity], get[Entity], update[Entity] } from '#/api/[module]/[entity]';
 import { $t } from '#/locales';
 
 import { useFormSchema } from '../data';
 
 /** 保存成功后通知主页面重新查询。 */
-const emits = defineEmits<{ success: [] }>();
-const formData = ref<[Module]Api.[Module]>();
+const emit = defineEmits<{ success: [] }>();
+const formData = ref<[Module][Entity]Api.[Entity]>();
+const id = ref<number | string>();
 
 const [Form, formApi] = useVbenForm({
+  commonConfig: {
+    componentProps: { class: 'w-full' },
+    labelWidth: 80,
+  },
+  layout: 'horizontal',
   schema: useFormSchema(),
   showDefaultActions: false,
 });
 
-const id = ref<number>();
-const [Drawer, drawerApi] = useVbenDrawer({
-  /** 校验后提交新增或带编号的更新，成功关闭；失败始终释放抽屉锁。 */
+const [Modal, modalApi] = useVbenModal({
+  /** 校验后提交新增或带主键的更新请求，任意异常均保证释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
-    if (!valid) return;
-    const values = await formApi.getValues<[Module]Api.[Module]>();
-    drawerApi.lock();
+    if (!valid) {
+      return;
+    }
     try {
-      // 更新接口接收包含 id 的完整对象；编号为空时走新增。
+      modalApi.lock();
+      const values = await formApi.getValues<[Module][Entity]Api.[Entity]>();
       if (id.value == null) {
-        await create[Module](values);
+        await create[Entity](values);
       } else {
-        await update[Module]({ ...values, id: id.value });
+        await update[Entity]({ ...values, id: id.value });
       }
-      emits('success');
-      await drawerApi.close();
+      await modalApi.close();
+      emit('success');
+      ElMessage.success($t('ui.actionMessage.operationSuccess'));
     } finally {
-      drawerApi.unlock();
+      modalApi.unlock();
     }
   },
-  /** 打开时清空旧值并加载当前记录，关闭时释放编辑态。 */
+  /** 打开弹窗时按主键回填最新详情；关闭时清空缓存状态。 */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       formData.value = undefined;
       id.value = undefined;
       return;
     }
-    const data = drawerApi.getData<[Module]Api.[Module]>();
-    formData.value = data?.id == null ? undefined : data;
+    const data = modalApi.getData<[Module][Entity]Api.[Entity]>();
     id.value = data?.id;
     await formApi.resetForm();
-    await nextTick();
-    if (formData.value) await formApi.setValues(formData.value);
+    if (data?.id == null) {
+      formData.value = undefined;
+      return;
+    }
+    try {
+      modalApi.lock();
+      formData.value = await get[Entity](data.id);
+      await nextTick();
+      await formApi.setValues(formData.value);
+    } finally {
+      modalApi.unlock();
+    }
   },
 });
 
-/** 由当前有效编辑编号区分新增与编辑标题。 */
-const getDrawerTitle = computed(() => {
-  return formData.value?.id
+/** 根据是否存在有效主键区分新增与编辑标题。 */
+const getModalTitle = computed(() => {
+  return formData.value?.id != null
     ? $t('ui.actionTitle.edit')
     : $t('ui.actionTitle.create');
 });
 </script>
 
 <template>
-  <Drawer :title="getDrawerTitle">
-    <Form />
-  </Drawer>
+  <Modal class="w-[600px]" :title="getModalTitle">
+    <Form class="mx-4" />
+  </Modal>
 </template>
 ```
 
 ## data.ts - 数据配置
 
 ```typescript
+/**
+ * [Title]管理列表与表单 Schema 配置。
+ */
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { [Module]Api } from '#/api/[module]';
+import type { [Module][Entity]Api } from '#/api/[module]/[entity]';
 
 import { $t } from '#/locales';
 
@@ -260,13 +308,14 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 定义列表字段与 `#actions` 操作插槽；权限标识须按当前业务补齐。 */
-export function useColumns(): VxeTableGridOptions<[Module]Api.[Module]>['columns'] {
+/** 定义列表字段、多选列与 `#actions` 操作插槽。 */
+export function useGridColumns(): VxeTableGridOptions<[Module][Entity]Api.[Entity]>['columns'] {
   return [
+    { type: 'checkbox', width: 40 },
     {
       field: 'name',
       title: '名称',
-      width: 200,
+      minWidth: 160,
     },
     {
       field: 'status',
@@ -278,12 +327,12 @@ export function useColumns(): VxeTableGridOptions<[Module]Api.[Module]>['columns
       field: 'createTime',
       title: '创建时间',
       formatter: 'formatDateTime',
-      width: 200,
+      width: 180,
     },
     {
       field: 'remark',
       title: '备注',
-      minWidth: 100,
+      minWidth: 120,
     },
     {
       title: '操作',
