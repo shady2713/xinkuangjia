@@ -30,10 +30,6 @@ window._VBEN_ADMIN_PRO_APP_CONF_ = {
   VITE_APP_CAPTCHA_ENABLE: 'true',
   // 后端 API 前缀；Nginx 会将 `/admin-api` 代理到共用后台容器。
   VITE_GLOB_API_URL: '/admin-api',
-  // 钉钉登录客户端 ID；留空时不启用钉钉登录。
-  VITE_GLOB_AUTH_DINGDING_CLIENT_ID: '',
-  // 钉钉登录企业 ID；留空时不启用钉钉登录。
-  VITE_GLOB_AUTH_DINGDING_CORP_ID: '',
   // 登录表单默认账号；生产环境保持为空，仅开发环境通过 .env.development 预填。
   VITE_APP_DEFAULT_USERNAME: '',
   // 登录表单默认密码；必须保持为空，避免凭证被打包或发送到浏览器。

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 短信渠道新增与编辑弹窗组件。 */
 import type { SystemSmsChannelApi } from '#/api/system/sms/channel';
 
 import { ref } from 'vue';
@@ -41,8 +42,8 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    const data = (await formApi.getValues()) as SystemSmsChannelApi.Channel;
     try {
+      const data = (await formApi.getValues()) as SystemSmsChannelApi.Channel;
       await (formData.value?.id
         ? updateSmsChannel(data)
         : createSmsChannel(data));

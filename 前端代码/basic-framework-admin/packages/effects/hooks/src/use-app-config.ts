@@ -4,14 +4,14 @@ import type {
 } from '@vben/types/global';
 
 /**
- * 获取应用接口和第三方认证配置。
+ * 获取应用后端 API 基础地址配置。
  *
  * 生产环境始终使用 `app.config.js`；开发环境仅允许 `.env` 中的 API 地址覆盖默认值，
  * 其余运行时配置仍统一来自 `app.config.js`。
  *
  * @param env Vite 开发环境变量
  * @param isProduction 是否为生产构建
- * @returns 应用接口和认证配置
+ * @returns 应用接口基础地址配置
  */
 export function useAppConfig(
   env: Record<string, any>,
@@ -23,21 +23,9 @@ export function useAppConfig(
       : (window._VBEN_ADMIN_PRO_APP_CONF_ ?? {});
   const developmentApiURL = isProduction ? undefined : env.VITE_GLOB_API_URL;
 
-  const { VITE_GLOB_AUTH_DINGDING_CORP_ID, VITE_GLOB_AUTH_DINGDING_CLIENT_ID } =
-    config;
-
-  const applicationConfig: ApplicationConfig = {
+  return {
     apiURL: developmentApiURL || config.VITE_GLOB_API_URL || '',
-    auth: {},
   };
-  if (VITE_GLOB_AUTH_DINGDING_CORP_ID && VITE_GLOB_AUTH_DINGDING_CLIENT_ID) {
-    applicationConfig.auth.dingding = {
-      clientId: VITE_GLOB_AUTH_DINGDING_CLIENT_ID,
-      corpId: VITE_GLOB_AUTH_DINGDING_CORP_ID,
-    };
-  }
-
-  return applicationConfig;
 }
 
 /**

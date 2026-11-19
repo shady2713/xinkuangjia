@@ -1,3 +1,4 @@
+/** 窗口导航安全校验与新窗口打开工具。 */
 interface OpenWindowOptions {
   noopener?: boolean;
   noreferrer?: boolean;
@@ -39,15 +40,27 @@ function openWindow(url: string, options: OpenWindowOptions = {}): void {
 }
 
 /**
- * 在新窗口中打开当前应用内路由。
+ * 在新窗口中打开当前应用内路由，保留非根路径部署前缀（如 `/admin/`）。
  *
  * @param path 应用内路由路径
  */
 function openRouteInNewWindow(path: string) {
-  const { hash, origin } = location;
+  const { hash, origin, pathname } = location;
   const fullPath = path.startsWith('/') ? path : `/${path}`;
-  const url = `${origin}${hash && !fullPath.startsWith('/#') ? '/#' : ''}${fullPath}`;
-  openWindow(url, { target: '_blank' });
+  if (!hash) {
+    openWindow(`${origin}${fullPath}`, { target: '_blank' });
+    return;
+  }
+  const basePath = pathname.replace(/\/+$/u, '');
+  let normalized: string;
+  if (fullPath.includes('#')) {
+    normalized = fullPath.startsWith('/#')
+      ? `${basePath}${fullPath}`
+      : fullPath;
+  } else {
+    normalized = `${basePath}/#${fullPath}`;
+  }
+  openWindow(`${origin}${normalized}`, { target: '_blank' });
 }
 
 export { isSafeNavigationUrl, openRouteInNewWindow, openWindow };

@@ -17,6 +17,12 @@ export namespace SystemUserApi {
     password?: string;
   } & Omit<OpenApiSchemas.UserRespVO, 'id'>;
 
+  /** 用户保存请求（源自后端 UserSaveReqVO 契约；编辑场景无需传递密码） */
+  export type UserSaveReq = {
+    /** 仅创建用户时提交的密码密文；编辑用户时无需提交密码。 */
+    password?: string;
+  } & Omit<OpenApiSchemas.UserSaveReqVO, 'password'>;
+
   /** 用户导入结果（源自后端 UserImportRespVO 契约） */
   export type UserImportResp = OpenApiSchemas.UserImportRespVO;
 }
@@ -50,7 +56,7 @@ export function getUser(id: number | string) {
  * @param data 用户提交参数
  * @returns 新建用户编号
  */
-export function createUser(data: OpenApiSchemas.UserSaveReqVO) {
+export function createUser(data: SystemUserApi.UserSaveReq) {
   return requestClient.post('/system/user/create', data);
 }
 
@@ -60,7 +66,7 @@ export function createUser(data: OpenApiSchemas.UserSaveReqVO) {
  * @param data 用户提交参数
  * @returns 修改结果
  */
-export function updateUser(data: OpenApiSchemas.UserSaveReqVO) {
+export function updateUser(data: SystemUserApi.UserSaveReq) {
   return requestClient.put('/system/user/update', data);
 }
 

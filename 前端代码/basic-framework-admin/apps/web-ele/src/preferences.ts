@@ -1,6 +1,9 @@
+/** 应用级默认偏好与品牌图标资源覆盖配置。 */
 import { defineOverridesPreferences } from '@vben/preferences';
 
 const appConfig = window._VBEN_ADMIN_PRO_APP_CONF_;
+/** 结合部署基础路径生成品牌 Logo 静态资源地址。 */
+const brandLogoUrl = `${import.meta.env.BASE_URL}brand-logo.svg`;
 
 /**
  * 将 app.config.js 中的固定配置映射为框架偏好，并补充管理平台运行配置。
@@ -17,8 +20,8 @@ export const overridesPreferences = defineOverridesPreferences({
     name: appConfig.VITE_APP_TITLE,
   },
   logo: {
-    source: '/brand-logo.svg',
-    sourceDark: '/brand-logo.svg',
+    source: brandLogoUrl,
+    sourceDark: brandLogoUrl,
   },
   copyright: {
     companyName: appConfig.VITE_APP_TITLE,

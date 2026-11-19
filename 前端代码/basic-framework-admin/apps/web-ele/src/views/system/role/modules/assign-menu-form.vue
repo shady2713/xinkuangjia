@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 角色菜单与按钮权限分配弹窗组件。 */
 import type { Recordable } from '@vben/types';
 
 import type { SystemMenuApi } from '#/api/system/menu';
@@ -46,15 +47,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存角色菜单权限分配，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = await formApi.getValues();
     try {
+      // 提交表单
+      const data = await formApi.getValues();
       await assignRoleMenu({
         roleId: data.id,
         menuIds: data.menuIds,
@@ -67,6 +69,11 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 弹窗打开时加载菜单树与角色已分配菜单集合。
+   *
+   * @param isOpen 弹窗是否处于打开状态
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;
@@ -142,6 +149,12 @@ function getAllNodeIds(
   return ids;
 }
 
+/**
+ * 为按钮级权限节点计算行内排列样式类。
+ *
+ * @param node 树节点渲染上下文
+ * @returns 样式类名列表字符串
+ */
 function getNodeClass(node: Recordable<any>) {
   const classes: string[] = [];
   if (node.value?.type === SystemMenuTypeEnum.BUTTON) {

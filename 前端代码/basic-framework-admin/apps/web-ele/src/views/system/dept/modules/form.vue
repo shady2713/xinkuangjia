@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统部门新增与编辑弹窗组件。 */
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { ref } from 'vue';
@@ -37,18 +38,18 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemDeptApi.Dept;
-    // 表单清空选择器时可能返回空字符串，先按外部输入收窄后统一清空。
-    const leaderUserId: unknown = data.leaderUserId;
-    if (
-      leaderUserId === undefined ||
-      leaderUserId === null ||
-      leaderUserId === ''
-    ) {
-      data.leaderUserId = undefined;
-    }
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as SystemDeptApi.Dept;
+      // 表单清空选择器时可能返回空字符串，先按外部输入收窄后统一清空。
+      const leaderUserId: unknown = data.leaderUserId;
+      if (
+        leaderUserId === undefined ||
+        leaderUserId === null ||
+        leaderUserId === ''
+      ) {
+        data.leaderUserId = undefined;
+      }
       await (formData.value?.id ? updateDept(data) : createDept(data));
       // 关闭并提示
       await modalApi.close();

@@ -1,3 +1,8 @@
+/**
+ * 认证、图形验证码与登录态接口封装，用户及表单模型直接对齐后端 OpenAPI 契约。
+ *
+ * @author shady2713
+ */
 import type { AuthPermissionInfo } from '@vben/types';
 
 import type { OpenApiSchemas } from '#/api/generated/api-types';
@@ -10,6 +15,11 @@ export namespace AuthApi {
 
   /** 登录接口返回值（源自后端 AuthLoginRespVO 契约） */
   export type LoginResult = OpenApiSchemas.AuthLoginRespVO;
+
+  /** 当前登录用户权限信息（用户信息直接复用后端 OpenAPI 契约） */
+  export type PermissionInfo = Omit<AuthPermissionInfo, 'user'> & {
+    user: OpenApiSchemas.AuthPermissionInfoRespVO_UserVO;
+  };
 
   /** SM2 密码传输公钥（源自后端 Sm2PublicKeyRespVO 契约） */
   export type Sm2PublicKeyResult = OpenApiSchemas.Sm2PublicKeyRespVO;
@@ -74,7 +84,7 @@ export async function logoutApi(accessToken: string) {
  * @returns 用户资料、角色编码、权限码与菜单树
  */
 export async function getAuthPermissionInfoApi() {
-  return requestClient.get<AuthPermissionInfo>(
+  return requestClient.get<AuthApi.PermissionInfo>(
     '/system/auth/get-permission-info',
   );
 }

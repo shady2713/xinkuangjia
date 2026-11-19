@@ -219,14 +219,14 @@ async function redirectsToChangePasswordDuringModalRelogin() {
     roles: ['super_admin'],
     user: {
       avatar: '',
+      deptId: 1,
       id: 1,
       nickname: '管理员',
       passwordChangeRequired: true,
-      realName: '管理员',
-      roles: ['super_admin'],
+      userType: 'super_admin',
       username: 'admin',
     },
-  } as any);
+  });
 
   const authStore = useAuthStore();
   await authStore.authLogin('username', {

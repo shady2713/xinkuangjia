@@ -39,9 +39,6 @@ catalogs:
     '@manypkg/get-packages':
       specifier: ^3.1.0
       version: 3.1.0
-    '@microsoft/fetch-event-source':
-      specifier: ^2.0.1
-      version: 2.0.1
     '@playwright/test':
       specifier: ^1.65.0
       version: 1.65.0
@@ -372,9 +369,6 @@ catalogs:
     theme-colors:
       specifier: ^0.1.0
       version: 0.1.0
-    tippy.js:
-      specifier: ^6.3.7
-      version: 6.3.7
     turbo:
       specifier: ^2.11.10
       version: 2.11.10
@@ -411,9 +405,6 @@ catalogs:
     vue-router:
       specifier: ^4.6.4
       version: 4.6.4
-    vue-tippy:
-      specifier: ^6.8.0
-      version: 6.8.0
     vue-tsc:
       specifier: ^3.3.14
       version: 3.3.14
@@ -1225,9 +1216,6 @@ importers:
       '@vben-core/popup-ui':
         specifier: workspace:*
         version: link:../../@core/ui-kit/popup-ui
-      '@vben-core/preferences':
-        specifier: workspace:*
-        version: link:../../@core/preferences
       '@vben-core/shadcn-ui':
         specifier: workspace:*
         version: link:../../@core/ui-kit/shadcn-ui
@@ -1249,18 +1237,12 @@ importers:
       '@vueuse/core':
         specifier: 'catalog:'
         version: 14.2.1(vue@3.5.45(typescript@5.9.3))
-      tippy.js:
-        specifier: 'catalog:'
-        version: 6.3.7
       vue:
         specifier: ^3.5.45
         version: 3.5.45(typescript@5.9.3)
       vue-router:
         specifier: 'catalog:'
         version: 4.6.4(vue@3.5.45(typescript@5.9.3))
-      vue-tippy:
-        specifier: 'catalog:'
-        version: 6.8.0(vue@3.5.45(typescript@5.9.3))
 
   packages/effects/hooks:
     dependencies:
@@ -1396,9 +1378,6 @@ importers:
 
   packages/effects/request:
     dependencies:
-      '@microsoft/fetch-event-source':
-        specifier: 'catalog:'
-        version: 2.0.1
       '@vben/locales':
         specifier: workspace:*
         version: link:../../locales
@@ -2817,9 +2796,6 @@ packages:
     resolution: {integrity: sha512-RI0TxUGA3T0zwuyMIg86aHxAqJJNCjoFnIO/oVzyofxyxqokrXXiLenSBTVHGRyh6vUHg1mKGlT+LhKRF+oczg==}
     hasBin: true
 
-  '@microsoft/fetch-event-source@2.0.1':
-    resolution: {integrity: sha512-W6CLUJ2eBMw3Rec70qrsEW0jOm/3twwJv21mrmj2yORiaVmVYGS4sSS5yUwvQc1ZlDLYGPnClVWmUUMagKNsfA==}
-
   '@microsoft/tsdoc-config@0.18.1':
     resolution: {integrity: sha512-9brPoVdfN9k9g0dcWkFeA7IH9bbcttzDJlXvkf8b2OBzd5MueR1V2wkKBL0abn0otvmkHJC6aapBOTJDDeMCZg==}
 
@@ -2964,9 +2940,6 @@ packages:
   '@pnpm/npm-conf@3.0.2':
     resolution: {integrity: sha512-h104Kh26rR8tm+a3Qkc5S4VLYint3FE48as7+/5oCEcKR2idC/pF1G6AhIXKI+eHPJa/3J9i5z0Al47IeGHPkA==}
     engines: {node: '>=12'}
-
-  '@popperjs/core@2.11.8':
-    resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
   '@publint/pack@0.1.7':
     resolution: {integrity: sha512-4EDEmvxWtgsCnnVeBvtFIFZtUhPPt1+bA9JrSwU4Sa//6oKtzCSlGGXYJr44OD9aGISymbieJ4mCKHUygUDU+g==}
@@ -7886,9 +7859,6 @@ packages:
     resolution: {integrity: sha512-azl+t0z7pw/z958Gy9svOTuzqIk6xq+NSheJzn5MMWtWTFywIacg2wUlzKFGtt3cthx0r2SxMK0yzJOR0IES7Q==}
     engines: {node: '>=14.0.0'}
 
-  tippy.js@6.3.7:
-    resolution: {integrity: sha512-E1d3oP2emgJ9dRQZdf3Kkn0qJgI6ZLpyS5z6ZkY1DF3kaQaBsGZsndEpHwx+eC+tYM41HaSNvNtLx8tU57FzTQ==}
-
   tldts-core@6.1.86:
     resolution: {integrity: sha512-Je6p7pkk+KMzMv2XXKmAE3McmolOQFdxkKw0R8EYNr7sELW46JqnNeTX8ybPiQgvg1ymCoF8LXs5fzFaZvJPTA==}
 
@@ -8182,11 +8152,6 @@ packages:
 
   vue-router@4.6.4:
     resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
-    peerDependencies:
-      vue: ^3.5.45
-
-  vue-tippy@6.8.0:
-    resolution: {integrity: sha512-NiWpwncli2vXpestHyvuFPDgQ51qLbBKpZQj7FeSOm1mFbPhzMeaRxWBQQEhl/FqGRXasfGvETgAUW4md6SAbA==}
     peerDependencies:
       vue: ^3.5.45
 
@@ -9808,8 +9773,6 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@microsoft/fetch-event-source@2.0.1': {}
-
   '@microsoft/tsdoc-config@0.18.1':
     dependencies:
       '@microsoft/tsdoc': 0.16.0
@@ -9948,8 +9911,6 @@ snapshots:
       '@pnpm/config.env-replace': 1.1.0
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
-
-  '@popperjs/core@2.11.8': {}
 
   '@publint/pack@0.1.7':
     dependencies:
@@ -15102,10 +15063,6 @@ snapshots:
 
   tinyspy@4.0.4: {}
 
-  tippy.js@6.3.7:
-    dependencies:
-      '@popperjs/core': 2.11.8
-
   tldts-core@6.1.86: {}
 
   tldts@6.1.86:
@@ -15557,11 +15514,6 @@ snapshots:
   vue-router@4.6.4(vue@3.5.45(typescript@5.9.3)):
     dependencies:
       '@vue/devtools-api': 6.6.4
-      vue: 3.5.45(typescript@5.9.3)
-
-  vue-tippy@6.8.0(vue@3.5.45(typescript@5.9.3)):
-    dependencies:
-      tippy.js: 6.3.7
       vue: 3.5.45(typescript@5.9.3)
 
   vue-tsc@3.3.14(typescript@5.9.3):

@@ -56,10 +56,6 @@ export interface VbenAdminProAppConfigRaw {
   VITE_APP_TITLE: string;
   /** 后端 API 基础地址。 */
   VITE_GLOB_API_URL: string;
-  /** 钉钉登录客户端 ID；留空时不启用钉钉登录。 */
-  VITE_GLOB_AUTH_DINGDING_CLIENT_ID: string;
-  /** 钉钉登录企业 ID；留空时不启用钉钉登录。 */
-  VITE_GLOB_AUTH_DINGDING_CORP_ID: string;
   /** 文件上传方式。 */
   VITE_UPLOAD_TYPE: 'client' | 'server';
 }
@@ -67,16 +63,8 @@ export interface VbenAdminProAppConfigRaw {
 /** 运行时布尔配置的字符串表示。 */
 type RuntimeBoolean = 'false' | 'true';
 
-interface AuthConfig {
-  dingding?: {
-    clientId: string;
-    corpId: string;
-  };
-}
-
 export interface ApplicationConfig {
   apiURL: string;
-  auth: AuthConfig;
 }
 
 declare global {

@@ -13,20 +13,11 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
-    },
-    "./es/tippy": {
-      "types": "./src/components/tippy/index.ts",
-      "default": "./src/components/tippy/index.ts"
-    },
-    "./es/loading": {
-      "types": "./src/components/loading/index.ts",
-      "default": "./src/components/loading/index.ts"
     }
   },
   "dependencies": {
     "@vben-core/form-ui": "workspace:*",
     "@vben-core/popup-ui": "workspace:*",
-    "@vben-core/preferences": "workspace:*",
     "@vben-core/shadcn-ui": "workspace:*",
     "@vben-core/shared": "workspace:*",
     "@vben/hooks": "workspace:*",
@@ -34,9 +25,7 @@
     "@vben/locales": "workspace:*",
     "@vben/types": "workspace:*",
     "@vueuse/core": "catalog:",
-    "tippy.js": "catalog:",
     "vue": "catalog:",
-    "vue-router": "catalog:",
-    "vue-tippy": "catalog:"
+    "vue-router": "catalog:"
   }
 }

@@ -16,16 +16,7 @@ export namespace SystemDictDataApi {
   };
 }
 
-/**
- * 查询字典数据精简列表。
- *
- * @returns 字典数据精简列表
- */
-export function getSimpleDictDataList() {
-  return requestClient.get<OpenApiSchemas.DictDataSimpleRespVO[]>(
-    '/system/dict-data/simple-list',
-  );
-}
+export { getSimpleDictDataList } from '#/api/core/dict';
 
 /**
  * 分页查询字典数据列表。

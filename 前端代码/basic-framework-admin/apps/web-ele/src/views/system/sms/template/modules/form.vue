@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 短信模板新增与编辑弹窗组件。 */
 import type { SystemSmsTemplateApi } from '#/api/system/sms/template';
 
 import { ref } from 'vue';
@@ -41,8 +42,8 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    const data = (await formApi.getValues()) as SystemSmsTemplateApi.Template;
     try {
+      const data = (await formApi.getValues()) as SystemSmsTemplateApi.Template;
       await (formData.value?.id
         ? updateSmsTemplate(data)
         : createSmsTemplate(data));

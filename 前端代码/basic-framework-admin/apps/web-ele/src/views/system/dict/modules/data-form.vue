@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统字典数据新增与编辑弹窗组件。 */
 import type { SystemDictDataApi } from '#/api/system/dict/data';
 
 import { ref } from 'vue';
@@ -36,15 +37,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存字典数据，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemDictDataApi.DictData;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as SystemDictDataApi.DictData;
       await (formData.value?.id ? updateDictData(data) : createDictData(data));
       // 关闭并提示
       await modalApi.close();

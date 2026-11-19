@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统岗位新增与编辑弹窗组件。 */
 import type { SystemPostApi } from '#/api/system/post';
 
 import { ref } from 'vue';
@@ -30,15 +31,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存系统岗位，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemPostApi.Post;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as SystemPostApi.Post;
       await (formData.value?.id ? updatePost(data) : createPost(data));
       // 关闭并提示
       await modalApi.close();

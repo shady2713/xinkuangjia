@@ -1,3 +1,4 @@
+/** 核心仪表盘与静态业务子页面路由定义（含权限前置条件）。 */
 import type { RouteRecordRaw } from 'vue-router';
 
 import { $t } from '#/locales';
@@ -10,8 +11,11 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/analytics',
     redirect: '/dashboard',
-    meta: { hideInMenu: true },
-  } as any,
+    meta: {
+      hideInMenu: true,
+      title: 'Analytics',
+    },
+  },
   {
     name: 'Dashboard',
     path: '/dashboard',
@@ -51,6 +55,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       activePath: '/infra/job',
       hideInMenu: true,
+      requiredPermissions: ['infra:job:query'],
       title: '调度日志',
     },
   },
