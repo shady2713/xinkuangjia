@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -107,12 +110,10 @@ jobs:
       - name: Install web parser
         working-directory: 前端代码/basic-framework-admin
         run: pnpm install --frozen-lockfile
-      - name: Docs checks (mermaid excluded)
+      - name: Docs checks (with mermaid)
         run: |
           set -euo pipefail
-          # mermaid 检查仍不在本 job 执行；前端依赖已为 comments 暂存检查安装。
-          echo "Skipping mermaid: not part of this job's docs checks; frontend dependencies are installed for staged comments checks."
-          python -B -X utf8 scripts/workflow/run_checks.py --checks md-links skills doc-refs package-readmes doc-structure doc-policy note-classification note-format
+          python -B -X utf8 scripts/workflow/run_checks.py --group docs
       - name: Comments checks
         run: |
           set -euo pipefail
@@ -125,16 +126,17 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          CHANGED_LINES="$(git diff --numstat "$BASE_SHA" HEAD -- . \
+          MERGE_BASE="$(git merge-base "$BASE_SHA" HEAD 2>/dev/null || echo "$BASE_SHA")"
+          ADDED_LINES="$(git diff --numstat "$MERGE_BASE" HEAD -- . \
             ':!pnpm-lock.yaml' \
             ':!*/pnpm-lock.yaml' \
             ':!*/openapi.json' \
             ':!*/api-types.d.ts' \
             ':!docs/开发指南/模块依赖关系图.md' \
-            | awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ { sum += $1 + $2 } END { print sum + 0 }')"
-          echo "Non-generated PR changed lines: $CHANGED_LINES"
-          if [ "$CHANGED_LINES" -gt 600 ] && [[ "${PR_BODY:-}" != *"[slice-override]"* ]]; then
-            echo "PR non-generated diff ($CHANGED_LINES lines) exceeds 600-line slice budget; split into smaller PRs or add [slice-override] rationale in PR body." >&2
+            | awk '$1 ~ /^[0-9]+$/ { sum += $1 } END { print sum + 0 }')"
+          echo "Non-generated PR added lines: $ADDED_LINES"
+          if [ "$ADDED_LINES" -gt 600 ] && [[ "${PR_BODY:-}" != *"[slice-override]"* ]]; then
+            echo "PR non-generated additions ($ADDED_LINES lines) exceed 600-line slice budget; split into smaller PRs or add [slice-override] rationale in PR body." >&2
             exit 1
           fi
 

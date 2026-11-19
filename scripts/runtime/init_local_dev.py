@@ -163,29 +163,51 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
     backend_env_path = backend_dir / ".env"
     actions: list[str] = []
 
-    db_password = generate_local_secret(20)
-    redis_password = generate_local_secret(20)
-    minio_secret = generate_local_secret(24)
+    def _parse_existing_env(path: Path) -> dict[str, str]:
+        """读取已有本地环境文件中的键值对，用于在单侧文件缺失时保持双边凭据一致。"""
+        parsed: dict[str, str] = {}
+        if not path.is_file():
+            return parsed
+        for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            parsed[k.strip()] = v.strip().strip('"').strip("'")
+        return parsed
+
+    existing_vals: dict[str, str] = {}
+    if not force:
+        if compose_env_path.exists():
+            existing_vals.update(_parse_existing_env(compose_env_path))
+        if backend_env_path.exists():
+            existing_vals.update(_parse_existing_env(backend_env_path))
+
+    db_password = existing_vals.get("DB_PASSWORD") or generate_local_secret(20)
+    redis_password = existing_vals.get("REDIS_PASSWORD") or generate_local_secret(20)
+    minio_access = existing_vals.get("MINIO_ACCESS_KEY") or generate_local_secret(16)
+    minio_secret = existing_vals.get("MINIO_SECRET_KEY") or generate_local_secret(24)
     generated_values = {
-        "DEV_MYSQL_ROOT_PASSWORD": generate_local_secret(20),
-        "DB_HOST": "127.0.0.1",
-        "DB_PORT": "3306",
-        "DB_NAME": "basic_framework",
-        "DB_USERNAME": "basic_dev",
+        "DEV_MYSQL_ROOT_PASSWORD": existing_vals.get("DEV_MYSQL_ROOT_PASSWORD") or generate_local_secret(20),
+        "DB_HOST": existing_vals.get("DB_HOST") or "127.0.0.1",
+        "DB_PORT": existing_vals.get("DB_PORT") or "3306",
+        "DB_NAME": existing_vals.get("DB_NAME") or "basic_framework",
+        "DB_USERNAME": existing_vals.get("DB_USERNAME") or "basic_dev",
         "DB_PASSWORD": db_password,
-        "DB_SLAVE_HOST": "127.0.0.1",
-        "DB_SLAVE_PORT": "3306",
-        "DB_SLAVE_NAME": "basic_framework",
-        "DB_SLAVE_USERNAME": "basic_dev",
+        "DB_SLAVE_HOST": existing_vals.get("DB_SLAVE_HOST") or "127.0.0.1",
+        "DB_SLAVE_PORT": existing_vals.get("DB_SLAVE_PORT") or "3306",
+        "DB_SLAVE_NAME": existing_vals.get("DB_SLAVE_NAME") or "basic_framework",
+        "DB_SLAVE_USERNAME": existing_vals.get("DB_SLAVE_USERNAME") or "basic_dev",
         "DB_SLAVE_PASSWORD": db_password,
-        "REDIS_HOST": "127.0.0.1",
-        "REDIS_PORT": "6379",
+        "REDIS_HOST": existing_vals.get("REDIS_HOST") or "127.0.0.1",
+        "REDIS_PORT": existing_vals.get("REDIS_PORT") or "6379",
         "REDIS_PASSWORD": redis_password,
-        "SM2_PRIVATE_KEY": generate_sm2_private_key_hex(),
-        "MINIO_ENDPOINT": "http://127.0.0.1:19000",
-        "MINIO_ACCESS_KEY": generate_local_secret(16),
+        "SM2_PRIVATE_KEY": existing_vals.get("SM2_PRIVATE_KEY") or generate_sm2_private_key_hex(),
+        "MINIO_ENDPOINT": existing_vals.get("MINIO_ENDPOINT") or "http://127.0.0.1:19000",
+        "MINIO_PUBLIC_URL": existing_vals.get("MINIO_PUBLIC_URL") or "http://127.0.0.1:19000",
+        "MINIO_ACCESS_KEY": minio_access,
         "MINIO_SECRET_KEY": minio_secret,
-        "MINIO_BUCKET": "basic-framework",
+        "MINIO_BUCKET": existing_vals.get("MINIO_BUCKET") or "basic-framework",
     }
 
     if not compose_env_path.exists() or force:

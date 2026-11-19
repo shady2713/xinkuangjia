@@ -40,4 +40,10 @@ public class FilePresignedUrlRespVO {
     @Schema(description = "文件路径", requiredMode = Schema.RequiredMode.REQUIRED, example = "xxx.png")
     private String path;
 
+    /**
+     * 预签名 PUT URL 绑定的预期 Content-Type，前端直传时必须透传该值以匹配 SigV4 签名。
+     */
+    @Schema(description = "预签名绑定的 Content-Type", example = "image/png")
+    private String contentType;
+
 }

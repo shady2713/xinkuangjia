@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import type { SystemDeptApi } from '#/api/system/dept';
+/**
+ * 用户管理左侧部门树筛选组件。
+ */
+import type { OpenApiSchemas } from '#/api/generated/api-types';
 
 import { onMounted, ref } from 'vue';
 
@@ -11,9 +14,9 @@ import { ElInput, ElTree } from 'element-plus';
 import { getSimpleDeptList } from '#/api/system/dept';
 
 const emit = defineEmits(['select']);
-const deptList = ref<SystemDeptApi.Dept[]>([]); // 部门列表
+const deptList = ref<OpenApiSchemas.DeptSimpleRespVO[]>([]); // 部门列表
 const deptTree = ref<any[]>([]); // 部门树
-const expandedKeys = ref<number[]>([]); // 展开的节点
+const expandedKeys = ref<(number | string)[]>([]); // 展开的节点
 const loading = ref(false); // 加载状态
 const searchValue = ref(''); // 搜索值
 

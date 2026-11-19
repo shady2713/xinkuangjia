@@ -40,6 +40,7 @@ describe('fileUploader', () => {
       url,
       expect.any(FormData),
       {
+        timeout: 120_000,
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -72,6 +73,7 @@ describe('fileUploader', () => {
       url,
       expect.any(FormData),
       {
+        timeout: 120_000,
         headers: {
           'Content-Type': 'multipart/form-data',
           'Custom-Header': 'value',

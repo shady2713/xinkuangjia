@@ -42,11 +42,6 @@
 - `package-reference` → [templates/package-reference.md](../templates/package-reference.md)：插件、服务或其他功能包，说明实际接入方式、必要配置、可观察行为及限制。
 - `package-library` → [templates/package-library.md](../templates/package-library.md)：供调用方引入的库，说明依赖获取、公开入口、调用示例及使用边界。
 - `package-bundle` → [templates/package-bundle.md](../templates/package-bundle.md)：组合多个组件的分发包或预设，说明实际安装、启用、移除方式及组合关系。
-- `persistence-change` → [templates/persistence-change.md](../templates/persistence-change.md)：持久化格式变更确认记录，说明来源版本、变更前后约定、兼容性决策及迁移验证。
-- `persistence-release` → [templates/persistence-release.md](../templates/persistence-release.md)：比较明确发布版本的持久化结构，保留差异和来源证据；比较结果本身不证明兼容性或迁移安全。
-- `persistence-format` → [templates/persistence-format.md](../templates/persistence-format.md)：记录选定历史检查点的存储格式及完整结构证据，与当前格式约定区分。
-
-只有涉及相应持久化格式任务时才使用这 3 类记录，不要求无相关需求的项目创建它们。目录、机器声明、附件和验证工具按项目实际约定执行；没有专用工具时仍须记录来源、差异及核验结果，明确未验证结论。
 
 编写前打开对应模板，遵循其内容要求及事实核查规则。新增类别必须说明用途和与已有类别的边界，提供对应模板，并在[类别体系](metadata-links.md#the-kind-system)中登记核验规则；已有自动检查覆盖该分类时，同步更新，否则逐项人工核验并报告，不要求仅为新增类别创建检查工具。
 
@@ -59,7 +54,7 @@
 - **摘要说明主题能够做什么。** 开头的摘要和面向用户的章节，应说明用户或智能体能够用该主题完成什么：结果、收益、选择时机及主要代价；绝不叙述它的角色、类型或内部身份。包摘要中“它是什么”仅指读者可见的能力，不是它的框架注册角色或内部组件。除非读者会在配置、命令或公开 API 中直接使用，否则省略源码标识符。“该组件注册内部服务并追加内部事件记录”是在叙述身份；“你可以为每条消息保存一条笔记，重启后仍然存在”才是在说明它的用途。
 - **开发者章节重在解释，绝不罗列。** 开发者细节必须折叠，章节标题与锚点保留可见；必要操作、限制和警告不得藏入折叠区。实现内容应涵盖整体设计概念、架构及概略的数据流，让读者足以理解包如何运作，并链接代码供查阅精确细节。折叠区域中不得放入完整 API 目录、穷尽的字段列表、事件载荷枚举或对 接口文档 的复述。
 - **开发笔记按需设置。** 在本技能页面格式适用范围内，不完整想法、草稿、未决定的方向、测量产物和工作假设只能放在可选的开发笔记中，明确标记为非权威内容；没有内容时可省略章节，不限制数量、固定层级或末尾位置。其他章节描述经过核实的当前状态。页面开发笔记不代替非小改动必需的 Agent Note，特殊格式的适用边界见[页面顺序](structure-hierarchy.md#page-order)。
-- **仅描述当前状态。** 普通文档描述当前行为，历史与决策按[事实归属规则](structure-hierarchy.md#fact-ownership-and-history)单独记录。专门的 `persistence-change`、`persistence-release` 和 `persistence-format` 记录保留持久化格式的历史证据；发布比较和格式检查点描述观察到的历史，不能仅凭结构证据声称兼容性或迁移安全。Agent Note 和事故复盘各自保留其历史范围。
+- **仅描述当前状态。** 普通文档描述当前行为，历史与决策按[事实归属规则](structure-hierarchy.md#fact-ownership-and-history)单独记录。Agent Note 保留其决策历史范围。
 - **使用清晰、准确的技术表达。** 明确执行者和主要动作，统一术语，优先使用直接动词，拆开堆叠的指令与条件。准确区分“必须、应当、可以、禁止”，保留条件、例外及不确定程度；不得为精简而改变约束。具体遵循[技术表达规则](style.md#clear-technical-expression)。
 
 <a id="quality-criteria"></a>

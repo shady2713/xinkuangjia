@@ -155,6 +155,19 @@ class SmsCallbackSignatureVerifierTest {
         assertThat(result).isEqualTo(SmsCallbackVerificationResult.PASS);
     }
 
+    /** 验证同一签名在重放窗口内第二次提交会被去重拦截，阻断窗口内重复重放。 */
+    @Test
+    void rejectsReplayedSignatureWithinWindow() {
+        SmsCallbackSignatureVerifier verifier = newVerifier();
+        long timestamp = currentEpochSecond();
+        String signature = sign("ALIYUN", timestamp, ALIYUN_BODY, ALIYUN_TEST_HMAC_KEY);
+
+        assertThat(verifier.verify("ALIYUN", request(Long.toString(timestamp), signature), ALIYUN_BODY))
+                .isEqualTo(SmsCallbackVerificationResult.PASS);
+        assertThat(verifier.verify("ALIYUN", request(Long.toString(timestamp), signature), ALIYUN_BODY))
+                .isEqualTo(SmsCallbackVerificationResult.INVALID);
+    }
+
     /**
      * 创建使用默认时间窗口的校验器，密钥大小写混合以覆盖归一化逻辑。
      *

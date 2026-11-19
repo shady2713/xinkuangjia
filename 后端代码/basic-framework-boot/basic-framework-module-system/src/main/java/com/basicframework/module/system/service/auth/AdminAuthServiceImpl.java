@@ -42,10 +42,13 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Validator;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.Objects;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -79,8 +82,18 @@ public class AdminAuthServiceImpl implements AdminAuthService {
     private LoginFailureLockService loginFailureLockService;
     @Resource
     private SmsLoginFailureLockService smsLoginFailureLockService;
+    /** 匿名短信发送防枚举冷却键前缀，确保未注册与已注册手机号返回一致的频控响应。 */
+    private static final String AUTH_SMS_SEND_COOLDOWN_PREFIX = "sms:auth:send:cooldown:";
+
+    /** 匿名短信发送默认冷却窗口，与验证码默认发送间隔保持一致。 */
+    private static final Duration DEFAULT_AUTH_SMS_COOLDOWN = Duration.ofMinutes(1);
+
     @Resource
     private SecurityAuditService securityAuditService;
+    @Resource
+    private ObjectProvider<StringRedisTemplate> stringRedisTemplateProvider;
+    @Resource
+    private ObjectProvider<com.basicframework.module.system.framework.sms.config.SmsCodeProperties> smsCodePropertiesProvider;
 
     /** 图形验证码开关，默认为 true。 */
     @Value("${basic-framework.captcha.enable:true}")
@@ -254,6 +267,8 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         if (!response.isSuccess()) {
             throw exception(ErrorCodeConstants.AUTH_LOGIN_CAPTCHA_CODE_ERROR, response.getRepMsg());
         }
+        // 在检查账号是否存在之前统一施加冷却频控，防止通过连续两次请求的响应差异枚举手机号或超管归属。
+        enforceAuthSmsSendCooldown(reqVO.getMobile());
 
         // 匿名短信入口仅服务已启用的业务管理平台账号；不存在、停用或超管账号静默结束，不向调用方暴露手机号状态。
         AdminUserDO user = userService.getUserByMobile(reqVO.getMobile());
@@ -265,6 +280,30 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         SmsCodeSendReqDTO sendRequest = AuthConvert.INSTANCE.convert(reqVO);
         sendRequest.setCreateIp(clientIp);
         smsCodeApi.sendSmsCode(sendRequest);
+    }
+
+    /**
+     * 对匿名短信发送请求按手机号施加统一冷却窗口，消除未注册账号与已注册账号的频控差异。
+     *
+     * @param mobile 手机号
+     */
+    private void enforceAuthSmsSendCooldown(String mobile) {
+        StringRedisTemplate redisTemplate = stringRedisTemplateProvider != null
+                ? stringRedisTemplateProvider.getIfAvailable() : null;
+        if (redisTemplate == null) {
+            return;
+        }
+        var properties = smsCodePropertiesProvider != null ? smsCodePropertiesProvider.getIfAvailable() : null;
+        Duration cooldown = properties != null && properties.getSendFrequency() != null
+                ? properties.getSendFrequency() : DEFAULT_AUTH_SMS_COOLDOWN;
+        if (cooldown.isZero() || cooldown.isNegative()) {
+            return;
+        }
+        String key = AUTH_SMS_SEND_COOLDOWN_PREFIX + cn.hutool.crypto.digest.DigestUtil.sha256Hex(mobile);
+        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(key, "1", cooldown);
+        if (!Boolean.TRUE.equals(acquired)) {
+            throw exception(ErrorCodeConstants.SMS_CODE_SEND_TOO_FAST);
+        }
     }
 
     /**

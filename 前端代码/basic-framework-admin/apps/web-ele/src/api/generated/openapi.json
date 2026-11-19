@@ -1837,6 +1837,10 @@
       "FilePresignedUrlRespVO" : {
         "description" : "管理后台 - 文件预签名地址 Response VO",
         "properties" : {
+          "contentType" : {
+            "description" : "预签名绑定的 Content-Type",
+            "type" : "string"
+          },
           "path" : {
             "description" : "文件路径",
             "type" : "string"
@@ -1906,21 +1910,6 @@
           }
         },
         "required" : [ "file" ],
-        "type" : "object"
-      },
-      "HttpHeaders" : {
-        "properties" : {
-          "headers" : {
-            "additionalProperties" : {
-              "type" : "string"
-            },
-            "type" : "object"
-          }
-        },
-        "type" : "object"
-      },
-      "HttpStatusCode" : {
-        "properties" : { },
         "type" : "object"
       },
       "JobLogPageReqVO" : {
@@ -3522,34 +3511,6 @@
         "required" : [ "id", "name" ],
         "type" : "object"
       },
-      "ResponseEntity_AliyunSmsCallbackRespVO" : {
-        "properties" : {
-          "body" : {
-            "$ref" : "#/components/schemas/AliyunSmsCallbackRespVO"
-          },
-          "headers" : {
-            "$ref" : "#/components/schemas/HttpHeaders"
-          },
-          "status" : {
-            "$ref" : "#/components/schemas/HttpStatusCode"
-          }
-        },
-        "type" : "object"
-      },
-      "ResponseEntity_TencentSmsCallbackRespVO" : {
-        "properties" : {
-          "body" : {
-            "$ref" : "#/components/schemas/TencentSmsCallbackRespVO"
-          },
-          "headers" : {
-            "$ref" : "#/components/schemas/HttpHeaders"
-          },
-          "status" : {
-            "$ref" : "#/components/schemas/HttpStatusCode"
-          }
-        },
-        "type" : "object"
-      },
       "ResponseModel" : {
         "properties" : {
           "repCode" : {
@@ -4620,10 +4581,63 @@
         "operationId" : "ConfigController_exportConfig",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/ConfigPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -4695,10 +4709,63 @@
         "operationId" : "ConfigController_getConfigPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/ConfigPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -4880,10 +4947,55 @@
         "operationId" : "FileController_getFilePage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/FilePageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "path",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -4970,10 +5082,70 @@
         "operationId" : "JobLogController_exportJobLogExcel",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "beginTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/JobLogPageReqVO"
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          }
+        }, {
+          "in" : "query",
+          "name" : "endTime",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          }
+        }, {
+          "in" : "query",
+          "name" : "handlerName",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "jobId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -5018,10 +5190,70 @@
         "operationId" : "JobLogController_getJobLogPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "beginTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/JobLogPageReqVO"
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          }
+        }, {
+          "in" : "query",
+          "name" : "endTime",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          }
+        }, {
+          "in" : "query",
+          "name" : "handlerName",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "jobId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -5133,10 +5365,51 @@
         "operationId" : "JobController_exportJobExcel",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "handlerName",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/JobPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -5217,10 +5490,51 @@
         "operationId" : "JobController_getJobPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "handlerName",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/JobPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -5817,10 +6131,18 @@
         "operationId" : "DeptController_getDeptList",
         "parameters" : [ {
           "in" : "query",
-          "name" : "reqVO",
+          "name" : "name",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/DeptListReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -5980,10 +6302,51 @@
         "operationId" : "DictDataController_export",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "dictType",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/DictDataPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "label",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6028,10 +6391,51 @@
         "operationId" : "DictDataController_getDictTypePage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "dictType",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/DictDataPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "label",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6191,10 +6595,63 @@
         "operationId" : "DictTypeController_export",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/DictTypePageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -6239,10 +6696,63 @@
         "operationId" : "DictTypeController_pageDictTypes",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/DictTypePageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -6314,10 +6824,62 @@
         "operationId" : "LoginLogController_exportLoginLog",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/LoginLogPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userIp",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "username",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -6362,10 +6924,62 @@
         "operationId" : "LoginLogController_getLoginLogPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/LoginLogPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userIp",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "username",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -6505,10 +7119,18 @@
         "operationId" : "MenuController_getMenuList",
         "parameters" : [ {
           "in" : "query",
-          "name" : "reqVO",
+          "name" : "name",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/MenuListReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6696,10 +7318,44 @@
         "operationId" : "OAuth2ClientController_getOAuth2ClientPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "name",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/OAuth2ClientPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6811,10 +7467,52 @@
         "operationId" : "OAuth2TokenController_getAccessTokenPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "reqVO",
+          "name" : "clientId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/OAuth2AccessTokenPageReqVO"
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userType",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6886,10 +7584,78 @@
         "operationId" : "OperateLogController_exportOperateLog",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "action",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/OperateLogPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "bizId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "subType",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -6934,10 +7700,78 @@
         "operationId" : "OperateLogController_pageOperateLog",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "action",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/OperateLogPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "bizId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "subType",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "userId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7192,10 +8026,51 @@
         "operationId" : "PostController_export",
         "parameters" : [ {
           "in" : "query",
-          "name" : "reqVO",
+          "name" : "code",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/PostPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7240,10 +8115,51 @@
         "operationId" : "PostController_getPostPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "code",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/PostPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7403,10 +8319,63 @@
         "operationId" : "RoleController_export",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "code",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/RolePageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7451,10 +8420,63 @@
         "operationId" : "RoleController_getRolePage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "code",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/RolePageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7642,10 +8664,63 @@
         "operationId" : "SmsChannelController_getSmsChannelPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "code",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/SmsChannelPageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "signature",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7805,10 +8880,86 @@
         "operationId" : "SmsTemplateController_exportSmsTemplateExcel",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "apiTemplateId",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/SmsTemplatePageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "code",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "content",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7853,10 +9004,86 @@
         "operationId" : "SmsTemplateController_getSmsTemplatePage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageVO",
+          "name" : "apiTemplateId",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/SmsTemplatePageReqVO"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "channelId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "code",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "content",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "createTime",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         } ],
         "responses" : {
@@ -7941,7 +9168,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ResponseEntity_AliyunSmsCallbackRespVO"
+                  "$ref" : "#/components/schemas/AliyunSmsCallbackRespVO"
                 }
               }
             },
@@ -7961,7 +9188,7 @@
             "content" : {
               "application/json" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ResponseEntity_TencentSmsCallbackRespVO"
+                  "$ref" : "#/components/schemas/TencentSmsCallbackRespVO"
                 }
               }
             },
@@ -8066,10 +9293,79 @@
         "operationId" : "UserController_exportUserList",
         "parameters" : [ {
           "in" : "query",
-          "name" : "exportReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/UserPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "deptId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "mobile",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "roleId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "username",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -8126,20 +9422,23 @@
         "operationId" : "UserController_importExcel",
         "parameters" : [ {
           "in" : "query",
-          "name" : "file",
-          "required" : true,
-          "schema" : {
-            "format" : "binary",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
           "name" : "updateSupport",
           "required" : false,
           "schema" : {
             "type" : "boolean"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "format" : "binary",
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -8161,10 +9460,79 @@
         "operationId" : "UserController_getUserPage",
         "parameters" : [ {
           "in" : "query",
-          "name" : "pageReqVO",
+          "name" : "createTime",
           "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/UserPageReqVO"
+            "items" : {
+              "format" : "int64",
+              "type" : "integer",
+              "x-java-type" : "LocalDateTime-epoch-ms"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "deptId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "mobile",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageNo",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pageSize",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "roleId",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sortingFields",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SortingField"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "username",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         } ],
         "responses" : {

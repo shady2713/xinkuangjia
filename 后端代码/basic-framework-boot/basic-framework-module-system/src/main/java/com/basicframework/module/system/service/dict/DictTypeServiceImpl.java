@@ -93,7 +93,12 @@ public class DictTypeServiceImpl implements DictTypeService {
     @Override
     public void updateDictType(DictTypeSaveReqVO updateReqVO) {
         // 校验自己存在
-        validateDictTypeExists(updateReqVO.getId());
+        DictTypeDO existing = validateDictTypeExists(updateReqVO.getId());
+        // 已存在字典数据时禁止修改字典类型编码，避免子字典数据成为孤儿记录。
+        if (!Objects.equals(existing.getType(), updateReqVO.getType())
+                && getDictDataService().getDictDataCountByDictType(existing.getType()) > 0) {
+            throw exception(DICT_TYPE_HAS_CHILDREN);
+        }
         // 校验字典类型的名字的唯一性
         validateDictTypeNameUnique(updateReqVO.getId(), updateReqVO.getName());
         // 校验字典类型的类型的唯一性

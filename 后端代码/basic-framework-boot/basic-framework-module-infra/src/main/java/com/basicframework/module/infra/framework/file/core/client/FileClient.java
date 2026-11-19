@@ -1,6 +1,8 @@
 /** 文件客户端统一协议，包含有界对象元数据读取。 */
 package com.basicframework.module.infra.framework.file.core.client;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -57,6 +59,18 @@ public interface FileClient extends AutoCloseable {
     byte[] getContent(String path) throws Exception;
 
     /**
+     * 以流式方式打开对象内容，避免大文件整包载入堆内存。
+     *
+     * @param path 相对路径
+     * @return 对象内容输入流，不存在时返回 null；调用方负责关闭
+     * @throws Exception 读取存储失败时抛出
+     */
+    default InputStream openContentStream(String path) throws Exception {
+        byte[] content = getContent(path);
+        return content != null ? new ByteArrayInputStream(content) : null;
+    }
+
+    /**
      * 复制对象到新的路径。
      *
      * @param sourcePath 来源对象路径，例如 frames/20260515/a.jpg
@@ -102,6 +116,17 @@ public interface FileClient extends AutoCloseable {
      */
     default String presignPutUrl(String path) {
         throw new UnsupportedOperationException("不支持的操作");
+    }
+
+    /**
+     * 获得限定 {@code Content-Type} 的文件预签名上传地址，防止前端直传篡改内容类型。
+     *
+     * @param path        相对路径
+     * @param contentType 期望的 MIME 类型，为空时退化为无内容类型约束的签名
+     * @return 文件预签名地址
+     */
+    default String presignPutUrl(String path, String contentType) {
+        return presignPutUrl(path);
     }
 
     /**

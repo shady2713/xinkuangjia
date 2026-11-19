@@ -1,7 +1,7 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { OpenApiSchemas } from '#/api/generated/api-types';
 import type { SystemDeptApi } from '#/api/system/dept';
-import type { SystemUserApi } from '#/api/system/user';
 
 import { CommonStatusEnum, DICT_TYPE } from '@vben/constants';
 import { getDictOptions } from '@vben/hooks';
@@ -15,9 +15,14 @@ import {
 import { getDeptList } from '#/api/system/dept';
 import { getSimpleUserList } from '#/api/system/user';
 
-let userList: SystemUserApi.User[] = [];
+let userList: OpenApiSchemas.UserSimpleRespVO[] = [];
 getSimpleUserList().then((data) => (userList = data));
 
+/**
+ * 构建部门新增/编辑表单字段定义。
+ *
+ * @returns 部门表单配置数组
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -34,12 +39,19 @@ export function useFormSchema(): VbenFormSchema[] {
       component: 'ApiTreeSelect',
       componentProps: {
         clearable: true,
+        /** 拉取部门列表并补齐顶级部门根节点后转换为树形结构。 */
         api: async () => {
-          const data = await getDeptList();
-          data.unshift({
-            id: 0,
-            name: '顶级部门',
-          });
+          const data: Array<{
+            id?: number | string;
+            name: string;
+            parentId?: number | string;
+          }> = [
+            {
+              id: 0,
+              name: '顶级部门',
+            },
+            ...(await getDeptList()),
+          ];
           return handleTree(data);
         },
         labelField: 'name',

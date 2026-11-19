@@ -82,21 +82,24 @@ const previewImage = ref<string>(''); // 预览图片
 const previewTitle = ref<string>(''); // 预览标题
 
 const fileList = ref<UploadFile[]>([]);
-const isLtMsg = ref<boolean>(true); // 文件大小错误提示
-const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
 const uploadNumber = ref<number>(0); // 上传文件计数器
 const uploadList = ref<any[]>([]); // 临时上传列表
 
 watch(
   currentValue,
+  /**
+   * 同步外部绑定值到本地预览文件列表，空值时清空列表。
+   *
+   * @param v 外部传入的单图地址或图片地址数组
+   */
   async (v) => {
     if (isInnerOperate.value) {
       isInnerOperate.value = false;
       return;
     }
     let value: string | string[] = [];
-    if (v) {
+    if (v && (!Array.isArray(v) || v.length > 0)) {
       if (Array.isArray(v)) {
         value = v;
       } else {
@@ -123,10 +126,14 @@ watch(
           return null;
         })
         .filter(Boolean) as UploadFile[];
+    } else {
+      // 外部将 v-model 置空或重置表单时必须清空内部预览列表，避免残留旧缩略图。
+      fileList.value = [];
     }
-    if (!isFirstRender.value) {
-      emit('change', value);
+    if (isFirstRender.value) {
       isFirstRender.value = false;
+    } else {
+      emit('change', value);
     }
   },
   {
@@ -197,17 +204,11 @@ async function beforeUpload(file: File) {
   const isAct = isImage(file.name, accept);
   if (!isAct) {
     showErrorMessage($t('ui.upload.acceptUpload', [accept]));
-    isActMsg.value = false;
-    // 防止弹出多个错误提示
-    setTimeout(() => (isActMsg.value = true), 1000);
     return false;
   }
   const isLt = file.size / 1024 / 1024 > maxSize;
   if (isLt) {
     showErrorMessage($t('ui.upload.maxSizeMultiple', [maxSize]));
-    isLtMsg.value = false;
-    // 防止弹出多个错误提示
-    setTimeout(() => (isLtMsg.value = true), 1000);
     return false;
   }
 

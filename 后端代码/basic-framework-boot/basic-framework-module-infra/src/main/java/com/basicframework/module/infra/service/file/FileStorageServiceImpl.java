@@ -106,6 +106,18 @@ public class FileStorageServiceImpl implements FileStorageService {
     }
 
     /**
+     * 以流式方式打开指定对象的内容流。
+     *
+     * @param path 对象路径
+     * @return 对象内容输入流
+     * @throws Exception 读取失败时抛出
+     */
+    @Override
+    public java.io.InputStream openContentStream(String path) throws Exception {
+        return fileClient.openContentStream(path);
+    }
+
+    /**
      * 通过对象存储服务端复制对象。
      *
      * @param sourcePath 来源对象路径
@@ -153,6 +165,18 @@ public class FileStorageServiceImpl implements FileStorageService {
     @Override
     public String presignPutUrl(String path) {
         return fileClient.presignPutUrl(path);
+    }
+
+    /**
+     * 生成限定 {@code Content-Type} 的对象上传预签名地址。
+     *
+     * @param path        对象路径
+     * @param contentType 允许的 MIME 类型
+     * @return 上传预签名地址
+     */
+    @Override
+    public String presignPutUrl(String path, String contentType) {
+        return fileClient.presignPutUrl(path, contentType);
     }
 
     /**

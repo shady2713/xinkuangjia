@@ -78,6 +78,8 @@ function showSpinning(index: number) {
         <iframe
           :src="item.meta.iframeSrc as string"
           class="size-full"
+          referrerpolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           @load="hideLoading(index)"
         ></iframe>
       </div>

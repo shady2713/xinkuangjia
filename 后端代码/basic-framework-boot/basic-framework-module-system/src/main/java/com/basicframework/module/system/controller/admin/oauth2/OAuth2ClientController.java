@@ -13,6 +13,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -95,7 +97,7 @@ public class OAuth2ClientController {
     @Parameter(name = "ids", description = "编号列表", required = true)
     @Operation(summary = "批量删除 OAuth2 客户端")
     @PreAuthorize("@ss.hasPermission('system:oauth2-client:delete')")
-    public CommonResult<Boolean> deleteOAuth2ClientList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteOAuth2ClientList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         oAuth2ClientService.deleteOAuth2ClientList(ids);
         return success(true);
     }

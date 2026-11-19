@@ -142,8 +142,17 @@ public class BasicFrameworkWebAutoConfiguration {
         // 创建 CorsConfiguration 对象
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
-        // 从配置读取允许的源地址，生产环境应配置为具体域名
-        webProperties.getCorsAllowedOrigins().forEach(config::addAllowedOriginPattern);
+        // 携带凭据（Cookie/Authorization）时禁止放行全局通配符 "*"，强制显式声明受信来源。
+        for (String origin : webProperties.getCorsAllowedOrigins()) {
+            String trimmed = StrUtil.trim(origin);
+            if ("*".equals(trimmed)) {
+                throw new IllegalStateException(
+                        "CORS 携带凭据模式下禁止配置通配符 '*'，请指定明确的来源域名或模式");
+            }
+            if (StrUtil.isNotBlank(trimmed)) {
+                config.addAllowedOriginPattern(trimmed);
+            }
+        }
         config.addAllowedHeader("*"); // 设置访问源请求头
         config.addAllowedMethod("*"); // 设置访问源请求方法
         // 创建 UrlBasedCorsConfigurationSource 对象

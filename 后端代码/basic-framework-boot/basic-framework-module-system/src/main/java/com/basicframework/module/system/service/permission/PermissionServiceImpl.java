@@ -7,6 +7,7 @@ import cn.hutool.extra.spring.SpringUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.util.collection.CollectionUtils;
 import com.basicframework.framework.datapermission.core.annotation.DataPermission;
+import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
@@ -429,7 +430,71 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     public void assignRoleDataScope(Long roleId, Integer dataScope, Set<Long> dataScopeDeptIds) {
         validateRolePlatform(roleId);
+        validateOperatorDataScopeAuthority(dataScope, dataScopeDeptIds);
         roleService.updateRoleDataScope(roleId, dataScope, dataScopeDeptIds);
+    }
+
+    /**
+     * 获取操作员在当前管理平台下处于启用状态的角色编号集合，防止跨平台历史超管角色绕过反提权校验。
+     *
+     * @param operatorId    操作员编号
+     * @param loginUserType 当前登录平台类型
+     * @return 同平台启用角色编号集合
+     */
+    private Set<Long> getSamePlatformEnableRoleIds(Long operatorId, String loginUserType) {
+        return getEnableUserRoleListByUserIdFromCache(operatorId).stream()
+                .filter(role -> AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType))
+                .map(RoleDO::getId)
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
+     * 校验非超管操作员授予角色的数据权限范围不得超越自身数据权限边界。
+     *
+     * @param dataScope        目标数据范围
+     * @param dataScopeDeptIds 指定部门数据范围集合
+     */
+    private void validateOperatorDataScopeAuthority(Integer dataScope, Set<Long> dataScopeDeptIds) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            return;
+        }
+        String loginUserType = userService.getLoginUserTypeOrDefault();
+        Set<Long> operatorRoleIds = getSamePlatformEnableRoleIds(operatorId, loginUserType);
+        if (roleService.hasAnySuperAdmin(operatorRoleIds)) {
+            return;
+        }
+        DeptDataPermissionRespDTO operatorPerm = getDeptDataPermission(operatorId);
+        if (Boolean.TRUE.equals(operatorPerm.getAll())) {
+            return;
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.ALL.getScope())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_CUSTOM.getScope())
+                && (CollUtil.isEmpty(dataScopeDeptIds) || !operatorPerm.getDeptIds().containsAll(dataScopeDeptIds))) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_ONLY.getScope())) {
+            AdminUserDO operator = DataPermissionUtils.executeIgnore(() -> userService.getUser(operatorId));
+            Long operatorDeptId = operator != null ? operator.getDeptId() : null;
+            if (operatorDeptId == null || !operatorPerm.getDeptIds().contains(operatorDeptId)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_AND_CHILD.getScope())) {
+            AdminUserDO operator = DataPermissionUtils.executeIgnore(() -> userService.getUser(operatorId));
+            Long operatorDeptId = operator != null ? operator.getDeptId() : null;
+            if (operatorDeptId == null) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            Set<Long> requiredDeptIds = new HashSet<>(
+                    CollUtil.emptyIfNull(deptService.getChildDeptIdListFromCache(operatorDeptId)));
+            requiredDeptIds.add(operatorDeptId);
+            if (!operatorPerm.getDeptIds().containsAll(requiredDeptIds)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
     }
 
     /**
@@ -493,10 +558,13 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     /**
-     * 校验角色存在、同平台归属，且非超管操作员不得越权分配自身未持有的菜单。
+     * 校验角色存在、非系统内置角色、同平台归属，且非超管操作员不得越权分配自身未持有的菜单。
      */
     private void validateRoleMenuPlatform(Long roleId, Set<Long> menuIds) {
-        validateRolePlatform(roleId);
+        RoleDO role = validateRolePlatform(roleId);
+        if (com.basicframework.module.system.enums.permission.RoleTypeEnum.SYSTEM.getType().equals(role.getType())) {
+            throw exception(ErrorCodeConstants.ROLE_CAN_NOT_UPDATE_SYSTEM_TYPE_ROLE);
+        }
         String loginUserType = userService.getLoginUserTypeOrDefault();
         for (MenuDO menu : menuService.getMenuList(menuIds)) {
             if (!AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType)) {
@@ -505,7 +573,7 @@ public class PermissionServiceImpl implements PermissionService {
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId != null && CollUtil.isNotEmpty(menuIds)) {
-            Set<Long> operatorRoleIds = convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId);
+            Set<Long> operatorRoleIds = getSamePlatformEnableRoleIds(operatorId, loginUserType);
             if (!roleService.hasAnySuperAdmin(operatorRoleIds)) {
                 Set<Long> operatorMenuIds = getRoleMenuListByRoleId(operatorRoleIds);
                 if (!operatorMenuIds.containsAll(menuIds)) {
@@ -516,7 +584,7 @@ public class PermissionServiceImpl implements PermissionService {
     }
 
     /**
-     * 校验目标用户存在（受调用方数据权限约束）、同平台归属，且非超管不得授予超管角色。
+     * 校验目标用户存在（受调用方数据权限约束）、同平台归属，且非超管不得授予超管角色或超越自身权限边界的角色。
      */
     private void validateUserRolePlatform(Long userId, Set<Long> roleIds) {
         AdminUserDO user = userService.getUser(userId);
@@ -528,8 +596,18 @@ public class PermissionServiceImpl implements PermissionService {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        boolean operatorIsSuperAdmin = operatorId == null
-                || roleService.hasAnySuperAdmin(convertSet(getEnableUserRoleListByUserIdFromCache(operatorId), RoleDO::getId));
+        Set<Long> operatorRoleIds = operatorId != null
+                ? getSamePlatformEnableRoleIds(operatorId, loginUserType)
+                : Collections.emptySet();
+        boolean operatorIsSuperAdmin = operatorId == null || roleService.hasAnySuperAdmin(operatorRoleIds);
+        // 非超管操作员禁止修改超级管理员的角色集合（包括传入空集合摘除超管角色）。
+        if (!operatorIsSuperAdmin) {
+            Set<Long> dbRoleIds = convertSet(userRoleMapper.selectListByUserId(userId), UserRoleDO::getRoleId);
+            if (roleService.hasAnySuperAdmin(dbRoleIds)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+        }
+        Set<Long> operatorMenuIds = null;
         for (RoleDO role : roleService.getRoleList(roleIds)) {
             if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType)) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
@@ -537,13 +615,29 @@ public class PermissionServiceImpl implements PermissionService {
             if (!operatorIsSuperAdmin && RoleCodeEnum.isSuperAdmin(role.getCode())) {
                 throw exception(ErrorCodeConstants.ROLE_ADMIN_CODE_ERROR, role.getCode());
             }
+            if (!operatorIsSuperAdmin) {
+                validateOperatorDataScopeAuthority(role.getDataScope(), role.getDataScopeDeptIds());
+                Set<Long> targetRoleMenus = convertSet(
+                        roleMenuMapper.selectListByRoleId(role.getId()), RoleMenuDO::getMenuId);
+                if (CollUtil.isNotEmpty(targetRoleMenus)) {
+                    if (operatorMenuIds == null) {
+                        operatorMenuIds = getRoleMenuListByRoleId(operatorRoleIds);
+                    }
+                    if (!operatorMenuIds.containsAll(targetRoleMenus)) {
+                        throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+                    }
+                }
+            }
         }
     }
 
     /**
      * 校验目标角色存在并归属当前登录平台。
+     *
+     * @param roleId 角色编号
+     * @return 校验通过的角色记录
      */
-    private void validateRolePlatform(Long roleId) {
+    private RoleDO validateRolePlatform(Long roleId) {
         RoleDO role = roleService.getRole(roleId);
         if (role == null) {
             throw exception(ErrorCodeConstants.ROLE_NOT_EXISTS);
@@ -551,6 +645,7 @@ public class PermissionServiceImpl implements PermissionService {
         if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), userService.getLoginUserTypeOrDefault())) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
+        return role;
     }
 
     /**

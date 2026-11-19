@@ -1,6 +1,7 @@
 package com.basicframework.module.infra.controller.admin.job.vo.job;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -54,6 +55,7 @@ public class JobSaveReqVO {
     @Schema(description = "重试次数", requiredMode = Schema.RequiredMode.REQUIRED, example = "3")
     @NotNull(message = "重试次数不能为空")
     @PositiveOrZero(message = "重试次数不能小于 0")
+    @Max(value = 10, message = "重试次数不能超过 10 次")
     private Integer retryCount;
 
     /**
@@ -62,6 +64,7 @@ public class JobSaveReqVO {
     @Schema(description = "重试间隔", requiredMode = Schema.RequiredMode.REQUIRED, example = "1000")
     @NotNull(message = "重试间隔不能为空")
     @PositiveOrZero(message = "重试间隔不能小于 0")
+    @Max(value = 3_600_000, message = "重试间隔不能超过 3600000 毫秒")
     private Integer retryInterval;
 
     /**
@@ -69,6 +72,7 @@ public class JobSaveReqVO {
      */
     @Schema(description = "监控超时时间", example = "1000")
     @PositiveOrZero(message = "监控超时时间不能小于 0")
+    @Max(value = 86_400_000, message = "监控超时时间不能超过 86400000 毫秒")
     private Integer monitorTimeout;
 
 }

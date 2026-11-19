@@ -110,10 +110,14 @@ public class BasicFrameworkMybatisAutoConfiguration {
      * <p>固定使用 {@link JsonUtils#getObjectMapper()} 而非 Web 层 {@code ObjectMapper}，
      * 避免挂载了 HTML XSS 清洗反序列化器的 Web 映射器污染数据库 JSON 列读写。</p>
      *
+     * @param jsonUtilsProvider 领域 {@link JsonUtils} Bean 提供器，确保初始化顺序先于 TypeHandler 绑定
      * @return 初始化后的类型处理器占位实例（返回 Object 以避免注册为全局默认 TypeHandler）
      */
     @Bean
-    public Object jacksonTypeHandler() {
+    public Object jacksonTypeHandler(org.springframework.beans.factory.ObjectProvider<JsonUtils> jsonUtilsProvider) {
+        jsonUtilsProvider.ifAvailable(ignored -> {
+            // 触发 JsonUtils 初始化完成，再绑定纯净的领域 ObjectMapper。
+        });
         JacksonTypeHandler.setObjectMapper(JsonUtils.getObjectMapper());
         return new JacksonTypeHandler(Object.class);
     }

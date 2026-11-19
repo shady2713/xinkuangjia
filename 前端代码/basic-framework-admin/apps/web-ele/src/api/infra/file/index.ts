@@ -17,10 +17,8 @@ export {
 } from '#/api/core/file';
 
 export namespace InfraFileApi {
-  /** 文件记录信息。 */
-  export interface File extends CoreInfraFileApi.File {
-    configId?: number;
-  }
+  /** 文件记录信息（源自后端 FileRespVO 契约）。 */
+  export type File = CoreInfraFileApi.File;
 
   /** 文件预签名上传地址响应结构。 */
   export type FilePresignedUrlRespVO = CoreInfraFileApi.FilePresignedUrlRespVO;
@@ -47,7 +45,7 @@ export function getFilePage(params: PageParam) {
  * @param id 文件主键编号
  * @returns 删除结果
  */
-export function deleteFile(id: number) {
+export function deleteFile(id: number | string) {
   return requestClient.delete(`/infra/file/delete?id=${id}`);
 }
 
@@ -57,6 +55,6 @@ export function deleteFile(id: number) {
  * @param ids 待删除的文件主键编号列表
  * @returns 批量删除结果
  */
-export function deleteFileList(ids: number[]) {
+export function deleteFileList(ids: (number | string)[]) {
   return requestClient.delete(`/infra/file/delete-list?ids=${ids.join(',')}`);
 }

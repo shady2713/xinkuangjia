@@ -207,7 +207,7 @@ OAuth2 密码授权 Service 仍接收明文参数，但当前没有对外暴露�
 - 前端路由守卫强制跳转 `/change-password`；
 - 后端 `PasswordChangeRequiredFilter` 对已登录且标志为 `1` 的请求返回 403，只放行登录、刷新、权限信息、个人中心读取和修改密码等必要入口。
 
-初始化 SQL 中管理员密码 hash 为空，由部署受控 provisioning（或本地环回开发环境的 `scripts/runtime/seed_local_dev.py --apply`）写入；该账号的 `password_change_required` 初始为 `1`。`system.user.init-password` 默认为空，导入前必须由管理员在系统中设置符合策略的初始密码。
+初始化 SQL 中管理员密码 hash 为空，由部署受控 provisioning（或本地环回开发环境的 `scripts/runtime/seed_local_dev.py --apply --admin-password-hash <bcrypt-hash>`）写入；该账号的 `password_change_required` 初始为 `1`。`system.user.init-password` 默认为空，导入前必须由管理员在系统中设置符合策略的初始密码。
 
 ## 验证入口
 

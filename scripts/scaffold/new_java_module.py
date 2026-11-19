@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""确定性后端业务模块脚手架：一键生成 basic-framework-module-<name> 并注册 Maven 与错误码号段。
+"""确定性后端业务模块脚手架：一键生成 basic-framework-module-<name> 并注册 Maven、Swagger 与错误码号段。
 
 默认只读预览（--dry-run），仅在显式传入 --apply 时写入文件。
-自动分配不重叠的 1_SSS_000_000 错误码区间，注册根 pom.xml、dependencies、server 与 ServiceErrorCodeRange。
+自动分配不重叠的 1_SSS_000_000 错误码区间，注册根 pom.xml、dependencies、server 与 ServiceErrorCodeRange（Map.ofEntries）。
 
 用法：
   python -B -X utf8 scripts/scaffold/new_java_module.py crm
-  python -B -X utf8 scripts/scaffold/new_java_module.py crm --apply
+  python -B -X utf8 scripts/scaffold/new_java_module.py --name crm --apply
 
 @author shady2713
 """
@@ -24,7 +24,88 @@ sys.dont_write_bytecode = True
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 MODULE_NAME_RE = re.compile(r"^[a-z][a-z0-9]{1,23}$")
 RESERVED_NAMES = frozenset(
-    {"common", "core", "dependencies", "framework", "infra", "server", "system"}
+    {
+        "common",
+        "core",
+        "dependencies",
+        "framework",
+        "infra",
+        "server",
+        "system",
+    }
+)
+JAVA_KEYWORDS = frozenset(
+    {
+        "abstract",
+        "assert",
+        "boolean",
+        "break",
+        "byte",
+        "case",
+        "catch",
+        "char",
+        "class",
+        "const",
+        "continue",
+        "default",
+        "do",
+        "double",
+        "else",
+        "enum",
+        "exports",
+        "extends",
+        "false",
+        "final",
+        "finally",
+        "float",
+        "for",
+        "goto",
+        "if",
+        "implements",
+        "import",
+        "instanceof",
+        "int",
+        "interface",
+        "long",
+        "module",
+        "native",
+        "new",
+        "null",
+        "open",
+        "opens",
+        "package",
+        "permits",
+        "private",
+        "protected",
+        "provides",
+        "public",
+        "record",
+        "requires",
+        "return",
+        "sealed",
+        "short",
+        "static",
+        "strictfp",
+        "super",
+        "switch",
+        "synchronized",
+        "this",
+        "throw",
+        "throws",
+        "to",
+        "transient",
+        "transitive",
+        "true",
+        "try",
+        "uses",
+        "var",
+        "void",
+        "volatile",
+        "when",
+        "while",
+        "with",
+        "yield",
+    }
 )
 STEP_SIZE = 1_000_000
 
@@ -43,14 +124,14 @@ class ModuleScaffoldPlan:
 
 
 def _validate_module_name(raw_name: str) -> str:
-    """校验模块短名格式与保留字冲突。
+    """校验模块短名格式、框架保留名与 Java 关键字冲突。
 
     Args:
         raw_name: 用户输入的模块短名（不含 basic-framework-module- 前缀）。
     Returns:
         归一化的小写模块名。
     Raises:
-        ValueError: 名称不符合小写字母数字规则或命中框架保留名时抛出。
+        ValueError: 名称不符合小写字母数字规则、命中框架保留名或 Java 关键字时抛出。
     """
     name = raw_name.strip().lower()
     if not MODULE_NAME_RE.fullmatch(name):
@@ -59,6 +140,8 @@ def _validate_module_name(raw_name: str) -> str:
         )
     if name in RESERVED_NAMES:
         raise ValueError(f"模块名 '{name}' 为框架核心保留名称，请换用具体业务域名")
+    if name in JAVA_KEYWORDS:
+        raise ValueError(f"模块名 '{name}' 为 Java 语言保留关键字，不能作为包名段")
     return name
 
 
@@ -69,7 +152,7 @@ def _format_java_int(number: int) -> str:
 
 
 def _parse_existing_ranges(range_source: str) -> dict[str, tuple[int, int]]:
-    """解析 ServiceErrorCodeRange.java 中已登记的模块号段区间。
+    """解析 ServiceErrorCodeRange.java 中已登记的模块号段区间（兼容 Map.ofEntries 与 Map.of）。
 
     Args:
         range_source: ServiceErrorCodeRange.java 源码文本。
@@ -142,19 +225,54 @@ def _update_service_error_code_range(
         raise ValueError("ServiceErrorCodeRange.java 结构不符合预期，缺少 MODULE_RANGES 注释锚点")
     updated = source.replace(anchor, constant_block + anchor, 1)
 
-    entry_pattern = re.compile(
-        r'(public\s+static\s+final\s+Map<String,\s*int\[\]>\s+MODULE_RANGES\s*=\s*Map\.of\(\n)'
-        r'([\s\S]*?)'
-        r'(\n\s*\);)'
+    entries_pattern = re.compile(
+        r"(public\s+static\s+final\s+Map<String,\s*int\[\]>\s+MODULE_RANGES\s*=\s*Map\.ofEntries\(\n)"
+        r"([\s\S]*?)"
+        r"(\n\s*\);)"
     )
-    match = entry_pattern.search(updated)
-    if match is None:
+    match = entries_pattern.search(updated)
+    if match is not None:
+        body = match.group(2).rstrip()
+        if not body.endswith(","):
+            body += ","
+        new_entry = (
+            f'{body}\n            Map.entry("{module_name}", new int[]{{{upper}_BEGIN, {upper}_END}})'
+        )
+        return (
+            updated[: match.start()]
+            + match.group(1)
+            + new_entry
+            + match.group(3)
+            + updated[match.end() :]
+        )
+
+    legacy_pattern = re.compile(
+        r"(public\s+static\s+final\s+Map<String,\s*int\[\]>\s+MODULE_RANGES\s*=\s*Map\.of\(\n)"
+        r"([\s\S]*?)"
+        r"(\n\s*\);)"
+    )
+    legacy_match = legacy_pattern.search(updated)
+    if legacy_match is None:
         raise ValueError("ServiceErrorCodeRange.java 中的 MODULE_RANGES 声明无法解析")
-    body = match.group(2).rstrip()
-    if not body.endswith(","):
-        body += ","
-    new_entry = f'{body}\n            "{module_name}", new int[]{{{upper}_BEGIN, {upper}_END}}'
-    return updated[: match.start()] + match.group(1) + new_entry + match.group(3) + updated[match.end() :]
+    converted_lines = [
+        re.sub(
+            r'^\s*"([a-z0-9_]+)"\s*,\s*(new\s+int\[\]\{[^}]+\}),?\s*$',
+            r'            Map.entry("\1", \2),',
+            line,
+        )
+        for line in legacy_match.group(2).splitlines()
+        if line.strip()
+    ]
+    converted_lines.append(
+        f'            Map.entry("{module_name}", new int[]{{{upper}_BEGIN, {upper}_END}})'
+    )
+    return (
+        updated[: legacy_match.start()]
+        + "public static final Map<String, int[]> MODULE_RANGES = Map.ofEntries(\n"
+        + "\n".join(converted_lines)
+        + legacy_match.group(3)
+        + updated[legacy_match.end() :]
+    )
 
 
 def _insert_before_closing_tag(xml_text: str, closing_tag: str, snippet: str) -> str:
@@ -168,7 +286,7 @@ def _insert_before_closing_tag(xml_text: str, closing_tag: str, snippet: str) ->
 def _render_module_files(
     module_name: str, artifact_id: str, begin_code: int, end_code: int
 ) -> dict[str, str]:
-    """渲染新业务模块的标准文件集合。"""
+    """渲染新业务模块的标准文件集合（含 OpenAPI 分组配置与号段单测）。"""
     upper = module_name.upper()
     title_name = module_name.capitalize()
     sample_code = f"{begin_code + 1_000:010d}"
@@ -242,6 +360,7 @@ kind: package-library
 ## 模块结构
 
 - [ErrorCodeConstants.java]({base_pkg_dir}/enums/ErrorCodeConstants.java)：模块业务错误码常量定义。
+- [{title_name}WebConfiguration.java]({base_pkg_dir}/framework/web/config/{title_name}WebConfiguration.java)：注册模块 OpenAPI 分组。
 
 ## 已知限制与暂缓工作
 
@@ -255,12 +374,40 @@ import com.basicframework.framework.common.exception.ErrorCode;
 /**
  * {title_name} 业务模块错误码常量定义，占用区间 [{_format_java_int(begin_code)}, {_format_java_int(end_code)})。
  *
- * @author shady2713
+ * @author basic-framework
  */
 public interface ErrorCodeConstants {{
 
     /** 示例记录不存在错误码，首个真实实体落地后可按业务子域扩展或替换。 */
     ErrorCode {upper}_RECORD_NOT_EXISTS = new ErrorCode({sample_literal}, "{module_name} 记录不存在");
+
+}}
+"""
+
+    web_config_java = f"""package com.basicframework.module.{module_name}.framework.web.config;
+
+import com.basicframework.framework.swagger.config.BasicFrameworkSwaggerAutoConfiguration;
+import org.springdoc.core.models.GroupedOpenApi;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * {module_name} 模块 Web 配置类，注册独立的 OpenAPI 接口分组。
+ *
+ * @author basic-framework
+ */
+@Configuration(proxyBeanMethods = false)
+public class {title_name}WebConfiguration {{
+
+    /**
+     * 注册 {module_name} 模块的 OpenAPI 接口文档分组。
+     *
+     * @return {module_name} 模块 OpenAPI 分组
+     */
+    @Bean
+    public GroupedOpenApi {module_name}GroupedOpenApi() {{
+        return BasicFrameworkSwaggerAutoConfiguration.buildGroupedOpenApi("{module_name}");
+    }}
 
 }}
 """
@@ -276,7 +423,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {title_name} 模块错误码区间归属单元测试。
  *
- * @author shady2713
+ * @author basic-framework
  */
 class ErrorCodeConstantsTest {{
 
@@ -298,6 +445,7 @@ class ErrorCodeConstantsTest {{
         "pom.xml": pom_xml,
         "README.md": readme_md,
         f"{base_pkg_dir}/enums/ErrorCodeConstants.java": error_codes_java,
+        f"{base_pkg_dir}/framework/web/config/{title_name}WebConfiguration.java": web_config_java,
         f"{test_pkg_dir}/enums/ErrorCodeConstantsTest.java": error_codes_test,
     }
     for subpkg, desc in (
@@ -308,7 +456,7 @@ class ErrorCodeConstantsTest {{
     ):
         java_pkg = subpkg.replace("/", ".")
         files[f"{base_pkg_dir}/{subpkg}/package-info.java"] = (
-            f"/**\n * {module_name} 模块：{desc}。\n *\n * @author shady2713\n */\n"
+            f"/**\n * {module_name} 模块：{desc}。\n *\n * @author basic-framework\n */\n"
             f"package com.basicframework.module.{module_name}.{java_pkg};\n"
         )
     return files
@@ -390,11 +538,18 @@ def scaffold_java_module(
         "            <version>${revision}</version>\n"
         "        </dependency>\n"
     )
-    updated_server_pom = _insert_before_closing_tag(
-        server_pom,
-        "\n        <!-- 测试基础能力 -->",
-        "\n" + server_dep_snippet.rstrip("\n"),
-    )
+    if "\n        <!-- 测试基础能力 -->" in server_pom:
+        updated_server_pom = _insert_before_closing_tag(
+            server_pom,
+            "\n        <!-- 测试基础能力 -->",
+            "\n" + server_dep_snippet.rstrip("\n"),
+        )
+    else:
+        updated_server_pom = _insert_before_closing_tag(
+            server_pom,
+            "    </dependencies>",
+            server_dep_snippet,
+        )
 
     rendered_files = _render_module_files(module_name, artifact_id, begin_code, end_code)
     created_rel = tuple(
@@ -427,17 +582,22 @@ def scaffold_java_module(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """解析命令行参数并执行后端业务模块脚手架。"""
+    """解析命令行参数并执行后端业务模块脚手架（同时兼容位置参数与 --name 选项）。"""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("name", help="新业务模块短名（例如 crm、order）")
+    parser.add_argument("name", nargs="?", default=None, help="新业务模块短名（例如 crm、order）")
+    parser.add_argument("--name", dest="name_opt", default=None, help="新业务模块短名（可选命名参数形式）")
     parser.add_argument("--code-begin", type=int, default=None, help="自定义起始错误码（可选）")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
     parser.add_argument("--apply", action="store_true", help="实际写入文件（默认仅预览）")
     args = parser.parse_args(argv)
 
+    raw_name = args.name_opt or args.name
+    if not raw_name:
+        parser.error("必须提供新业务模块短名（例如 crm 或 --name crm）")
+
     try:
         plan = scaffold_java_module(
-            args.root, args.name, code_begin=args.code_begin, apply=args.apply
+            args.root, raw_name, code_begin=args.code_begin, apply=args.apply
         )
     except ValueError as exc:
         print(f"错误：{exc}", file=sys.stderr)

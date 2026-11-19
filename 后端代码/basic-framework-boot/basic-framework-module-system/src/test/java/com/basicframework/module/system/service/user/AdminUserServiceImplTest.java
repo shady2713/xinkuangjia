@@ -233,6 +233,40 @@ class AdminUserServiceImplTest {
         verify(userMapper, never()).updateById(any(AdminUserDO.class));
     }
 
+    /** 验证同属 super_admin 平台的普通子管理员无法重置或删除持有 super_admin 角色的超级管理员账号。 */
+    @Test
+    void nonSuperAdminCannotResetOrDeleteSuperAdminUser() {
+        var loginUser = new com.basicframework.framework.security.core.LoginUser();
+        loginUser.setId(20L);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(loginUser, null));
+        try {
+            PermissionService permissionService = mock(PermissionService.class);
+            when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
+            when(permissionService.hasAnyRoles(1L,
+                    com.basicframework.module.system.enums.permission.RoleCodeEnum.SUPER_ADMIN.getCode()))
+                    .thenReturn(true);
+            when(permissionService.hasAnyRoles(20L,
+                    com.basicframework.module.system.enums.permission.RoleCodeEnum.SUPER_ADMIN.getCode()))
+                    .thenReturn(false);
+            when(userMapper.selectById(1L)).thenReturn(buildUser(1L, AdminPlatformTypeEnum.SUPER_ADMIN.getType()));
+
+            assertThatThrownBy(() -> userService.updateUserPassword(
+                    1L, "New#Pass1", AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
+                    .isInstanceOfSatisfying(ServiceException.class,
+                            ex -> assertThat(ex.getCode()).isEqualTo(
+                                    com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+            assertThatThrownBy(() -> userService.deleteUser(1L, AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
+                    .isInstanceOfSatisfying(ServiceException.class,
+                            ex -> assertThat(ex.getCode()).isEqualTo(
+                                    com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+            verify(userMapper, never()).updateById(any(AdminUserDO.class));
+            verify(userMapper, never()).deleteById(1L);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     /**
      * 匹配指定原因的令牌失效事件，避免依赖事件对象的其他字段。
      *

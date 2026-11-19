@@ -111,25 +111,14 @@ def validate(source: str, relative: str, rules: Rules) -> list[Finding]:
                     relative, 1, "readme-order", "已知限制与暂缓工作必须是最后一个非开发笔记 H2"
                 )
             )
-        for title in ("深入探索", "模型体验"):
+        for title in ("深入探索",):
             if title in titles and titles.index(title) >= limit:
                 findings.append(
                     Finding(relative, 1, "readme-order", f"{title}必须位于限制章节之前")
                 )
-        if matches(relative, rules.model_readmes) and "模型体验" not in titles:
-            findings.append(
-                Finding(relative, 1, "readme-model", "已登记模型交互的包必须提供模型体验说明")
-            )
-        for heading in headings:
-            if heading[1] == "模型体验" and not section_body(source, heading).strip().strip("- \n"):
-                findings.append(
-                    Finding(relative, heading[2], "readme-model", "模型体验缺少实际影响说明")
-                )
-    elif kind == "package-group" and any(
-        title in titles for title in ("模型体验", "已知限制与暂缓工作")
-    ):
+    elif kind == "package-group" and "已知限制与暂缓工作" in titles:
         findings.append(
-            Finding(relative, 1, "readme-group", "包组导览不承担模型体验或运行时限制章节")
+            Finding(relative, 1, "readme-group", "包组导览不承担运行时限制章节")
         )
     findings.extend(structure_findings(source, relative, rules))
     return findings

@@ -16,6 +16,7 @@ public interface ErrorCodeConstants {
     ErrorCode CONFIG_KEY_DUPLICATE = new ErrorCode(1_001_000_002, "参数配置 key 重复");
     ErrorCode CONFIG_CAN_NOT_DELETE_SYSTEM_TYPE = new ErrorCode(1_001_000_003, "不能删除类型为系统内置的参数配置");
     ErrorCode CONFIG_GET_VALUE_ERROR_IF_VISIBLE = new ErrorCode(1_001_000_004, "获取参数配置失败，原因：不允许获取不可见配置");
+    ErrorCode CONFIG_CAN_NOT_UPDATE_SYSTEM_KEY = new ErrorCode(1_001_000_005, "不能修改系统内置参数配置的参数键");
 
     // ========== 定时任务 1-001-001-000 ==========
     ErrorCode JOB_NOT_EXISTS = new ErrorCode(1_001_001_000, "定时任务不存在");
@@ -26,6 +27,7 @@ public interface ErrorCodeConstants {
     ErrorCode JOB_CRON_EXPRESSION_VALID = new ErrorCode(1_001_001_005, "CRON 表达式不正确");
     ErrorCode JOB_HANDLER_BEAN_NOT_EXISTS = new ErrorCode(1_001_001_006, "定时任务的处理器 Bean 不存在，注意 Bean 默认首字母小写");
     ErrorCode JOB_HANDLER_BEAN_TYPE_ERROR = new ErrorCode(1_001_001_007, "定时任务的处理器 Bean 类型不正确，未实现 JobHandler 接口");
+    ErrorCode JOB_HANDLER_CAN_NOT_UPDATE = new ErrorCode(1_001_001_008, "定时任务的处理器名字不允许修改");
 
     // ========== API 错误日志 1-001-002-000 ==========
 

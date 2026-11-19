@@ -136,6 +136,35 @@ class TokenAuthenticationFilterTest {
     }
 
     /**
+     * 验证 {@code userId = 0} 的客户端凭据令牌无权访问 {@code /admin-api/**} 管理后台端点。
+     */
+    @Test
+    void writesForbiddenResponseWhenClientCredentialsTokenTargetsAdminApi() throws Exception {
+        OAuth2TokenCommonApi tokenApi = mock(OAuth2TokenCommonApi.class);
+        OAuth2AccessTokenCheckRespDTO dto = new OAuth2AccessTokenCheckRespDTO();
+        dto.setUserId(0L);
+        dto.setUserType(UserTypeEnum.ADMIN.getValue());
+        when(tokenApi.checkAccessToken("client-token")).thenReturn(dto);
+
+        GlobalExceptionHandler exceptionHandler = mock(GlobalExceptionHandler.class);
+        when(exceptionHandler.allExceptionHandler(any(), any(AccessDeniedException.class)))
+                .thenReturn(CommonResult.error(FORBIDDEN));
+
+        TokenAuthenticationFilter filter = buildFilter(tokenApi, exceptionHandler);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/admin-api/infra/file/upload");
+        request.addHeader("Authorization", "Bearer client-token");
+        WebFrameworkUtils.setLoginUserType(request, UserTypeEnum.ADMIN.getValue());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(SecurityFrameworkUtils.getLoginUser()).isNull();
+        assertThat(response.getContentAsString()).contains(String.valueOf(FORBIDDEN.getCode()));
+        verify(chain, never()).doFilter(any(), any());
+    }
+
+    /**
      * 构造带受控依赖的过滤器实例。
      */
     @SuppressWarnings("unchecked")

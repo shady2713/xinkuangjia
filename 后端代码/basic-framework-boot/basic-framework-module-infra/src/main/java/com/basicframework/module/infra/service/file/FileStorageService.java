@@ -3,6 +3,8 @@ package com.basicframework.module.infra.service.file;
 
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -51,6 +53,18 @@ public interface FileStorageService {
     byte[] getContent(String path) throws Exception;
 
     /**
+     * 以流式方式打开文件内容，避免大文件整包载入堆内存。
+     *
+     * @param path 对象路径
+     * @return 文件内容输入流，不存在时返回 null
+     * @throws Exception 读取失败时抛出
+     */
+    default InputStream openContentStream(String path) throws Exception {
+        byte[] content = getContent(path);
+        return content != null ? new ByteArrayInputStream(content) : null;
+    }
+
+    /**
      * 复制文件。
      *
      * @param sourcePath 来源对象路径
@@ -87,6 +101,17 @@ public interface FileStorageService {
      * @return 预签名上传地址
      */
     String presignPutUrl(String path);
+
+    /**
+     * 生成限定 {@code Content-Type} 的上传预签名地址。
+     *
+     * @param path        对象路径
+     * @param contentType 允许的 MIME 类型
+     * @return 预签名上传地址
+     */
+    default String presignPutUrl(String path, String contentType) {
+        return presignPutUrl(path);
+    }
 
     /**
      * 生成读取地址。

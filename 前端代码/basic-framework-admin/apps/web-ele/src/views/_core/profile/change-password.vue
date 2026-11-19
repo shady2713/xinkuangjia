@@ -24,7 +24,7 @@ async function handleSuccess() {
 <template>
   <Page auto-content-height>
     <div class="mx-auto mt-8 w-full max-w-xl">
-      <ElCard title="首次修改密码">
+      <ElCard header="首次修改密码">
         <p class="mb-4 text-sm text-gray-500">
           当前账号使用初始密码或已被管理员重置，完成修改后才能使用其他功能。
         </p>

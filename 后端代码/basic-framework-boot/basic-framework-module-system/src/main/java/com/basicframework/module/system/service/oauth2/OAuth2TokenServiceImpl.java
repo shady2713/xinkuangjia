@@ -91,6 +91,32 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
+     * 为 {@code client_credentials} 模式创建纯客户端访问令牌，不签发刷新令牌。
+     *
+     * @param clientId 客户端编号
+     * @param scopes   授权范围
+     * @return 访问令牌信息
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OAuth2AccessTokenDO createClientAccessToken(String clientId, List<String> scopes) {
+        OAuth2ClientDO clientDO = resolveClient(clientId);
+        OAuth2AccessTokenDO accessTokenDO = new OAuth2AccessTokenDO();
+        accessTokenDO.setAccessToken(generateAccessToken());
+        accessTokenDO.setUserId(0L);
+        accessTokenDO.setUserType(0);
+        accessTokenDO.setUserInfo(Collections.emptyMap());
+        accessTokenDO.setClientId(clientDO.getClientId());
+        accessTokenDO.setScopes(scopes);
+        // 数据库 refresh_token 列非空；客户端模式按 RFC 6749 §4.4.3 不落库 refresh_token 记录。
+        accessTokenDO.setRefreshToken("");
+        accessTokenDO.setExpiresTime(LocalDateTime.now().plusSeconds(clientDO.getAccessTokenValiditySeconds()));
+        oauth2AccessTokenMapper.insert(accessTokenDO);
+        runAfterCommitOrNow(() -> oauth2AccessTokenRedisDAO.set(accessTokenDO));
+        return accessTokenDO;
+    }
+
+    /**
      * 刷新访问令牌。
      *
      * @param refreshToken refreshToken 参数
@@ -183,6 +209,14 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (isLegacyDefaultClient(accessTokenDO.getClientId())) {
             throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "登录已失效，请重新登录");
         }
+        // 非内部会话客户端需核验客户端仍处于启用状态，确保禁用或删除客户端后既有令牌立即失效。
+        if (!isInternalSession(accessTokenDO.getClientId())) {
+            try {
+                oauth2ClientService.validOAuthClientFromCache(accessTokenDO.getClientId());
+            } catch (ServiceException ex) {
+                throw exception0(GlobalErrorCodeConstants.UNAUTHORIZED.getCode(), "客户端已停用或不存在");
+            }
+        }
         assertAccessTokenActive(accessTokenDO);
         return accessTokenDO;
     }
@@ -236,7 +270,9 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      */
     private void revokeAccessTokenRecord(OAuth2AccessTokenDO accessTokenDO) {
         oauth2AccessTokenMapper.deleteById(accessTokenDO.getId());
-        oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
+        if (cn.hutool.core.util.StrUtil.isNotBlank(accessTokenDO.getRefreshToken())) {
+            oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
+        }
         String tokenValue = accessTokenDO.getAccessToken();
         runAfterCommitOrNow(() -> {
             oauth2AccessTokenRedisDAO.delete(tokenValue);

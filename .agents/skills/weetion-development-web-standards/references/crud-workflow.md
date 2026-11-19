@@ -31,7 +31,6 @@
 | 弹窗 Modal | `vben-modal.md` | `../assets/modal-template.md` |
 | 抽屉 Drawer | `vben-drawer.md` | `../assets/drawer-template.md` |
 | 页面 Page | `vben-page.md` | `../assets/page-template.md` |
-| 省略文本 Ellipsis Text | `vben-ellipsis-text.md` | `../assets/ellipsis-text-template.md` |
 | 提示 Alert | `vben-alert.md` | `../assets/alert-template.md` |
 
 本 Skill 中所有 `src/` 路径均指目标前端应用的源码目录：本仓库为 `前端代码/basic-framework-admin/apps/web-ele/src`，执行前确认目标业务模块。当前应用使用 Element Plus，API 使用 `#/api/request`；分页复用 `PageParam`/`PageResult`，参数为 `pageNo`、`pageSize`，结果为 `list`、`total`。接口端点、实体字段及更新签名须核对实际后端（或 `src/api/generated/api-types.d.ts`）和相邻模块，不照搬示例字段。生成代码前必须完整读取本技能的 [Web 注释完整规范](web-comments.md)（中文注释、props/emits 契约、职责说明）。

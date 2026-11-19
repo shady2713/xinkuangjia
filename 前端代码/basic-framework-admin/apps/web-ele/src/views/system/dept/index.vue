@@ -48,6 +48,7 @@ function hasChildDept(row: SystemDeptApi.Dept) {
 
 const {
   checkedIds,
+  clearCheckedIds,
   handleCreate,
   handleDelete,
   handleDeleteBatch,
@@ -99,7 +100,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
     },
     toolbarConfig: {
       refresh: true,
-      search: true,
     },
     treeConfig: {
       parentField: 'parentId',
@@ -111,6 +111,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
   gridEvents: {
     checkboxAll: handleRowCheckboxChange,
     checkboxChange: handleRowCheckboxChange,
+    proxyQuery: clearCheckedIds,
   },
 });
 </script>

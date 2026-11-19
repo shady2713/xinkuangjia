@@ -83,30 +83,6 @@ public interface OAuth2ClientService {
     PageResult<OAuth2ClientDO> getOAuth2ClientPage(OAuth2ClientPageReqVO pageReqVO);
 
     /**
-     * 新增或更新开放接口使用的客户端，密钥参数必须已经完成安全哈希。
-     *
-     * @param clientId 客户端编号
-     * @param encodedSecret 已哈希的客户端密钥
-     * @param status 客户端状态
-     */
-    void upsertEncodedOpenClient(String clientId, String encodedSecret, Integer status);
-
-    /**
-     * 更新开放接口客户端状态。
-     *
-     * @param clientId 客户端编号
-     * @param status 客户端状态
-     */
-    void updateOpenClientStatus(String clientId, Integer status);
-
-    /**
-     * 停用开放接口客户端并清理授权缓存。
-     *
-     * @param clientId 客户端编号
-     */
-    void disableOpenClient(String clientId);
-
-    /**
      * 从缓存中校验客户端是否可用。
      *
      * @param clientId 客户端标识

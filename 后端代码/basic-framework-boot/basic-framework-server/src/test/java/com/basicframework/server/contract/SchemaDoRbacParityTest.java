@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.basicframework.framework.common.exception.ErrorCode;
 import com.basicframework.framework.common.exception.enums.ServiceErrorCodeRange;
+import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
 import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -56,7 +57,7 @@ class SchemaDoRbacParityTest {
     private static final Pattern COLUMN_LINE_PATTERN = Pattern.compile("^\\s*`([^`]+)`\\s+([a-zA-Z]+).*");
 
     private static final Pattern UNIQUE_INDEX_PATTERN = Pattern.compile(
-            "UNIQUE\\s+(?:INDEX|KEY)\\s+`[^`]+`\\s*\\(([^)]+)\\)",
+            "UNIQUE(?:\\s+(?:INDEX|KEY))?(?:\\s+`[^`]+`)?\\s*\\(([^)]+)\\)",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern MENU_INSERT_PATTERN = Pattern.compile(
@@ -69,6 +70,11 @@ class SchemaDoRbacParityTest {
             "@ss\\.has(?:Any)?Permissions?\\(([^)]*)\\)");
 
     private static final Pattern SINGLE_QUOTED_PATTERN = Pattern.compile("'([^']+)'");
+
+    /** 仅存一次性密码学随机令牌、删除后永不复用旧值的表，豁免 deleted_tag 要求。 */
+    private static final Set<String> IMMUTABLE_TOKEN_UNIQUE_TABLES = Set.of(
+            "system_oauth2_access_token",
+            "system_oauth2_refresh_token");
 
     /** 校验全部持久化 DO 类与 basic_framework.sql 的表结构及软删除唯一索引严格对齐。 */
     @Test
@@ -114,6 +120,12 @@ class SchemaDoRbacParityTest {
                         mismatches.add("表 `" + tableName + "` 的唯一索引未包含 deleted_tag 列: " + ukCols);
                     }
                 }
+            } else if (BaseDO.class.isAssignableFrom(doClass)
+                    && !tableMeta.uniqueIndexColumnSets.isEmpty()
+                    && !IMMUTABLE_TOKEN_UNIQUE_TABLES.contains(tableName)) {
+                // 反向门禁：任何可软删除的 BaseDO 表只要声明了业务 UNIQUE INDEX，就必须继承 UniqueBaseDO 并包含 deleted_tag。
+                mismatches.add(doClass.getSimpleName() + " 对应软删除表 `" + tableName
+                        + "` 含唯一索引 " + tableMeta.uniqueIndexColumnSets + "，必须继承 UniqueBaseDO 并加入 deleted_tag");
             }
         }
         assertTrue(mismatches.isEmpty(), String.join("\n", mismatches));
@@ -182,19 +194,22 @@ class SchemaDoRbacParityTest {
                 metadataReader.getClassMetadata().getClassName().endsWith(".ErrorCodeConstants"));
         Map<Integer, String> seenCodes = new HashMap<>();
         List<String> violations = new ArrayList<>();
-        Map<String, Class<?>> constantClasses = new LinkedHashMap<>();
+        // 支持同一业务模块下存在多个 ErrorCodeConstants 类，避免按模块名覆盖导致漏检。
+        List<Map.Entry<String, Class<?>>> constantClasses = new ArrayList<>();
+        Set<String> discoveredModules = new LinkedHashSet<>();
         Pattern modulePattern = Pattern.compile("^com\\.basicframework\\.module\\.([a-z0-9_]+)\\..*\\.ErrorCodeConstants$");
         for (BeanDefinition candidate : scanner.findCandidateComponents("com.basicframework.module")) {
             String className = candidate.getBeanClassName();
             Matcher matcher = modulePattern.matcher(className);
             if (matcher.matches()) {
-                constantClasses.put(matcher.group(1), Class.forName(className));
+                discoveredModules.add(matcher.group(1));
+                constantClasses.add(Map.entry(matcher.group(1), Class.forName(className)));
             }
         }
-        assertTrue(ServiceErrorCodeRange.MODULE_RANGES.keySet().containsAll(constantClasses.keySet()),
-                "存在未在 ServiceErrorCodeRange.MODULE_RANGES 登记号段的模块: " + constantClasses.keySet());
+        assertTrue(ServiceErrorCodeRange.MODULE_RANGES.keySet().containsAll(discoveredModules),
+                "存在未在 ServiceErrorCodeRange.MODULE_RANGES 登记号段的模块: " + discoveredModules);
 
-        for (Map.Entry<String, Class<?>> entry : constantClasses.entrySet()) {
+        for (Map.Entry<String, Class<?>> entry : constantClasses) {
             String moduleName = entry.getKey();
             Class<?> clazz = entry.getValue();
             int[] range = ServiceErrorCodeRange.MODULE_RANGES.get(moduleName);
@@ -244,14 +259,8 @@ class SchemaDoRbacParityTest {
                     continue;
                 }
                 String upper = trimmed.toUpperCase(Locale.ROOT);
-                if (upper.startsWith("PRIMARY KEY")
-                        || upper.startsWith("INDEX ")
-                        || upper.startsWith("KEY ")
-                        || upper.startsWith("CONSTRAINT ")
-                        || upper.startsWith("FOREIGN KEY")) {
-                    continue;
-                }
-                if (upper.startsWith("UNIQUE ")) {
+                if (upper.startsWith("UNIQUE ")
+                        || (upper.startsWith("CONSTRAINT ") && upper.contains(" UNIQUE"))) {
                     Matcher ukMatcher = UNIQUE_INDEX_PATTERN.matcher(trimmed);
                     if (ukMatcher.find()) {
                         Set<String> ukCols = new TreeSet<>();
@@ -261,6 +270,13 @@ class SchemaDoRbacParityTest {
                         }
                         uniqueIndexes.add(ukCols);
                     }
+                    continue;
+                }
+                if (upper.startsWith("PRIMARY KEY")
+                        || upper.startsWith("INDEX ")
+                        || upper.startsWith("KEY ")
+                        || upper.startsWith("CONSTRAINT ")
+                        || upper.startsWith("FOREIGN KEY")) {
                     continue;
                 }
                 Matcher colMatcher = COLUMN_LINE_PATTERN.matcher(trimmed);

@@ -1,37 +1,21 @@
 /**
- * 字典精简查询接口：供路由守卫与通用选择器加载字典缓存。
+ * 字典精简查询接口：供路由守卫与通用选择器加载字典缓存，类型直接复用后端 OpenAPI 契约。
  * 核心组件通过此模块加载字典，系统管理页面的增删改接口由 system/dict 模块提供。
  */
+import type { OpenApiSchemas } from '#/api/generated/api-types';
+
 import { requestClient } from '#/api/request';
 
 /** 路由字典缓存使用的精简字典数据契约。 */
 export namespace SystemDictDataApi {
-  /** 字典数据 */
-  export type DictData = {
-    colorType: string;
-    createTime: Date;
-    cssClass: string;
-    dictType: string;
-    id?: number;
-    label: string;
-    remark: string;
-    sort?: number;
-    status: number;
-    value: string;
-  };
+  /** 精简字典数据（源自后端 DictDataSimpleRespVO 契约） */
+  export type DictData = OpenApiSchemas.DictDataSimpleRespVO;
 }
 
 /** 表单设计器字典选择器使用的字典类型契约。 */
 export namespace SystemDictTypeApi {
-  /** 字典类型 */
-  export type DictType = {
-    createTime: Date;
-    id?: number;
-    name: string;
-    remark: string;
-    status: number;
-    type: string;
-  };
+  /** 精简字典类型（源自后端 DictTypeSimpleRespVO 契约） */
+  export type DictType = OpenApiSchemas.DictTypeSimpleRespVO;
 }
 
 /**

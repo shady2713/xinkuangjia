@@ -30,8 +30,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 
-import static com.basicframework.module.system.enums.oauth2.OAuth2GrantTypeEnum.CLIENT_CREDENTIALS;
-
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 
@@ -221,76 +219,6 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     @Override
     public PageResult<OAuth2ClientDO> getOAuth2ClientPage(OAuth2ClientPageReqVO pageReqVO) {
         return oauth2ClientMapper.selectPage(pageReqVO);
-    }
-
-    /**
-     * 新增或更新开放接口客户端，直接保存调用方已完成 BCrypt 处理的密钥。
-     *
-     * @param clientId 客户端编号
-     * @param encodedSecret 已哈希的客户端密钥
-     * @param status 客户端状态
-     */
-    @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.OAUTH_CLIENT, allEntries = true)
-    public void upsertEncodedOpenClient(String clientId, String encodedSecret, Integer status) {
-        OAuth2ClientDO client = oauth2ClientMapper.selectByClientId(clientId);
-        if (client == null) {
-            client = new OAuth2ClientDO();
-            client.setClientId(clientId);
-        }
-        client.setSecret(encodedSecret);
-        client.setName(clientId);
-        client.setLogo("");
-        client.setDescription("第三方开放接口客户授权");
-        client.setStatus(status);
-        client.setAccessTokenValiditySeconds(7200);
-        client.setRefreshTokenValiditySeconds(2592000);
-        client.setRedirectUris(List.of());
-        client.setAuthorizedGrantTypes(List.of(CLIENT_CREDENTIALS.getGrantType()));
-        client.setScopes(List.of("alert:read", "alert:subscribe"));
-        client.setAutoApproveScopes(List.of("alert:read", "alert:subscribe"));
-        client.setAuthorities(List.of());
-        client.setResourceIds(List.of());
-        client.setAdditionalInformation("{}");
-        client.setDeleted(false);
-        if (client.getId() == null) {
-            oauth2ClientMapper.insert(client);
-        } else {
-            oauth2ClientMapper.updateById(client);
-        }
-    }
-
-    /**
-     * 更新开放接口客户端状态。
-     *
-     * @param clientId 客户端编号
-     * @param status 客户端状态
-     */
-    @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.OAUTH_CLIENT, allEntries = true)
-    public void updateOpenClientStatus(String clientId, Integer status) {
-        OAuth2ClientDO client = oauth2ClientMapper.selectByClientId(clientId);
-        if (client == null) {
-            return;
-        }
-        OAuth2ClientDO update = new OAuth2ClientDO();
-        update.setId(client.getId());
-        update.setStatus(status);
-        oauth2ClientMapper.updateById(update);
-    }
-
-    /**
-     * 停用开放接口客户端。
-     *
-     * @param clientId 客户端编号
-     */
-    @Override
-    @CacheEvict(cacheNames = RedisKeyConstants.OAUTH_CLIENT, allEntries = true)
-    public void disableOpenClient(String clientId) {
-        OAuth2ClientDO client = oauth2ClientMapper.selectByClientId(clientId);
-        if (client != null) {
-            oauth2ClientMapper.deleteById(client.getId());
-        }
     }
 
     /**

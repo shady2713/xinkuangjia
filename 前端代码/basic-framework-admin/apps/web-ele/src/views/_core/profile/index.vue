@@ -51,7 +51,7 @@ onMounted(loadProfile);
   <Page auto-content-height>
     <div class="flex">
       <!-- 左侧 个人信息 -->
-      <ElCard class="w-2/5" title="个人信息">
+      <ElCard class="w-2/5" header="个人信息">
         <ProfileUser :profile="profile" @success="refreshProfile" />
       </ElCard>
 
@@ -62,7 +62,7 @@ onMounted(loadProfile);
             <BaseInfo :profile="profile" @success="refreshProfile" />
           </ElTabPane>
           <ElTabPane name="resetPwd" label="密码设置">
-            <ResetPwd @success="handlePasswordChanged" />
+            <ResetPwd silent-success @success="handlePasswordChanged" />
           </ElTabPane>
         </ElTabs>
       </ElCard>

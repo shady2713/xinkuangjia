@@ -8,6 +8,12 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.core.toolkit.PluginUtils;
 import com.baomidou.mybatisplus.extension.parser.JsqlParserSupport;
 import com.baomidou.mybatisplus.extension.plugins.inner.InnerInterceptor;
+import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.expression.HexValue;
+import net.sf.jsqlparser.expression.JdbcNamedParameter;
+import net.sf.jsqlparser.expression.JdbcParameter;
+import net.sf.jsqlparser.expression.LongValue;
+import net.sf.jsqlparser.expression.StringValue;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.update.UpdateSet;
@@ -82,10 +88,15 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
         boolean setsDeleted = false;
         boolean setsDeletedTag = false;
         for (UpdateSet updateSet : updateSets) {
-            for (Column column : updateSet.getColumns()) {
-                String colName = cleanIdentifier(column.getColumnName());
+            List<Column> columns = updateSet.getColumns();
+            List<? extends Expression> values = updateSet.getValues();
+            for (int i = 0; i < columns.size(); i++) {
+                String colName = cleanIdentifier(columns.get(i).getColumnName());
                 if (DELETED_COLUMN.equalsIgnoreCase(colName)) {
-                    setsDeleted = true;
+                    Expression valueExpr = (values != null && i < values.size()) ? values.get(i) : null;
+                    if (isLogicDeleteValue(valueExpr)) {
+                        setsDeleted = true;
+                    }
                 } else if (DELETED_TAG_COLUMN.equalsIgnoreCase(colName)) {
                     setsDeletedTag = true;
                 }
@@ -95,6 +106,40 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
             String keyColumn = cleanIdentifier(StrUtil.blankToDefault(tableInfo.getKeyColumn(), "id"));
             update.addUpdateSet(new Column(DELETED_TAG_COLUMN), new Column(keyColumn));
         }
+    }
+
+    /**
+     * 判断 {@code deleted} 列的赋值表达式是否代表逻辑删除（而非恢复为未删除状态）。
+     *
+     * <p>显式将 {@code deleted} 置为 {@code 0}、{@code false}、{@code b'0'} 等未删除值时返回 {@code false}，
+     * 避免恢复或常规更新语句误将活跃行的 {@code deleted_tag} 篡改为 {@code id}。</p>
+     *
+     * @param valueExpr SET 子句右侧赋值表达式
+     * @return 为逻辑删除值时返回 true
+     */
+    private static boolean isLogicDeleteValue(Expression valueExpr) {
+        if (valueExpr == null) {
+            return false;
+        }
+        if (valueExpr instanceof LongValue longValue) {
+            return longValue.getValue() != 0L;
+        }
+        if (valueExpr instanceof StringValue stringValue) {
+            String text = StrUtil.trim(stringValue.getValue());
+            return "1".equals(text) || "true".equalsIgnoreCase(text);
+        }
+        if (valueExpr instanceof HexValue hexValue) {
+            String text = StrUtil.trim(hexValue.getValue());
+            return !"0x0".equalsIgnoreCase(text) && !"0x00".equalsIgnoreCase(text);
+        }
+        if (valueExpr instanceof JdbcParameter || valueExpr instanceof JdbcNamedParameter) {
+            return true;
+        }
+        String raw = StrUtil.trim(valueExpr.toString());
+        if ("0".equals(raw) || "false".equalsIgnoreCase(raw) || "b'0'".equalsIgnoreCase(raw) || "'0'".equals(raw)) {
+            return false;
+        }
+        return "1".equals(raw) || "true".equalsIgnoreCase(raw) || "b'1'".equalsIgnoreCase(raw) || "'1'".equals(raw);
     }
 
     /**

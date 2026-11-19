@@ -18,7 +18,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -36,6 +39,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_E
  */
 @Tag(name = "管理后台 - 短信模板")
 @RestController
+@Validated
 @RequestMapping("/system/sms-template")
 public class SmsTemplateController {
 
@@ -107,7 +111,7 @@ public class SmsTemplateController {
     @Parameter(name = "ids", description = "编号列表", required = true)
     @Operation(summary = "批量删除短信模板")
     @PreAuthorize("@ss.hasPermission('system:sms-template:delete')")
-    public CommonResult<Boolean> deleteSmsTemplateList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteSmsTemplateList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         smsTemplateService.deleteSmsTemplateList(ids);
         return success(true);
     }

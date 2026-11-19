@@ -243,20 +243,29 @@ def test_pr_slice_size_guard_blocks_oversized_pr_without_override(tmp_path: Path
     gen_res = run_shell(guard_script, repo, {"BASE_SHA": base_sha, "PR_BODY": "routine sync"})
     assert gen_res.returncode == 0, gen_res.stdout + gen_res.stderr
 
-    # 2. 业务源码超过 600 行且无 [slice-override] 必须失败
+    # 2. 纯删除超过 600 行（清理死代码）不应被误杀阻断
+    big_legacy = repo / "src" / "Legacy.java"
+    big_legacy.parent.mkdir(parents=True)
+    big_legacy.write_text("\n".join(f"// old {i}" for i in range(650)) + "\n", encoding="utf-8")
+    base_with_legacy = commit_all(repo, "add legacy")
+    big_legacy.unlink()
+    commit_all(repo, "delete legacy")
+    deletion_ok = run_shell(guard_script, repo, {"BASE_SHA": base_with_legacy, "PR_BODY": "prune"})
+    assert deletion_ok.returncode == 0, deletion_ok.stdout + deletion_ok.stderr
+
+    # 3. 业务源码新增超过 600 行且无 [slice-override] 必须失败
     src = repo / "src" / "Oversized.java"
-    src.parent.mkdir(parents=True)
     src.write_text("\n".join(f"// line {i}" for i in range(650)) + "\n", encoding="utf-8")
     commit_all(repo, "oversized")
-    blocked = run_shell(guard_script, repo, {"BASE_SHA": base_sha, "PR_BODY": "missing rationale"})
+    blocked = run_shell(guard_script, repo, {"BASE_SHA": base_with_legacy, "PR_BODY": "missing rationale"})
     assert blocked.returncode == 1
-    assert "exceeds 600-line slice budget" in blocked.stderr
+    assert "exceed 600-line slice budget" in blocked.stderr
 
-    # 3. PR 描述显式附带 [slice-override] 时放行
+    # 4. PR 描述显式附带 [slice-override] 时放行
     allowed = run_shell(
         guard_script,
         repo,
-        {"BASE_SHA": base_sha, "PR_BODY": "Architecture baseline [slice-override]"},
+        {"BASE_SHA": base_with_legacy, "PR_BODY": "Architecture baseline [slice-override]"},
     )
     assert allowed.returncode == 0, allowed.stdout + allowed.stderr
 

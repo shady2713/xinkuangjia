@@ -5,6 +5,7 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.controller.admin.permission.vo.menu.MenuListReqVO;
 import com.basicframework.module.system.controller.admin.permission.vo.menu.MenuSaveVO;
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
@@ -13,6 +14,7 @@ import com.basicframework.module.system.dal.redis.RedisKeyConstants;
 import com.basicframework.module.system.enums.ErrorCodeConstants;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.permission.MenuTypeEnum;
+import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
@@ -45,6 +47,8 @@ public class MenuServiceImpl implements MenuService {
     private MenuMapper menuMapper;
     @Resource
     private ObjectProvider<PermissionService> permissionServiceProvider;
+    @Resource
+    private ObjectProvider<com.basicframework.module.system.service.user.AdminUserService> adminUserServiceProvider;
 
 
     /**
@@ -57,6 +61,7 @@ public class MenuServiceImpl implements MenuService {
     @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#createReqVO.permission",
             condition = "#createReqVO.permission != null")
     public Long createMenu(MenuSaveVO createReqVO) {
+        validateOperatorMenuPermissionChange(null, createReqVO.getPermission());
         // 校验父菜单存在
         validateParentMenu(createReqVO.getParentId(), null);
         validateParentMenuType(createReqVO.getParentId(), createReqVO.getMenuType());
@@ -82,8 +87,15 @@ public class MenuServiceImpl implements MenuService {
             allEntries = true) // allEntries 清空所有缓存，因为 permission 如果变更，涉及到新老两个 permission。直接清理，简单有效
     public void updateMenu(MenuSaveVO updateReqVO) {
         // 校验更新的菜单是否存在
-        if (menuMapper.selectById(updateReqVO.getId()) == null) {
+        MenuDO oldMenu = menuMapper.selectById(updateReqVO.getId());
+        if (oldMenu == null) {
             throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
+        }
+        // 非超管操作员不得篡改菜单权限标识或跨平台变更菜单归属，防止通过已有角色绑定实现自我提权。
+        validateOperatorMenuPermissionChange(oldMenu, updateReqVO.getPermission());
+        if (!Objects.equals(oldMenu.getMenuType(), updateReqVO.getMenuType())
+                && !isOperatorSuperAdmin()) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         // 校验父菜单存在
         validateParentMenu(updateReqVO.getParentId(), updateReqVO.getId());
@@ -96,6 +108,47 @@ public class MenuServiceImpl implements MenuService {
         MenuDO updateObj = BeanUtils.toBean(updateReqVO, MenuDO.class);
         initMenuProperty(updateObj);
         menuMapper.updateById(updateObj);
+    }
+
+    /**
+     * 校验非超管操作员不得新增或修改自身不具备的权限标识，防止菜单改权导致的权限提升。
+     *
+     * @param oldMenu       更新前的菜单对象，新建时为空
+     * @param newPermission 目标权限标识
+     */
+    private void validateOperatorMenuPermissionChange(MenuDO oldMenu, String newPermission) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null || isOperatorSuperAdmin()) {
+            return;
+        }
+        String normalizedNew = StrUtil.nullToEmpty(newPermission).trim();
+        if (oldMenu == null) {
+            if (StrUtil.isNotBlank(normalizedNew)
+                    && !getPermissionService().hasAnyPermissions(operatorId, normalizedNew)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            return;
+        }
+        String normalizedOld = StrUtil.nullToEmpty(oldMenu.getPermission()).trim();
+        if (!Objects.equals(normalizedOld, normalizedNew)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+    }
+
+    /**
+     * 判断当前登录操作员是否具备超级管理员角色。
+     *
+     * @return 无登录上下文或当前用户为超级管理员时返回 true
+     */
+    private boolean isOperatorSuperAdmin() {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            return true;
+        }
+        PermissionService permissionService = permissionServiceProvider != null
+                ? permissionServiceProvider.getIfAvailable() : null;
+        return permissionService == null
+                || permissionService.hasAnyRoles(operatorId, RoleCodeEnum.SUPER_ADMIN.getCode());
     }
 
     /**
@@ -112,14 +165,39 @@ public class MenuServiceImpl implements MenuService {
         if (menuMapper.selectCountByParentId(id) > 0) {
             throw exception(ErrorCodeConstants.MENU_EXISTS_CHILDREN);
         }
-        // 校验删除的菜单是否存在
-        if (menuMapper.selectById(id) == null) {
+        // 校验删除的菜单是否存在，并防止非超管删除自身不具备权限的菜单节点
+        MenuDO existing = menuMapper.selectById(id);
+        if (existing == null) {
             throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
         }
+        validateOperatorMenuDeleteAuthority(existing);
         // 标记删除
         menuMapper.deleteById(id);
         // 删除授予给角色的权限
         getPermissionService().processMenuDeleted(id);
+    }
+
+    /**
+     * 校验非超管操作员仅可删除同管理平台且自身已持有权限的菜单节点。
+     *
+     * @param existing 待删除菜单记录
+     */
+    private void validateOperatorMenuDeleteAuthority(MenuDO existing) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null || isOperatorSuperAdmin()) {
+            return;
+        }
+        com.basicframework.module.system.service.user.AdminUserService userService =
+                adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
+        if (userService != null
+                && !AdminPlatformTypeEnum.isSame(existing.getMenuType(), userService.getLoginUserTypeOrDefault())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        String permission = StrUtil.nullToEmpty(existing.getPermission()).trim();
+        if (StrUtil.isNotBlank(permission)
+                && !getPermissionService().hasAnyPermissions(operatorId, permission)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
     }
 
     /**
@@ -132,12 +210,16 @@ public class MenuServiceImpl implements MenuService {
     @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为 Spring Cache 不支持按照 ids 批量删除
     public void deleteMenuList(List<Long> ids) {
-        // 校验是否还有子菜单
-        ids.forEach(id -> {
+        // 校验是否还有子菜单，并核验操作员对目标菜单的删除权限
+        for (Long id : ids) {
             if (menuMapper.selectCountByParentId(id) > 0) {
                 throw exception(ErrorCodeConstants.MENU_EXISTS_CHILDREN);
             }
-        });
+            MenuDO existing = menuMapper.selectById(id);
+            if (existing != null) {
+                validateOperatorMenuDeleteAuthority(existing);
+            }
+        }
 
         // 标记删除
         menuMapper.deleteByIds(ids);
@@ -206,8 +288,20 @@ public class MenuServiceImpl implements MenuService {
      * 判断菜单Disabled 是否满足业务条件。
      */
     private boolean isMenuDisabled(MenuDO node, Map<Long, MenuDO> menuMap, Set<Long> disabledMenuCache) {
+        return isMenuDisabled(node, menuMap, disabledMenuCache, new HashSet<>());
+    }
+
+    /**
+     * 带访问路径环路保护的菜单禁用判定，防止异常父子环路触发栈溢出。
+     */
+    private boolean isMenuDisabled(MenuDO node, Map<Long, MenuDO> menuMap,
+                                   Set<Long> disabledMenuCache, Set<Long> visiting) {
         // 如果已经判定是禁用的节点，直接结束
         if (disabledMenuCache.contains(node.getId())) {
+            return true;
+        }
+        if (!visiting.add(node.getId())) {
+            disabledMenuCache.add(node.getId());
             return true;
         }
 
@@ -225,7 +319,7 @@ public class MenuServiceImpl implements MenuService {
 
         // 3. 继续遍历 parent 节点
         MenuDO parent = menuMap.get(parentId);
-        if (parent == null || isMenuDisabled(parent, menuMap, disabledMenuCache)) {
+        if (parent == null || isMenuDisabled(parent, menuMap, disabledMenuCache, visiting)) {
             disabledMenuCache.add(node.getId());
             return true;
         }
@@ -310,6 +404,25 @@ public class MenuServiceImpl implements MenuService {
         if (!MenuTypeEnum.DIR.getType().equals(menu.getType())
                 && !MenuTypeEnum.MENU.getType().equals(menu.getType())) {
             throw exception(ErrorCodeConstants.MENU_PARENT_NOT_DIR_OR_MENU);
+        }
+        // 校验多跳父子环路，防止将菜单挂到自身后代节点下。
+        if (childId != null) {
+            MenuDO current = menu;
+            Set<Long> visited = new HashSet<>();
+            visited.add(current.getId());
+            for (int i = 0; i < Short.MAX_VALUE; i++) {
+                Long ancestorId = current.getParentId();
+                if (Objects.equals(childId, ancestorId)) {
+                    throw exception(ErrorCodeConstants.MENU_PARENT_ERROR);
+                }
+                if (ancestorId == null || ID_ROOT.equals(ancestorId) || !visited.add(ancestorId)) {
+                    break;
+                }
+                current = menuMapper.selectById(ancestorId);
+                if (current == null) {
+                    break;
+                }
+            }
         }
     }
 

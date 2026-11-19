@@ -55,10 +55,14 @@ public class OAuth2UserController {
      */
     @GetMapping("/get")
     @Operation(summary = "获得用户基本信息")
-    @PreAuthorize("@ss.hasScope('user.read')") //
+    @PreAuthorize("@ss.hasScope('user.read')")
+    @com.basicframework.framework.datapermission.core.annotation.DataPermission(enable = false)
     public CommonResult<OAuth2UserInfoRespVO> getUserInfo() {
         // 获得用户基本信息
         AdminUserDO user = userService.getUser(getLoginUserId());
+        if (user == null) {
+            return success(null);
+        }
         OAuth2UserInfoRespVO resp = BeanUtils.toBean(user, OAuth2UserInfoRespVO.class);
         // 获得部门信息
         if (user.getDeptId() != null) {

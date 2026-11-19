@@ -36,7 +36,7 @@ export namespace OpenApiSchemas {
     /** 刷新令牌 */
     refreshToken: string;
     /** 用户编号 */
-    userId: number;
+    userId: number | string;
   }
 
   /** 管理后台 - 登录用户的权限信息 Response VO，额外包括用户信息和角色列表 */
@@ -62,13 +62,13 @@ export namespace OpenApiSchemas {
     /** 菜单图标,仅菜单类型为菜单或者目录时，才需要传 */
     icon?: string;
     /** 菜单名称 */
-    id: number;
+    id: number | string;
     /** 是否缓存 */
     keepAlive: boolean;
     /** 菜单名称 */
     name: string;
     /** 父菜单 ID */
-    parentId: number;
+    parentId: number | string;
     /** 路由地址,仅菜单类型为菜单或者目录时，才需要传 */
     path?: string;
     /** 是否可见 */
@@ -80,11 +80,11 @@ export namespace OpenApiSchemas {
     /** 用户头像 */
     avatar: string;
     /** 部门编号 */
-    deptId: number;
+    deptId: number | string;
     /** 用户邮箱 */
     email?: string;
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 用户昵称 */
     nickname: string;
     /** 是否要求先修改密码 */
@@ -147,7 +147,7 @@ export namespace OpenApiSchemas {
     result?: boolean;
     secretKey?: string;
     token?: string;
-    ts?: number;
+    ts?: number | string;
     wordList?: string[];
   }
 
@@ -297,7 +297,7 @@ export namespace OpenApiSchemas {
 
   export interface CommonResult_Long {
     code?: number;
-    data?: number;
+    data?: number | string;
     msg?: string;
   }
 
@@ -435,7 +435,7 @@ export namespace OpenApiSchemas {
 
   export interface CommonResult_Set_Long {
     code?: number;
-    data?: number[];
+    data?: (number | string)[];
     msg?: string;
   }
 
@@ -506,7 +506,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 参数配置序号 */
-    id: number;
+    id: number | string;
     /** 参数键名 */
     key: string;
     /** 参数名称 */
@@ -526,7 +526,7 @@ export namespace OpenApiSchemas {
     /** 参数分组 */
     category: string;
     /** 参数配置序号 */
-    id?: number;
+    id?: number | string;
     /** 参数键名 */
     key: string;
     /** 参数名称 */
@@ -554,13 +554,13 @@ export namespace OpenApiSchemas {
     /** 邮箱 */
     email?: string;
     /** 部门编号 */
-    id?: number;
+    id?: number | string;
     /** 负责人的用户编号 */
-    leaderUserId?: number;
+    leaderUserId?: number | string;
     /** 部门名称 */
     name: string;
     /** 父部门 ID */
-    parentId?: number;
+    parentId?: number | string;
     /** 联系电话 */
     phone?: string;
     /** 显示顺序 */
@@ -574,13 +574,13 @@ export namespace OpenApiSchemas {
     /** 邮箱 */
     email?: string;
     /** 部门编号 */
-    id?: number;
+    id?: number | string;
     /** 负责人用户编号 */
-    leaderUserId?: number;
+    leaderUserId?: number | string;
     /** 部门名称 */
     name: string;
     /** 父部门 ID */
-    parentId?: number;
+    parentId?: number | string;
     /** 联系电话 */
     phone?: string;
     /** 显示顺序 */
@@ -592,11 +592,11 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 部门精简信息 Response VO */
   export interface DeptSimpleRespVO {
     /** 部门编号 */
-    id: number;
+    id: number | string;
     /** 部门名称 */
     name: string;
     /** 父部门 ID */
-    parentId: number;
+    parentId: number | string;
   }
 
   /** 管理后台 - 字典类型分页列表 Request VO */
@@ -626,7 +626,7 @@ export namespace OpenApiSchemas {
     /** 字典类型 */
     dictType: string;
     /** 字典数据编号 */
-    id: number;
+    id: number | string;
     /** 字典标签 */
     label: string;
     /** 备注 */
@@ -648,7 +648,7 @@ export namespace OpenApiSchemas {
     /** 字典类型 */
     dictType: string;
     /** 字典数据编号 */
-    id?: number;
+    id?: number | string;
     /** 字典标签 */
     label: string;
     /** 备注 */
@@ -698,7 +698,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 字典类型编号 */
-    id: number;
+    id: number | string;
     /** 字典名称 */
     name: string;
     /** 备注 */
@@ -712,7 +712,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 字典类型创建/修改 Request VO */
   export interface DictTypeSaveReqVO {
     /** 字典类型编号 */
-    id?: number;
+    id?: number | string;
     /** 字典名称 */
     name: string;
     /** 备注 */
@@ -726,7 +726,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 字典类型精简信息 Response VO */
   export interface DictTypeSimpleRespVO {
     /** 字典类型编号 */
-    id: number;
+    id: number | string;
     /** 字典类型名称 */
     name: string;
     /** 字典类型 */
@@ -740,7 +740,7 @@ export namespace OpenApiSchemas {
     /** 文件路径 */
     path: string;
     /** 文件大小 */
-    size: number;
+    size: number | string;
     /** 文件 MIME 类型 */
     type?: string;
     /** 文件 URL（兼容字段，服务端按 path 重新生成） */
@@ -765,6 +765,8 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - 文件预签名地址 Response VO */
   export interface FilePresignedUrlRespVO {
+    /** 预签名绑定的 Content-Type */
+    contentType?: string;
     /** 文件路径 */
     path: string;
     /** 文件上传 URL */
@@ -778,13 +780,13 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 文件编号 */
-    id: number;
+    id: number | string;
     /** 原文件名 */
     name: string;
     /** 文件路径 */
     path: string;
     /** 文件大小 */
-    size: number;
+    size: number | string;
     /** 文件MIME类型 */
     type?: string;
     /** 文件 URL */
@@ -799,12 +801,6 @@ export namespace OpenApiSchemas {
     file: Blob | File;
   }
 
-  export interface HttpHeaders {
-    headers?: Record<string, string>;
-  }
-
-  export type HttpStatusCode = Record<string, unknown>;
-
   /** 管理后台 - 定时任务日志分页 Request VO */
   export interface JobLogPageReqVO {
     /** 开始执行时间 */
@@ -814,7 +810,7 @@ export namespace OpenApiSchemas {
     /** 处理器的名字，模糊匹配 */
     handlerName?: string;
     /** 任务编号 */
-    jobId?: number;
+    jobId?: number | string;
     /** 页码，从 1 开始 */
     pageNo: number;
     /** 每页条数，最大值为 200 */
@@ -842,9 +838,9 @@ export namespace OpenApiSchemas {
     /** 处理器的参数 */
     handlerParam?: string;
     /** 日志编号 */
-    id: number;
+    id: number | string;
     /** 任务编号 */
-    jobId: number;
+    jobId: number | string;
     /** 结果数据 */
     result?: string;
     /** 任务状态，参见 JobLogStatusEnum 枚举 */
@@ -878,7 +874,7 @@ export namespace OpenApiSchemas {
     /** 处理器的参数 */
     handlerParam?: string;
     /** 任务编号 */
-    id: number;
+    id: number | string;
     /** 监控超时时间 */
     monitorTimeout?: number;
     /** 任务名称 */
@@ -900,7 +896,7 @@ export namespace OpenApiSchemas {
     /** 处理器的参数 */
     handlerParam?: string;
     /** 任务编号 */
-    id?: number;
+    id?: number | string;
     /** 监控超时时间 */
     monitorTimeout?: number;
     /** 任务名称 */
@@ -934,7 +930,7 @@ export namespace OpenApiSchemas {
     /** 登录时间 */
     createTime: number;
     /** 日志编号 */
-    id: number;
+    id: number | string;
     /** 日志类型，参见 LoginLogTypeEnum 枚举类 */
     logType: number;
     /** 登录结果，参见 LoginResultEnum 枚举类 */
@@ -944,7 +940,7 @@ export namespace OpenApiSchemas {
     /** 浏览器 UserAgent */
     userAgent?: string;
     /** 用户编号 */
-    userId?: number;
+    userId?: number | string;
     /** 用户 IP */
     userIp: string;
     /** 用户类型，参见 UserTypeEnum 枚举 */
@@ -974,7 +970,7 @@ export namespace OpenApiSchemas {
     /** 菜单图标,仅菜单类型为菜单或者目录时，才需要传 */
     icon?: string;
     /** 菜单编号 */
-    id: number;
+    id: number | string;
     /** 是否缓存 */
     keepAlive?: boolean;
     /** 所属后台类型 */
@@ -982,7 +978,7 @@ export namespace OpenApiSchemas {
     /** 菜单名称 */
     name: string;
     /** 父菜单 ID */
-    parentId: number;
+    parentId: number | string;
     /** 路由地址,仅菜单类型为菜单或者目录时，才需要传 */
     path?: string;
     /** 权限标识,仅菜单类型为按钮时，才需要传递 */
@@ -1008,13 +1004,13 @@ export namespace OpenApiSchemas {
     /** 菜单图标,仅菜单类型为菜单或者目录时，才需要传 */
     icon?: string;
     /** 菜单编号 */
-    id?: number;
+    id?: number | string;
     /** 是否缓存 */
     keepAlive?: boolean;
     /** 菜单名称 */
     name: string;
     /** 父菜单 ID */
-    parentId: number;
+    parentId: number | string;
     /** 路由地址,仅菜单类型为菜单或者目录时，才需要传 */
     path?: string;
     /** 权限标识,仅菜单类型为按钮时，才需要传递 */
@@ -1032,13 +1028,13 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 菜单精简信息 Response VO */
   export interface MenuSimpleRespVO {
     /** 菜单编号 */
-    id: number;
+    id: number | string;
     /** 所属后台类型 */
     menuType: string;
     /** 菜单名称 */
     name: string;
     /** 父菜单 ID */
-    parentId: number;
+    parentId: number | string;
     /** 类型，参见 MenuTypeEnum 枚举类 */
     type: number;
   }
@@ -1054,7 +1050,7 @@ export namespace OpenApiSchemas {
     /** 排序字段 */
     sortingFields?: OpenApiSchemas.SortingField[];
     /** 用户编号 */
-    userId: number;
+    userId: number | string;
     /** 用户类型，参见 UserTypeEnum 枚举 */
     userType: number;
   }
@@ -1068,9 +1064,9 @@ export namespace OpenApiSchemas {
     /** 过期时间 */
     expiresTime: number;
     /** 编号 */
-    id: number;
+    id: number | string;
     /** 用户编号 */
-    userId: number;
+    userId: number | string;
     /** 用户类型，参见 UserTypeEnum 枚举 */
     userType: number;
   }
@@ -1108,7 +1104,7 @@ export namespace OpenApiSchemas {
     /** 应用描述 */
     description?: string;
     /** 编号 */
-    id: number;
+    id: number | string;
     /** 应用图标 */
     logo: string;
     /** 应用名 */
@@ -1142,7 +1138,7 @@ export namespace OpenApiSchemas {
     /** 应用描述 */
     description?: string;
     /** 编号 */
-    id?: number;
+    id?: number | string;
     /** 应用图标 */
     logo: string;
     /** 应用名 */
@@ -1166,7 +1162,7 @@ export namespace OpenApiSchemas {
     /** 访问令牌 */
     accessToken: string;
     /** 访问令牌剩余有效秒数 */
-    expiresIn: number;
+    expiresIn: number | string;
     /** 刷新令牌 */
     refreshToken: string;
     /** 实际授权范围 */
@@ -1183,7 +1179,7 @@ export namespace OpenApiSchemas {
     /** 用户邮箱 */
     email?: string;
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 手机号码 */
     mobile?: string;
     /** 用户昵称 */
@@ -1198,7 +1194,7 @@ export namespace OpenApiSchemas {
   /** 部门 */
   export interface OAuth2UserInfoRespVO_Dept {
     /** 部门编号 */
-    id: number;
+    id: number | string;
     /** 部门名称 */
     name: string;
   }
@@ -1206,7 +1202,7 @@ export namespace OpenApiSchemas {
   /** 岗位 */
   export interface OAuth2UserInfoRespVO_Post {
     /** 岗位编号 */
-    id: number;
+    id: number | string;
     /** 岗位名称 */
     name: string;
   }
@@ -1228,7 +1224,7 @@ export namespace OpenApiSchemas {
     /** 操作明细，模拟匹配 */
     action?: string;
     /** 操作模块业务编号 */
-    bizId?: number;
+    bizId?: number | string;
     /** 开始时间 */
     createTime?: number[];
     /** 页码，从 1 开始 */
@@ -1242,7 +1238,7 @@ export namespace OpenApiSchemas {
     /** 操作模块，模拟匹配 */
     type?: string;
     /** 用户编号 */
-    userId?: number;
+    userId?: number | string;
   }
 
   /** 管理后台 - 操作日志 Response VO */
@@ -1250,13 +1246,13 @@ export namespace OpenApiSchemas {
     /** 操作明细 */
     action?: string;
     /** 操作模块业务编号 */
-    bizId: number;
+    bizId: number | string;
     /** 创建时间 */
     createTime: number;
     /** 拓展字段 */
     extra?: string;
     /** 日志编号 */
-    id: number;
+    id: number | string;
     /** 请求方法名 */
     requestMethod: string;
     /** 请求地址 */
@@ -1270,7 +1266,7 @@ export namespace OpenApiSchemas {
     /** 浏览器 UserAgent */
     userAgent: string;
     /** 用户编号 */
-    userId: number;
+    userId: number | string;
     /** 用户 IP */
     userIp: string;
     /** 用户昵称 */
@@ -1284,7 +1280,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.ConfigRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1292,7 +1288,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.DictDataRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1300,7 +1296,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.DictTypeRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1308,7 +1304,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.FileRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1316,7 +1312,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.JobLogRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1324,7 +1320,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.JobRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1332,7 +1328,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.LoginLogRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1340,7 +1336,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.OAuth2AccessTokenRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1348,7 +1344,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.OAuth2ClientRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1356,7 +1352,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.OperateLogRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1364,7 +1360,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.PostRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1372,7 +1368,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.RoleRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1380,7 +1376,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.SmsChannelRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1388,7 +1384,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.SmsTemplateRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 分页结果 */
@@ -1396,7 +1392,7 @@ export namespace OpenApiSchemas {
     /** 数据 */
     list: OpenApiSchemas.UserRespVO[];
     /** 总量 */
-    total: number;
+    total: number | string;
   }
 
   /** 管理后台 - 赋予角色数据权限 Request VO */
@@ -1404,25 +1400,25 @@ export namespace OpenApiSchemas {
     /** 数据范围，参见 DataScopeEnum 枚举类 */
     dataScope: number;
     /** 部门编号列表，只有范围类型为 DEPT_CUSTOM 时，该字段才需要 */
-    dataScopeDeptIds?: number[];
+    dataScopeDeptIds?: (number | string)[];
     /** 角色编号 */
-    roleId: number;
+    roleId: number | string;
   }
 
   /** 管理后台 - 赋予角色菜单 Request VO */
   export interface PermissionAssignRoleMenuReqVO {
     /** 菜单编号列表 */
-    menuIds?: number[];
+    menuIds?: (number | string)[];
     /** 角色编号 */
-    roleId: number;
+    roleId: number | string;
   }
 
   /** 管理后台 - 赋予用户角色 Request VO */
   export interface PermissionAssignUserRoleReqVO {
     /** 角色编号列表 */
-    roleIds?: number[];
+    roleIds?: (number | string)[];
     /** 用户编号 */
-    userId: number;
+    userId: number | string;
   }
 
   export interface Point {
@@ -1459,7 +1455,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 岗位序号 */
-    id: number;
+    id: number | string;
     /** 岗位名称 */
     name: string;
     /** 备注 */
@@ -1475,7 +1471,7 @@ export namespace OpenApiSchemas {
     /** 岗位编码 */
     code: string;
     /** 岗位编号 */
-    id?: number;
+    id?: number | string;
     /** 岗位名称 */
     name: string;
     /** 备注 */
@@ -1489,21 +1485,9 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 岗位信息的精简 Response VO */
   export interface PostSimpleRespVO {
     /** 岗位序号 */
-    id: number;
+    id: number | string;
     /** 岗位名称 */
     name: string;
-  }
-
-  export interface ResponseEntity_AliyunSmsCallbackRespVO {
-    body?: OpenApiSchemas.AliyunSmsCallbackRespVO;
-    headers?: OpenApiSchemas.HttpHeaders;
-    status?: OpenApiSchemas.HttpStatusCode;
-  }
-
-  export interface ResponseEntity_TencentSmsCallbackRespVO {
-    body?: OpenApiSchemas.TencentSmsCallbackRespVO;
-    headers?: OpenApiSchemas.HttpHeaders;
-    status?: OpenApiSchemas.HttpStatusCode;
   }
 
   export interface ResponseModel {
@@ -1539,9 +1523,9 @@ export namespace OpenApiSchemas {
     /** 数据范围，参见 DataScopeEnum 枚举类 */
     dataScope: number;
     /** 数据范围(指定部门数组) */
-    dataScopeDeptIds?: number[];
+    dataScopeDeptIds?: (number | string)[];
     /** 角色编号 */
-    id: number;
+    id: number | string;
     /** 角色名称 */
     name: string;
     /** 备注 */
@@ -1561,7 +1545,7 @@ export namespace OpenApiSchemas {
     /** 角色标志 */
     code: string;
     /** 角色编号 */
-    id?: number;
+    id?: number | string;
     /** 角色名称 */
     name: string;
     /** 备注 */
@@ -1575,7 +1559,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 角色精简信息 Response VO */
   export interface RoleSimpleRespVO {
     /** 角色编号 */
-    id: number;
+    id: number | string;
     /** 角色名称 */
     name: string;
     /** 角色状态 */
@@ -1621,7 +1605,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 编号 */
-    id: number;
+    id: number | string;
     /** 备注 */
     remark?: string;
     /** 短信签名 */
@@ -1641,7 +1625,7 @@ export namespace OpenApiSchemas {
     /** 渠道编码，参见 SmsChannelEnum 枚举类 */
     code: string;
     /** 编号 */
-    id?: number;
+    id?: number | string;
     /** 备注 */
     remark?: string;
     /** 短信签名 */
@@ -1655,7 +1639,7 @@ export namespace OpenApiSchemas {
     /** 渠道编码，参见 SmsChannelEnum 枚举类 */
     code: string;
     /** 编号 */
-    id: number;
+    id: number | string;
     /** 短信签名 */
     signature: string;
   }
@@ -1665,7 +1649,7 @@ export namespace OpenApiSchemas {
     /** 短信 API 的模板编号，模糊匹配 */
     apiTemplateId?: string;
     /** 短信渠道编号 */
-    channelId?: number;
+    channelId?: number | string;
     /** 模板编码，模糊匹配 */
     code?: string;
     /** 模板内容，模糊匹配 */
@@ -1691,7 +1675,7 @@ export namespace OpenApiSchemas {
     /** 短信渠道编码 */
     channelCode: string;
     /** 短信渠道编号 */
-    channelId: number;
+    channelId: number | string;
     /** 模板编码 */
     code: string;
     /** 模板内容 */
@@ -1699,7 +1683,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 编号 */
-    id: number;
+    id: number | string;
     /** 模板名称 */
     name: string;
     /** 参数数组 */
@@ -1717,13 +1701,13 @@ export namespace OpenApiSchemas {
     /** 短信 API 的模板编号 */
     apiTemplateId: string;
     /** 短信渠道编号 */
-    channelId: number;
+    channelId: number | string;
     /** 模板编码 */
     code: string;
     /** 模板内容 */
     content: string;
     /** 编号 */
-    id?: number;
+    id?: number | string;
     /** 模板名称 */
     name: string;
     /** 备注 */
@@ -1769,7 +1753,7 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime?: number[];
     /** 部门编号，同时筛选子部门 */
-    deptId?: number;
+    deptId?: number | string;
     /** 手机号码，模糊匹配 */
     mobile?: string;
     /** 页码，从 1 开始 */
@@ -1777,7 +1761,7 @@ export namespace OpenApiSchemas {
     /** 每页条数，最大值为 200 */
     pageSize: number;
     /** 角色编号 */
-    roleId?: number;
+    roleId?: number | string;
     /** 排序字段 */
     sortingFields?: OpenApiSchemas.SortingField[];
     /** 展示状态，参见 CommonStatusEnum 枚举类 */
@@ -1796,7 +1780,7 @@ export namespace OpenApiSchemas {
     /** 用户邮箱 */
     email?: string;
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 最后登录时间 */
     loginDate: number;
     /** 最后登录 IP */
@@ -1842,13 +1826,13 @@ export namespace OpenApiSchemas {
     /** 创建时间 */
     createTime: number;
     /** 部门ID */
-    deptId?: number;
+    deptId?: number | string;
     /** 部门名称 */
     deptName?: string;
     /** 用户邮箱 */
     email?: string;
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 最后登录时间 */
     loginDate: number;
     /** 最后登录 IP */
@@ -1858,7 +1842,7 @@ export namespace OpenApiSchemas {
     /** 用户昵称 */
     nickname: string;
     /** 岗位编号数组 */
-    postIds?: number[];
+    postIds?: (number | string)[];
     /** 备注 */
     remark?: string;
     /** 当前平台已分配角色名称 */
@@ -1878,11 +1862,11 @@ export namespace OpenApiSchemas {
     /** 用户头像 */
     avatar?: string;
     /** 部门编号 */
-    deptId?: number;
+    deptId?: number | string;
     /** 用户邮箱 */
     email?: string;
     /** 用户编号 */
-    id?: number;
+    id?: number | string;
     /** 手机号 */
     mobile?: string;
     /** 用户昵称 */
@@ -1890,7 +1874,7 @@ export namespace OpenApiSchemas {
     /** SM2 密码密文（C1C3C2） */
     password: string;
     /** 岗位编号数组 */
-    postIds?: number[];
+    postIds?: (number | string)[];
     /** 备注 */
     remark?: string;
     /** 用户性别，参见 SexEnum 枚举类 */
@@ -1904,11 +1888,11 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 用户精简信息 Response VO */
   export interface UserSimpleRespVO {
     /** 部门ID */
-    deptId?: number;
+    deptId?: number | string;
     /** 部门名称 */
     deptName?: string;
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 用户昵称 */
     nickname: string;
   }
@@ -1916,7 +1900,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 用户更新密码 Request VO */
   export interface UserUpdatePasswordReqVO {
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** SM2 密码密文（C1C3C2） */
     password: string;
   }
@@ -1924,7 +1908,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 用户更新状态 Request VO */
   export interface UserUpdateStatusReqVO {
     /** 用户编号 */
-    id: number;
+    id: number | string;
     /** 状态，见 CommonStatusEnum 枚举 */
     status: number;
   }
@@ -1938,19 +1922,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/config/delete": {
     /** 删除参数配置 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/config/delete-list": {
     /** 批量删除参数配置 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/config/export-excel": {
     /** 导出参数配置 */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.ConfigPageReqVO }; response: void };
+    get: { body: never; query: { createTime?: number[]; key?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; type?: number }; response: void };
   };
   "/admin-api/infra/config/get": {
     /** 获得参数配置 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_ConfigRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_ConfigRespVO };
   };
   "/admin-api/infra/config/get-value-by-key": {
     /** 根据参数键名查询参数值 */
@@ -1958,7 +1942,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/config/page": {
     /** 获取参数配置分页 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.ConfigPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_ConfigRespVO };
+    get: { body: never; query: { createTime?: number[]; key?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; type?: number }; response: OpenApiSchemas.CommonResult_PageResult_ConfigRespVO };
   };
   "/admin-api/infra/config/update": {
     /** 修改参数配置 */
@@ -1974,19 +1958,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/file/delete": {
     /** 删除文件 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/file/delete-list": {
     /** 批量删除文件 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/file/get": {
     /** 获得文件 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_FileRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_FileRespVO };
   };
   "/admin-api/infra/file/page": {
     /** 获得文件分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.FilePageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_FileRespVO };
+    get: { body: never; query: { createTime?: number[]; pageNo: number; pageSize: number; path?: string; sortingFields?: OpenApiSchemas.SortingField[]; type?: string }; response: OpenApiSchemas.CommonResult_PageResult_FileRespVO };
   };
   "/admin-api/infra/file/presigned-url": {
     /** 获取文件预签名地址（上传） */
@@ -1998,15 +1982,15 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/job-log/export-excel": {
     /** 导出定时任务日志 Excel */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.JobLogPageReqVO }; response: void };
+    get: { body: never; query: { beginTime?: number; endTime?: number; handlerName?: string; jobId?: number | string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/infra/job-log/get": {
     /** 获得定时任务日志 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_JobLogRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_JobLogRespVO };
   };
   "/admin-api/infra/job-log/page": {
     /** 获得定时任务日志分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.JobLogPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_JobLogRespVO };
+    get: { body: never; query: { beginTime?: number; endTime?: number; handlerName?: string; jobId?: number | string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_JobLogRespVO };
   };
   "/admin-api/infra/job/create": {
     /** 创建定时任务 */
@@ -2014,27 +1998,27 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/job/delete": {
     /** 删除定时任务 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/job/delete-list": {
     /** 批量删除定时任务 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/job/export-excel": {
     /** 导出定时任务 Excel */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.JobPageReqVO }; response: void };
+    get: { body: never; query: { handlerName?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/infra/job/get": {
     /** 获得定时任务 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_JobRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_JobRespVO };
   };
   "/admin-api/infra/job/get_next_times": {
     /** 获得定时任务的下 n 次执行时间 */
-    get: { body: never; query: { id: number; count?: number }; response: OpenApiSchemas.CommonResult_List_LocalDateTime };
+    get: { body: never; query: { id: number | string; count?: number }; response: OpenApiSchemas.CommonResult_List_LocalDateTime };
   };
   "/admin-api/infra/job/page": {
     /** 获得定时任务分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.JobPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_JobRespVO };
+    get: { body: never; query: { handlerName?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_JobRespVO };
   };
   "/admin-api/infra/job/sync": {
     /** 同步定时任务 */
@@ -2042,7 +2026,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/job/trigger": {
     /** 触发定时任务 */
-    put: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    put: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/job/update": {
     /** 更新定时任务 */
@@ -2050,7 +2034,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/infra/job/update-status": {
     /** 更新定时任务的状态 */
-    put: { body: never; query: { id: number; status: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    put: { body: never; query: { id: number | string; status: number }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/area/get-by-ip": {
     /** 获得 IP 对应的地区名 */
@@ -2110,19 +2094,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/dept/delete": {
     /** 删除部门 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dept/delete-list": {
     /** 批量删除部门 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dept/get": {
     /** 获得部门信息 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_DeptRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_DeptRespVO };
   };
   "/admin-api/system/dept/list": {
     /** 获取部门列表 */
-    get: { body: never; query: { reqVO?: OpenApiSchemas.DeptListReqVO }; response: OpenApiSchemas.CommonResult_List_DeptRespVO };
+    get: { body: never; query: { name?: string; status?: number }; response: OpenApiSchemas.CommonResult_List_DeptRespVO };
   };
   "/admin-api/system/dept/simple-list": {
     /** 获取部门精简信息列表 */
@@ -2138,23 +2122,23 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/dict-data/delete": {
     /** 删除字典数据 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dict-data/delete-list": {
     /** 批量删除字典数据 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dict-data/export-excel": {
     /** 导出字典数据 */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.DictDataPageReqVO }; response: void };
+    get: { body: never; query: { dictType?: string; label?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/system/dict-data/get": {
     /** /查询字典数据详细 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_DictDataRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_DictDataRespVO };
   };
   "/admin-api/system/dict-data/page": {
     /** 获得字典类型的分页 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.DictDataPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_DictDataRespVO };
+    get: { body: never; query: { dictType?: string; label?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_DictDataRespVO };
   };
   "/admin-api/system/dict-data/simple-list": {
     /** 获得全部字典数据列表 */
@@ -2170,23 +2154,23 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/dict-type/delete": {
     /** 删除字典类型 */
-    delete: { body: never; query: { id?: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dict-type/delete-list": {
     /** 批量删除字典类型 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dict-type/export-excel": {
     /** 导出数据类型 */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.DictTypePageReqVO }; response: void };
+    get: { body: never; query: { createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: string }; response: void };
   };
   "/admin-api/system/dict-type/get": {
     /** /查询字典类型详细 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_DictTypeRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_DictTypeRespVO };
   };
   "/admin-api/system/dict-type/page": {
     /** 获得字典类型的分页列表 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.DictTypePageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_DictTypeRespVO };
+    get: { body: never; query: { createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: string }; response: OpenApiSchemas.CommonResult_PageResult_DictTypeRespVO };
   };
   "/admin-api/system/dict-type/simple-list": {
     /** 获得全部字典类型列表 */
@@ -2198,15 +2182,15 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/login-log/export-excel": {
     /** 导出登录日志 Excel */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.LoginLogPageReqVO }; response: void };
+    get: { body: never; query: { createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: boolean; userIp?: string; username?: string }; response: void };
   };
   "/admin-api/system/login-log/get": {
     /** 获得登录日志 */
-    get: { body: never; query: { id?: number }; response: OpenApiSchemas.CommonResult_LoginLogRespVO };
+    get: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_LoginLogRespVO };
   };
   "/admin-api/system/login-log/page": {
     /** 获得登录日志分页列表 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.LoginLogPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_LoginLogRespVO };
+    get: { body: never; query: { createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: boolean; userIp?: string; username?: string }; response: OpenApiSchemas.CommonResult_PageResult_LoginLogRespVO };
   };
   "/admin-api/system/menu/create": {
     /** 创建菜单 */
@@ -2214,19 +2198,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/menu/delete": {
     /** 删除菜单 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/menu/delete-list": {
     /** 批量删除菜单 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/menu/get": {
     /** 获取菜单信息 */
-    get: { body: never; query: { id?: number }; response: OpenApiSchemas.CommonResult_MenuRespVO };
+    get: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_MenuRespVO };
   };
   "/admin-api/system/menu/list": {
     /** 获取菜单列表 */
-    get: { body: never; query: { reqVO?: OpenApiSchemas.MenuListReqVO }; response: OpenApiSchemas.CommonResult_List_MenuRespVO };
+    get: { body: never; query: { name?: string; status?: number }; response: OpenApiSchemas.CommonResult_List_MenuRespVO };
   };
   "/admin-api/system/menu/simple-list": {
     /** 获取菜单精简信息列表 */
@@ -2242,19 +2226,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/oauth2-client/delete": {
     /** 删除 OAuth2 客户端 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/oauth2-client/delete-list": {
     /** 批量删除 OAuth2 客户端 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/oauth2-client/get": {
     /** 获得 OAuth2 客户端 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_OAuth2ClientRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_OAuth2ClientRespVO };
   };
   "/admin-api/system/oauth2-client/page": {
     /** 获得 OAuth2 客户端分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.OAuth2ClientPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2ClientRespVO };
+    get: { body: never; query: { name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2ClientRespVO };
   };
   "/admin-api/system/oauth2-client/update": {
     /** 更新 OAuth2 客户端 */
@@ -2262,15 +2246,15 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/oauth2-token/delete": {
     /** 删除访问令牌 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/oauth2-token/delete-list": {
     /** 批量删除访问令牌 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/oauth2-token/page": {
     /** 获得访问令牌分页 */
-    get: { body: never; query: { reqVO?: OpenApiSchemas.OAuth2AccessTokenPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2AccessTokenRespVO };
+    get: { body: never; query: { clientId: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; userId: number | string; userType: number }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2AccessTokenRespVO };
   };
   "/admin-api/system/oauth2/user/get": {
     /** 获得用户基本信息 */
@@ -2282,15 +2266,15 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/operate-log/export-excel": {
     /** 导出操作日志 */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.OperateLogPageReqVO }; response: void };
+    get: { body: never; query: { action?: string; bizId?: number | string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; subType?: string; type?: string; userId?: number | string }; response: void };
   };
   "/admin-api/system/operate-log/get": {
     /** 查看操作日志 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_OperateLogRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_OperateLogRespVO };
   };
   "/admin-api/system/operate-log/page": {
     /** 查看操作日志分页列表 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.OperateLogPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_OperateLogRespVO };
+    get: { body: never; query: { action?: string; bizId?: number | string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; subType?: string; type?: string; userId?: number | string }; response: OpenApiSchemas.CommonResult_PageResult_OperateLogRespVO };
   };
   "/admin-api/system/permission/assign-role-data-scope": {
     /** 赋予角色数据权限 */
@@ -2306,11 +2290,11 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/permission/list-role-menus": {
     /** 获得角色拥有的菜单编号 */
-    get: { body: never; query: { roleId?: number }; response: OpenApiSchemas.CommonResult_Set_Long };
+    get: { body: never; query: { roleId?: number | string }; response: OpenApiSchemas.CommonResult_Set_Long };
   };
   "/admin-api/system/permission/list-user-roles": {
     /** 获得管理员拥有的角色编号列表 */
-    get: { body: never; query: { userId: number }; response: OpenApiSchemas.CommonResult_Set_Long };
+    get: { body: never; query: { userId: number | string }; response: OpenApiSchemas.CommonResult_Set_Long };
   };
   "/admin-api/system/post/create": {
     /** 创建岗位 */
@@ -2318,23 +2302,23 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/post/delete": {
     /** 删除岗位 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/post/delete-list": {
     /** 批量删除岗位 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/post/export-excel": {
     /** 岗位管理 */
-    get: { body: never; query: { reqVO?: OpenApiSchemas.PostPageReqVO }; response: void };
+    get: { body: never; query: { code?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/system/post/get": {
     /** 获得岗位信息 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_PostRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_PostRespVO };
   };
   "/admin-api/system/post/page": {
     /** 获得岗位分页列表 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.PostPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_PostRespVO };
+    get: { body: never; query: { code?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_PostRespVO };
   };
   "/admin-api/system/post/simple-list": {
     /** 获取岗位全列表 */
@@ -2350,23 +2334,23 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/role/delete": {
     /** 删除角色 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/role/delete-list": {
     /** 批量删除角色 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/role/export-excel": {
     /** 导出角色 Excel */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.RolePageReqVO }; response: void };
+    get: { body: never; query: { code?: string; createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/system/role/get": {
     /** 获得角色信息 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_RoleRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_RoleRespVO };
   };
   "/admin-api/system/role/page": {
     /** 获得角色分页 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.RolePageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_RoleRespVO };
+    get: { body: never; query: { code?: string; createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_RoleRespVO };
   };
   "/admin-api/system/role/simple-list": {
     /** 获取角色精简信息列表 */
@@ -2382,19 +2366,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/sms-channel/delete": {
     /** 删除短信渠道 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/sms-channel/delete-list": {
     /** 批量删除短信渠道 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/sms-channel/get": {
     /** 获得短信渠道 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_SmsChannelRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_SmsChannelRespVO };
   };
   "/admin-api/system/sms-channel/page": {
     /** 获得短信渠道分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.SmsChannelPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_SmsChannelRespVO };
+    get: { body: never; query: { code?: string; createTime?: number[]; pageNo: number; pageSize: number; signature?: string; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_SmsChannelRespVO };
   };
   "/admin-api/system/sms-channel/simple-list": {
     /** 获得短信渠道精简列表 */
@@ -2410,23 +2394,23 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/sms-template/delete": {
     /** 删除短信模板 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/sms-template/delete-list": {
     /** 批量删除短信模板 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/sms-template/export-excel": {
     /** 导出短信模板 Excel */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.SmsTemplatePageReqVO }; response: void };
+    get: { body: never; query: { apiTemplateId?: string; channelId?: number | string; code?: string; content?: string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: number }; response: void };
   };
   "/admin-api/system/sms-template/get": {
     /** 获得短信模板 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_SmsTemplateRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_SmsTemplateRespVO };
   };
   "/admin-api/system/sms-template/page": {
     /** 获得短信模板分页 */
-    get: { body: never; query: { pageVO?: OpenApiSchemas.SmsTemplatePageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_SmsTemplateRespVO };
+    get: { body: never; query: { apiTemplateId?: string; channelId?: number | string; code?: string; content?: string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: number }; response: OpenApiSchemas.CommonResult_PageResult_SmsTemplateRespVO };
   };
   "/admin-api/system/sms-template/send-sms": {
     /** 发送短信 */
@@ -2438,11 +2422,11 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/sms/callback/aliyun": {
     /** 阿里云短信的回调 */
-    post: { body: never; query: never; response: OpenApiSchemas.ResponseEntity_AliyunSmsCallbackRespVO };
+    post: { body: never; query: never; response: OpenApiSchemas.AliyunSmsCallbackRespVO };
   };
   "/admin-api/system/sms/callback/tencent": {
     /** 腾讯云短信的回调 */
-    post: { body: never; query: never; response: OpenApiSchemas.ResponseEntity_TencentSmsCallbackRespVO };
+    post: { body: never; query: never; response: OpenApiSchemas.TencentSmsCallbackRespVO };
   };
   "/admin-api/system/user/create": {
     /** 新增用户 */
@@ -2450,19 +2434,19 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/user/delete": {
     /** 删除用户 */
-    delete: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/user/delete-list": {
     /** 批量删除用户 */
-    delete: { body: never; query: { ids: number[] }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/user/export-excel": {
     /** 导出用户 */
-    get: { body: never; query: { exportReqVO?: OpenApiSchemas.UserPageReqVO }; response: void };
+    get: { body: never; query: { createTime?: number[]; deptId?: number | string; mobile?: string; pageNo: number; pageSize: number; roleId?: number | string; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; username?: string }; response: void };
   };
   "/admin-api/system/user/get": {
     /** 获得用户详情 */
-    get: { body: never; query: { id: number }; response: OpenApiSchemas.CommonResult_UserRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_UserRespVO };
   };
   "/admin-api/system/user/get-import-template": {
     /** 获得导入用户模板 */
@@ -2470,11 +2454,11 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/user/import": {
     /** 导入用户 */
-    post: { body: never; query: { file: Blob | File; updateSupport?: boolean }; response: OpenApiSchemas.CommonResult_UserImportRespVO };
+    post: { body: Blob | File; query: { updateSupport?: boolean }; response: OpenApiSchemas.CommonResult_UserImportRespVO };
   };
   "/admin-api/system/user/page": {
     /** 获得用户分页列表 */
-    get: { body: never; query: { pageReqVO?: OpenApiSchemas.UserPageReqVO }; response: OpenApiSchemas.CommonResult_PageResult_UserRespVO };
+    get: { body: never; query: { createTime?: number[]; deptId?: number | string; mobile?: string; pageNo: number; pageSize: number; roleId?: number | string; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; username?: string }; response: OpenApiSchemas.CommonResult_PageResult_UserRespVO };
   };
   "/admin-api/system/user/profile/get": {
     /** 获得登录用户信息 */

@@ -98,4 +98,16 @@ public interface FileService {
      */
     byte[] getFileContent(String path) throws Exception;
 
+    /**
+     * 按对象路径以流式方式打开未软删除文件的内容流，避免大文件整包载入堆内存。
+     *
+     * @param path 文件路径
+     * @return 文件内容输入流；记录不存在、已删除或存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    default java.io.InputStream openFileContentStream(String path) throws Exception {
+        byte[] content = getFileContent(path);
+        return content != null ? new java.io.ByteArrayInputStream(content) : null;
+    }
+
 }

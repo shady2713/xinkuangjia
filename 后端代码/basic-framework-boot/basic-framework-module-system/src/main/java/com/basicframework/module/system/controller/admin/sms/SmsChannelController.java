@@ -14,7 +14,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Comparator;
@@ -29,6 +32,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
  */
 @Tag(name = "管理后台 - 短信渠道")
 @RestController
+@Validated
 @RequestMapping("system/sms-channel")
 public class SmsChannelController {
 
@@ -95,7 +99,7 @@ public class SmsChannelController {
     @Parameter(name = "ids", description = "编号列表", required = true)
     @Operation(summary = "批量删除短信渠道")
     @PreAuthorize("@ss.hasPermission('system:sms-channel:delete')")
-    public CommonResult<Boolean> deleteSmsChannelList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteSmsChannelList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         smsChannelService.deleteSmsChannelList(ids);
         return success(true);
     }

@@ -1,7 +1,6 @@
 import { createApp, watchEffect } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
-import { registerLoadingDirective } from '@vben/common-ui';
 import { preferences } from '@vben/preferences';
 import { initStores } from '@vben/stores';
 import '@vben/styles';
@@ -29,17 +28,9 @@ async function bootstrap(namespace: string) {
   const app = createApp(App);
   app.directive('loading', ElLoading.directive);
 
-  registerLoadingDirective(app, {
-    loading: false,
-    spinning: 'spinning',
-  });
-
   await setupI18n(app);
   await initStores(app, { namespace });
   registerAccessDirective(app);
-
-  const { initTippy } = await import('@vben/common-ui/es/tippy');
-  initTippy(app);
 
   app.use(router);
 

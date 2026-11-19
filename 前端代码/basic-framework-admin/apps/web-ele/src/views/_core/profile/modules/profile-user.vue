@@ -76,7 +76,7 @@ async function handelUpload({
               所属角色
             </div>
           </template>
-          {{ profile.roles.map((role) => role.name).join(',') }}
+          {{ (profile.roles ?? []).map((role) => role.name).join(',') }}
         </ElDescriptionsItem>
         <ElDescriptionsItem>
           <template #label>

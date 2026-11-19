@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -30,12 +31,13 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * 第三方开放 OAuth2 令牌接口。
  *
- * <p>接口路径、表单参数和返回字段严格对齐《AI场景识别接口文档》中的认证接口。</p>
+ * <p>提供标准 OAuth2 {@code client_credentials} 令牌签发与查询能力。</p>
  *
  * @author 李杰
  */
 @Tag(name = "开放接口 - OAuth2 令牌")
 @RestController
+@Validated
 @RequestMapping("/system/oauth2")
 public class OAuth2OpenController {
 
@@ -81,8 +83,9 @@ public class OAuth2OpenController {
         OAuth2AccessTokenDO accessToken = oauth2GrantService.grantClientCredentials(clientId, scopes);
 
         long expiresIn = Math.max(0, ChronoUnit.SECONDS.between(LocalDateTime.now(), accessToken.getExpiresTime()));
+        String refreshToken = StrUtil.isNotBlank(accessToken.getRefreshToken()) ? accessToken.getRefreshToken() : null;
         return success(new OAuth2OpenTokenRespVO(
-                accessToken.getAccessToken(), accessToken.getRefreshToken(), "Bearer", expiresIn,
+                accessToken.getAccessToken(), refreshToken, "Bearer", expiresIn,
                 String.join(" ", scopes)));
     }
 

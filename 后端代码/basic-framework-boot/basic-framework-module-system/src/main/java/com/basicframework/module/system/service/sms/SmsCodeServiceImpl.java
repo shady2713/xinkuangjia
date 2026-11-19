@@ -3,6 +3,7 @@ package com.basicframework.module.system.service.sms;
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.map.MapUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeSendReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeValidateReqDTO;
@@ -10,11 +11,14 @@ import com.basicframework.module.system.dal.dataobject.sms.SmsCodeDO;
 import com.basicframework.module.system.dal.mysql.sms.SmsCodeMapper;
 import com.basicframework.module.system.enums.sms.SmsSceneEnum;
 import com.basicframework.module.system.framework.sms.config.SmsCodeProperties;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -33,6 +37,9 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     private static final int SMS_CODE_BOUND = 1_000_000;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    /** 短信验证码原子发送冷却键前缀，消除并发请求下的 TOCTOU 竞态。 */
+    private static final String SEND_COOLDOWN_KEY_PREFIX = "sms:code:cooldown:";
+
     @Resource
     private SmsCodeProperties smsCodeProperties;
 
@@ -41,6 +48,9 @@ public class SmsCodeServiceImpl implements SmsCodeService {
 
     @Resource
     private SmsSendService smsSendService;
+
+    @Resource
+    private ObjectProvider<StringRedisTemplate> stringRedisTemplateProvider;
 
     /**
      * 发送短信验证码。
@@ -62,29 +72,50 @@ public class SmsCodeServiceImpl implements SmsCodeService {
      * 创建短信验证码。
      */
     private String createSmsCode(String mobile, Integer scene, String ip) {
-        // 校验是否可以发送验证码，不用筛选场景
-        SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, null);
-        if (lastSmsCode != null) {
-            if (LocalDateTimeUtil.between(lastSmsCode.getCreateTime(), LocalDateTime.now()).toMillis()
-                    < smsCodeProperties.getSendFrequency().toMillis()) { // 发送过于频繁
+        // 先通过 Redis SETNX 原子抢占发送冷却窗口，防止并发突发请求绕过数据库读-写检查。
+        StringRedisTemplate redisTemplate = stringRedisTemplateProvider != null
+                ? stringRedisTemplateProvider.getIfAvailable() : null;
+        Duration sendFrequency = smsCodeProperties.getSendFrequency();
+        String cooldownKey = SEND_COOLDOWN_KEY_PREFIX + DigestUtil.sha256Hex(mobile);
+        boolean cooldownAcquired = false;
+        if (redisTemplate != null && sendFrequency != null && !sendFrequency.isZero() && !sendFrequency.isNegative()) {
+            Boolean acquired = redisTemplate.opsForValue().setIfAbsent(cooldownKey, "1", sendFrequency);
+            if (!Boolean.TRUE.equals(acquired)) {
                 throw exception(SMS_CODE_SEND_TOO_FAST);
             }
-            if (LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now()) && // 必须是今天，才能计算超过当天的上限
-                    lastSmsCode.getTodayIndex() >= smsCodeProperties.getSendMaximumQuantityPerDay()) { // 超过当天发送的上限。
-                throw exception(SMS_CODE_EXCEED_SEND_MAXIMUM_QUANTITY_PER_DAY);
-            }
-            // 当前仅按手机号做发送频控，IP 维度限流后续如有明确需求再单独补充。
+            cooldownAcquired = true;
         }
+        try {
+            // 校验是否可以发送验证码，不用筛选场景
+            SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, null);
+            if (lastSmsCode != null) {
+                if (LocalDateTimeUtil.between(lastSmsCode.getCreateTime(), LocalDateTime.now()).toMillis()
+                        < smsCodeProperties.getSendFrequency().toMillis()) { // 发送过于频繁
+                    throw exception(SMS_CODE_SEND_TOO_FAST);
+                }
+                if (LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now()) && // 必须是今天，才能计算超过当天的上限
+                        lastSmsCode.getTodayIndex() >= smsCodeProperties.getSendMaximumQuantityPerDay()) { // 超过当天发送的上限。
+                    throw exception(SMS_CODE_EXCEED_SEND_MAXIMUM_QUANTITY_PER_DAY);
+                }
+                // 当前仅按手机号做发送频控，IP 维度限流后续如有明确需求再单独补充。
+            }
 
-        // 创建验证码记录
-        String code = String.format("%0" + SMS_CODE_LENGTH + "d", SECURE_RANDOM.nextInt(SMS_CODE_BOUND));
-        SmsCodeDO newSmsCode = SmsCodeDO.builder().mobile(mobile).code(code).scene(scene)
-                .todayIndex(lastSmsCode != null
-                        && LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now())
-                        ? lastSmsCode.getTodayIndex() + 1 : 1)
-                .createIp(ip).used(false).build();
-        smsCodeMapper.insert(newSmsCode);
-        return code;
+            // 创建验证码记录
+            String code = String.format("%0" + SMS_CODE_LENGTH + "d", SECURE_RANDOM.nextInt(SMS_CODE_BOUND));
+            SmsCodeDO newSmsCode = SmsCodeDO.builder().mobile(mobile).code(code).scene(scene)
+                    .todayIndex(lastSmsCode != null
+                            && LocalDateTimeUtil.isSameDay(lastSmsCode.getCreateTime(), LocalDateTime.now())
+                            ? lastSmsCode.getTodayIndex() + 1 : 1)
+                    .createIp(ip).used(false).build();
+            smsCodeMapper.insert(newSmsCode);
+            return code;
+        } catch (RuntimeException ex) {
+            // 仅在异常非频控拒绝时清理未落库冷却锁，避免数据库临时抖动误锁用户。
+            if (cooldownAcquired && redisTemplate != null) {
+                redisTemplate.delete(cooldownKey);
+            }
+            throw ex;
+        }
     }
 
     /**

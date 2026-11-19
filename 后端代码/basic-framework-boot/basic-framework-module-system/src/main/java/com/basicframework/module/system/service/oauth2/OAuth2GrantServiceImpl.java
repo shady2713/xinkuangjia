@@ -86,8 +86,8 @@ public class OAuth2GrantServiceImpl implements OAuth2GrantService {
      */
     @Override
     public OAuth2AccessTokenDO grantClientCredentials(String clientId, List<String> scopes) {
-        // 客户端模式没有真实登录用户；使用 0 作为系统占位用户，兼容 token 表 user_id 非空约束。
-        return oauth2TokenService.createAccessToken(0L, UserTypeEnum.ADMIN.getValue(), clientId, scopes);
+        // 客户端凭据模式无真实后台用户且不签发刷新令牌，避免持有者冒充管理端身份。
+        return oauth2TokenService.createClientAccessToken(clientId, scopes);
     }
 
     /**

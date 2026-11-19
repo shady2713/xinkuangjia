@@ -32,7 +32,7 @@ Java 工程位于 `后端代码/basic-framework-boot`，编译目标 Java 17，�
 | module-infra | 参数配置、统一文件存储、任务管理、任务日志及 API 日志 |
 | server | 启动扫描、全局配置、可执行 JAR；不承载业务规则 |
 
-启动类扫描配置的基础包 `com.basicframework` 下的 `server` 与 `module`；Starter 由 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 装配。新模块不仅要有源码，还需进入聚合 POM 与 server 依赖（可使用 `scripts/scaffold/new_java_module.py` 一键注册并分配错误码号段）。
+启动类扫描配置的基础包 `com.basicframework` 下的 `server` 与 `module`；Starter 由 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 装配。新模块不仅要有源码，还需进入聚合 POM 与 server 依赖（可使用 `scripts/scaffold/new_java_module.py` 一键注册并分配错误码号段，模块内标准 CRUD 骨架可使用 `scripts/scaffold/new_java_crud.py` 生成）。
 
 版本以[根 POM](../../后端代码/basic-framework-boot/pom.xml)和[BOM](../../后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml)为准：MyBatis 3.5.19、MyBatis-Plus 3.5.18.1、Redisson 3.52.0、Springdoc 2.8.17、Knife4j 4.5.0；MinIO 客户端使用 AWS SDK S3，BOM 为 2.57.12，不是 MinIO Java SDK。
 
@@ -57,7 +57,7 @@ Web Starter 按 Controller 包匹配自动加前缀：`controller.admin` 为 `/a
 - **JSON 与 Excel 传输契约**：`LocalDateTime` 统一序列化/反序列化为毫秒级时间戳（epoch-ms `number`）；超过 JavaScript 安全整数（`> 2^53 - 1`）的 `Long` 值自动序列化为 JSON 字符串，FastExcel 导出通过 `LongPlainStringWriteConverter` 转为纯数字文本防止科学计数法精度丢失。
 - **模块错误码号段**：业务异常统一登记在 `ServiceErrorCodeRange` 与模块 `ErrorCodeConstants`（`system` 为 `1-002-000-000`，`infra` 为 `1-001-000-000`，新建业务模块从 `1-003-000-000` 起按百万步长分配），禁止直接抛出裸 `RuntimeException`。
 - **链路追踪日志**：请求过滤链自动将链路标识写入 SLF4J MDC `traceId`（日志格式包含 `[%X{traceId:-}]`），便于跨 Controller、Service 与异常处理器检索同一请求日志。
-- **OpenAPI 契约快照**：Controller 签名或 VO 字段变更后，通过 `OpenApiContractSnapshotTest`（携带 `-Dopenapi.snapshot.update=true`）更新 `apps/web-ele/src/api/generated/openapi.json`，再运行前端 `pnpm api:gen` 同步 TypeScript 类型。
+- **OpenAPI 契约快照**：Controller 签名或 VO 字段变更后，通过 `OpenApiContractSnapshotTest`（携带 `-Dopenapi.update=true`）更新 `apps/web-ele/src/api/generated/openapi.json`，再运行前端 `pnpm api:gen` 同步 TypeScript 类型。
 
 新查询应使用项目分页和查询基类；用户身份取认证上下文，不信任请求中的用户、部门或权限字段。部门数据权限仅作用于已登记规则和对应 SQL 路径，写操作（更新、删除、分配角色/状态）必须在 Service 层显式校验目标记录在当前登录者可访问的数据范围内，防止只拦截列表查询而漏放单条 ID 修改。
 

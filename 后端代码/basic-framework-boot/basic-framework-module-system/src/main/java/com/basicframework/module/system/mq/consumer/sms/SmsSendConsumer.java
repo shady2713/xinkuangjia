@@ -3,9 +3,10 @@ package com.basicframework.module.system.mq.consumer.sms;
 import com.basicframework.module.system.mq.message.sms.SmsSendMessage;
 import com.basicframework.module.system.service.sms.SmsSendService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import jakarta.annotation.Resource;
 
@@ -22,11 +23,11 @@ public class SmsSendConsumer {
     private SmsSendService smsSendService;
 
     /**
-     * 完成 onMessage 对应的业务处理。
+     * 在事务提交后异步发送短信，避免业务事务回滚仍触发外部短信下发。
      *
      * @param message 消息对象
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Async // Spring Event 默认在 Producer 发送的线程，通过 @Async 实现异步
     public void onMessage(SmsSendMessage message) {
         log.info("[onMessage][短信发送 logId({}) channelId({}) mobile({})]",

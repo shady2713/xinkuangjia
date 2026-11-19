@@ -127,7 +127,7 @@ def test_rule_changes_select_only_affected_structures(
     data = ast.literal_eval(
         ast.parse((DEFAULT_ROOT / runner.RULE_FILE).read_text(encoding="utf-8")).body[-1].value
     )
-    pattern = ".gitlab/merge_request_templates/*.md"
+    pattern = ".github/pull_request_template.md"
     data["structure_exclusions"].pop(pattern, None)
     old = "RULES = " + repr(data)
     data["structure_exclusions"][pattern] = "填写模板"
@@ -156,14 +156,14 @@ def test_rule_changes_select_only_affected_structures(
     assert patterns == expected
     entries = {
         name: staged.IndexEntry("100644", NEW)
-        for name in (runner.RULE_FILE, ".gitlab/merge_request_templates/Default.md", "历史.md")
+        for name in (runner.RULE_FILE, ".github/pull_request_template.md", "历史.md")
     }
     scopes, _ = runner.document_scopes(tmp_path, changes, entries, patterns)
     if patterns is not None:
         assert "历史.md" not in scopes["doc-structure"]
         assert scopes["md-links"] == []
         assert scopes["doc-structure"] == (
-            [".gitlab/merge_request_templates/Default.md"] if patterns else []
+            [".github/pull_request_template.md"] if patterns else []
         )
     else:
         assert "历史.md" in scopes["doc-structure"]

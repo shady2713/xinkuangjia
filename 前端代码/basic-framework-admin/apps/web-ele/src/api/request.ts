@@ -122,13 +122,17 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   }
 
   /**
-   * 对携带加密响应头的字符串密文报文执行对称解密。
+   * 对携带加密响应头的字符串密文报文执行对称解密，并解包 HTTP 200 Blob 伪装的 JSON 业务错误，
+   * 使 401 刷新令牌与全局错误提示拦截器能够统一生效。
    *
    * @param response Axios 原始响应对象
    * @returns 解密或原样透传后的响应对象
-   * @throws 密文损坏或密钥不匹配导致解密失败时抛出异常
+   * @throws 密文损坏、密钥不匹配或 Blob 载荷包含非零业务错误码时抛出异常
    */
-  function handleResponseDecrypt(response: RequestResponse) {
+  async function handleResponseDecrypt(response: RequestResponse) {
+    if (response.data instanceof Blob) {
+      return unwrapJsonErrorBlobResponse(response);
+    }
     const encryptHeader = apiEncrypt.getEncryptHeader();
     const isEncryptResponse =
       response.headers[encryptHeader] === 'true' ||
@@ -171,19 +175,36 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   );
 
   /**
-   * 提取服务端标准错误文案并触发全局错误提示（跳过 401 重认证流程）。
+   * 提取服务端标准错误文案并触发全局错误提示（跳过 401 重认证流程，并兼容 Blob 错误体）。
    *
    * @param msg 拦截器兜底错误文案
    * @param error Axios 错误对象
    */
-  function handleErrorMessage(msg: string, error: any) {
-    const responseData = error?.response?.data ?? {};
-    const errorMessage = normalizeErrorMessage(
-      responseData?.error ?? responseData?.message ?? responseData.msg ?? '',
-    );
-    if (error?.data?.code === 401) {
+  async function handleErrorMessage(msg: string, error: any) {
+    if (
+      error?.data?.code === 401 ||
+      error?.response?.status === 401 ||
+      error?.code === 401
+    ) {
       return;
     }
+    let responseData = error?.response?.data ?? error?.data ?? {};
+    if (responseData instanceof Blob) {
+      try {
+        const parsed = JSON.parse(await responseData.text());
+        if (parsed && typeof parsed === 'object') {
+          responseData = parsed;
+        }
+      } catch {
+        responseData = {};
+      }
+    }
+    if (responseData?.code === 401) {
+      return;
+    }
+    const errorMessage = normalizeErrorMessage(
+      responseData?.error ?? responseData?.message ?? responseData?.msg ?? '',
+    );
     showErrorMessage(errorMessage || msg);
   }
 
@@ -192,6 +213,49 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   );
 
   return client;
+}
+
+/**
+ * 解包 HTTP 200 Blob 响应中伪装的后端 JSON 业务错误，抛出带 config/response/data 的标准错误对象，
+ * 使 401 刷新令牌拦截器与全局错误提示拦截器能够统一处理。
+ *
+ * @param response Axios 原始响应对象
+ * @returns 非业务错误时原样返回响应对象
+ * @throws Error 当 Blob 载荷为非零业务错误码的 JSON 时抛出异常
+ */
+export async function unwrapJsonErrorBlobResponse(response: RequestResponse) {
+  if (!(response.data instanceof Blob)) {
+    return response;
+  }
+  const contentType = (response.data.type || '').toLowerCase();
+  if (
+    !contentType.includes('application/json') &&
+    !contentType.includes('text/json') &&
+    !contentType.includes('problem+json')
+  ) {
+    return response;
+  }
+  const text = await response.data.text();
+  let parsed: undefined | { code?: number; msg?: string };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return response;
+  }
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    typeof parsed.code === 'number' &&
+    parsed.code !== 0
+  ) {
+    response.data = parsed;
+    throw Object.assign(new Error(parsed.msg || '文件下载失败'), {
+      config: response.config,
+      data: parsed,
+      response,
+    });
+  }
+  return response;
 }
 
 /** 默认管理端业务请求客户端。 */

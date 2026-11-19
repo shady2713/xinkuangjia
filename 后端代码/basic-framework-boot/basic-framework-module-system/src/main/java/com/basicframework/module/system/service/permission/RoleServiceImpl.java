@@ -170,6 +170,7 @@ public class RoleServiceImpl implements RoleService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = RedisKeyConstants.ROLE, allEntries = true)
     public void deleteRoleList(List<Long> ids) {
         // 1. 校验是否可以删除
         ids.forEach(this::validateRoleForUpdate);

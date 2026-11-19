@@ -25,11 +25,11 @@ const menuTree = ref<SystemMenuApi.Menu[]>([]); // 菜单树
 const menuLoading = ref(false); // 加载菜单列表
 const isAllSelected = ref(false); // 全选状态
 const isExpanded = ref(false); // 展开状态
-const expandedKeys = ref<number[]>([]); // 展开的节点
+const expandedKeys = ref<(number | string)[]>([]); // 展开的节点
 
 type TreeNodeLike = {
   children?: TreeNodeLike[];
-  id?: number;
+  id?: number | string;
 };
 
 const [Form, formApi] = useVbenForm({
@@ -120,15 +120,25 @@ function handleExpandAll() {
 }
 
 /** 递归获取所有节点 ID */
-function getAllNodeIds(nodes: TreeNodeLike[], ids: number[] = []): number[] {
-  nodes.forEach((node) => {
-    if (typeof node.id === 'number') {
-      ids.push(node.id);
-    }
-    if (Array.isArray(node.children) && node.children.length > 0) {
-      getAllNodeIds(node.children, ids);
-    }
-  });
+function getAllNodeIds(
+  nodes: TreeNodeLike[],
+  ids: (number | string)[] = [],
+): (number | string)[] {
+  nodes.forEach(
+    /**
+     * 收集单个菜单节点及其子节点的编号。
+     *
+     * @param node 当前遍历到的菜单树节点
+     */
+    (node) => {
+      if (typeof node.id === 'number' || typeof node.id === 'string') {
+        ids.push(node.id);
+      }
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        getAllNodeIds(node.children, ids);
+      }
+    },
+  );
   return ids;
 }
 

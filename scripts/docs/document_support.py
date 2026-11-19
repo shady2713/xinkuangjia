@@ -29,7 +29,6 @@ class Rules:
     package_readmes: tuple[str, ...]
     readme_sections: dict[str, tuple[str, ...]]
     runtime_kinds: tuple[str, ...]
-    model_readmes: tuple[str, ...]
     developer_headings: tuple[str, ...]
     forbidden_terms: tuple[str, ...]
     forbidden_skill_prefixes: tuple[str, ...]

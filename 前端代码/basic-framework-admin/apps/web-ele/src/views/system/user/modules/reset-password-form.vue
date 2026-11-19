@@ -38,9 +38,9 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = await formApi.getValues();
     try {
+      // 将取值与加密纳入 try，避免加密或取值异常造成弹窗永久死锁。
+      const data = await formApi.getValues();
       await resetUserPassword(data.id, await encryptPassword(data.newPassword));
       // 关闭并提示
       await modalApi.close();

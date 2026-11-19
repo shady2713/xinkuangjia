@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Vibe-Coding 增量切片快速验证器：根据相对基线的改动域按需运行秒级门禁。
+"""Vibe-Coding 增量切片快速验证器：根据相对基线的改动域按需运行定向门禁。
 
-自动识别受影响的 Java 子模块、前端文件、Python 工具脚本与 Markdown 文档，
-仅运行命中的增量注释检查、文档契约检查及定向单测/Lint，缩短本地与智能体反馈闭环。
+自动解析 merge-base 并识别受影响的 Java 子模块、前端文件、Python 工具脚本与 Markdown 文档，
+将有效基线透传至注释与契约检查器，避免分支提交后出现 0 文件假绿。
 
 用法：
   python -B -X utf8 scripts/workflow/verify_slice.py --plan
@@ -43,6 +43,7 @@ class SlicePlan:
     """描述当前工作区相对基线的改动归类与待运行步骤。"""
 
     base: str
+    effective_base: str
     changed_files: tuple[str, ...]
     java_modules: tuple[str, ...]
     web_files: tuple[str, ...]
@@ -51,8 +52,48 @@ class SlicePlan:
     steps: tuple[SliceStep, ...]
 
 
+def resolve_effective_base(root: Path, base: str = "HEAD") -> str:
+    """当对比非 HEAD 分支时解析 merge-base，避免把主干新提交误算为当前切片变更。
+
+    Args:
+        root: 仓库根目录。
+        base: 用户指定的 Git 引用（如 HEAD、main）。
+    Returns:
+        用于 diff 与注释门禁的有效基线提交标识或 HEAD。
+    """
+    if base == "HEAD":
+        return "HEAD"
+    resolved = root.resolve()
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "merge-base", base, "HEAD"],
+        cwd=resolved,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=30,
+    )
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    return base
+
+
+def _has_staged_changes(root: Path) -> bool:
+    """判断当前 Git 索引是否存在已暂存变更，用于按需触发暂存密钥扫描。"""
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "diff", "--cached", "--name-only"],
+        cwd=root.resolve(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=15,
+    )
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
 def collect_changed_files(root: Path, base: str = "HEAD") -> list[str]:
-    """收集相对指定 Git 基线的已暂存、未暂存与未跟踪文件集合。
+    """收集相对指定 Git 基线（自动取 merge-base）的已暂存、未暂存与未跟踪文件集合。
 
     Args:
         root: 仓库根目录。
@@ -63,8 +104,9 @@ def collect_changed_files(root: Path, base: str = "HEAD") -> list[str]:
         RuntimeError: Git 命令失败或基线不存在时抛出。
     """
     resolved = root.resolve()
+    effective_base = resolve_effective_base(resolved, base)
     diff_proc = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", base, "--"],
+        ["git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", effective_base, "--"],
         cwd=resolved,
         capture_output=True,
         check=False,
@@ -72,7 +114,7 @@ def collect_changed_files(root: Path, base: str = "HEAD") -> list[str]:
     )
     if diff_proc.returncode != 0:
         err = diff_proc.stderr.decode("utf-8", errors="replace").strip()
-        raise RuntimeError(f"无法比较基线 {base}：{err or 'git diff 失败'}")
+        raise RuntimeError(f"无法比较基线 {effective_base}：{err or 'git diff 失败'}")
 
     untracked_proc = subprocess.run(
         ["git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"],
@@ -112,6 +154,23 @@ def resolve_java_modules(root: Path, changed_files: list[str]) -> list[str]:
     return sorted(modules)
 
 
+def _find_related_web_tests(web_dir: Path, web_files: list[str]) -> list[str]:
+    """收集本次前端改动中直接修改、同级或同目录 __tests__ 下对应的 Vitest 测试文件。"""
+    tests: set[str] = set()
+    for rel in web_files:
+        inner = Path(rel).relative_to("前端代码/basic-framework-admin")
+        if inner.name.endswith((".test.ts", ".spec.ts")):
+            tests.add(inner.as_posix())
+            continue
+        sibling = web_dir / inner.with_suffix(".test.ts")
+        if sibling.is_file():
+            tests.add(sibling.relative_to(web_dir).as_posix())
+        nested = web_dir / inner.parent / "__tests__" / f"{inner.stem}.test.ts"
+        if nested.is_file():
+            tests.add(nested.relative_to(web_dir).as_posix())
+    return sorted(tests)
+
+
 def build_slice_plan(
     root: Path,
     changed_files: list[str],
@@ -125,11 +184,12 @@ def build_slice_plan(
         root: 仓库根目录。
         changed_files: 改动文件相对路径列表。
         base: Git 基线名称。
-        skip_runtime: 为 True 时仅运行快速静态/注释/文档门禁，跳过 Maven/ESLint 子进程。
+        skip_runtime: 为 True 时仅运行快速静态/注释/文档门禁，跳过 Maven/ESLint/单测子进程。
     Returns:
         结构化增量验证计划。
     """
     resolved = root.resolve()
+    effective_base = resolve_effective_base(resolved, base)
     py_exe = sys.executable
     boot_dir = resolved / "后端代码" / "basic-framework-boot"
     web_dir = resolved / "前端代码" / "basic-framework-admin"
@@ -155,36 +215,78 @@ def build_slice_plan(
     ]
 
     steps: list[SliceStep] = []
-    if java_files:
+    if _has_staged_changes(resolved):
         steps.append(
             SliceStep(
-                name="java-comments",
+                name="staged-secrets",
                 cwd=str(resolved),
-                command=(py_exe, "-B", "-X", "utf8", "scripts/code/java/check_worktree_java_comments.py"),
+                command=(py_exe, "-B", "-X", "utf8", "scripts/security/scan_staged_secrets.py"),
             )
         )
-    if python_files:
+
+    if effective_base != "HEAD" and (java_files or python_files or web_files):
+        # 显式对比分支基线时必须透传 --base，覆盖分支已提交但工作区干净的增量声明。
         steps.append(
             SliceStep(
-                name="python-comments",
+                name="branch-comments",
                 cwd=str(resolved),
                 command=(
                     py_exe,
                     "-B",
                     "-X",
                     "utf8",
-                    "scripts/code/python/check_worktree_python_comments.py",
+                    "scripts/workflow/run_checks.py",
+                    "--group",
+                    "comments",
+                    "--base",
+                    effective_base,
                 ),
             )
         )
-    if web_files:
-        steps.append(
-            SliceStep(
-                name="web-comments",
-                cwd=str(resolved),
-                command=(py_exe, "-B", "-X", "utf8", "scripts/code/web/check_worktree_web_comments.py"),
+    else:
+        if java_files:
+            steps.append(
+                SliceStep(
+                    name="java-comments",
+                    cwd=str(resolved),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "scripts/code/java/check_worktree_java_comments.py",
+                    ),
+                )
             )
-        )
+        if python_files:
+            steps.append(
+                SliceStep(
+                    name="python-comments",
+                    cwd=str(resolved),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "scripts/code/python/check_worktree_python_comments.py",
+                    ),
+                )
+            )
+        if web_files:
+            steps.append(
+                SliceStep(
+                    name="web-comments",
+                    cwd=str(resolved),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "scripts/code/web/check_worktree_web_comments.py",
+                    ),
+                )
+            )
+
     if doc_files:
         steps.append(
             SliceStep(
@@ -203,30 +305,103 @@ def build_slice_plan(
         )
 
     if not skip_runtime:
-        mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
-        if java_modules and mvn_bin:
+        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files):
+            py_tests = [p for p in python_files if p.startswith("scripts/tests/test_")]
+            has_non_test_py = any(
+                p.startswith(("scripts/", ".agents/skills/")) and not p.startswith("scripts/tests/")
+                for p in python_files
+            )
+            pytest_targets = ["scripts/tests"] if has_non_test_py or not py_tests else py_tests
             steps.append(
                 SliceStep(
-                    name="maven-slice-test",
-                    cwd=str(boot_dir),
-                    command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "test"),
+                    name="python-slice-pytest",
+                    cwd=str(resolved),
+                    command=(py_exe, "-B", "-X", "utf8", "-m", "pytest", "-q", *pytest_targets),
                 )
             )
-        pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
-        if web_files and pnpm_bin and len(web_files) <= 40:
-            rel_web = [
-                Path(p).relative_to("前端代码/basic-framework-admin").as_posix() for p in web_files
-            ]
-            steps.append(
-                SliceStep(
-                    name="web-slice-eslint",
-                    cwd=str(web_dir),
-                    command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
+        sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
+        if java_modules or sql_changed:
+            mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
+            if mvn_bin is None:
+                steps.append(
+                    SliceStep(
+                        name="maven-slice-test",
+                        cwd=str(boot_dir),
+                        command=(
+                            py_exe,
+                            "-c",
+                            "import sys; sys.stderr.write('错误：检测到 Java 模块或基线 SQL 改动但环境中未安装 mvn，拒绝静默跳过\\n'); sys.exit(2)",
+                        ),
+                    )
                 )
-            )
+            else:
+                if java_modules:
+                    steps.append(
+                        SliceStep(
+                            name="maven-slice-test",
+                            cwd=str(boot_dir),
+                            command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "-am", "test"),
+                        )
+                    )
+                has_module_or_sql = sql_changed or any(
+                    m.startswith("basic-framework-module-") for m in java_modules
+                )
+                if has_module_or_sql and "basic-framework-server" not in java_modules:
+                    steps.append(
+                        SliceStep(
+                            name="maven-server-contracts",
+                            cwd=str(boot_dir),
+                            command=(
+                                mvn_bin,
+                                "-B",
+                                "-ntp",
+                                "-pl",
+                                "basic-framework-server",
+                                "-am",
+                                "-Dtest=SchemaDoRbacParityTest,OpenApiContractSnapshotTest,FootgunArchitectureTest",
+                                "-DfailIfNoTests=false",
+                                "test",
+                            ),
+                        )
+                    )
+        if web_files:
+            pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
+            if pnpm_bin is None:
+                steps.append(
+                    SliceStep(
+                        name="web-slice-eslint",
+                        cwd=str(web_dir),
+                        command=(
+                            py_exe,
+                            "-c",
+                            "import sys; sys.stderr.write('错误：检测到前端源码改动但环境中未安装 pnpm，拒绝静默跳过\\n'); sys.exit(2)",
+                        ),
+                    )
+                )
+            else:
+                rel_web = [
+                    Path(p).relative_to("前端代码/basic-framework-admin").as_posix() for p in web_files
+                ]
+                steps.append(
+                    SliceStep(
+                        name="web-slice-eslint",
+                        cwd=str(web_dir),
+                        command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
+                    )
+                )
+                web_tests = _find_related_web_tests(web_dir, web_files)
+                if web_tests:
+                    steps.append(
+                        SliceStep(
+                            name="web-slice-vitest",
+                            cwd=str(web_dir),
+                            command=(pnpm_bin, "test:unit", *web_tests),
+                        )
+                    )
 
     return SlicePlan(
         base=base,
+        effective_base=effective_base,
         changed_files=tuple(changed_files),
         java_modules=tuple(java_modules),
         web_files=tuple(web_files),
@@ -256,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
     parser.add_argument("--base", default="HEAD", help="Git 比较基线（默认 HEAD）")
     parser.add_argument("--plan", action="store_true", help="仅打印命中切片与命令计划，不执行子进程")
-    parser.add_argument("--skip-runtime", action="store_true", help="跳过 Maven 与 ESLint 运行时步骤")
+    parser.add_argument("--skip-runtime", action="store_true", help="跳过 Maven、pytest 与前端运行时步骤")
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出结果")
     args = parser.parse_args(argv)
 
@@ -273,7 +448,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(asdict(plan), ensure_ascii=False, indent=2))
         else:
-            print(f"基线：{plan.base}，检测到 {len(plan.changed_files)} 个变更文件，命中 {len(plan.steps)} 项检查：")
+            print(
+                f"基线：{plan.base}（有效对比点 {plan.effective_base}），"
+                f"检测到 {len(plan.changed_files)} 个变更文件，命中 {len(plan.steps)} 项检查："
+            )
             for step in plan.steps:
                 print(f"  - [{step.name}] ({step.cwd}) {' '.join(step.command)}")
         return 0

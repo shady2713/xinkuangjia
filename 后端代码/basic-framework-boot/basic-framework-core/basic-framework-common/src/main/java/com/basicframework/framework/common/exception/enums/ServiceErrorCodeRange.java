@@ -24,9 +24,9 @@ public final class ServiceErrorCodeRange {
     public static final int SYSTEM_END = 1_003_000_000;
 
     /** 模块名称到半开区间 {@code [begin, end)} 的权威注册表（新业务模块从 1_003_000_000 起递增）。 */
-    public static final Map<String, int[]> MODULE_RANGES = Map.of(
-            "infra", new int[]{INFRA_BEGIN, INFRA_END},
-            "system", new int[]{SYSTEM_BEGIN, SYSTEM_END}
+    public static final Map<String, int[]> MODULE_RANGES = Map.ofEntries(
+            Map.entry("infra", new int[]{INFRA_BEGIN, INFRA_END}),
+            Map.entry("system", new int[]{SYSTEM_BEGIN, SYSTEM_END})
     );
 
     /**

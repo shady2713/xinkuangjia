@@ -17,6 +17,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -107,7 +109,7 @@ public class DictTypeController {
     @Operation(summary = "批量删除字典类型")
     @Parameter(name = "ids", description = "编号列表", required = true)
     @PreAuthorize("@ss.hasPermission('system:dict:delete')")
-    public CommonResult<Boolean> deleteDictTypeList(@RequestParam("ids") List<Long> ids) {
+    public CommonResult<Boolean> deleteDictTypeList(@RequestParam("ids") @NotEmpty(message = "编号列表不能为空") @Size(max = 100, message = "单次最多删除 100 条记录") List<Long> ids) {
         dictTypeService.deleteDictTypeList(ids);
         return success(true);
     }
