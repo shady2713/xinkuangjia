@@ -19,8 +19,8 @@ import { useVbenModal } from '@vben/common-ui';
 const [Modal, modalApi] = useVbenModal({
   title: 'Title',
   onConfirm: async () => {
-    // 确认操作
-    console.log('Confirmed');
+    await submitConfirmAction();
+    await modalApi.close();
   },
 });
 ```
@@ -42,7 +42,7 @@ import { useVbenModal } from '@vben/common-ui';
 const [Modal, modalApi] = useVbenModal({
   title: 'Notice',
   onConfirm: async () => {
-    console.log('Confirm action');
+    await modalApi.close();
   },
 });
 </script>
@@ -66,7 +66,7 @@ const [Modal, modalApi] = useVbenModal({
   connectedComponent: ModalContent,
   onConfirm: async () => {
     const data = modalApi.getData();
-    console.log('Submit data:', data);
+    await saveModalData(data);
   },
 });
 
@@ -199,9 +199,9 @@ modalApi.setData({
   name: 'John',
 });
 
-// 获取数据
+// 获取数据并用于表单或状态回填
 const data = modalApi.getData();
-console.log(data);
+applyModalData(data);
 ```
 
 ### 锁定/解锁
@@ -224,18 +224,20 @@ const [Modal, modalApi] = useVbenModal({
 
   // 打开/关闭状态变化
   onOpenChange: (isOpen) => {
-    console.log('Modal state:', isOpen);
+    if (!isOpen) {
+      resetModalState();
+    }
   },
 
   // 打开动画完成
   onOpened: () => {
-    console.log('Opened');
+    focusInitialField();
   },
 
   // 关闭前确认
   onBeforeClose: async () => {
-    const confirm = await showConfirm('Are you sure to close?');
-    return confirm; // 返回 false 可阻止关闭
+    const confirmed = await showConfirm('Are you sure to close?');
+    return confirmed; // 返回 false 可阻止关闭
   },
 
   // 确认按钮
@@ -243,7 +245,7 @@ const [Modal, modalApi] = useVbenModal({
     try {
       modalApi.lock(true);
       await submitData();
-      modalApi.close();
+      await modalApi.close();
     } finally {
       modalApi.unlock();
     }
@@ -251,12 +253,12 @@ const [Modal, modalApi] = useVbenModal({
 
   // 取消按钮
   onCancel: () => {
-    console.log('Cancelled');
+    resetDraftState();
   },
 
   // 关闭动画完成
   onClosed: () => {
-    console.log('Closed');
+    cleanupTransientState();
   },
 });
 ```

@@ -167,8 +167,7 @@ def _is_forbidden_env_path(path: str) -> bool:
     if name == ".env" or name.startswith(".env."):
         if normalized.startswith("前端代码/basic-framework-admin/apps/"):
             return False
-        if normalized.startswith(("部署/", "后端/", "docs/部署/", "后端代码/", "数据库文件/")) or "/" not in normalized:
-            return True
+        return True
     return False
 
 
@@ -1185,9 +1184,13 @@ def _run_self_test() -> None:
         "src/jsencrypt.js", list(enumerate(generated_key_code, start=1))
     ):
         raise AssertionError("私钥生成代码被误报")
-    if not _is_forbidden_env_path("部署/生产/.env") or not _is_forbidden_env_path("docs/部署/.env"):
-        raise AssertionError("部署 .env 文件名规则未生效")
-    if _is_forbidden_env_path("部署/.env.example") or _is_forbidden_env_path("docs/部署/.env.example"):
+    if (
+        not _is_forbidden_env_path("docs/部署/.env")
+        or not _is_forbidden_env_path("后端代码/basic-framework-boot/.env")
+        or not _is_forbidden_env_path("ops/prod/.env")
+    ):
+        raise AssertionError("部署/后端/任意环境配置 .env 文件名规则未生效")
+    if _is_forbidden_env_path("docs/部署/.env.example"):
         raise AssertionError(".env.example 不应被文件名规则拦截")
     if _is_forbidden_env_path("前端代码/basic-framework-admin/apps/web-ele/.env.production"):
         raise AssertionError("前端构建环境配置不应被文件名规则拦截")

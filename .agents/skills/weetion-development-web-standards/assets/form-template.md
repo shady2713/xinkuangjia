@@ -276,8 +276,8 @@ const [Form, formApi] = useVbenForm({
 
 ### 获取表单值
 ```typescript
-const values = formApi.getValues();
-console.log(values);
+const values = await formApi.getValues();
+await submitFormValues(values);
 ```
 
 ### 设置表单值
@@ -372,8 +372,8 @@ const [Form, formApi] = useVbenForm({
     },
   ],
   handleSubmit: async (values) => {
-    console.log('Submit data:', values);
-    // 调用 API 提交
+    // 调用对应实体 API 提交并给出成功反馈
+    await submitFormValues(values);
   },
 });
 ```

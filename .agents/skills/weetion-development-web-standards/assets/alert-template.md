@@ -90,9 +90,9 @@ try {
     cancelText: 'Cancel',
     icon: 'warning',
   });
-  console.log('User confirmed');
+  await handleDeleteConfirmed();
 } catch {
-  console.log('User cancelled');
+  // 用户取消确认时保持页面状态不变
 }
 ```
 
@@ -186,7 +186,7 @@ const result = await prompt({
 });
 
 if (result) {
-  console.log('User entered:', result);
+  await submitUserName(result);
 }
 ```
 
@@ -207,7 +207,7 @@ const result = await prompt({
   defaultValue: '',
 });
 
-console.log('Email:', result);
+await submitUserEmail(result);
 ```
 
 ## 10. 带校验的 Prompt
@@ -231,7 +231,7 @@ const result = await prompt({
   },
 });
 
-console.log('Age:', result);
+await submitUserAge(result);
 ```
 
 ## 11. 自定义插槽与 useAlertContext 的 Prompt
