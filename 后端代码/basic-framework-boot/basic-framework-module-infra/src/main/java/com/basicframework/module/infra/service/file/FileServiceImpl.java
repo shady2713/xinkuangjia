@@ -6,20 +6,30 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePageReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.dal.mysql.file.FileMapper;
 import com.basicframework.module.infra.enums.ErrorCodeConstants;
+import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import com.basicframework.module.infra.framework.file.core.utils.FileTypeUtils;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.SneakyThrows;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static cn.hutool.core.date.DatePattern.PURE_DATE_PATTERN;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
@@ -46,6 +56,12 @@ public class FileServiceImpl implements FileService {
      * 目的：保证文件名唯一，避免同名文件覆盖。
      */
     private static final boolean PATH_SUFFIX_TIMESTAMP_ENABLE = true;
+    /** 预签名直传凭证有效期，与 S3 预签名上传有效期一致。 */
+    private static final Duration PRESIGN_TICKET_TTL = Duration.ofMinutes(15);
+    /** 无 Redis 环境下的本地预签名凭证缓存上限。 */
+    private static final int MAX_LOCAL_PRESIGN_TICKETS = 10_000;
+    /** Redis 预签名一次性凭证键前缀。 */
+    private static final String PRESIGN_TICKET_KEY_PREFIX = "infra:file:presign:ticket:";
 
     /** 统一对象存储服务。 */
     @Resource
@@ -54,6 +70,33 @@ public class FileServiceImpl implements FileService {
     /** 文件元数据 Mapper。 */
     @Resource
     private FileMapper fileMapper;
+
+    /** Redis 模板（未配置 Redis 时按单机有界内存凭证表降级）。 */
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
+
+    /** 无 Redis 时的有界本地一次性直传凭证表，键为对象路径。 */
+    private final ConcurrentHashMap<String, PresignTicket> localPresignTickets = new ConcurrentHashMap<>();
+
+    /**
+     * 预签名直传一次性凭证载荷。
+     *
+     * @param userId         申请人编号（未登录或无上下文时为 {@code null}）
+     * @param contentType    预签名绑定的预期 MIME 类型
+     * @param expireAtMillis 本地缓存过期时间戳（毫秒）
+     */
+    private record PresignTicket(Long userId, String contentType, long expireAtMillis) {
+
+        /**
+         * 判断当前凭证是否已过期。
+         *
+         * @param nowMillis 当前毫秒时间戳
+         * @return 过期返回 true
+         */
+        boolean isExpired(long nowMillis) {
+            return nowMillis >= expireAtMillis;
+        }
+    }
 
     /**
      * 分页查询文件元数据。
@@ -207,10 +250,11 @@ public class FileServiceImpl implements FileService {
         }
         String path = generateUploadPath(normalizedName, directory);
 
-        // 同时返回上传地址和访问地址；预签名绑定预期 Content-Type 防止直传篡改内容类型。
+        // 同时返回上传地址和访问地址；预签名绑定预期 Content-Type 并签发一次性登记凭证防止未签发路径绕过直传登记。
         String expectedContentType = FileTypeUtils.getMineType(normalizedName);
         String uploadUrl = fileStorageService.presignPutUrl(path, expectedContentType);
         String visitUrl = fileStorageService.presignGetUrl(path, null);
+        issuePresignTicket(path, expectedContentType);
         FilePresignedUrlRespVO response = new FilePresignedUrlRespVO();
         response.setPath(path);
         response.setUploadUrl(uploadUrl);
@@ -234,7 +278,8 @@ public class FileServiceImpl implements FileService {
     /**
      * 登记已经通过预签名地址上传的文件。
      *
-     * <p>访问 URL 由服务端根据对象路径生成，不信任客户端回传的 URL，避免持久化外部地址或签名参数。</p>
+     * <p>校验一次性预签名凭证、对象存储真实元信息及大小上限后才写入数据库；
+     * 访问 URL 与实际文件大小均以服务端查询结果为准，不采信客户端提交值。</p>
      *
      * @param createReqVO 文件登记请求
      * @return 文件记录编号
@@ -252,25 +297,145 @@ public class FileServiceImpl implements FileService {
                 || !FileTypeUtils.isAllowedUploadMetadata(createReqVO.getName(), createReqVO.getType())) {
             throw exception(ErrorCodeConstants.FILE_TYPE_NOT_ALLOWED);
         }
-        if (createReqVO.getSize() == null
-                || createReqVO.getSize() <= 0
-                || createReqVO.getSize() > FilePathUtils.MAX_UPLOAD_BYTES) {
-            throw exception(ErrorCodeConstants.FILE_TOO_LARGE);
-        }
         if (!FilePathUtils.isMimeTypeValid(createReqVO.getType())) {
             throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
         }
+        PresignTicket ticket = consumePresignTicket(createReqVO.getPath());
+        if (fileMapper.selectByPath(createReqVO.getPath()) != null) {
+            throw exception(ErrorCodeConstants.FILE_PATH_EXISTS);
+        }
+        FileObjectStat stat = verifyUploadedObjectStat(createReqVO.getPath());
+
         FileDO file = BeanUtils.toBean(createReqVO, FileDO.class);
+        file.setSize(stat.size());
         if (StrUtil.isBlank(file.getType())) {
-            file.setType(FileTypeUtils.getMineType(createReqVO.getName()));
+            file.setType(StrUtil.blankToDefault(ticket.contentType(), FileTypeUtils.getMineType(createReqVO.getName())));
         }
         // 只持久化受控对象存储生成的稳定 URL，不采信客户端提交的任意外部地址。
         file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
         if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
             throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
         }
-        fileMapper.insert(file);
+        try {
+            fileMapper.insert(file);
+        } catch (DuplicateKeyException ex) {
+            throw exception(ErrorCodeConstants.FILE_PATH_EXISTS);
+        }
         return file.getId();
+    }
+
+    /**
+     * 为预签名上传路径签发 15 分钟有效的一次性登记凭证，并绑定申请用户与预期 MIME 类型。
+     *
+     * @param path                对象存储相对路径
+     * @param expectedContentType 预签名绑定的预期 MIME 类型
+     */
+    private void issuePresignTicket(String path, String expectedContentType) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        String safeContentType = StrUtil.emptyToDefault(expectedContentType, "");
+        if (stringRedisTemplate != null) {
+            String payload = (operatorId != null ? operatorId : "") + "|" + safeContentType;
+            stringRedisTemplate.opsForValue().set(buildPresignTicketKey(path), payload, PRESIGN_TICKET_TTL);
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (localPresignTickets.size() >= MAX_LOCAL_PRESIGN_TICKETS) {
+            localPresignTickets.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+            if (localPresignTickets.size() >= MAX_LOCAL_PRESIGN_TICKETS) {
+                localPresignTickets.entrySet().stream()
+                        .min(Comparator.comparingLong(entry -> entry.getValue().expireAtMillis()))
+                        .map(Map.Entry::getKey)
+                        .ifPresent(localPresignTickets::remove);
+            }
+        }
+        localPresignTickets.put(path, new PresignTicket(
+                operatorId, safeContentType, now + PRESIGN_TICKET_TTL.toMillis()));
+    }
+
+    /**
+     * 原子消费预签名直传凭证并校验持有人归属，防止伪造路径、过期复用或并发重复登记。
+     *
+     * @param path 对象存储相对路径
+     * @return 已通过校验并消费的一次性凭证
+     */
+    private PresignTicket consumePresignTicket(String path) {
+        PresignTicket ticket;
+        if (stringRedisTemplate != null) {
+            String raw = stringRedisTemplate.opsForValue().getAndDelete(buildPresignTicketKey(path));
+            ticket = parseRedisTicket(raw);
+        } else {
+            PresignTicket localTicket = localPresignTickets.remove(path);
+            ticket = (localTicket != null && !localTicket.isExpired(System.currentTimeMillis()))
+                    ? localTicket : null;
+        }
+        if (ticket == null) {
+            throw exception(ErrorCodeConstants.FILE_PRESIGN_TICKET_INVALID);
+        }
+        if (ticket.userId() != null && !Objects.equals(ticket.userId(), SecurityFrameworkUtils.getLoginUserId())) {
+            throw exception(ErrorCodeConstants.FILE_PRESIGN_TICKET_INVALID);
+        }
+        return ticket;
+    }
+
+    /**
+     * 解析 Redis 中保存的预签名凭证字符串；格式非法时返回 {@code null} 按无效凭证拒绝。
+     *
+     * @param raw Redis 中的原始文本
+     * @return 解析后的凭证；为空或格式错误返回 {@code null}
+     */
+    private PresignTicket parseRedisTicket(String raw) {
+        if (StrUtil.isBlank(raw)) {
+            return null;
+        }
+        int sep = raw.indexOf('|');
+        if (sep < 0) {
+            return null;
+        }
+        String userPart = raw.substring(0, sep);
+        String contentType = raw.substring(sep + 1);
+        Long userId = null;
+        if (!userPart.isEmpty()) {
+            try {
+                userId = Long.parseLong(userPart);
+            } catch (NumberFormatException ex) {
+                return null;
+            }
+        }
+        return new PresignTicket(userId, contentType, 0L);
+    }
+
+    /**
+     * 生成绑定对象路径哈希的 Redis 预签名凭证键名。
+     *
+     * @param path 对象相对路径
+     * @return Redis 键名
+     */
+    private static String buildPresignTicketKey(String path) {
+        return PRESIGN_TICKET_KEY_PREFIX + DigestUtil.sha256Hex(path);
+    }
+
+    /**
+     * 通过对象存储 HEAD 查询验证已上传对象的存在性与真实大小；超限或空对象会被立即清理并拒绝登记。
+     *
+     * @param path 对象相对路径
+     * @return 存储端实测对象元数据
+     */
+    private FileObjectStat verifyUploadedObjectStat(String path) {
+        FileObjectStat stat = fileStorageService.statObject(path);
+        if (stat == null) {
+            throw exception(ErrorCodeConstants.FILE_NOT_EXISTS);
+        }
+        if (stat.size() <= 0 || stat.size() > FilePathUtils.MAX_UPLOAD_BYTES) {
+            var sizeException = exception(stat.size() <= 0
+                    ? ErrorCodeConstants.FILE_IS_EMPTY : ErrorCodeConstants.FILE_TOO_LARGE);
+            try {
+                fileStorageService.delete(path);
+            } catch (Exception cleanupException) {
+                sizeException.addSuppressed(cleanupException);
+            }
+            throw sizeException;
+        }
+        return stat;
     }
 
     /**

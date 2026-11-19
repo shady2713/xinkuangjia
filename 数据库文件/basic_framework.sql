@@ -128,8 +128,9 @@ CREATE TABLE `infra_file`  (
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
+  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_path`(`path` ASC) USING BTREE,
+  UNIQUE INDEX `uk_path_deleted_tag`(`path` ASC, `deleted_tag` ASC) USING BTREE,
   INDEX `idx_type`(`type` ASC) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '文件表' ROW_FORMAT = DYNAMIC;
 

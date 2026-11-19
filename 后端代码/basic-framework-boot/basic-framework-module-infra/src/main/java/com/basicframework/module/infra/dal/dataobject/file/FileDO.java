@@ -1,6 +1,6 @@
 package com.basicframework.module.infra.dal.dataobject.file;
 
-import com.basicframework.framework.mybatis.core.dataobject.BaseDO;
+import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 
 import com.baomidou.mybatisplus.annotation.KeySequence;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -8,8 +8,8 @@ import lombok.*;
 
 /**
  * 文件表
- 
- * 每次文件上传，都会记录一条记录到该表中
+ *
+ * <p>每次文件上传，都会记录一条记录到该表中。</p>
  *
  * @author 李杰
  */
@@ -21,7 +21,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FileDO extends BaseDO {
+public class FileDO extends UniqueBaseDO {
 
     /**
      * 编号，数据库自增

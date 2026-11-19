@@ -29,6 +29,12 @@
             <artifactId>basic-framework-spring-boot-starter-mybatis</artifactId>
         </dependency>
 
+        <!-- Redis 缓存（用于预签名直传一次性凭证等有界状态存储） -->
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-spring-boot-starter-redis</artifactId>
+        </dependency>
+
         <!-- Job 定时任务相关 -->
         <dependency>
             <groupId>com.basicframework</groupId>
