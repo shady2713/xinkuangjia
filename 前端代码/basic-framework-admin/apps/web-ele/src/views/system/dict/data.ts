@@ -148,22 +148,14 @@ export function useTypeGridColumns(): VxeTableGridOptions['columns'] {
 
 // ============================== 字典数据 ==============================
 
-// 当前颜色选项仅用于 web-ele 字典页。
-/** 颜色选项 */
+/** Element Plus ElTag 支持的颜色类型选项。 */
 const colorOptions = [
   { value: '', label: '无' },
-  { value: 'processing', label: '主要' },
+  { value: 'primary', label: '主要' },
   { value: 'success', label: '成功' },
-  { value: 'default', label: '默认' },
+  { value: 'info', label: '信息' },
   { value: 'warning', label: '警告' },
-  { value: 'error', label: '危险' },
-  { value: 'pink', label: 'pink' },
-  { value: 'red', label: 'red' },
-  { value: 'orange', label: 'orange' },
-  { value: 'green', label: 'green' },
-  { value: 'cyan', label: 'cyan' },
-  { value: 'blue', label: 'blue' },
-  { value: 'purple', label: 'purple' },
+  { value: 'danger', label: '危险' },
 ];
 
 /** 数据新增/修改的表单 */
