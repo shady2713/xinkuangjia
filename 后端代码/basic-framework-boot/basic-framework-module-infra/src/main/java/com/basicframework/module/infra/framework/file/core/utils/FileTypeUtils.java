@@ -1,7 +1,6 @@
 package com.basicframework.module.infra.framework.file.core.utils;
 
 import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.util.http.HttpUtils;
 import jakarta.servlet.http.HttpServletResponse;
@@ -282,33 +281,6 @@ public final class FileTypeUtils {
             response.setHeader("Accept-Ranges", "bytes");
             response.setContentLengthLong(contentLength);
         }
-    }
-
-    /**
-     * 将文件内容写回响应；仅安全光栅图片走 inline，其余一律走 attachment 并附带防嗅探响应头。
-     *
-     * @param response 响应对象
-     * @param filename 文件名
-     * @param content 文件内容
-     * @throws IOException 响应写出失败时抛出
-     */
-    public static void writeAttachment(HttpServletResponse response, String filename, byte[] content) throws IOException {
-        String mineType = resolveSafeMimeType(content, filename);
-        writeCommonHeaders(response, filename, mineType, (long) content.length);
-        IoUtil.write(response.getOutputStream(), false, content);
-    }
-
-    /**
-     * 以流式方式将文件内容写回响应，仅缓冲头部 4KB 用于 MIME 魔数识别，避免大文件整包载入堆内存。
-     *
-     * @param response    响应对象
-     * @param filename    文件名
-     * @param inputStream 文件内容流（调用方负责关闭）
-     * @throws IOException 响应写出失败时抛出
-     */
-    public static void writeAttachment(HttpServletResponse response, String filename,
-                                       InputStream inputStream) throws IOException {
-        writeAttachment(response, filename, inputStream, null, null);
     }
 
     /**

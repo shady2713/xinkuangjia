@@ -104,10 +104,8 @@ public class RoleServiceImpl implements RoleService {
 
         // 1.3 校验是否被用户引用，不允许禁用
         if (CommonStatusEnum.isEnable(role.getStatus())
-                && CommonStatusEnum.isDisable(updateReqVO.getStatus())
-                && CollUtil.isNotEmpty(userRoleMapper.selectListByRoleIds(
-                        Collections.singletonList(updateReqVO.getId())))) {
-            throw exception(ROLE_IS_REFERENCED, role.getName());
+                && CommonStatusEnum.isDisable(updateReqVO.getStatus())) {
+            validateRoleNotReferenced(role);
         }
 
         // 2. 更新到数据库
@@ -151,8 +149,9 @@ public class RoleServiceImpl implements RoleService {
     @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_DELETE_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_ROLE_DELETE_SUCCESS)
     public void deleteRole(Long id) {
-        // 1. 校验是否可以更新
+        // 1. 校验是否可以删除及是否存在用户关联
         RoleDO role = validateRoleForUpdate(id);
+        validateRoleNotReferenced(role);
 
         // 2.1 标记删除
         roleMapper.deleteById(id);
@@ -164,21 +163,36 @@ public class RoleServiceImpl implements RoleService {
     }
 
     /**
-     * 删除角色List。
+     * 批量删除角色。
      *
-     * @param ids ids 编号集合
+     * @param ids 角色编号集合
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     @CacheEvict(value = RedisKeyConstants.ROLE, allEntries = true)
     public void deleteRoleList(List<Long> ids) {
-        // 1. 校验是否可以删除
-        ids.forEach(this::validateRoleForUpdate);
+        // 1. 校验全部角色可删除且均未被用户引用
+        List<RoleDO> roles = ids.stream()
+                .map(this::validateRoleForUpdate)
+                .toList();
+        roles.forEach(this::validateRoleNotReferenced);
 
         // 2.1 标记删除
         roleMapper.deleteByIds(ids);
         // 2.2 删除相关数据
         ids.forEach(id -> getPermissionService().processRoleDeleted(id));
+    }
+
+    /**
+     * 校验角色是否仍被用户绑定；存在关联用户时拒绝停用或删除，防止隐式失效授权。
+     *
+     * @param role 目标角色对象
+     */
+    private void validateRoleNotReferenced(RoleDO role) {
+        if (CollUtil.isNotEmpty(userRoleMapper.selectListByRoleIds(
+                Collections.singletonList(role.getId())))) {
+            throw exception(ROLE_IS_REFERENCED, role.getName());
+        }
     }
 
     /**

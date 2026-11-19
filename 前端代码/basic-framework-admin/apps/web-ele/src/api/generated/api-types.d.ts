@@ -319,12 +319,6 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_OAuth2UserInfoRespVO {
-    code?: number;
-    data?: OpenApiSchemas.OAuth2UserInfoRespVO;
-    msg?: string;
-  }
-
   export interface CommonResult_OperateLogRespVO {
     code?: number;
     data?: OpenApiSchemas.OperateLogRespVO;
@@ -1169,54 +1163,6 @@ export namespace OpenApiSchemas {
     scope: string;
     /** 令牌类型 */
     tokenType: string;
-  }
-
-  /** 管理后台 - OAuth2 获得用户基本信息 Response VO */
-  export interface OAuth2UserInfoRespVO {
-    /** 用户头像 */
-    avatar?: string;
-    dept?: OpenApiSchemas.OAuth2UserInfoRespVO_Dept;
-    /** 用户邮箱 */
-    email?: string;
-    /** 用户编号 */
-    id: number | string;
-    /** 手机号码 */
-    mobile?: string;
-    /** 用户昵称 */
-    nickname: string;
-    posts?: OpenApiSchemas.OAuth2UserInfoRespVO_Post[];
-    /** 用户性别，参见 SexEnum 枚举类 */
-    sex?: number;
-    /** 用户账号 */
-    username: string;
-  }
-
-  /** 部门 */
-  export interface OAuth2UserInfoRespVO_Dept {
-    /** 部门编号 */
-    id: number | string;
-    /** 部门名称 */
-    name: string;
-  }
-
-  /** 岗位 */
-  export interface OAuth2UserInfoRespVO_Post {
-    /** 岗位编号 */
-    id: number | string;
-    /** 岗位名称 */
-    name: string;
-  }
-
-  /** 管理后台 - OAuth2 更新用户基本信息 Request VO */
-  export interface OAuth2UserUpdateReqVO {
-    /** 用户邮箱 */
-    email?: string;
-    /** 手机号 */
-    mobile?: string;
-    /** 用户昵称 */
-    nickname: string;
-    /** 用户性别，参见 SexEnum 枚举类 */
-    sex?: number;
   }
 
   /** 管理后台 - 操作日志分页列表 Request VO */
@@ -2255,14 +2201,6 @@ export interface OpenApiPaths {
   "/admin-api/system/oauth2-token/page": {
     /** 获得访问令牌分页 */
     get: { body: never; query: { clientId: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; userId: number | string; userType: number }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2AccessTokenRespVO };
-  };
-  "/admin-api/system/oauth2/user/get": {
-    /** 获得用户基本信息 */
-    get: { body: never; query: never; response: OpenApiSchemas.CommonResult_OAuth2UserInfoRespVO };
-  };
-  "/admin-api/system/oauth2/user/update": {
-    /** 更新用户基本信息 */
-    put: { body: OpenApiSchemas.OAuth2UserUpdateReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/operate-log/export-excel": {
     /** 导出操作日志 */

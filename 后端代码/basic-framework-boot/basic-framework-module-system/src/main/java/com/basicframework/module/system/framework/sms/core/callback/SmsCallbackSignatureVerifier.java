@@ -165,7 +165,7 @@ public final class SmsCallbackSignatureVerifier {
         if (ttl.isZero() || ttl.isNegative()) {
             ttl = DEFAULT_TIMESTAMP_TOLERANCE.multipliedBy(2);
         }
-        String fingerprint = DigestUtil.sha256Hex(channelCode.toUpperCase(Locale.ROOT) + ":" + timestamp + ":" + expectedSignature);
+        String fingerprint = computeReplayFingerprint(channelCode, timestamp, expectedSignature);
         if (stringRedisTemplate != null) {
             Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(REPLAY_KEY_PREFIX + fingerprint, "1", ttl);
             return Boolean.TRUE.equals(acquired);
@@ -183,6 +183,45 @@ public final class SmsCallbackSignatureVerifier {
             return localReplayCache.replace(fingerprint, existing, expiresAt);
         }
         return false;
+    }
+
+    /**
+     * 释放已登记但业务处理尚未落库的回调签名指纹，避免瞬时异常导致合法供应商重试被重放保护误拒。
+     *
+     * @param channelCode 渠道编码
+     * @param request     当前回调请求
+     * @param body        已读取的原始请求体
+     */
+    public void releaseReplayFingerprint(String channelCode, HttpServletRequest request, String body) {
+        String secret = secrets.get(StrUtil.isBlank(channelCode) ? null : channelCode.toUpperCase(Locale.ROOT));
+        if (StrUtil.isBlank(secret)) {
+            return;
+        }
+        String timestamp = request.getHeader(HEADER_TIMESTAMP);
+        String signature = request.getHeader(HEADER_SIGNATURE);
+        if (StrUtil.isBlank(timestamp) || StrUtil.isBlank(signature)) {
+            return;
+        }
+        String expectedSignature = hmacSha256Hex(secret,
+                channelCode + "\n" + timestamp + "\n" + StrUtil.nullToEmpty(body));
+        String fingerprint = computeReplayFingerprint(channelCode, timestamp, expectedSignature);
+        if (stringRedisTemplate != null) {
+            stringRedisTemplate.delete(REPLAY_KEY_PREFIX + fingerprint);
+            return;
+        }
+        localReplayCache.remove(fingerprint);
+    }
+
+    /**
+     * 计算重放去重缓存使用的签名指纹。
+     *
+     * @param channelCode       渠道编码
+     * @param timestamp         回调时间戳字符串
+     * @param expectedSignature 已验签通过的签名摘要
+     * @return SHA-256 指纹字符串
+     */
+    private static String computeReplayFingerprint(String channelCode, String timestamp, String expectedSignature) {
+        return DigestUtil.sha256Hex(channelCode.toUpperCase(Locale.ROOT) + ":" + timestamp + ":" + expectedSignature);
     }
 
     /**

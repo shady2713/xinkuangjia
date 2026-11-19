@@ -12,8 +12,6 @@ import net.sf.jsqlparser.schema.Table;
 
 import java.util.List;
 
-import static com.basicframework.framework.security.core.util.SecurityFrameworkUtils.skipPermissionCheck;
-
 /**
  * 基于 {@link DataPermissionRule} 的数据权限处理器。
  *
@@ -39,10 +37,6 @@ public class DataPermissionRuleHandler implements MultiDataPermissionHandler {
      */
     @Override
     public Expression getSqlSegment(Table table, Expression where, String mappedStatementId) {
-        if (skipPermissionCheck()) {
-            return null;
-        }
-
         List<DataPermissionRule> rules = ruleFactory.getDataPermissionRule(mappedStatementId);
         if (CollUtil.isEmpty(rules)) {
             return null;

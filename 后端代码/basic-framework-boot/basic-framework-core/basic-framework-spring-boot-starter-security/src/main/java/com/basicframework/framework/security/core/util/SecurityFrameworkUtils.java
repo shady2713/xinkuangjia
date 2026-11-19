@@ -43,9 +43,9 @@ public class SecurityFrameworkUtils {
      */
     public static String obtainAuthorization(HttpServletRequest request,
                                              String headerName, String parameterName) {
-        // 1. 获得 Token。优先级：Header > Parameter
+        // 1. 获得 Token。优先级：Header > Parameter；parameterName 置空时关闭 URL 查询参数取令牌。
         String token = request.getHeader(headerName);
-        if (StrUtil.isEmpty(token)) {
+        if (StrUtil.isEmpty(token) && StrUtil.isNotBlank(parameterName)) {
             token = request.getParameter(parameterName);
         }
         if (!StringUtils.hasText(token)) {
@@ -144,15 +144,6 @@ public class SecurityFrameworkUtils {
                 loginUser, null, Collections.emptyList());
         authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         return authenticationToken;
-    }
-
-    /**
-     * 是否条件跳过权限校验，包括数据权限、功能权限
-     *
-     * @return 是否跳过
-     */
-    public static boolean skipPermissionCheck() {
-        return false;
     }
 
 }

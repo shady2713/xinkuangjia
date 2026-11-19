@@ -142,6 +142,44 @@ class SmsCallbackControllerTest {
         assertThat(response.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());
     }
 
+    /** 验证业务处理瞬时异常返回 500 时会释放重放指纹，使厂商合法重试成功，随后同签名重放仍被 403 拦截。 */
+    @Test
+    void releasesReplayTokenOnTransientFailureAndRejectsReplayAfterSuccess() {
+        long timestamp = currentEpochSecond();
+        String signature = DigestUtil.hmac(HmacAlgorithm.HmacSHA256, ALIYUN_TEST_HMAC_KEY.getBytes(StandardCharsets.UTF_8))
+                .digestHex("ALIYUN\n" + timestamp + "\n" + ALIYUN_BODY);
+        doThrow(new RuntimeException("临时数据库超时"))
+                .doNothing()
+                .when(smsSendService).receiveSmsStatus(eq("ALIYUN"), eq(ALIYUN_BODY));
+
+        ResponseEntity<AliyunSmsCallbackRespVO> firstAttempt = controller.receiveAliyunSmsStatus(
+                jsonRequest(ALIYUN_BODY, timestamp, signature));
+        assertThat(firstAttempt.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+
+        ResponseEntity<AliyunSmsCallbackRespVO> retryAttempt = controller.receiveAliyunSmsStatus(
+                jsonRequest(ALIYUN_BODY, timestamp, signature));
+        assertThat(retryAttempt.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(retryAttempt.getBody()).isEqualTo(AliyunSmsCallbackRespVO.success());
+
+        ResponseEntity<AliyunSmsCallbackRespVO> replayAttempt = controller.receiveAliyunSmsStatus(
+                jsonRequest(ALIYUN_BODY, timestamp, signature));
+        assertThat(replayAttempt.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(replayAttempt.getBody()).isEqualTo(AliyunSmsCallbackRespVO.failure());
+    }
+
+    /** 验证非 JSON 内容类型（如 text/plain）携带合法签名时也可完整读取请求体并处理成功。 */
+    @Test
+    void acceptsNonJsonContentTypeCallbackWithValidSignature() {
+        MockHttpServletRequest request = signedJsonRequest("TENCENT", TENCENT_BODY, TENCENT_TEST_HMAC_KEY);
+        request.setContentType("text/plain;charset=UTF-8");
+
+        ResponseEntity<TencentSmsCallbackRespVO> response = controller.receiveTencentSmsStatus(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(TencentSmsCallbackRespVO.success());
+        verify(smsSendService).receiveSmsStatus("TENCENT", TENCENT_BODY);
+    }
+
     /**
      * 构造带合法签名的 JSON 回调请求。
      *
