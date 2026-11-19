@@ -133,6 +133,7 @@ def execute_mysql_seed(
     database: str,
     sql_text: str,
     password: str | None = None,
+    default_port: int = 3306,
 ) -> int:
     """通过本机 mysql 客户端导入演示数据，密码仅从参数或环境受控传递。
 
@@ -143,10 +144,11 @@ def execute_mysql_seed(
         database: 目标数据库名。
         sql_text: 待执行的幂等 SQL 文本。
         password: 数据库密码（不写入命令行参数，仅通过 MYSQL_PWD 环境变量传递）。
+        default_port: Docker Compose MySQL 默认暴露端口，用于识别非默认端口并拒绝静默误连。
     Returns:
         mysql 进程退出码。
     Raises:
-        ValueError: 目标主机不是本机回环地址或缺少 mysql 客户端时抛出。
+        ValueError: 目标主机不是本机回环地址、Docker 回退模式传入非匹配端口或缺少客户端时抛出。
     """
     if not is_loopback_host(host):
         raise ValueError(f"安全阻断：seed_local_dev.py 仅允许连接本机回环地址，拒绝主机 '{host}'")
@@ -165,18 +167,30 @@ def execute_mysql_seed(
             database,
         ]
     else:
+        normalized_host = host.strip().strip("[]").lower()
+        if normalized_host not in LOOPBACK_HOSTS or port != default_port:
+            raise ValueError(
+                "未找到本机 mysql 客户端，Docker Compose 回退路径仅支持默认回环容器端口 "
+                f"({default_port})，拒绝目标 '{host}:{port}'"
+            )
         docker_bin = shutil.which("docker") or shutil.which("docker.exe")
         compose_file = DEFAULT_ROOT / "docker-compose.dev.yml"
         if docker_bin is None or not compose_file.is_file():
             raise ValueError("未找到 mysql 或 docker 命令行客户端，请改用 --output 导出 SQL 文件后手动导入")
+        if db_pass:
+            env["MYSQL_PWD"] = db_pass
+        env_dev_file = DEFAULT_ROOT / ".env.dev"
+        env_file_args = ["--env-file", str(env_dev_file)] if env_dev_file.is_file() else []
+        env_pass_args = ["-e", "MYSQL_PWD"] if db_pass else []
         cmd = [
             docker_bin,
             "compose",
+            *env_file_args,
             "-f",
             str(compose_file),
             "exec",
             "-T",
-            *(["-e", f"MYSQL_PWD={db_pass}"] if db_pass else []),
+            *env_pass_args,
             "mysql",
             "mysql",
             f"--user={user}",
@@ -265,6 +279,7 @@ def main(argv: list[str] | None = None) -> int:
                 database=args.database,
                 sql_text=sql_text,
                 password=effective_pass,
+                default_port=default_port,
             )
             if code == 0 and args.admin_password_hash is None:
                 print(

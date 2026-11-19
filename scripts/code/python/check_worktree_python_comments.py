@@ -60,9 +60,13 @@ def _run_git(
 
 
 def _repo_root() -> Path:
-    """根据脚本位置返回仓库根目录。"""
+    """从当前工作目录向上解析所属 Git 仓库根目录，支持 worktree 与独立测试仓库。"""
 
-    return Path(__file__).resolve().parents[3]
+    result = _run_git(Path.cwd(), ["rev-parse", "--show-toplevel"])
+    resolved = result.stdout.strip()
+    if not resolved:
+        raise RuntimeError("未能解析 Git 仓库根目录。")
+    return Path(resolved).resolve()
 
 
 def _worktree_python_paths(repo_root: Path) -> list[str]:
@@ -116,9 +120,14 @@ def _temporary_index_environment(repo_root: Path, temporary_index: Path) -> dict
 def _run_checker(repo_root: Path, env: dict[str, str]) -> int:
     """使用临时索引运行仓库级 Python 暂存区检查器。"""
 
-    checker = repo_root / "scripts" / "code" / "python" / "check_staged_python_comments.py"
+    repo_checker = repo_root / "scripts" / "code" / "python" / "check_staged_python_comments.py"
+    checker = (
+        repo_checker
+        if repo_checker.is_file()
+        else Path(__file__).resolve().with_name("check_staged_python_comments.py")
+    )
     result = subprocess.run(
-        [sys.executable, str(checker)],
+        [sys.executable, "-B", "-X", "utf8", str(checker)],
         cwd=repo_root,
         env=env,
         check=False,
@@ -131,8 +140,8 @@ def main() -> int:
     """将工作区与已暂存的 Python 变化合并到临时索引并执行注释检查。"""
 
     _configure_console_encoding()
-    repo_root = _repo_root()
     try:
+        repo_root = _repo_root()
         worktree_paths = _worktree_python_paths(repo_root)
         staged_paths = _staged_python_paths(repo_root)
         if not worktree_paths and not staged_paths:

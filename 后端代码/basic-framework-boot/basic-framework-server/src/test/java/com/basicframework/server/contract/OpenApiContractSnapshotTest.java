@@ -90,11 +90,11 @@ class OpenApiContractSnapshotTest {
         }
         assertTrue(Files.isRegularFile(snapshotPath),
                 "缺少 OpenAPI 契约快照文件，请在 后端代码/basic-framework-boot 执行: "
-                        + "mvn -pl basic-framework-server -am test -Dtest=OpenApiContractSnapshotTest -Dopenapi.update=true");
+                        + "mvn -pl basic-framework-server -am test -Dtest=OpenApiContractSnapshotTest -Dsurefire.failIfNoSpecifiedTests=false -Dopenapi.update=true");
         String committedJson = Files.readString(snapshotPath, StandardCharsets.UTF_8).replace("\r\n", "\n");
         assertEquals(expectedJson, committedJson,
                 "后端接口或 VO 已变更但 OpenAPI 契约快照未同步！请依次执行:\n"
-                        + "1) cd 后端代码/basic-framework-boot && mvn -pl basic-framework-server -am test -Dtest=OpenApiContractSnapshotTest -Dopenapi.update=true\n"
+                        + "1) cd 后端代码/basic-framework-boot && mvn -pl basic-framework-server -am test -Dtest=OpenApiContractSnapshotTest -Dsurefire.failIfNoSpecifiedTests=false -Dopenapi.update=true\n"
                         + "2) cd 前端代码/basic-framework-admin && pnpm api:gen");
     }
 

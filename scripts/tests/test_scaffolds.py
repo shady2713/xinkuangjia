@@ -149,6 +149,16 @@ def test_java_module_and_crud_scaffolds_pass_java_comment_gate_and_scale_past_te
         / "src/main/java/com/basicframework/module/crm/controller/admin/customer/CustomerController.java"
     ).read_text(encoding="utf-8")
     assert '/export-excel' in controller_src
+    assert "MAX_EXPORT_SIZE" in controller_src
+    assert "ErrorCodeConstants.EXPORT_SIZE_EXCEEDED" in controller_src
+    assert "PAGE_SIZE_NONE" not in controller_src
+    resp_vo_src = (
+        repo
+        / "后端代码/basic-framework-boot/basic-framework-module-crm"
+        / "src/main/java/com/basicframework/module/crm/controller/admin/customer/vo/CustomerRespVO.java"
+    ).read_text(encoding="utf-8")
+    assert "@ExcelIgnoreUnannotated" in resp_vo_src
+    assert "@ExcelProperty(" in resp_vo_src
     service_impl_src = (
         repo
         / "后端代码/basic-framework-boot/basic-framework-module-crm"
@@ -156,13 +166,33 @@ def test_java_module_and_crud_scaffolds_pass_java_comment_gate_and_scale_past_te
     ).read_text(encoding="utf-8")
     assert "record.setId(null);" in service_impl_src
     assert "validateCodeUnique" in service_impl_src
+    assert "ErrorCodeConstants.CUSTOMER_NOT_EXISTS" in service_impl_src
+    assert "ErrorCodeConstants.CUSTOMER_CODE_DUPLICATE" in service_impl_src
+    assert "GlobalErrorCodeConstants" not in service_impl_src
+    assert "exception0" not in service_impl_src
+
+    error_codes_rel = (
+        "后端代码/basic-framework-boot/basic-framework-module-crm/"
+        "src/main/java/com/basicframework/module/crm/enums/ErrorCodeConstants.java"
+    )
+    assert error_codes_rel in crud_plan.updated_files
+    error_codes_src = (repo / error_codes_rel).read_text(encoding="utf-8")
+    assert "EXPORT_SIZE_EXCEEDED" in error_codes_src
+    assert "CUSTOMER_NOT_EXISTS" in error_codes_src
+    assert "CUSTOMER_CODE_DUPLICATE" in error_codes_src
+    allocated = [
+        int(num.replace("_", ""))
+        for num in re.findall(r"new ErrorCode\(([0-9_]+)", error_codes_src)
+    ]
+    assert allocated and all(1_003_000_000 <= code < 1_004_000_000 for code in allocated)
+    assert len(allocated) == len(set(allocated))
 
     java_files = [
         repo / rel
-        for rel in crud_plan.created_files
+        for rel in (*crud_plan.created_files, *crud_plan.updated_files)
         if rel.endswith(".java")
     ]
-    assert len(java_files) == 9
+    assert len(java_files) == 10
     for java_file in java_files:
         source = java_file.read_text(encoding="utf-8")
         all_lines = set(range(1, source.count("\n") + 2))
@@ -314,3 +344,65 @@ def test_seed_local_dev_strictly_enforces_loopback_hosts_and_bcrypt_validation(
     assert "deleted_tag" in rendered
     assert "UPDATE `system_users`" in rendered
     assert synthetic_bcrypt in rendered
+
+
+def test_seed_local_dev_docker_fallback_avoids_argv_secret_and_checks_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Docker Compose 回退路径通过环境变量传递口令、附带 .env.dev 且拒绝非匹配端口。"""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "docker-compose.dev.yml").write_text("services: {}\n", encoding="utf-8", newline="\n")
+    (repo / ".env.dev").write_text("DB_PORT=3306\n", encoding="utf-8", newline="\n")
+
+    captured: dict[str, object] = {}
+
+    def fake_which(name: str) -> str | None:
+        """模拟仅安装 docker 而缺少 mysql 的本机命令环境。"""
+        if name in {"docker", "docker.exe"}:
+            return "/usr/bin/docker"
+        return None
+
+    class FakeCompleted:
+        """模拟返回成功退出码的子进程结果。"""
+
+        returncode = 0
+
+    def fake_run(cmd: list[str], **kwargs: object) -> FakeCompleted:
+        """记录实际调用的命令行参数与子进程环境变量。"""
+        captured["cmd"] = cmd
+        captured["env"] = kwargs.get("env")
+        return FakeCompleted()
+
+    monkeypatch.setattr(seed_local_dev, "DEFAULT_ROOT", repo)
+    monkeypatch.setattr(seed_local_dev.shutil, "which", fake_which)
+    monkeypatch.setattr(seed_local_dev.subprocess, "run", fake_run)
+
+    sample_db_pw = "CHANGE_ME_" + "LOCAL_DB_PASS"
+    code = seed_local_dev.execute_mysql_seed(
+        host="127.0.0.1",
+        port=3306,
+        user="basic_dev",
+        database="basic_framework",
+        sql_text="SELECT 1;",
+        password=sample_db_pw,
+    )
+    assert code == 0
+    cmd = captured["cmd"]
+    env = captured["env"]
+    assert isinstance(cmd, list) and isinstance(env, dict)
+    assert "--env-file" in cmd and str(repo / ".env.dev") in cmd
+    assert env["MYSQL_PWD"] == sample_db_pw
+    assert all(sample_db_pw not in part for part in cmd)
+    idx = cmd.index("-e")
+    assert cmd[idx + 1] == "MYSQL_PWD"
+
+    with pytest.raises(ValueError, match="回退路径仅支持默认回环容器端口"):
+        seed_local_dev.execute_mysql_seed(
+            host="127.0.0.1",
+            port=3307,
+            user="basic_dev",
+            database="basic_framework",
+            sql_text="SELECT 1;",
+            password=sample_db_pw,
+        )
