@@ -7,7 +7,10 @@ import type { RequestClient } from './request-client';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { authenticateResponseInterceptor } from './preset-interceptors';
+import {
+  authenticateResponseInterceptor,
+  errorMessageResponseInterceptor,
+} from './preset-interceptors';
 
 /** 字符串可控 Promise 解决回调签名。 */
 type DeferredResolve = (value: PromiseLike<string> | string) => void;
@@ -174,6 +177,97 @@ async function replaysQueuedRequestsWhenRefreshSucceeds() {
   expect(doReAuthenticate).not.toHaveBeenCalled();
 }
 
+/** 验证 401 刷新成功后重放请求返回 500 时，仅在内层提示一次错误，外层不再重复弹窗。 */
+async function suppressesDuplicateToastWhenReplayedRequestFails() {
+  const makeErrorMessage = vi.fn();
+  const errorInterceptor = errorMessageResponseInterceptor(makeErrorMessage);
+  /**
+   * 模拟重放请求命中内层错误拦截器后抛出 500 异常。
+   *
+   * @returns 经过内层错误拦截器处理的被拒 Promise
+   */
+  function mockReplayFailure() {
+    const replayError = {
+      config: { headers: {}, url: '/system/user/page' },
+      response: { data: { msg: '服务器开小差了' }, status: 500 },
+    };
+    return errorInterceptor.rejected?.(replayError);
+  }
+  const fakeClient = {
+    isRefreshing: false,
+    refreshTokenQueue: [],
+    request: vi.fn(mockReplayFailure),
+  } as unknown as RequestClient;
+  const authInterceptor = authenticateResponseInterceptor({
+    client: fakeClient,
+    doReAuthenticate: vi.fn().mockResolvedValue(undefined),
+    doRefreshToken: vi.fn().mockResolvedValue('fresh-token'),
+    enableRefreshToken: true,
+    formatToken: formatBearerToken,
+  });
+  const first401 = {
+    config: { headers: {}, url: '/system/user/page' },
+    response: { status: 401 },
+  };
+
+  let outerError: unknown;
+  try {
+    await authInterceptor.rejected?.(first401);
+  } catch (error) {
+    outerError = error;
+  }
+
+  await expect(errorInterceptor.rejected?.(outerError)).rejects.toBe(
+    outerError,
+  );
+  expect(makeErrorMessage).toHaveBeenCalledTimes(1);
+}
+
+/** 验证刷新令牌失败并触发重认证时，主请求与排队请求都不会在外层触发重复错误弹窗。 */
+async function suppressesRedundantToastsWhenRefreshFails() {
+  const refreshDeferred = createDeferred();
+  const makeErrorMessage = vi.fn();
+  const errorInterceptor = errorMessageResponseInterceptor(makeErrorMessage);
+  /**
+   * 返回可控刷新 Promise。
+   *
+   * @returns 待决刷新令牌 Promise
+   */
+  function doRefreshToken() {
+    return refreshDeferred.promise;
+  }
+  const fakeClient = {
+    isRefreshing: false,
+    refreshTokenQueue: [],
+    request: vi.fn(),
+  } as unknown as RequestClient;
+  const authInterceptor = authenticateResponseInterceptor({
+    client: fakeClient,
+    doReAuthenticate: vi.fn().mockResolvedValue(undefined),
+    doRefreshToken,
+    enableRefreshToken: true,
+    formatToken: formatBearerToken,
+  });
+
+  const firstAttempt = authInterceptor.rejected?.({
+    config: { headers: {}, url: '/system/user/page' },
+    response: { status: 401 },
+  });
+  const secondAttempt = authInterceptor.rejected?.({
+    config: { headers: {}, url: '/system/role/page' },
+    response: { status: 401 },
+  });
+  refreshDeferred.reject(new Error('refresh-expired'));
+
+  const [firstErr, secondErr] = await Promise.all([
+    firstAttempt?.catch((error: unknown) => error),
+    secondAttempt?.catch((error: unknown) => error),
+  ]);
+  await expect(errorInterceptor.rejected?.(firstErr)).rejects.toBe(firstErr);
+  await expect(errorInterceptor.rejected?.(secondErr)).rejects.toBe(secondErr);
+  expect(makeErrorMessage).not.toHaveBeenCalled();
+}
+
 /** authenticateResponseInterceptor 测试套件。 */
 function authenticateInterceptorSuite() {
   it(
@@ -183,6 +277,14 @@ function authenticateInterceptorSuite() {
   it(
     '刷新令牌成功时携带新令牌重放当前与挂起请求',
     replaysQueuedRequestsWhenRefreshSucceeds,
+  );
+  it(
+    '重放请求返回 500 时外层错误拦截器不再重复提示',
+    suppressesDuplicateToastWhenReplayedRequestFails,
+  );
+  it(
+    '刷新令牌失败已触发重认证时跳过外层冗余错误提示',
+    suppressesRedundantToastsWhenRefreshFails,
   );
 }
 

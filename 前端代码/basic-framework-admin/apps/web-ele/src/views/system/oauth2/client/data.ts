@@ -6,7 +6,11 @@ import { getDictOptions } from '@vben/hooks';
 
 import { z } from '#/adapter/form';
 
-/** 新增/修改的表单 */
+/**
+ * 新增/修改 OAuth2 客户端表单结构配置。
+ *
+ * @returns OAuth2 客户端新增与编辑表单字段配置数组
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -29,11 +33,32 @@ export function useFormSchema(): VbenFormSchema[] {
     {
       fieldName: 'secret',
       label: '客户端密钥',
-      component: 'Input',
-      componentProps: {
-        placeholder: '请输入客户端密钥',
+      component: 'InputPassword',
+      dependencies: {
+        triggerFields: ['id'],
+        /**
+         * 编辑已有客户端时提示密钥留空即保留原值。
+         *
+         * @param values 当前表单字段值对象
+         * @returns 动态输入框占位提示属性
+         */
+        componentProps(values) {
+          return {
+            placeholder: values.id
+              ? '留空则保持原密钥不变'
+              : '请输入客户端密钥',
+          };
+        },
+        /**
+         * 仅新建客户端时要求填写密钥；编辑时允许留空以保留服务端原密钥哈希。
+         *
+         * @param values 当前表单字段值对象
+         * @returns 是否必填
+         */
+        required(values) {
+          return !values.id;
+        },
       },
-      rules: 'required',
     },
     {
       fieldName: 'name',
@@ -192,18 +217,17 @@ export function useGridFormSchema(): VbenFormSchema[] {
   ];
 }
 
-/** 列表的字段 */
+/**
+ * OAuth2 客户端列表表格列配置。
+ *
+ * @returns OAuth2 客户端表格列定义数组
+ */
 export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     { type: 'checkbox', width: 40 },
     {
       field: 'clientId',
       title: '客户端编号',
-      minWidth: 120,
-    },
-    {
-      field: 'secret',
-      title: '客户端密钥',
       minWidth: 120,
     },
     {

@@ -34,16 +34,19 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /**
+   * 校验表单输入并提交新增或更新请求，完成后关闭弹窗并触发列表刷新。
+   */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data =
-      (await formApi.getValues()) as SystemOAuth2ClientApi.OAuth2Client;
     try {
+      // 提交表单
+      const data =
+        (await formApi.getValues()) as SystemOAuth2ClientApi.OAuth2Client;
       await (formData.value?.id
         ? updateOAuth2Client(data)
         : createOAuth2Client(data));
