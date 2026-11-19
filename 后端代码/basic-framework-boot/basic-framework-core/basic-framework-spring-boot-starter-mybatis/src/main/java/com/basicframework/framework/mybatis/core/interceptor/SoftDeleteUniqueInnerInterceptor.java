@@ -18,8 +18,12 @@ import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.update.UpdateSet;
 import org.apache.ibatis.executor.statement.StatementHandler;
+import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.mapping.ParameterMapping;
+import org.apache.ibatis.mapping.ParameterMode;
 import org.apache.ibatis.mapping.SqlCommandType;
+import org.apache.ibatis.session.Configuration;
 
 import java.sql.Connection;
 import java.util.List;
@@ -60,7 +64,8 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
         if (!StrUtil.containsIgnoreCase(sql, DELETED_COLUMN)) {
             return;
         }
-        mpBs.sql(parserMulti(sql, null));
+        ParameterContext parameterContext = new ParameterContext(ms.getConfiguration(), sh.getBoundSql());
+        mpBs.sql(parserMulti(sql, parameterContext));
     }
 
     /**
@@ -69,7 +74,7 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
      * @param update UPDATE 语法树
      * @param index 多语句序号
      * @param sql 原始 SQL
-     * @param obj 附加参数
+     * @param obj 附加参数上下文
      */
     @Override
     protected void processUpdate(Update update, int index, String sql, Object obj) {
@@ -94,7 +99,7 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
                 String colName = cleanIdentifier(columns.get(i).getColumnName());
                 if (DELETED_COLUMN.equalsIgnoreCase(colName)) {
                     Expression valueExpr = (values != null && i < values.size()) ? values.get(i) : null;
-                    if (isLogicDeleteValue(valueExpr)) {
+                    if (isLogicDeleteValue(valueExpr, obj)) {
                         setsDeleted = true;
                     }
                 } else if (DELETED_TAG_COLUMN.equalsIgnoreCase(colName)) {
@@ -111,13 +116,15 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
     /**
      * 判断 {@code deleted} 列的赋值表达式是否代表逻辑删除（而非恢复为未删除状态）。
      *
-     * <p>显式将 {@code deleted} 置为 {@code 0}、{@code false}、{@code b'0'} 等未删除值时返回 {@code false}，
+     * <p>显式将 {@code deleted} 置为 {@code 0}、{@code false}、{@code b'0'} 等未删除值时返回 {@code false}；
+     * 对于参数化占位符 {@code ?}，会结合 {@link BoundSql} 解析真实绑定值并在无法解析时安全降级为 {@code false}，
      * 避免恢复或常规更新语句误将活跃行的 {@code deleted_tag} 篡改为 {@code id}。</p>
      *
      * @param valueExpr SET 子句右侧赋值表达式
+     * @param obj       SQL 参数上下文
      * @return 为逻辑删除值时返回 true
      */
-    private static boolean isLogicDeleteValue(Expression valueExpr) {
+    private static boolean isLogicDeleteValue(Expression valueExpr, Object obj) {
         if (valueExpr == null) {
             return false;
         }
@@ -132,14 +139,96 @@ public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implemen
             String text = StrUtil.trim(hexValue.getValue());
             return !"0x0".equalsIgnoreCase(text) && !"0x00".equalsIgnoreCase(text);
         }
-        if (valueExpr instanceof JdbcParameter || valueExpr instanceof JdbcNamedParameter) {
-            return true;
+        if (valueExpr instanceof JdbcParameter jdbcParameter) {
+            return isLogicDeleteBoundValue(resolveJdbcParameterValue(jdbcParameter, obj));
+        }
+        if (valueExpr instanceof JdbcNamedParameter) {
+            return false;
         }
         String raw = StrUtil.trim(valueExpr.toString());
         if ("0".equals(raw) || "false".equalsIgnoreCase(raw) || "b'0'".equalsIgnoreCase(raw) || "'0'".equals(raw)) {
             return false;
         }
         return "1".equals(raw) || "true".equalsIgnoreCase(raw) || "b'1'".equalsIgnoreCase(raw) || "'1'".equals(raw);
+    }
+
+    /**
+     * 按 JDBC 占位符序号从 {@link BoundSql} 解析对应的真实参数值。
+     *
+     * @param jdbcParameter JSqlParser 占位符节点（序号从 1 开始）
+     * @param obj           参数上下文
+     * @return 解析到的绑定参数值；上下文缺失、越界或属性不可读时返回 null
+     */
+    private static Object resolveJdbcParameterValue(JdbcParameter jdbcParameter, Object obj) {
+        if (!(obj instanceof ParameterContext context)
+                || context.configuration() == null
+                || context.boundSql() == null) {
+            return null;
+        }
+        Integer index = jdbcParameter.getIndex();
+        if (index == null || index < 1) {
+            return null;
+        }
+        List<ParameterMapping> mappings = context.boundSql().getParameterMappings();
+        int paramIndex = index - 1;
+        if (mappings == null || paramIndex >= mappings.size()) {
+            return null;
+        }
+        ParameterMapping mapping = mappings.get(paramIndex);
+        if (mapping.getMode() == ParameterMode.OUT) {
+            return null;
+        }
+        String property = mapping.getProperty();
+        if (context.boundSql().hasAdditionalParameter(property)) {
+            return context.boundSql().getAdditionalParameter(property);
+        }
+        Object paramObj = context.boundSql().getParameterObject();
+        if (paramObj == null) {
+            return null;
+        }
+        if (context.configuration().getTypeHandlerRegistry().hasTypeHandler(paramObj.getClass())) {
+            return paramObj;
+        }
+        try {
+            return context.configuration().newMetaObject(paramObj).getValue(property);
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    /**
+     * 判断已解析的绑定参数值是否表示逻辑删除状态。
+     *
+     * @param value 绑定参数值
+     * @return 表示逻辑删除（true / 非零数值 / "1" / "true" / 非零字节）时返回 true
+     */
+    private static boolean isLogicDeleteBoundValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof Boolean boolVal) {
+            return boolVal;
+        }
+        if (value instanceof Number numVal) {
+            return numVal.longValue() != 0L;
+        }
+        if (value instanceof CharSequence text) {
+            String trimmed = StrUtil.trim(text.toString());
+            return "1".equals(trimmed) || "true".equalsIgnoreCase(trimmed);
+        }
+        if (value instanceof byte[] bytes) {
+            return bytes.length > 0 && bytes[bytes.length - 1] != 0;
+        }
+        return false;
+    }
+
+    /**
+     * 透传至 JSqlParser 解析回调的 MyBatis 参数上下文。
+     *
+     * @param configuration MyBatis 全局配置
+     * @param boundSql      当前绑定 SQL 与参数映射
+     */
+    record ParameterContext(Configuration configuration, BoundSql boundSql) {
     }
 
     /**

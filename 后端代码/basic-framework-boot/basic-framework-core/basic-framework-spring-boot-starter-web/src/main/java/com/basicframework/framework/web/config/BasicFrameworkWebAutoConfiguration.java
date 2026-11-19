@@ -1,8 +1,16 @@
 package com.basicframework.framework.web.config;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.Module;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -13,6 +21,8 @@ import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
@@ -183,14 +193,50 @@ public class BasicFrameworkWebAutoConfiguration {
     }
 
     /**
-     * 创建 RestTemplate 实例
+     * 创建 RestTemplate 实例，并为其配置不含 Web XSS 字符串清洗器的独立 JSON 映射器，
+     * 避免在 HTTP 请求线程内调用外部接口时篡改出站或回传的原始字符（且不原地修改 MVC 共享转换器）。
      *
      * @param restTemplateBuilder {@link RestTemplateAutoConfiguration#restTemplateBuilder}
+     * @param timestampSupportModuleProvider 时间与 Long 精度模块提供器
+     * @return 独立隔离 XSS 反序列化器的 RestTemplate 实例
      */
     @Bean
     @ConditionalOnMissingBean
-    public RestTemplate restTemplate(RestTemplateBuilder restTemplateBuilder) {
-        return restTemplateBuilder.build();
+    public RestTemplate restTemplate(
+            RestTemplateBuilder restTemplateBuilder,
+            @Qualifier("timestampSupportModuleBean") ObjectProvider<Module> timestampSupportModuleProvider) {
+        RestTemplate restTemplate = restTemplateBuilder.build();
+        ObjectMapper outboundMapper = buildOutboundObjectMapper(timestampSupportModuleProvider.getIfAvailable());
+        List<HttpMessageConverter<?>> converters = restTemplate.getMessageConverters();
+        for (int i = 0; i < converters.size(); i++) {
+            HttpMessageConverter<?> converter = converters.get(i);
+            if (converter instanceof MappingJackson2HttpMessageConverter jacksonConverter) {
+                MappingJackson2HttpMessageConverter isolatedConverter =
+                        new MappingJackson2HttpMessageConverter(outboundMapper);
+                if (!jacksonConverter.getSupportedMediaTypes().isEmpty()) {
+                    isolatedConverter.setSupportedMediaTypes(jacksonConverter.getSupportedMediaTypes());
+                }
+                converters.set(i, isolatedConverter);
+            }
+        }
+        return restTemplate;
+    }
+
+    /**
+     * 构造专供外部 HTTP 通信使用的 Jackson {@link ObjectMapper}，对齐框架时间与未知字段策略且不挂接 XSS 清洗器。
+     *
+     * @param timestampSupportModule 时间与 Long 精度兼容模块，可能为空
+     * @return 独立的 ObjectMapper 实例
+     */
+    private static ObjectMapper buildOutboundObjectMapper(Module timestampSupportModule) {
+        ObjectMapper outboundMapper = new ObjectMapper();
+        outboundMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        outboundMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        outboundMapper.registerModule(new JavaTimeModule());
+        if (timestampSupportModule != null) {
+            outboundMapper.registerModule(timestampSupportModule);
+        }
+        return outboundMapper;
     }
 
 }
