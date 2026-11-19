@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统用户新增与编辑弹窗组件，提交前对初始密码执行 SM2 加密。 */
 import type { SystemUserApi } from '#/api/system/user';
 
 import { ref } from 'vue';
@@ -44,14 +45,12 @@ const [Modal, modalApi] = useVbenModal({
     modalApi.lock();
     try {
       // 提交表单（置于 try 内确保 getValues 或 SM2 加密异常时也能解锁弹窗）
-      const data = (await formApi.getValues()) as SystemUserApi.User;
+      const data = (await formApi.getValues()) as SystemUserApi.UserSaveReq;
       // 新增用户时对密码进行 SM2 加密；编辑用户不提交密码字段。
       if (!formData.value?.id && data.password) {
         data.password = await encryptPassword(data.password);
       }
-      await (formData.value?.id
-        ? updateUser(data as any)
-        : createUser(data as any));
+      await (formData.value?.id ? updateUser(data) : createUser(data));
       // 关闭并提示
       await modalApi.close();
       emit('success');

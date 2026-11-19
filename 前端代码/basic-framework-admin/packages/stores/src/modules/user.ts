@@ -1,3 +1,4 @@
+/** 用户基础信息状态 store，保存当前登录用户资料与角色编码。 */
 import { acceptHMRUpdate, defineStore } from 'pinia';
 
 interface BasicUserInfo {
@@ -7,21 +8,37 @@ interface BasicUserInfo {
    */
   avatar: string;
   /**
+   * 部门编号
+   */
+  deptId?: number | string;
+  /**
    * 用户邮箱
    */
   email?: string;
+  /**
+   * 用户编号（后端认证信息主键）
+   */
+  id?: number | string;
   /**
    * 用户昵称
    */
   nickname: string;
   /**
-   * 用户 id
+   * 是否要求先修改密码
    */
-  userId: string;
+  passwordChangeRequired?: boolean;
+  /**
+   * 兼容字段：部分模板中使用的用户 id
+   */
+  userId?: string;
   /**
    * 用户名
    */
   username: string;
+  /**
+   * 所属后台类型
+   */
+  userType?: string;
 }
 
 interface AccessState {

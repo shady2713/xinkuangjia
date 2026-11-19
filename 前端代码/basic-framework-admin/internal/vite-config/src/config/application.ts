@@ -41,7 +41,7 @@ function resolveVendorChunk(id: string): string | undefined {
     return 'vendor-icons';
   }
   if (
-    /[/\\]node_modules[/\\](?:reka-ui|tippy\.js|vue-tippy|vee-validate|@vee-validate|zod|sm-crypto|crypto-js|jsencrypt)[/\\]/u.test(
+    /[/\\]node_modules[/\\](?:reka-ui|vee-validate|@vee-validate|zod|sm-crypto|crypto-js|jsencrypt)[/\\]/u.test(
       id,
     )
   ) {

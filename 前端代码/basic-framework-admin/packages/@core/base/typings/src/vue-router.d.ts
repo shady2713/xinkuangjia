@@ -113,6 +113,10 @@ interface RouteMeta {
    */
   query?: Recordable;
   /**
+   * 需要具备的权限码（任一命中即放行；用于后端路由模式下的静态业务子页守卫）
+   */
+  requiredPermissions?: string[];
+  /**
    * 标题名称
    */
   title: string;

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 角色数据权限范围与自定义部门分配弹窗组件。 */
 import type { SystemDeptApi } from '#/api/system/dept';
 import type { SystemRoleApi } from '#/api/system/role';
 
@@ -46,14 +47,15 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并提交角色数据权限分配，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    const data = await formApi.getValues();
     try {
+      const data = await formApi.getValues();
       await assignRoleDataScope({
         roleId: data.id,
         dataScope: data.dataScope,
@@ -69,6 +71,11 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 弹窗打开时加载部门树与角色当前数据权限配置。
+   *
+   * @param isOpen 弹窗是否处于打开状态
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;

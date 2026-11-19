@@ -5,18 +5,27 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isSafeNavigationUrl, openWindow } from '../window';
+import {
+  isSafeNavigationUrl,
+  openRouteInNewWindow,
+  openWindow,
+} from '../window';
 
 let originalOpen: typeof window.open;
+let originalPathname = '/';
+let originalHash = '';
 
-/** 保存原始 window.open 引用。 */
-function saveWindowOpen() {
+/** 保存原始 window.open 与当前页面路径状态。 */
+function saveWindowState() {
   originalOpen = window.open;
+  originalPathname = location.pathname;
+  originalHash = location.hash;
 }
 
-/** 恢复原始 window.open 引用。 */
-function restoreWindowOpen() {
+/** 恢复原始 window.open 与页面路径状态。 */
+function restoreWindowState() {
   window.open = originalOpen;
+  window.history.replaceState(null, '', `${originalPathname}${originalHash}`);
 }
 
 /** 验证安全 HTTP(S) 链接按默认 noopener/noreferrer 打开。 */
@@ -53,15 +62,75 @@ function blocksUnsafeNavigationSchemes() {
   expect(window.open).not.toHaveBeenCalled();
 }
 
+/** 验证安全 HTTP(S) 链接、单斜杠路径及 openRouteInNewWindow 部署前缀拼接规则。 */
+function opensRouteInNewWindowAcrossModes() {
+  window.open = vi.fn();
+
+  // 根路径 Hash 模式
+  window.history.replaceState(null, '', '/#/dashboard');
+  openRouteInNewWindow('/system/user');
+  openRouteInNewWindow('#/system/role');
+  expect(window.open).toHaveBeenNthCalledWith(
+    1,
+    `${location.origin}/#/system/user`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+  expect(window.open).toHaveBeenNthCalledWith(
+    2,
+    `${location.origin}/#/system/role`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+
+  // 子路径 /admin/ Hash 模式（涵盖裸路由、#/ 前缀与 router.resolve 完整 href）
+  window.history.replaceState(null, '', '/admin/#/dashboard');
+  openRouteInNewWindow('/system/user');
+  openRouteInNewWindow('#/system/role');
+  openRouteInNewWindow('/admin/#/infra/job');
+  expect(window.open).toHaveBeenNthCalledWith(
+    3,
+    `${location.origin}/admin/#/system/user`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+  expect(window.open).toHaveBeenNthCalledWith(
+    4,
+    `${location.origin}/admin/#/system/role`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+  expect(window.open).toHaveBeenNthCalledWith(
+    5,
+    `${location.origin}/admin/#/infra/job`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+
+  // History 模式
+  window.history.replaceState(null, '', '/admin/dashboard');
+  openRouteInNewWindow('/admin/system/user');
+  expect(window.open).toHaveBeenNthCalledWith(
+    6,
+    `${location.origin}/admin/system/user`,
+    '_blank',
+    'noopener=yes,noreferrer=yes',
+  );
+}
+
 /** openWindow 与导航协议安全测试套件。 */
 function openWindowSuite() {
-  beforeEach(saveWindowOpen);
-  afterEach(restoreWindowOpen);
+  beforeEach(saveWindowState);
+  afterEach(restoreWindowState);
 
   it('should call window.open with correct arguments', opensHttpsUrlSafely);
   it(
     'blocks javascript:, data:, and protocol-relative URLs',
     blocksUnsafeNavigationSchemes,
+  );
+  it(
+    'preserves deployment base prefix when opening routes in new window',
+    opensRouteInNewWindowAcrossModes,
   );
 }
 

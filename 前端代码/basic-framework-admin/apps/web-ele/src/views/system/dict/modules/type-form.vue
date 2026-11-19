@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统字典类型新增与编辑弹窗组件。 */
 import type { SystemDictTypeApi } from '#/api/system/dict/type';
 
 import { ref } from 'vue';
@@ -34,15 +35,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存字典类型，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemDictTypeApi.DictType;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as SystemDictTypeApi.DictType;
       await (formData.value?.id ? updateDictType(data) : createDictType(data));
       // 关闭并提示
       await modalApi.close();

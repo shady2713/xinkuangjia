@@ -16,7 +16,7 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 import { showLoadingMessage } from '#/utils/feedback';
 
-import { generateAccess } from './access';
+import { generateAccess, hasRoutePermission } from './access';
 
 /** 首次登录或管理员重置密码后的强制修改密码页。 */
 const PASSWORD_CHANGE_PATH = '/change-password';
@@ -129,6 +129,20 @@ function setupAccessGuard(router: Router) {
         to.path !== PASSWORD_CHANGE_PATH
       ) {
         return { path: PASSWORD_CHANGE_PATH, replace: true };
+      }
+      if (
+        !hasRoutePermission(
+          to.meta?.requiredPermissions,
+          accessStore.accessCodes,
+        )
+      ) {
+        return {
+          name: 'FallbackNotFound',
+          params: {
+            path: to.path.replace(/^\/+/u, '').split('/').filter(Boolean),
+          },
+          replace: true,
+        };
       }
       return true;
     }

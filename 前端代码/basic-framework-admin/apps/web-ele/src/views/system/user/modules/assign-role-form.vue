@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统用户角色分配弹窗组件。 */
 import type { SystemUserApi } from '#/api/system/user';
 
 import { useVbenModal } from '@vben/common-ui';
@@ -26,15 +27,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存用户角色分配，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const values = await formApi.getValues();
     try {
+      // 提交表单
+      const values = await formApi.getValues();
       await assignUserRole({
         userId: values.id,
         roleIds: values.roleIds,
@@ -47,6 +49,11 @@ const [Modal, modalApi] = useVbenModal({
       modalApi.unlock();
     }
   },
+  /**
+   * 弹窗打开时加载用户已分配角色列表并填充表单。
+   *
+   * @param isOpen 弹窗是否处于打开状态
+   */
   async onOpenChange(isOpen: boolean) {
     if (!isOpen) {
       return;

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 手机短信验证码登录页，支持行为图形验证码校验与防重提交加载态。 */
 import type { VbenFormSchema } from '@vben/common-ui';
 import type { Recordable } from '@vben/types';
 
@@ -18,7 +19,6 @@ defineOptions({ name: 'CodeLogin' });
 const authStore = useAuthStore();
 const captchaEnable = isCaptchaEnable();
 
-const loading = ref(false);
 const CODE_LENGTH = 4;
 const SMS_LOGIN_SCENE = 21;
 const captchaType = 'blockPuzzle';
@@ -116,28 +116,23 @@ const formSchema = computed((): VbenFormSchema[] => {
          * @throws 表单未就绪或手机号格式不合法时抛出异常阻断倒计时
          */
         handleSendCode: async () => {
-          loading.value = true;
-          try {
-            const formApi = loginRef.value?.getFormApi();
-            if (!formApi) {
-              throw new Error('表单未初始化');
-            }
-            await formApi.validateField('mobile');
-            const isMobileValid = await formApi.isFieldValid('mobile');
-            if (!isMobileValid) {
-              throw new Error('请输入有效的手机号码');
-            }
-            const { mobile } = await formApi.getValues();
-            const captchaVerification = await requestCaptchaVerification();
-            await sendSmsCode({
-              captchaVerification,
-              mobile,
-              scene: SMS_LOGIN_SCENE,
-            });
-            showSuccessMessage('验证码已提交发送');
-          } finally {
-            loading.value = false;
+          const formApi = loginRef.value?.getFormApi();
+          if (!formApi) {
+            throw new Error('表单未初始化');
           }
+          await formApi.validateField('mobile');
+          const isMobileValid = await formApi.isFieldValid('mobile');
+          if (!isMobileValid) {
+            throw new Error('请输入有效的手机号码');
+          }
+          const { mobile } = await formApi.getValues();
+          const captchaVerification = await requestCaptchaVerification();
+          await sendSmsCode({
+            captchaVerification,
+            mobile,
+            scene: SMS_LOGIN_SCENE,
+          });
+          showSuccessMessage('验证码已提交发送');
         },
       },
       fieldName: 'code',
@@ -171,7 +166,7 @@ async function handleLogin(values: Recordable<any>) {
     <AuthenticationCodeLogin
       ref="loginRef"
       :form-schema="formSchema"
-      :loading="loading"
+      :loading="authStore.loginLoading"
       @submit="handleLogin"
     />
     <Verification

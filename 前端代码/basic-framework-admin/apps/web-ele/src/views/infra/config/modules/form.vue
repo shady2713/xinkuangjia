@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 参数配置新增与编辑弹窗组件。 */
 import type { InfraConfigApi } from '#/api/infra/config';
 
 import { ref } from 'vue';
@@ -30,15 +31,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存参数配置，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as InfraConfigApi.Config;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as InfraConfigApi.Config;
       await (formData.value?.id ? updateConfig(data) : createConfig(data));
       // 关闭并提示
       await modalApi.close();

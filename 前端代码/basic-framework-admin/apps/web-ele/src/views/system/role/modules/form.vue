@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 系统角色新增与编辑弹窗组件。 */
 import type { SystemRoleApi } from '#/api/system/role';
 
 import { ref } from 'vue';
@@ -30,15 +31,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存系统角色，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as SystemRoleApi.Role;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as SystemRoleApi.Role;
       await (formData.value?.id ? updateRole(data) : createRole(data));
       // 关闭并提示
       await modalApi.close();

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+/** 定时任务新增与编辑弹窗组件。 */
 import type { InfraJobApi } from '#/api/infra/job';
 
 import { ref } from 'vue';
@@ -30,15 +31,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并保存定时任务配置，失败时仍释放弹窗锁。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = (await formApi.getValues()) as InfraJobApi.Job;
     try {
+      // 提交表单
+      const data = (await formApi.getValues()) as InfraJobApi.Job;
       await (formData.value?.id ? updateJob(data) : createJob(data));
       // 关闭并提示
       await modalApi.close();

@@ -1,3 +1,4 @@
+/** 基础选项与登录用户信息通用类型定义。 */
 interface BasicOption {
   label: string;
   value: string;
@@ -13,6 +14,18 @@ interface BasicUserInfo {
    */
   avatar: string;
   /**
+   * 部门编号
+   */
+  deptId?: number | string;
+  /**
+   * 邮箱
+   */
+  email?: string;
+  /**
+   * 用户编号（后端认证信息主键）
+   */
+  id?: number | string;
+  /**
    * 用户昵称
    */
   nickname: string;
@@ -25,13 +38,17 @@ interface BasicUserInfo {
    */
   roles?: string[];
   /**
-   * 用户id
+   * 兼容字段：部分模板中使用的用户标识
    */
-  userId: string;
+  userId?: string;
   /**
    * 用户名
    */
   username: string;
+  /**
+   * 所属后台类型
+   */
+  userType?: string;
 }
 
 type ClassType = Array<object | string> | object | string;
