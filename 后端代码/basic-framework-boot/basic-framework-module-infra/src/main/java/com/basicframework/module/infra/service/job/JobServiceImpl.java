@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -237,14 +238,27 @@ public class JobServiceImpl implements JobService {
         List<JobDO> jobs = jobMapper.selectByIds(ids);
         jobMapper.deleteByIds(ids);
 
-        // 事务提交后逐条删除 Quartz 中对应的任务，单条失败不中断其余任务清理
+        // 事务提交后逐条删除 Quartz 中对应的任务，单条失败不中断其余任务清理，汇总异常后向上抛出错因
         runSchedulerAfterCommit(() -> {
+            List<String> failedHandlers = new ArrayList<>();
+            SchedulerException firstException = null;
             for (JobDO job : jobs) {
                 try {
                     schedulerManager.deleteJob(job.getHandlerName());
                 } catch (SchedulerException ex) {
                     log.error("[deleteJobList][删除 Quartz 任务({}) 失败]", job.getHandlerName(), ex);
+                    failedHandlers.add(job.getHandlerName());
+                    if (firstException == null) {
+                        firstException = ex;
+                    } else {
+                        firstException.addSuppressed(ex);
+                    }
                 }
+            }
+            if (firstException != null) {
+                throw new SchedulerException(
+                        "批量删除 Quartz 任务部分失败，失败处理器: " + String.join(", ", failedHandlers),
+                        firstException);
             }
         });
     }
@@ -266,6 +280,7 @@ public class JobServiceImpl implements JobService {
 
     /**
      * 若当前存在活动 Spring 事务，则在事务成功提交后再同步 Quartz 调度器；无事务上下文时立即执行。
+     * 提交后若同步失败会抛出 {@link IllegalStateException} 暴露 DB 与 Quartz 失步异常，避免静默返回成功。
      *
      * @param action Quartz 调度器同步动作
      * @throws SchedulerException 无事务直接执行且 Quartz 操作失败时抛出
@@ -273,13 +288,14 @@ public class JobServiceImpl implements JobService {
     private void runSchedulerAfterCommit(SchedulerAction action) throws SchedulerException {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                /** 事务提交后执行调度器同步，记录异常避免吞掉故障信号。 */
+                /** 事务提交后执行调度器同步，记录日志并抛出异常暴露失步故障。 */
                 @Override
                 public void afterCommit() {
                     try {
                         action.execute();
                     } catch (SchedulerException ex) {
                         log.error("[runSchedulerAfterCommit][事务提交后同步 Quartz 调度器失败]", ex);
+                        throw new IllegalStateException("事务提交后同步 Quartz 调度器失败", ex);
                     }
                 }
             });

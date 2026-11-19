@@ -9,8 +9,13 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SoftDeleteUniqueInnerInterceptorTest {
 
+    private static final MybatisConfiguration CONFIG = new MybatisConfiguration();
+
     private final SoftDeleteUniqueInnerInterceptor interceptor = new SoftDeleteUniqueInnerInterceptor();
 
     /**
@@ -28,8 +35,7 @@ class SoftDeleteUniqueInnerInterceptorTest {
      */
     @BeforeAll
     static void initTableMetadata() {
-        MybatisConfiguration configuration = new MybatisConfiguration();
-        MapperBuilderAssistant assistant = new MapperBuilderAssistant(configuration, "");
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(CONFIG, "");
         TableInfoHelper.initTableInfo(assistant, SampleUniqueEntity.class);
         TableInfoHelper.initTableInfo(assistant, SamplePlainEntity.class);
     }
@@ -71,6 +77,36 @@ class SoftDeleteUniqueInnerInterceptorTest {
 
         assertThat(restoreInt).doesNotContainIgnoringCase("deleted_tag");
         assertThat(restoreBool).doesNotContainIgnoringCase("deleted_tag");
+    }
+
+    /**
+     * 验证参数化 {@code deleted = ?} 按 BoundSql 真实绑定值判定：true/1 改写，false/0/未解析上下文均不改写。
+     */
+    @Test
+    void resolvesParameterizedDeletedValueSafely() {
+        String sql = "UPDATE sample_unique_entity SET code = ?, deleted = ? WHERE id = ?";
+        assertThat(interceptor.parserSingle(sql, paramContext(sql, "C1", true, 42L)))
+                .containsIgnoringCase("deleted_tag = id");
+        assertThat(interceptor.parserSingle(sql, paramContext(sql, "C1", 1, 42L)))
+                .containsIgnoringCase("deleted_tag = id");
+        assertThat(interceptor.parserSingle(sql, paramContext(sql, "C1", false, 42L)))
+                .doesNotContainIgnoringCase("deleted_tag");
+        assertThat(interceptor.parserSingle(sql, paramContext(sql, "C1", 0, 42L)))
+                .doesNotContainIgnoringCase("deleted_tag");
+        assertThat(interceptor.parserSingle("UPDATE sample_unique_entity SET deleted = ? WHERE id = ?", null))
+                .doesNotContainIgnoringCase("deleted_tag");
+    }
+
+    /** 构造用于测试的 BoundSql 参数上下文。 */
+    private static SoftDeleteUniqueInnerInterceptor.ParameterContext paramContext(
+            String sql, String code, Object deleted, Long id) {
+        List<ParameterMapping> mappings = List.of(
+                new ParameterMapping.Builder(CONFIG, "code", Object.class).build(),
+                new ParameterMapping.Builder(CONFIG, "deleted", Object.class).build(),
+                new ParameterMapping.Builder(CONFIG, "id", Long.class).build());
+        BoundSql boundSql = new BoundSql(CONFIG, sql, mappings,
+                Map.of("code", code, "deleted", deleted, "id", id));
+        return new SoftDeleteUniqueInnerInterceptor.ParameterContext(CONFIG, boundSql);
     }
 
     /**
