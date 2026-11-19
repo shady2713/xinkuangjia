@@ -823,7 +823,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--sql-out", type=Path, default=None, help="可选菜单权限 SQL 输出路径（限仓库内）")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
-    parser.add_argument("--apply", action="store_true", help="实际写入文件（默认仅预览）")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只读预览拟生成文件与菜单 SQL，不写入磁盘（默认）",
+    )
+    mode_group.add_argument("--apply", action="store_true", help="实际写入文件（默认仅预览）")
     args = parser.parse_args(argv)
 
     raw_module = args.module_opt or args.module

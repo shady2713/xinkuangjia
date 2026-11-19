@@ -34,7 +34,7 @@ Java 工程位于 `后端代码/basic-framework-boot`，编译目标 Java 17，�
 
 启动类扫描配置的基础包 `com.basicframework` 下的 `server` 与 `module`；Starter 由 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 装配。新模块不仅要有源码，还需进入聚合 POM 与 server 依赖（可使用 `scripts/scaffold/new_java_module.py` 一键注册并分配错误码号段，模块内标准 CRUD 骨架可使用 `scripts/scaffold/new_java_crud.py` 生成）。
 
-版本以[根 POM](../../后端代码/basic-framework-boot/pom.xml)和[BOM](../../后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml)为准：MyBatis 3.5.19、MyBatis-Plus 3.5.18.1、Redisson 3.52.0、Springdoc 2.8.17、Knife4j 4.5.0；MinIO 客户端使用 AWS SDK S3，BOM 为 2.57.12，不是 MinIO Java SDK。
+版本以[根 POM](../../后端代码/basic-framework-boot/pom.xml)和[BOM](../../后端代码/basic-framework-boot/basic-framework-dependencies/pom.xml)为准：MyBatis 3.5.19、MyBatis-Plus 3.5.18.1、Springdoc 2.8.17、Knife4j 4.5.0；Redis 客户端使用 Spring Data Redis（随 Spring Boot 3.5.16 BOM 管理）；MinIO 客户端使用 AWS SDK S3，BOM 为 2.57.12，不是 MinIO Java SDK。
 
 ## 业务开发与接口边界
 

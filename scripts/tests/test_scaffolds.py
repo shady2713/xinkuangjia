@@ -100,6 +100,10 @@ def test_java_module_and_crud_scaffolds_pass_java_comment_gate_and_scale_past_te
     assert preview.applied is False
     assert preview.begin_code == 1_003_000_000
     assert not (repo / "后端代码/basic-framework-boot/basic-framework-module-crm").exists()
+    assert new_java_module.main(["--root", str(repo), "crm", "--dry-run"]) == 0
+    with pytest.raises(SystemExit) as mod_conflict:
+        new_java_module.main(["--root", str(repo), "crm", "--dry-run", "--apply"])
+    assert mod_conflict.value.code == 2
 
     # 连续注册 10 个以上模块，验证 Map.ofEntries 不受 Java Map.of 10 项上限限制
     for index in range(11):
@@ -297,13 +301,128 @@ def test_web_crud_scaffold_passes_real_web_comments_check_crud_and_schema_regex(
     # 命名参数 --module/--entity 同样支持
     assert (
         new_web_crud.main(
-            ["--root", str(repo), "--module", "crm", "--entity", "order", "--title", "订单"]
+            ["--root", str(repo), "--module", "crm", "--entity", "order", "--title", "订单", "--dry-run"]
         )
         == 0
     )
+    assert not (
+        repo / "前端代码/basic-framework-admin/apps/web-ele/src/views/crm/order/index.vue"
+    ).exists()
+    with pytest.raises(SystemExit) as web_conflict:
+        new_web_crud.main(
+            ["--root", str(repo), "crm", "order", "--title", "订单", "--dry-run", "--apply"]
+        )
+    assert web_conflict.value.code == 2
 
     with pytest.raises(ValueError, match="拒绝覆盖"):
         new_web_crud.scaffold_web_crud(repo, "crm", "customer", title="客户", apply=True)
+
+
+def test_hyphenated_multi_word_entity_scaffold_aligns_backend_frontend_and_gates(
+    tmp_path: Path,
+) -> None:
+    """多词连字符实体（如 sales-order）须在前后端脚手架间保持路径/权限对齐且无非法 Java 标识符。"""
+    repo = _prepare_scaffold_repo(tmp_path / "repo")
+    sql_dir = repo / "数据库文件"
+    sql_dir.mkdir()
+    (sql_dir / "basic_framework.sql").write_text(
+        "CREATE TABLE `system_menu` (`id` bigint) ENGINE=InnoDB AUTO_INCREMENT=5047;\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    new_java_module.scaffold_java_module(repo, "crm", apply=True)
+
+    # 非法连字符与空段实体名必须拒绝
+    for invalid_entity in ("-bad", "bad-", "a--b", "x"):
+        with pytest.raises(ValueError, match="实体名"):
+            new_java_crud.scaffold_java_crud(repo, "crm", invalid_entity, title="异常", apply=False)
+
+    # --dry-run 不应落盘，且与 --apply 互斥
+    assert (
+        new_java_crud.main(
+            ["--root", str(repo), "crm", "sales-order", "--title", "销售订单", "--dry-run"]
+        )
+        == 0
+    )
+    assert not (
+        repo
+        / "后端代码/basic-framework-boot/basic-framework-module-crm"
+        / "src/main/java/com/basicframework/module/crm/dal/dataobject/salesorder/SalesOrderDO.java"
+    ).exists()
+    with pytest.raises(SystemExit) as crud_conflict:
+        new_java_crud.main(
+            [
+                "--root",
+                str(repo),
+                "crm",
+                "sales-order",
+                "--title",
+                "销售订单",
+                "--dry-run",
+                "--apply",
+            ]
+        )
+    assert crud_conflict.value.code == 2
+
+    java_plan = new_java_crud.scaffold_java_crud(
+        repo, "crm", "sales-order", title="销售订单", use_unique_base=True, apply=True
+    )
+    web_plan = new_web_crud.scaffold_web_crud(repo, "crm", "sales-order", title="销售订单", apply=True)
+
+    assert java_plan.table_name == "crm_sales_order"
+    assert "CREATE TABLE `crm_sales_order`" in java_plan.ddl_sql
+    mod_root = repo / "后端代码/basic-framework-boot/basic-framework-module-crm"
+    controller_src = (
+        mod_root / "src/main/java/com/basicframework/module/crm/controller/admin/salesorder/SalesOrderController.java"
+    ).read_text(encoding="utf-8")
+    service_impl_src = (
+        mod_root / "src/main/java/com/basicframework/module/crm/service/salesorder/SalesOrderServiceImpl.java"
+    ).read_text(encoding="utf-8")
+    error_codes_src = (
+        mod_root / "src/main/java/com/basicframework/module/crm/enums/ErrorCodeConstants.java"
+    ).read_text(encoding="utf-8")
+
+    assert "package com.basicframework.module.crm.controller.admin.salesorder;" in controller_src
+    assert '@RequestMapping("/crm/sales-order")' in controller_src
+    assert "@ss.hasPermission('crm:sales-order:create')" in controller_src
+    assert "private SalesOrderService salesOrderService;" in controller_src
+    assert "sales-orderService" not in controller_src
+    assert "package com.basicframework.module.crm.service.salesorder;" in service_impl_src
+    assert "private SalesOrderMapper salesOrderMapper;" in service_impl_src
+    assert "sales-orderMapper" not in service_impl_src
+    assert "SALES_ORDER_NOT_EXISTS" in error_codes_src
+    assert "SALES_ORDER_CODE_DUPLICATE" in error_codes_src
+
+    web_api_src = (
+        repo / "前端代码/basic-framework-admin/apps/web-ele/src/api/crm/sales-order/index.ts"
+    ).read_text(encoding="utf-8")
+    assert "'/crm/sales-order/page'" in web_api_src
+    assert "crm:sales-order:export" in web_plan.menu_sql
+
+    # 前后端脚手架生成代码均必须 0 违规通过真实注释门禁
+    for rel in java_plan.created_files:
+        if rel.endswith(".java"):
+            source = (repo / rel).read_text(encoding="utf-8")
+            findings = check_staged_java_comments._scan_source(
+                rel, source, set(range(1, source.count("\n") + 2))
+            )
+            assert findings == [], f"{rel} Java 注释检查失败: {findings}"
+    web_targets = [repo / rel for rel in web_plan.created_files if rel.endswith((".ts", ".vue"))]
+    bridge_result = invoke_node_bridge(
+        "web",
+        {
+            "files": [
+                {
+                    "path": p.relative_to(repo).as_posix(),
+                    "source": p.read_text(encoding="utf-8"),
+                    "lines": None,
+                    "new": True,
+                }
+                for p in web_targets
+            ]
+        },
+    )
+    assert bridge_result["findings"] == []
 
 
 def test_seed_local_dev_strictly_enforces_loopback_hosts_and_bcrypt_validation(

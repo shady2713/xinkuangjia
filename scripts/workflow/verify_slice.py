@@ -262,7 +262,14 @@ def build_slice_plan(
         and not p.endswith(".d.ts")
         and (resolved / p).is_file()
     ]
+    web_openapi_changed = any(
+        p.startswith("前端代码/basic-framework-admin/apps/web-ele/src/api/generated/")
+        for p in changed_files
+    )
     python_files = [p for p in changed_files if p.endswith(".py") and (resolved / p).is_file()]
+    web_quality_py_changed = any(
+        p.startswith("前端代码/basic-framework-admin/scripts/quality/") for p in python_files
+    )
     doc_files = [
         p
         for p in changed_files
@@ -399,6 +406,26 @@ def build_slice_plan(
                     command=(py_exe, "-B", "-X", "utf8", "-m", "pytest", "-q", *pytest_targets),
                 )
             )
+        if web_quality_py_changed:
+            steps.append(
+                SliceStep(
+                    name="web-quality-python-tests",
+                    cwd=str(web_dir),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "-m",
+                        "unittest",
+                        "discover",
+                        "-s",
+                        "scripts/quality/tests",
+                        "-p",
+                        "test_*.py",
+                    ),
+                )
+            )
         sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
         if java_modules or sql_changed:
             mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
@@ -445,12 +472,12 @@ def build_slice_plan(
                             ),
                         )
                     )
-        if web_files:
+        if web_files or web_openapi_changed:
             pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
             if pnpm_bin is None:
                 steps.append(
                     SliceStep(
-                        name="web-slice-eslint",
+                        name="web-slice-eslint" if web_files else "web-slice-api-check",
                         cwd=str(web_dir),
                         command=(
                             py_exe,
@@ -460,25 +487,41 @@ def build_slice_plan(
                     )
                 )
             else:
-                rel_web = [
-                    Path(p).relative_to("前端代码/basic-framework-admin").as_posix() for p in web_files
-                ]
-                steps.append(
-                    SliceStep(
-                        name="web-slice-eslint",
-                        cwd=str(web_dir),
-                        command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
-                    )
-                )
-                web_tests = _find_related_web_tests(web_dir, web_files)
-                if web_tests:
+                if web_files:
+                    rel_web = [
+                        Path(p).relative_to("前端代码/basic-framework-admin").as_posix()
+                        for p in web_files
+                    ]
                     steps.append(
                         SliceStep(
-                            name="web-slice-vitest",
+                            name="web-slice-eslint",
                             cwd=str(web_dir),
-                            command=(pnpm_bin, "test:unit", *web_tests),
+                            command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
                         )
                     )
+                    steps.append(
+                        SliceStep(
+                            name="web-slice-typecheck",
+                            cwd=str(web_dir),
+                            command=(pnpm_bin, "check:type"),
+                        )
+                    )
+                    web_tests = _find_related_web_tests(web_dir, web_files)
+                    if web_tests:
+                        steps.append(
+                            SliceStep(
+                                name="web-slice-vitest",
+                                cwd=str(web_dir),
+                                command=(pnpm_bin, "test:unit", *web_tests),
+                            )
+                        )
+                steps.append(
+                    SliceStep(
+                        name="web-slice-api-check",
+                        cwd=str(web_dir),
+                        command=(pnpm_bin, "api:check"),
+                    )
+                )
 
     return SlicePlan(
         base=base,

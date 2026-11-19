@@ -7,7 +7,7 @@ kind: package-reference
 
 ## 摘要
 
-本工作流吸收确定性工程约束（Lauren Tan `pstack` 的先勘察再切片、单一规范实现、运行期真实验证、独立上下文审查）与主干护栏体系（DeepSeek Harness 的工作树隔离、内部消费方同步、配置与文档漂移校验、小批次 PR 门禁），将从自然语言需求到合入 `main` 分支沉淀为可重复验证的七步闭环。
+本工作流通过确定性工程约束（先勘察再切片、单一规范实现、运行期真实验证、独立上下文审查）与主干护栏体系（工作树隔离、内部消费方同步、配置与文档漂移校验、小批次 PR 门禁），将从自然语言需求到合入 `main` 分支沉淀为可重复验证的七步闭环。
 
 -----
 
@@ -49,7 +49,7 @@ flowchart LR
 
 ### 2. 单责切片与隔离分支（Slice & Isolate）
 
-- 遵循“一事一分支、一事一 PR”：将跨栈大改动拆分为文件边界清晰、可独立回滚的小切片（非生成文件净变更默认控制在 `<= 600` 行，架构级变更须在 PR 描述中显式标注 `[slice-override]` 说明原因）；复杂需求使用 [weetion-task-cards](../../.agents/skills/weetion-task-cards/SKILL.md) 拆卡跟踪。
+- 遵循“一事一分支、一事一 PR”：将跨栈大改动拆分为文件边界清晰、可独立回滚的小切片（非生成文件新增行默认控制在 `<= 600` 行，架构级变更须在 PR 描述中显式标注 `[slice-override]` 说明原因）；复杂需求使用 [weetion-task-cards](../../.agents/skills/weetion-task-cards/SKILL.md) 拆卡跟踪。
 - 首次接入或新克隆环境先执行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply`，按 [`后端代码/basic-framework-boot/.env.example`](../../后端代码/basic-framework-boot/.env.example) 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并挂载 `.githooks`，再按需通过 [`docker-compose.dev.yml`](../../docker-compose.dev.yml) 拉起环回绑定的本地 MySQL、Redis 与 MinIO；需要本地演示组织与初始化 `admin` 联调口令时，运行 `python -B -X utf8 scripts/runtime/seed_local_dev.py --apply --admin-password-hash <bcrypt-hash>`。
 
 ### 3. 调用方与契约同步实现（Consumer-Sync Implementation）
@@ -61,7 +61,7 @@ flowchart LR
 
 ### 4. 运行期与反例验证（Runtime & Negative-Proof Verify）
 
-- 编码迭代期间优先运行 `python -B -X utf8 scripts/workflow/verify_slice.py` 对当前改动文件执行秒级增量门禁（密钥、注释、关联文档与对应单测），缩短反馈回路。
+- 编码迭代期间优先运行 `python -B -X utf8 scripts/workflow/verify_slice.py` 对当前改动文件按改动域执行定向增量门禁（密钥、注释、关联文档、前端类型/API 契约与对应单测），缩短反馈回路。
 - 编译通过不等于验证通过：Mapper 与 SQL 改动须执行基于真实数据库或 H2 MySQL 模式的切片测试，杜绝仅 Mock Mapper 掩盖 SQL 语法或依赖二进制不兼容。
 - 缺陷修复与坏味道治理遵循[纠错即门禁](纠错即门禁.md)：将确定性检查接入既有 `eslint`、`ArchUnit`、`pytest` 或文档检查，并验证故意引入坏样本时门禁必然失败。
 
@@ -107,7 +107,7 @@ git worktree remove ../06kuangjiaxin-wt-feature
 | 变更层面 | 本地必跑门禁 | 对应线上 CI 任务 |
 | --- | --- | --- |
 | Java 源码、SQL、Maven 依赖或环境变量 | `mvn -B -ntp -Pquality-gate verify` | `backend (Maven quality-gate)` |
-| Vue、TypeScript、OpenAPI 契约、工作区包清单或 ESLint | `pnpm api:check`、`pnpm quality:workspace`、`pnpm quality:development`、`pnpm check:circular`、`pnpm check:dep`、`pnpm check:type`、`CI=true pnpm lint`、`pnpm test:unit`、`pnpm build:ele`、`pnpm quality:prod-scan` | `frontend (unit + typecheck + lint + build)` |
+| Vue、TypeScript、OpenAPI 契约、工作区包清单或 ESLint | `pnpm api:check`、`pnpm quality:workspace`、`pnpm quality:development`、`pnpm graph:modules:check`、`pnpm check:circular`、`pnpm check:dep`、`pnpm check:type`、`CI=true pnpm lint`、`pnpm test:unit`、`pnpm build:ele`、`pnpm quality:prod-scan` | `frontend (unit + typecheck + lint + build)` |
 | Markdown 文档、README、Skill 或代码注释 | `python -B -X utf8 scripts/workflow/run_checks.py --group docs`、`check_staged_quality.py` | `docs + comments` |
 | Python 质量脚本、脚手架工具或跨栈约束 | `python -B -X utf8 -m pytest scripts/tests` | `pytest (scripts/tests)` |
 | 配置文件、测试夹具与任意新增变更 | `python -B -X utf8 scripts/security/scan_staged_secrets.py` | `secrets scan (staged-equivalent)` |

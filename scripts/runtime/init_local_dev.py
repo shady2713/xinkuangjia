@@ -260,7 +260,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """构造命令行参数解析器。"""
     parser = argparse.ArgumentParser(description="本地开发与 Vibe Coding 环境自检及初始化工具")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
-    parser.add_argument("--apply", action="store_true", help="实际写入本地忽略环境文件并挂载 .githooks")
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只读预览自检与拟写入动作，不写入本地文件（默认）",
+    )
+    mode_group.add_argument("--apply", action="store_true", help="实际写入本地忽略环境文件并挂载 .githooks")
     parser.add_argument("--force", action="store_true", help="与 --apply 联用时覆盖已有本地环境文件")
     return parser
 
