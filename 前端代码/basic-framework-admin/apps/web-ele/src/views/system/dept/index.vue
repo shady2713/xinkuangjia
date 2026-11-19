@@ -1,17 +1,19 @@
 <script lang="ts" setup>
 /** 部门管理页面 */
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { OpenApiSchemas } from '#/api/generated/api-types';
 import type { SystemDeptApi } from '#/api/system/dept';
 
 import { ref } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
-import { isEmpty } from '@vben/utils';
+import { isEmpty, logError } from '@vben/utils';
 
 import { ElMessage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { deleteDept, deleteDeptList, getDeptList } from '#/api/system/dept';
+import { getSimpleUserList } from '#/api/system/user';
 import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
@@ -75,17 +77,39 @@ function handleRowCheckboxChange() {
   checkedIds.value = records.map((row) => row.id!);
 }
 
+const userList = ref<OpenApiSchemas.UserSimpleRespVO[]>([]);
+
+/**
+ * 提供当前响应式的精简用户列表供表格列格式化使用。
+ *
+ * @returns 当前已加载的精简用户列表
+ */
+function getCurrentUsers(): OpenApiSchemas.UserSimpleRespVO[] {
+  return userList.value;
+}
+
+/** 加载精简用户列表用于负责人列回显，失败时仅记日志以免阻断部门列表查询。 */
+async function loadUserList() {
+  try {
+    userList.value = await getSimpleUserList();
+  } catch (error) {
+    logError('system:dept:load-users', error);
+  }
+}
+
 const [Grid, gridApi] = useVbenVxeGrid({
   gridOptions: {
-    columns: useGridColumns(),
+    columns: useGridColumns(getCurrentUsers),
     height: 'auto',
     pagerConfig: {
       enabled: false,
     },
     proxyConfig: {
       ajax: {
+        /** 并行拉取部门树和负责人映射用户清单，优先返回部门列表数据。 */
         query: async () => {
-          return await getDeptList();
+          const [depts] = await Promise.all([getDeptList(), loadUserList()]);
+          return depts;
         },
       },
     },

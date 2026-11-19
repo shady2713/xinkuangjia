@@ -34,8 +34,8 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     modalApi.lock();
-    const data = await formApi.getValues();
     try {
+      const data = await formApi.getValues();
       const result = await importUser(data.file, data.updateSupport);
       const createCount = result?.createUsernames?.length ?? 0;
       const updateCount = result?.updateUsernames?.length ?? 0;
@@ -92,6 +92,11 @@ function handleChange(file: any) {
   }
 }
 
+/** 从待上传列表移除文件后清空表单绑定值，防止继续提交旧文件。 */
+function handleRemove() {
+  formApi.setFieldValue('file', undefined);
+}
+
 /** 下载用户导入模板。 */
 async function handleDownload() {
   const data = await importUserTemplate();
@@ -108,6 +113,7 @@ async function handleDownload() {
             :limit="1"
             accept=".xls,.xlsx"
             :on-change="handleChange"
+            :on-remove="handleRemove"
             :auto-upload="false"
           >
             <ElButton type="primary"> 选择 Excel 文件 </ElButton>

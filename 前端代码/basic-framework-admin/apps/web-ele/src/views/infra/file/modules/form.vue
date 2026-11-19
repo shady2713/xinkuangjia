@@ -29,17 +29,16 @@ const [Form, formApi] = useVbenForm({
 });
 
 const [Modal, modalApi] = useVbenModal({
+  /** 校验表单并上传所选图片文件。 */
   async onConfirm() {
     const { valid } = await formApi.validate();
     if (!valid) {
       return;
     }
     modalApi.lock();
-    // 提交表单
-    const data = await formApi.getValues();
     try {
+      const data = await formApi.getValues();
       await useUpload().httpRequest(data.file);
-      // 关闭并提示
       await modalApi.close();
       emit('success');
       showSuccessMessage($t('ui.actionMessage.operationSuccess'));
@@ -54,6 +53,11 @@ function handleChange(uploadFile: UploadFile) {
   if (uploadFile.raw) {
     formApi.setFieldValue('file', uploadFile.raw);
   }
+}
+
+/** 从待上传列表移除文件时清空表单字段值，防止继续提交已删除文件。 */
+function handleRemove() {
+  formApi.setFieldValue('file', undefined);
 }
 
 /** 文件数量超出限制 */
@@ -76,6 +80,7 @@ function beforeUpload(_rawFile: UploadRawFile) {
             :auto-upload="false"
             :limit="1"
             :on-change="handleChange"
+            :on-remove="handleRemove"
             :on-exceed="handleExceed"
             :before-upload="beforeUpload"
             accept=".jpg,.png,.gif,.webp"

@@ -5,6 +5,22 @@ import { ElMessage } from 'element-plus';
 const REQUEST_PARAM_PREFIX_RE =
   /^\u8BF7\u6C42\u53C2\u6570\u4E0D\u6B63\u786E[:\uFF1A]\s*/;
 
+const ERROR_MESSAGE_HANDLED_KEY = '__errorMessageHandled';
+
+/**
+ * 判断未知异常对象是否已被请求拦截器或外层错误处理展示过提示，避免上传等上层回调重复弹窗。
+ *
+ * @param error 捕获到的异常对象或响应错误载体
+ * @returns 已被消费提示返回 true，否则返回 false
+ */
+export function isErrorMessageHandled(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    (error as Record<string, unknown>)[ERROR_MESSAGE_HANDLED_KEY],
+  );
+}
+
 /**
  * 把未知错误值转成可展示的字符串。
  * @param value 原始错误信息

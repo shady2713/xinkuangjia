@@ -1,5 +1,10 @@
 <script lang="ts" setup>
-import type { UploadFile, UploadRequestOptions } from 'element-plus';
+/** 图片上传组件：支持卡片预览、批上传部分失败保留、resultField 透传与错误提示去重。 */
+import type {
+  UploadFile,
+  UploadRawFile,
+  UploadRequestOptions,
+} from 'element-plus';
 
 import type { FileUploadProps, UploadApiResult } from './typing';
 
@@ -18,6 +23,7 @@ import {
 import { ElDialog, ElUpload } from 'element-plus';
 
 import {
+  isErrorMessageHandled,
   showError,
   showErrorMessage,
   showSuccessMessage,
@@ -235,47 +241,69 @@ async function customRequest(options: UploadRequestOptions) {
 }
 
 /**
- * 处理上传成功
- * @param res 上传响应结果
- * @param file 上传的文件
+ * 在本批所有上传请求均已结算（成功或失败）后，将已成功文件合并到 fileList 并同步触发 v-model 更新。
  */
-function handleUploadSuccess(res: UploadApiResult, file: File) {
-  // 删除临时文件
-  const index = fileList.value?.findIndex((item) => item.name === file.name);
-  if (index !== -1) {
-    fileList.value?.splice(index!, 1);
+function flushUploadedBatch() {
+  if (uploadList.value.length < uploadNumber.value) {
+    return;
   }
-
-  // 添加到临时上传列表
-  const fileUrl = resolveUploadUrl(res);
-  uploadList.value.push({
-    name: file.name,
-    url: fileUrl,
-    status: UploadResultStatus.SUCCESS,
-    uid: file.name + Date.now(),
-  });
-
-  // 检查是否所有文件都上传完成
-  if (uploadList.value.length >= uploadNumber.value) {
+  if (uploadList.value.length > 0) {
     fileList.value?.push(...uploadList.value);
     uploadList.value = [];
-    uploadNumber.value = 0;
-
-    // 更新值
     const value = getValue();
     isInnerOperate.value = true;
     emit('update:value', value);
     emit('update:modelValue', value);
     emit('change', value);
   }
+  uploadNumber.value = 0;
 }
 
-/** 处理上传错误 */
+/**
+ * 处理单个图片上传成功：清除临时占位、保留原始响应以支持 resultField，并尝试提交本批成功项。
+ *
+ * @param res 上传响应结果
+ * @param file 上传的原始文件
+ */
+function handleUploadSuccess(res: UploadApiResult, file: File) {
+  // 优先按 Element Plus 分配的 uid 匹配临时占位项，重名文件时回退按文件名匹配
+  const rawUid = (file as Partial<UploadRawFile>).uid;
+  let index =
+    rawUid === undefined
+      ? -1
+      : (fileList.value?.findIndex((item) => item.uid === rawUid) ?? -1);
+  if (index === -1) {
+    index = fileList.value?.findIndex((item) => item.name === file.name) ?? -1;
+  }
+  if (index !== -1) {
+    fileList.value?.splice(index, 1);
+  }
+
+  // 保留 response 字段以支持 resolveUploadValue 按 props.resultField 解析自定义结果
+  const fileUrl = resolveUploadUrl(res);
+  uploadList.value.push({
+    name: file.name,
+    response: res,
+    status: UploadResultStatus.SUCCESS,
+    uid: rawUid ?? Date.now() + uploadList.value.length,
+    url: fileUrl,
+  });
+
+  flushUploadedBatch();
+}
+
+/**
+ * 处理单个图片上传失败：仅在未被全局请求拦截器提示过时弹窗，并在其余成功项存在时触发批次提交。
+ *
+ * @param error 上传失败抛出的异常对象
+ */
 function handleUploadError(error: unknown) {
   logError('upload:image:error', error);
-  showError(error, $t('ui.upload.uploadError'));
-  // 上传失败时减少计数器
+  if (!isErrorMessageHandled(error)) {
+    showError(error, $t('ui.upload.uploadError'));
+  }
   uploadNumber.value = Math.max(0, uploadNumber.value - 1);
+  flushUploadedBatch();
 }
 
 /**
