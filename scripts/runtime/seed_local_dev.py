@@ -132,7 +132,7 @@ def execute_mysql_seed(
     user: str,
     database: str,
     sql_text: str,
-    password: str = "",
+    password: str | None = None,
 ) -> int:
     """通过本机 mysql 客户端导入演示数据，密码仅从参数或环境受控传递。
 
@@ -152,7 +152,7 @@ def execute_mysql_seed(
         raise ValueError(f"安全阻断：seed_local_dev.py 仅允许连接本机回环地址，拒绝主机 '{host}'")
     mysql_bin = shutil.which("mysql") or shutil.which("mysql.exe")
     env = os.environ.copy()
-    db_pass = password or env.get("DB_PASSWORD", "")
+    db_pass = env.get("DB_PASSWORD", "") if password is None else password
     if mysql_bin is not None:
         if db_pass:
             env["MYSQL_PWD"] = db_pass

@@ -483,8 +483,11 @@ class OpenApiContractSnapshotTest {
         return clazz.isPrimitive() || scalarSchema(clazz) != null;
     }
 
-    /** 判断请求对象是否包含 {@link MultipartFile} 上传字段。 */
+    /** 判断参数或请求对象自身或其字段是否包含 {@link MultipartFile} 上传类型。 */
     private static boolean containsMultipartFile(Class<?> clazz) {
+        if (MultipartFile.class.isAssignableFrom(clazz)) {
+            return true;
+        }
         for (Class<?> cur = clazz; cur != null && cur != Object.class; cur = cur.getSuperclass()) {
             for (Field f : cur.getDeclaredFields()) {
                 if (!f.isSynthetic() && MultipartFile.class.isAssignableFrom(f.getType())) {

@@ -57,7 +57,7 @@ class SchemaDoRbacParityTest {
     private static final Pattern COLUMN_LINE_PATTERN = Pattern.compile("^\\s*`([^`]+)`\\s+([a-zA-Z]+).*");
 
     private static final Pattern UNIQUE_INDEX_PATTERN = Pattern.compile(
-            "UNIQUE\\s+(?:INDEX|KEY)\\s+`[^`]+`\\s*\\(([^)]+)\\)",
+            "UNIQUE(?:\\s+(?:INDEX|KEY))?(?:\\s+`[^`]+`)?\\s*\\(([^)]+)\\)",
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern MENU_INSERT_PATTERN = Pattern.compile(

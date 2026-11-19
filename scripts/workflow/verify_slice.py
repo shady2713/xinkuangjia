@@ -319,7 +319,8 @@ def build_slice_plan(
                     command=(py_exe, "-B", "-X", "utf8", "-m", "pytest", "-q", *pytest_targets),
                 )
             )
-        if java_modules:
+        sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
+        if java_modules or sql_changed:
             mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
             if mvn_bin is None:
                 steps.append(
@@ -329,19 +330,22 @@ def build_slice_plan(
                         command=(
                             py_exe,
                             "-c",
-                            "import sys; sys.stderr.write('错误：检测到 Java 模块改动但环境中未安装 mvn，拒绝静默跳过\\n'); sys.exit(2)",
+                            "import sys; sys.stderr.write('错误：检测到 Java 模块或基线 SQL 改动但环境中未安装 mvn，拒绝静默跳过\\n'); sys.exit(2)",
                         ),
                     )
                 )
             else:
-                steps.append(
-                    SliceStep(
-                        name="maven-slice-test",
-                        cwd=str(boot_dir),
-                        command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "-am", "test"),
+                if java_modules:
+                    steps.append(
+                        SliceStep(
+                            name="maven-slice-test",
+                            cwd=str(boot_dir),
+                            command=(mvn_bin, "-B", "-ntp", "-pl", ",".join(java_modules), "-am", "test"),
+                        )
                     )
+                has_module_or_sql = sql_changed or any(
+                    m.startswith("basic-framework-module-") for m in java_modules
                 )
-                has_module_or_sql = any(m.startswith("basic-framework-module-") for m in java_modules)
                 if has_module_or_sql and "basic-framework-server" not in java_modules:
                     steps.append(
                         SliceStep(

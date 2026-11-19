@@ -131,32 +131,7 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
    */
   async function handleResponseDecrypt(response: RequestResponse) {
     if (response.data instanceof Blob) {
-      const contentType = (response.data.type || '').toLowerCase();
-      if (
-        contentType.includes('application/json') ||
-        contentType.includes('text/json') ||
-        contentType.includes('problem+json')
-      ) {
-        const text = await response.data.text();
-        try {
-          const parsed = JSON.parse(text);
-          if (
-            parsed &&
-            typeof parsed === 'object' &&
-            typeof parsed.code === 'number' &&
-            parsed.code !== 0
-          ) {
-            response.data = parsed;
-            throw Object.assign(new Error(parsed.msg || '文件下载失败'), {
-              data: parsed,
-              response,
-            });
-          }
-        } catch {
-          // 非有效 JSON 负载时按普通二进制文件流继续向下透传。
-        }
-      }
-      return response;
+      return unwrapJsonErrorBlobResponse(response);
     }
     const encryptHeader = apiEncrypt.getEncryptHeader();
     const isEncryptResponse =
@@ -238,6 +213,49 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   );
 
   return client;
+}
+
+/**
+ * 解包 HTTP 200 Blob 响应中伪装的后端 JSON 业务错误，抛出带 config/response/data 的标准错误对象，
+ * 使 401 刷新令牌拦截器与全局错误提示拦截器能够统一处理。
+ *
+ * @param response Axios 原始响应对象
+ * @returns 非业务错误时原样返回响应对象
+ * @throws Error 当 Blob 载荷为非零业务错误码的 JSON 时抛出异常
+ */
+export async function unwrapJsonErrorBlobResponse(response: RequestResponse) {
+  if (!(response.data instanceof Blob)) {
+    return response;
+  }
+  const contentType = (response.data.type || '').toLowerCase();
+  if (
+    !contentType.includes('application/json') &&
+    !contentType.includes('text/json') &&
+    !contentType.includes('problem+json')
+  ) {
+    return response;
+  }
+  const text = await response.data.text();
+  let parsed: undefined | { code?: number; msg?: string };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return response;
+  }
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    typeof parsed.code === 'number' &&
+    parsed.code !== 0
+  ) {
+    response.data = parsed;
+    throw Object.assign(new Error(parsed.msg || '文件下载失败'), {
+      config: response.config,
+      data: parsed,
+      response,
+    });
+  }
+  return response;
 }
 
 /** 默认管理端业务请求客户端。 */

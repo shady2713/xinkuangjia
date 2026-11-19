@@ -47,6 +47,8 @@ public class MenuServiceImpl implements MenuService {
     private MenuMapper menuMapper;
     @Resource
     private ObjectProvider<PermissionService> permissionServiceProvider;
+    @Resource
+    private ObjectProvider<com.basicframework.module.system.service.user.AdminUserService> adminUserServiceProvider;
 
 
     /**
@@ -176,7 +178,7 @@ public class MenuServiceImpl implements MenuService {
     }
 
     /**
-     * 校验非超管操作员仅可删除自身已持有权限的菜单节点。
+     * 校验非超管操作员仅可删除同管理平台且自身已持有权限的菜单节点。
      *
      * @param existing 待删除菜单记录
      */
@@ -184,6 +186,12 @@ public class MenuServiceImpl implements MenuService {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null || isOperatorSuperAdmin()) {
             return;
+        }
+        com.basicframework.module.system.service.user.AdminUserService userService =
+                adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
+        if (userService != null
+                && !AdminPlatformTypeEnum.isSame(existing.getMenuType(), userService.getLoginUserTypeOrDefault())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         String permission = StrUtil.nullToEmpty(existing.getPermission()).trim();
         if (StrUtil.isNotBlank(permission)

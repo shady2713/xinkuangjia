@@ -2454,7 +2454,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/user/import": {
     /** 导入用户 */
-    post: { body: never; query: { file: Blob | File; updateSupport?: boolean }; response: OpenApiSchemas.CommonResult_UserImportRespVO };
+    post: { body: Blob | File; query: { updateSupport?: boolean }; response: OpenApiSchemas.CommonResult_UserImportRespVO };
   };
   "/admin-api/system/user/page": {
     /** 获得用户分页列表 */

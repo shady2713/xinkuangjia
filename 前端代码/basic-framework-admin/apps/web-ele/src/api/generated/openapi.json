@@ -9422,20 +9422,23 @@
         "operationId" : "UserController_importExcel",
         "parameters" : [ {
           "in" : "query",
-          "name" : "file",
-          "required" : true,
-          "schema" : {
-            "format" : "binary",
-            "type" : "string"
-          }
-        }, {
-          "in" : "query",
           "name" : "updateSupport",
           "required" : false,
           "schema" : {
             "type" : "boolean"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "format" : "binary",
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
         "responses" : {
           "200" : {
             "content" : {

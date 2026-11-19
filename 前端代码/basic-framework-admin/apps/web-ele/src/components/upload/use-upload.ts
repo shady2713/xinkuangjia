@@ -136,7 +136,7 @@ export function useUpload(directory?: string) {
         timeout: 120_000,
       });
       // 1.4 同步等待后端元数据登记成功，并返回与后端上传模式一致的 URL 字符串
-      await createFile0(presignedInfo, file);
+      await createFile0(presignedInfo, file, contentType);
       return presignedInfo.url;
     } else {
       // 模式二：后端上传
@@ -162,17 +162,19 @@ export function getUploadUrl(): string {
  *
  * @param vo 文件预签名信息
  * @param file 原始文件对象
+ * @param contentType 实际直传使用的 MIME 类型
  * @returns 登记完成后的文件记录编号
  */
 async function createFile0(
   vo: InfraFileApi.FilePresignedUrlRespVO,
   file: File,
+  contentType: string,
 ) {
   return createFile({
     name: file.name,
     path: vo.path,
     size: file.size,
-    type: file.type,
+    type: contentType,
     url: vo.url,
   });
 }
