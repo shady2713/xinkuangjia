@@ -42,6 +42,36 @@ class ExcelUtilsTest {
         assertThat(imported).containsExactlyElementsOf(rows);
     }
 
+    /** 验证导出的字符串单元对 {@code =}、{@code +}、{@code -}、{@code @}、制表符与回车符执行公式前缀中和。 */
+    @Test
+    void neutralizesFormulaInjectionPrefixesOnStringCells() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        List<SampleExcelRow> rows = List.of(
+                new SampleExcelRow(1L, "=CMD|'/C calc'!A0"),
+                new SampleExcelRow(2L, "+1+1"),
+                new SampleExcelRow(3L, "-2+3"),
+                new SampleExcelRow(4L, "@SUM(1,2)"),
+                new SampleExcelRow(5L, "\t=1+1"),
+                new SampleExcelRow(6L, "\r=1+1"),
+                new SampleExcelRow(7L, "正常文本")
+        );
+
+        ExcelUtils.write(response, "防公式注入.xlsx", "样本", SampleExcelRow.class, rows);
+        MockMultipartFile uploadFile = new MockMultipartFile(
+                "file", "防公式注入.xlsx", response.getContentType(), response.getContentAsByteArray());
+        List<SampleExcelRow> imported = ExcelUtils.read(uploadFile, SampleExcelRow.class);
+
+        assertThat(imported).extracting(SampleExcelRow::getName).containsExactly(
+                "'=CMD|'/C calc'!A0",
+                "'+1+1",
+                "'-2+3",
+                "'@SUM(1,2)",
+                "'\t=1+1",
+                "'\r=1+1",
+                "正常文本"
+        );
+    }
+
     /**
      * 测试用 Excel 行模型。
      *

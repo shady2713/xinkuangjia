@@ -1,9 +1,11 @@
 package com.basicframework.module.system.service.permission;
 
+import cn.hutool.extra.spring.SpringUtil;
 import com.basicframework.framework.common.biz.system.permission.dto.DeptDataPermissionRespDTO;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.core.LoginUser;
+import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.permission.UserRoleDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
@@ -18,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -310,6 +314,70 @@ class PermissionServiceImplSecurityTest {
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
         verify(roleService, never()).updateRoleDataScope(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    /** 验证菜单被停用后，无论普通角色还是超级管理员在后端权限判断均返回 false。 */
+    @Test
+    void hasAnyPermissionsRejectsDisabledMenu() {
+        when(userService.getUserTypeOrDefault(20L)).thenReturn(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        RoleDO regularRole = buildOperatorRole(DataScopeEnum.SELF.getScope());
+        doReturn(List.of(regularRole)).when(permissionService).getEnableUserRoleListByUserIdFromCache(20L);
+        when(roleService.hasAnySuperAdmin(Set.of(2L))).thenReturn(false).thenReturn(true);
+
+        MenuDO disabledMenu = buildMenu(10L, MenuDO.ID_ROOT, CommonStatusEnum.DISABLE.getStatus());
+        when(menuService.getMenuIdListByPermissionFromCache("system:demo:query")).thenReturn(List.of(10L));
+        when(menuService.getMenuList(List.of(10L))).thenReturn(List.of(disabledMenu));
+
+        assertThat(permissionService.hasAnyPermissions(20L, "system:demo:query")).isFalse();
+        assertThat(permissionService.hasAnyPermissions(20L, "system:demo:query")).isFalse();
+    }
+
+    /** 验证按钮权限关联菜单自身启用但上级目录或父菜单已停用时，后端鉴权拒绝放行。 */
+    @Test
+    void hasAnyPermissionsRejectsMenuUnderDisabledAncestor() {
+        when(userService.getUserTypeOrDefault(20L)).thenReturn(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        RoleDO regularRole = buildOperatorRole(DataScopeEnum.SELF.getScope());
+        doReturn(List.of(regularRole)).when(permissionService).getEnableUserRoleListByUserIdFromCache(20L);
+        when(roleService.hasAnySuperAdmin(Set.of(2L))).thenReturn(false);
+
+        MenuDO childButton = buildMenu(10L, 100L, CommonStatusEnum.ENABLE.getStatus());
+        MenuDO disabledDir = buildMenu(100L, MenuDO.ID_ROOT, CommonStatusEnum.DISABLE.getStatus());
+        when(menuService.getMenuIdListByPermissionFromCache("system:demo:create")).thenReturn(List.of(10L));
+        when(menuService.getMenuList(List.of(10L))).thenReturn(List.of(childButton));
+        when(menuService.getMenu(100L)).thenReturn(disabledDir);
+
+        assertThat(permissionService.hasAnyPermissions(20L, "system:demo:create")).isFalse();
+    }
+
+    /** 验证自身与祖先链路全部启用的同平台已授权菜单允许后端鉴权通过。 */
+    @Test
+    void hasAnyPermissionsAllowsEnabledMenuWithEnabledAncestors() {
+        when(userService.getUserTypeOrDefault(20L)).thenReturn(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        RoleDO regularRole = buildOperatorRole(DataScopeEnum.SELF.getScope());
+        doReturn(List.of(regularRole)).when(permissionService).getEnableUserRoleListByUserIdFromCache(20L);
+
+        MenuDO button = buildMenu(10L, 100L, CommonStatusEnum.ENABLE.getStatus());
+        MenuDO parentMenu = buildMenu(100L, MenuDO.ID_ROOT, CommonStatusEnum.ENABLE.getStatus());
+        when(menuService.getMenuIdListByPermissionFromCache("system:demo:update")).thenReturn(List.of(10L));
+        when(menuService.getMenuList(List.of(10L))).thenReturn(List.of(button));
+        when(menuService.getMenu(100L)).thenReturn(parentMenu);
+
+        try (MockedStatic<SpringUtil> springUtil = Mockito.mockStatic(SpringUtil.class)) {
+            springUtil.when(() -> SpringUtil.getBean(PermissionServiceImpl.class)).thenReturn(permissionService);
+            doReturn(Set.of(2L)).when(permissionService).getMenuRoleIdListByMenuIdFromCache(10L);
+
+            assertThat(permissionService.hasAnyPermissions(20L, "system:demo:update")).isTrue();
+        }
+    }
+
+    /** 构造业务管理平台菜单节点。 */
+    private static MenuDO buildMenu(Long id, Long parentId, Integer status) {
+        MenuDO menu = new MenuDO();
+        menu.setId(id);
+        menu.setParentId(parentId);
+        menu.setStatus(status);
+        menu.setMenuType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        return menu;
     }
 
     /** 构造业务管理平台操作员启用角色。 */

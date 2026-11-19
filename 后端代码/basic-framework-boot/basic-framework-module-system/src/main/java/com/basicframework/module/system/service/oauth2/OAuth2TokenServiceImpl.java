@@ -264,11 +264,12 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (accessTokenDO == null) {
             return null;
         }
-        if (UserTypeEnum.ADMIN.getValue().equals(accessTokenDO.getUserType())) {
-            String targetPlatform = adminUserService.getUserTypeOrDefault(accessTokenDO.getUserId());
-            if (!AdminPlatformTypeEnum.isSame(targetPlatform, operatorPlatformType)) {
-                throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
-            }
+        if (!UserTypeEnum.ADMIN.getValue().equals(accessTokenDO.getUserType())) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        String targetPlatform = adminUserService.getUserTypeOrDefault(accessTokenDO.getUserId());
+        if (!AdminPlatformTypeEnum.isSame(targetPlatform, operatorPlatformType)) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         revokeAccessTokenRecord(accessTokenDO);
         return accessTokenDO;

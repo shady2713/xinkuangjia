@@ -23,7 +23,6 @@ import com.basicframework.module.system.enums.permission.DataScopeEnum;
 import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.user.AdminUserService;
-import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.Sets;
@@ -154,8 +153,9 @@ public class PermissionServiceImpl implements PermissionService {
             return false;
         }
         List<MenuDO> permissionMenus = menuService.getMenuList(menuIds).stream()
-                // permission 也必须落在当前平台菜单下，避免跨平台权限穿透。
+                // permission 也必须落在当前平台且实际启用的菜单下，避免跨平台渗透或已禁用菜单被直调。
                 .filter(menu -> AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType))
+                .filter(this::isMenuEffectivelyEnabled)
                 .toList();
         if (CollUtil.isEmpty(permissionMenus)) {
             return false;
@@ -184,13 +184,42 @@ public class PermissionServiceImpl implements PermissionService {
                 continue;
             }
             boolean existsInCurrentPlatform = menuService.getMenuList(menuIds).stream()
-                    // 内置超管也只对当前平台菜单生效，不能跨到另一个平台。
-                    .anyMatch(menu -> AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType));
+                    // 内置超管也只对当前平台且启用的菜单生效，不能绕过停用状态或跨平台访问。
+                    .filter(menu -> AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType))
+                    .anyMatch(this::isMenuEffectivelyEnabled);
             if (existsInCurrentPlatform) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * 校验菜单自身及其所有祖先目录/菜单节点均处于启用状态，防止仅前端隐藏而后端接口继续放行。
+     *
+     * @param menu 待校验菜单节点
+     * @return 自身与全部祖先均启用时返回 true
+     */
+    private boolean isMenuEffectivelyEnabled(MenuDO menu) {
+        if (menu == null || !CommonStatusEnum.ENABLE.getStatus().equals(menu.getStatus())) {
+            return false;
+        }
+        Set<Long> visited = new HashSet<>();
+        if (menu.getId() != null) {
+            visited.add(menu.getId());
+        }
+        Long parentId = menu.getParentId();
+        for (int depth = 0; depth < 64 && parentId != null && !MenuDO.ID_ROOT.equals(parentId); depth++) {
+            if (!visited.add(parentId)) {
+                return false;
+            }
+            MenuDO parent = menuService.getMenu(parentId);
+            if (parent == null || !CommonStatusEnum.ENABLE.getStatus().equals(parent.getStatus())) {
+                return false;
+            }
+            parentId = parent.getParentId();
+        }
+        return parentId == null || MenuDO.ID_ROOT.equals(parentId);
     }
 
     /**
@@ -231,7 +260,7 @@ public class PermissionServiceImpl implements PermissionService {
      * @param menuIds menuIds 编号集合
      */
     @Override
-    @DSTransactional // 多数据源，使用 @DSTransactional 保证本地事务，以及数据源的切换
+    @Transactional(rollbackFor = Exception.class)
     @Caching(evict = {
             @CacheEvict(value = RedisKeyConstants.MENU_ROLE_ID_LIST,
             allEntries = true),
@@ -332,7 +361,7 @@ public class PermissionServiceImpl implements PermissionService {
      * @param roleIds roleIds 编号集合
      */
     @Override
-    @DSTransactional // 多数据源，使用 @DSTransactional 保证本地事务，以及数据源的切换
+    @Transactional(rollbackFor = Exception.class)
     @CacheEvict(value = RedisKeyConstants.USER_ROLE_ID_LIST, key = "#userId")
     public void assignUserRole(Long userId, Set<Long> roleIds) {
         validateUserRolePlatform(userId, roleIds);

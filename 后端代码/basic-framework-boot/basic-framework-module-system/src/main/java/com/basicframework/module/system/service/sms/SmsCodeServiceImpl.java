@@ -4,6 +4,7 @@ import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.crypto.digest.DigestUtil;
+import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeSendReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeUseReqDTO;
 import com.basicframework.module.system.api.sms.dto.code.SmsCodeValidateReqDTO;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -110,8 +113,8 @@ public class SmsCodeServiceImpl implements SmsCodeService {
             smsCodeMapper.insert(newSmsCode);
             return code;
         } catch (RuntimeException ex) {
-            // 仅在异常非频控拒绝时清理未落库冷却锁，避免数据库临时抖动误锁用户。
-            if (cooldownAcquired && redisTemplate != null) {
+            // 仅在异常非业务频控/校验拒绝（如数据库临时故障）时释放未落库的 Redis 冷却锁，避免重试并发绕过频控。
+            if (cooldownAcquired && redisTemplate != null && !(ex instanceof ServiceException)) {
                 redisTemplate.delete(cooldownKey);
             }
             throw ex;
@@ -147,11 +150,19 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     }
 
     /**
-     * 仅按手机号与场景读取最近签发的一条验证码并在常量时间内比对编码，确保新验证码签发后历史旧码立即失效。
+     * 仅按手机号与场景读取最近签发的一条验证码并在常量时间内先比对编码，再校验过期与已使用状态，
+     * 防止攻击者通过错误验证码区分目标手机号是否存在历史失效验证码。
      */
     private SmsCodeDO validateSmsCode0(String mobile, String code, Integer scene) {
         SmsCodeDO lastSmsCode = smsCodeMapper.selectLastByMobile(mobile, null, scene);
         if (lastSmsCode == null) {
+            throw exception(SMS_CODE_NOT_FOUND);
+        }
+        byte[] expectedBytes = lastSmsCode.getCode() != null
+                ? lastSmsCode.getCode().getBytes(StandardCharsets.UTF_8) : new byte[0];
+        byte[] actualBytes = code != null
+                ? code.getBytes(StandardCharsets.UTF_8) : new byte[0];
+        if (!MessageDigest.isEqual(expectedBytes, actualBytes)) {
             throw exception(SMS_CODE_NOT_FOUND);
         }
         if (LocalDateTimeUtil.between(lastSmsCode.getCreateTime(), LocalDateTime.now()).toMillis()
@@ -160,13 +171,6 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         }
         if (Boolean.TRUE.equals(lastSmsCode.getUsed())) {
             throw exception(SMS_CODE_USED);
-        }
-        byte[] expectedBytes = lastSmsCode.getCode() != null
-                ? lastSmsCode.getCode().getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
-        byte[] actualBytes = code != null
-                ? code.getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
-        if (!java.security.MessageDigest.isEqual(expectedBytes, actualBytes)) {
-            throw exception(SMS_CODE_NOT_FOUND);
         }
         return lastSmsCode;
     }

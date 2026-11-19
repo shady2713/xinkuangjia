@@ -1,5 +1,6 @@
 package com.basicframework.module.system.dal.mysql.oauth2;
 
+import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -63,9 +64,12 @@ public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO
         if (allowedAdminUserIds != null && allowedAdminUserIds.isEmpty()) {
             return new PageResult<>(Collections.emptyList(), 0L);
         }
+        Integer userTypeFilter = allowedAdminUserIds != null
+                ? UserTypeEnum.ADMIN.getValue() : reqVO.getUserType();
         return selectPage(reqVO, new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
                 .eqIfPresent(OAuth2AccessTokenDO::getUserId, reqVO.getUserId())
-                .eqIfPresent(OAuth2AccessTokenDO::getUserType, reqVO.getUserType())
+                // 管理员在线会话分页仅允许查询 ADMIN 令牌，防止自增主键与会员或客户端令牌碰撞越权。
+                .eqIfPresent(OAuth2AccessTokenDO::getUserType, userTypeFilter)
                 .inIfPresent(OAuth2AccessTokenDO::getUserId, allowedAdminUserIds)
                 .likeIfPresent(OAuth2AccessTokenDO::getClientId, reqVO.getClientId())
                 .gt(OAuth2AccessTokenDO::getExpiresTime, LocalDateTime.now())
