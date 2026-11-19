@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router';
 
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { ElCard, ElCol, ElRow, ElTag } from 'element-plus';
+import { ElCard, ElCol, ElEmpty, ElRow, ElTag } from 'element-plus';
 
 defineOptions({ name: 'DashboardWelcome' });
 
@@ -37,10 +37,20 @@ const quickLinks = computed(() =>
   ].filter((link) => accessStore.getMenuByPath(link.path)),
 );
 
+/**
+ * 跳转到选中的后台快捷管理页面。
+ *
+ * @param path 目标路由路径
+ */
 function navigateTo(path: string) {
   router.push(path);
 }
 
+/**
+ * 根据本地时间计算欢迎问候语。
+ *
+ * @returns 对应时段的中文问候语
+ */
 function getGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 6) return '夜深了';
@@ -73,7 +83,7 @@ function getGreeting(): string {
 
     <ElRow :gutter="16" class="mt-4">
       <!-- User Info Card -->
-      <ElCol :span="8">
+      <ElCol :xs="24" :md="8" class="mb-4 md:mb-0">
         <ElCard shadow="never">
           <template #header>
             <span class="card-header-title">当前用户</span>
@@ -112,7 +122,7 @@ function getGreeting(): string {
       </ElCol>
 
       <!-- Project Info Card -->
-      <ElCol :span="8">
+      <ElCol :xs="24" :md="8" class="mb-4 md:mb-0">
         <ElCard shadow="never">
           <template #header>
             <span class="card-header-title">项目信息</span>
@@ -143,12 +153,12 @@ function getGreeting(): string {
       </ElCol>
 
       <!-- Quick Links Card -->
-      <ElCol :span="8">
+      <ElCol :xs="24" :md="8">
         <ElCard shadow="never">
           <template #header>
             <span class="card-header-title">快捷入口</span>
           </template>
-          <div class="quick-links">
+          <div v-if="quickLinks.length > 0" class="quick-links">
             <div
               v-for="link in quickLinks"
               :key="link.path"
@@ -159,6 +169,7 @@ function getGreeting(): string {
               <div class="quick-link-desc">{{ link.description }}</div>
             </div>
           </div>
+          <ElEmpty v-else :image-size="60" description="暂无可用快捷入口" />
         </ElCard>
       </ElCol>
     </ElRow>
@@ -224,7 +235,7 @@ function getGreeting(): string {
 
 .info-label {
   flex-shrink: 0;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .info-value {
@@ -232,7 +243,7 @@ function getGreeting(): string {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  color: #303133;
+  color: var(--el-text-color-primary);
   text-align: right;
 }
 
@@ -250,18 +261,18 @@ function getGreeting(): string {
 }
 
 .quick-link-item:hover {
-  background-color: #f5f7fa;
+  background-color: var(--el-fill-color-light);
 }
 
 .quick-link-title {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .quick-link-desc {
   margin-top: 2px;
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 </style>

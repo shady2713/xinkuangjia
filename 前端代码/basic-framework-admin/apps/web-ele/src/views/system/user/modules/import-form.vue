@@ -100,7 +100,7 @@ function handleRemove() {
 /** 下载用户导入模板。 */
 async function handleDownload() {
   const data = await importUserTemplate();
-  downloadFileFromBlobPart({ fileName: '用户导入模板.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '用户导入模板.xlsx', source: data });
 }
 </script>
 

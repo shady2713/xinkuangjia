@@ -27,7 +27,7 @@ function handleRefresh() {
 /** 导出表格 */
 async function handleExport() {
   const data = await exportLoginLog(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '登录日志.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '登录日志.xlsx', source: data });
 }
 
 /** 查看登录日志详情 */

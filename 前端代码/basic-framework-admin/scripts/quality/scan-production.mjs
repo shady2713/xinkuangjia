@@ -177,6 +177,19 @@ async function validateProductionArtifacts(findings) {
       }
     }
     const content = await readFile(file, 'utf8');
+    if (ext === '.html') {
+      const hasInlineScript = [
+        ...content.matchAll(/<script\b([^>]*)>/giu),
+      ].some(
+        /** 检查 script 开始标签属性列表是否缺少外部 src 引用的外链属性。 */
+        ([, attrs]) => !/\bsrc\s*=/iu.test(attrs ?? ''),
+      );
+      if (hasInlineScript) {
+        findings.push(
+          `${displayPath(file)}：禁止输出无 src 的内联 script 标签，以保持严格 CSP script-src 'self'`,
+        );
+      }
+    }
     // 第三方依赖可能包含受控的动态构造；这里只阻断本次漏洞字段和动态执行在同一代码片段中出现。
     if (
       /new\s+Function[\s\S]{0,400}parseFunc|parseFunc[\s\S]{0,400}new\s+Function/u.test(

@@ -34,7 +34,7 @@ function handleRefresh() {
 /** 导出表格 */
 async function handleExport() {
   const data = await exportConfig(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '参数配置.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '参数配置.xlsx', source: data });
 }
 
 const {

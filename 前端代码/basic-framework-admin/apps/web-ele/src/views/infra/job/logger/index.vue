@@ -29,7 +29,7 @@ async function handleExport() {
     ...(await gridApi.formApi.getValues()),
     jobId: route.query.id,
   });
-  downloadFileFromBlobPart({ fileName: '任务日志.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '任务日志.xlsx', source: data });
 }
 
 /** 查看日志详情 */

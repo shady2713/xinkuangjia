@@ -64,7 +64,7 @@ async function handleExport() {
     ...(await gridApi.formApi.getValues()),
     deptId: searchDeptId.value,
   });
-  downloadFileFromBlobPart({ fileName: '用户.xls', source: data });
+  downloadFileFromBlobPart({ fileName: '用户.xlsx', source: data });
 }
 
 /** 选择部门 */
