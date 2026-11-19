@@ -1,6 +1,8 @@
 package com.basicframework.module.system.service.user;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.basicframework.framework.common.enums.CommonStatusEnum;
+import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
@@ -12,10 +14,13 @@ import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import com.basicframework.module.system.enums.security.UserTokenInvalidationReasonEnum;
 import com.basicframework.module.system.framework.security.audit.SecurityAuditService;
+import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
 import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
 import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -264,6 +269,53 @@ class AdminUserServiceImplTest {
             verify(userMapper, never()).deleteById(1L);
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    /** 验证通过编辑用户接口停用账号时发布状态变更事件，未变更状态时不重复发布。 */
+    @Test
+    void updateUserPublishesStatusChangedEventOnlyWhenStatusChanges() {
+        AdminUserDO oldUser = buildUser(2L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        oldUser.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        when(userMapper.selectById(2L)).thenReturn(oldUser);
+        when(userMapper.selectByUsernameAndUserType("test-user",
+                AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())).thenReturn(oldUser);
+
+        UserSaveReqVO unchangedReq = new UserSaveReqVO();
+        unchangedReq.setId(2L);
+        unchangedReq.setUsername("test-user");
+        unchangedReq.setNickname("Updated Name");
+        unchangedReq.setStatus(CommonStatusEnum.ENABLE.getStatus());
+        userService.updateUser(unchangedReq, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        verify(applicationContext, never()).publishEvent(any(UserStatusChangedEvent.class));
+
+        UserSaveReqVO disableReq = new UserSaveReqVO();
+        disableReq.setId(2L);
+        disableReq.setUsername("test-user");
+        disableReq.setNickname("Disabled User");
+        disableReq.setStatus(CommonStatusEnum.DISABLE.getStatus());
+        userService.updateUser(disableReq, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+
+        ArgumentCaptor<UserStatusChangedEvent> eventCaptor = ArgumentCaptor.forClass(UserStatusChangedEvent.class);
+        verify(applicationContext).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getUserId()).isEqualTo(2L);
+        assertThat(eventCaptor.getValue().getUserType()).isEqualTo(UserTypeEnum.ADMIN.getValue());
+        assertThat(eventCaptor.getValue().getStatus()).isEqualTo(CommonStatusEnum.DISABLE.getStatus());
+    }
+
+    /** 验证用户保存请求对非法状态枚举值的字段校验拒绝生效。 */
+    @Test
+    void saveReqVoRejectsInvalidStatusEnum() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            UserSaveReqVO reqVO = new UserSaveReqVO();
+            reqVO.setId(2L);
+            reqVO.setUsername("valid_user");
+            reqVO.setNickname("Valid User");
+            reqVO.setStatus(99);
+
+            var violations = validator.validate(reqVO);
+            assertThat(violations).anyMatch(v -> "status".equals(v.getPropertyPath().toString()));
         }
     }
 

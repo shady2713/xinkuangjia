@@ -430,8 +430,26 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     public void assignRoleDataScope(Long roleId, Integer dataScope, Set<Long> dataScopeDeptIds) {
         validateRolePlatform(roleId);
-        validateOperatorDataScopeAuthority(dataScope, dataScopeDeptIds);
+        Set<Long> holderUserIds = convertSet(
+                userRoleMapper.selectListByRoleIds(Collections.singleton(roleId)), UserRoleDO::getUserId);
+        List<AdminUserDO> holderUsers = CollUtil.isEmpty(holderUserIds)
+                ? Collections.emptyList()
+                : DataPermissionUtils.executeIgnore(() -> userService.getUserList(holderUserIds));
+        validateOperatorDataScopeAuthority(dataScope, dataScopeDeptIds, holderUsers, true);
         roleService.updateRoleDataScope(roleId, dataScope, dataScopeDeptIds);
+    }
+
+    /**
+     * 获取操作员在当前管理平台下处于启用状态的角色列表。
+     *
+     * @param operatorId    操作员编号
+     * @param loginUserType 当前登录平台类型
+     * @return 同平台启用角色列表
+     */
+    private List<RoleDO> getSamePlatformEnableRoles(Long operatorId, String loginUserType) {
+        return getEnableUserRoleListByUserIdFromCache(operatorId).stream()
+                .filter(role -> AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType))
+                .toList();
     }
 
     /**
@@ -442,25 +460,46 @@ public class PermissionServiceImpl implements PermissionService {
      * @return 同平台启用角色编号集合
      */
     private Set<Long> getSamePlatformEnableRoleIds(Long operatorId, String loginUserType) {
-        return getEnableUserRoleListByUserIdFromCache(operatorId).stream()
-                .filter(role -> AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType))
-                .map(RoleDO::getId)
-                .collect(java.util.stream.Collectors.toSet());
+        return convertSet(getSamePlatformEnableRoles(operatorId, loginUserType), RoleDO::getId);
     }
 
     /**
-     * 校验非超管操作员授予角色的数据权限范围不得超越自身数据权限边界。
+     * 判断非超管操作员在当前平台下是否持有不低于目标动态数据范围的授权能力。
      *
-     * @param dataScope        目标数据范围
-     * @param dataScopeDeptIds 指定部门数据范围集合
+     * @param operatorRoles   操作员同平台启用角色列表
+     * @param targetDataScope 目标数据范围编码
+     * @return 持有匹配或更宽动态数据范围能力时返回 true
      */
-    private void validateOperatorDataScopeAuthority(Integer dataScope, Set<Long> dataScopeDeptIds) {
+    private boolean hasSamePlatformDynamicScopeCapability(List<RoleDO> operatorRoles, Integer targetDataScope) {
+        if (Objects.equals(targetDataScope, DataScopeEnum.DEPT_AND_CHILD.getScope())) {
+            return operatorRoles.stream()
+                    .anyMatch(role -> Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_AND_CHILD.getScope()));
+        }
+        if (Objects.equals(targetDataScope, DataScopeEnum.DEPT_ONLY.getScope())) {
+            return operatorRoles.stream().anyMatch(role ->
+                    Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_ONLY.getScope())
+                            || Objects.equals(role.getDataScope(), DataScopeEnum.DEPT_AND_CHILD.getScope()));
+        }
+        return true;
+    }
+
+    /**
+     * 校验非超管操作员授予角色的数据权限范围不得超越自身数据权限边界及受影响用户的部门边界。
+     *
+     * @param dataScope           目标数据范围
+     * @param dataScopeDeptIds    指定部门数据范围集合
+     * @param affectedUsers       受该角色影响的用户列表
+     * @param includeOperatorDept 修改角色数据范围时同时校验操作员自身部门，防止空持有人角色后续越权复用
+     */
+    private void validateOperatorDataScopeAuthority(Integer dataScope, Set<Long> dataScopeDeptIds,
+            List<AdminUserDO> affectedUsers, boolean includeOperatorDept) {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null) {
             return;
         }
         String loginUserType = userService.getLoginUserTypeOrDefault();
-        Set<Long> operatorRoleIds = getSamePlatformEnableRoleIds(operatorId, loginUserType);
+        List<RoleDO> operatorRoles = getSamePlatformEnableRoles(operatorId, loginUserType);
+        Set<Long> operatorRoleIds = convertSet(operatorRoles, RoleDO::getId);
         if (roleService.hasAnySuperAdmin(operatorRoleIds)) {
             return;
         }
@@ -471,28 +510,80 @@ public class PermissionServiceImpl implements PermissionService {
         if (Objects.equals(dataScope, DataScopeEnum.ALL.getScope())) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
-        if (Objects.equals(dataScope, DataScopeEnum.DEPT_CUSTOM.getScope())
-                && (CollUtil.isEmpty(dataScopeDeptIds) || !operatorPerm.getDeptIds().containsAll(dataScopeDeptIds))) {
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_CUSTOM.getScope())) {
+            validateDeptCustomAuthority(dataScopeDeptIds, operatorPerm, affectedUsers);
+            return;
+        }
+        if (Objects.equals(dataScope, DataScopeEnum.DEPT_ONLY.getScope())
+                || Objects.equals(dataScope, DataScopeEnum.DEPT_AND_CHILD.getScope())) {
+            validateDynamicDeptAuthority(dataScope, operatorRoles, operatorPerm, operatorId,
+                    affectedUsers, includeOperatorDept);
+        }
+    }
+
+    /**
+     * 校验自定义部门数据范围及其受影响用户的所属部门均不超过操作员自身可见部门集合。
+     *
+     * @param dataScopeDeptIds 指定的部门编号集合
+     * @param operatorPerm     操作员当前部门数据权限
+     * @param affectedUsers    受影响的用户集合
+     */
+    private void validateDeptCustomAuthority(Set<Long> dataScopeDeptIds, DeptDataPermissionRespDTO operatorPerm,
+            List<AdminUserDO> affectedUsers) {
+        if (CollUtil.isEmpty(dataScopeDeptIds) || !operatorPerm.getDeptIds().containsAll(dataScopeDeptIds)) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
-        if (Objects.equals(dataScope, DataScopeEnum.DEPT_ONLY.getScope())) {
-            AdminUserDO operator = DataPermissionUtils.executeIgnore(() -> userService.getUser(operatorId));
-            Long operatorDeptId = operator != null ? operator.getDeptId() : null;
-            if (operatorDeptId == null || !operatorPerm.getDeptIds().contains(operatorDeptId)) {
+        // DEPT_CUSTOM 会在解析阶段隐式并入持有人自身 deptId，因此既有或目标持有人部门也必须在操作员授权范围内。
+        for (AdminUserDO affectedUser : CollUtil.emptyIfNull(affectedUsers)) {
+            if (affectedUser != null && affectedUser.getDeptId() != null
+                    && !operatorPerm.getDeptIds().contains(affectedUser.getDeptId())) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
             }
         }
-        if (Objects.equals(dataScope, DataScopeEnum.DEPT_AND_CHILD.getScope())) {
+    }
+
+    /**
+     * 校验动态部门数据范围（本部门、本部门及以下）的授予权限与受影响用户部门子集关系。
+     *
+     * @param dataScope           目标数据范围
+     * @param operatorRoles       操作员同平台启用角色列表
+     * @param operatorPerm        操作员当前部门数据权限
+     * @param operatorId          操作员用户编号
+     * @param affectedUsers       受影响的用户集合
+     * @param includeOperatorDept 是否一并校验操作员自身部门
+     */
+    private void validateDynamicDeptAuthority(Integer dataScope, List<RoleDO> operatorRoles,
+            DeptDataPermissionRespDTO operatorPerm, Long operatorId,
+            List<AdminUserDO> affectedUsers, boolean includeOperatorDept) {
+        if (!hasSamePlatformDynamicScopeCapability(operatorRoles, dataScope)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        Set<Long> deptIdsToVerify = new LinkedHashSet<>();
+        if (includeOperatorDept) {
             AdminUserDO operator = DataPermissionUtils.executeIgnore(() -> userService.getUser(operatorId));
-            Long operatorDeptId = operator != null ? operator.getDeptId() : null;
-            if (operatorDeptId == null) {
+            if (operator == null || operator.getDeptId() == null) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
             }
-            Set<Long> requiredDeptIds = new HashSet<>(
-                    CollUtil.emptyIfNull(deptService.getChildDeptIdListFromCache(operatorDeptId)));
-            requiredDeptIds.add(operatorDeptId);
-            if (!operatorPerm.getDeptIds().containsAll(requiredDeptIds)) {
+            deptIdsToVerify.add(operator.getDeptId());
+        }
+        for (AdminUserDO affectedUser : CollUtil.emptyIfNull(affectedUsers)) {
+            if (affectedUser == null || affectedUser.getDeptId() == null) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            deptIdsToVerify.add(affectedUser.getDeptId());
+        }
+        boolean includeChildren = Objects.equals(dataScope, DataScopeEnum.DEPT_AND_CHILD.getScope());
+        for (Long deptId : deptIdsToVerify) {
+            if (!operatorPerm.getDeptIds().contains(deptId)) {
+                throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            if (includeChildren) {
+                Set<Long> requiredDeptIds = new HashSet<>(
+                        CollUtil.emptyIfNull(deptService.getChildDeptIdListFromCache(deptId)));
+                requiredDeptIds.add(deptId);
+                if (!operatorPerm.getDeptIds().containsAll(requiredDeptIds)) {
+                    throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+                }
             }
         }
     }
@@ -607,6 +698,9 @@ public class PermissionServiceImpl implements PermissionService {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
             }
         }
+        if (CollUtil.isNotEmpty(roleIds)) {
+            roleService.validateRoleList(roleIds);
+        }
         Set<Long> operatorMenuIds = null;
         for (RoleDO role : roleService.getRoleList(roleIds)) {
             if (!AdminPlatformTypeEnum.isSame(role.getRoleType(), loginUserType)) {
@@ -616,7 +710,8 @@ public class PermissionServiceImpl implements PermissionService {
                 throw exception(ErrorCodeConstants.ROLE_ADMIN_CODE_ERROR, role.getCode());
             }
             if (!operatorIsSuperAdmin) {
-                validateOperatorDataScopeAuthority(role.getDataScope(), role.getDataScopeDeptIds());
+                validateOperatorDataScopeAuthority(role.getDataScope(), role.getDataScopeDeptIds(),
+                        Collections.singletonList(user), false);
                 Set<Long> targetRoleMenus = convertSet(
                         roleMenuMapper.selectListByRoleId(role.getId()), RoleMenuDO::getMenuId);
                 if (CollUtil.isNotEmpty(targetRoleMenus)) {
