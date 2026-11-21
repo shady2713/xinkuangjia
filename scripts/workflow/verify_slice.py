@@ -335,8 +335,11 @@ def build_slice_plan(
     ]
     wt_python_files = [p for p in worktree_changed if p.endswith(".py") and (resolved / p).is_file()]
 
+    has_staged = _has_staged_changes(resolved)
+    ci_workflow_changed = any(p == ".github/workflows/ci.yml" for p in changed_files)
+
     steps: list[SliceStep] = []
-    if _has_staged_changes(resolved):
+    if has_staged:
         steps.append(
             SliceStep(
                 name="staged-secrets",
@@ -430,6 +433,7 @@ def build_slice_plan(
         )
 
     sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
+    py_slice_runs_all = False
     if not skip_runtime:
         if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files):
             py_tests = [p for p in python_files if p.startswith("scripts/tests/test_")]
@@ -437,12 +441,30 @@ def build_slice_plan(
                 p.startswith(("scripts/", ".agents/skills/")) and not p.startswith("scripts/tests/")
                 for p in python_files
             )
-            pytest_targets = ["scripts/tests"] if has_non_test_py or not py_tests else py_tests
+            py_slice_runs_all = has_non_test_py or not py_tests
+            pytest_targets = ["scripts/tests"] if py_slice_runs_all else py_tests
             steps.append(
                 SliceStep(
                     name="python-slice-pytest",
                     cwd=str(resolved),
                     command=(py_exe, "-B", "-X", "utf8", "-m", "pytest", "-q", *pytest_targets),
+                )
+            )
+        if ci_workflow_changed and not py_slice_runs_all:
+            steps.append(
+                SliceStep(
+                    name="ci-workflow-pytest",
+                    cwd=str(resolved),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "scripts/tests/test_ci_baselines.py",
+                    ),
                 )
             )
         if web_quality_py_changed:
@@ -562,13 +584,29 @@ def build_slice_plan(
                 )
 
     skipped_steps: list[SkippedStep] = []
+    if effective_base != "HEAD" and changed_files and not has_staged:
+        skipped_steps.append(
+            SkippedStep(
+                "base-secrets-scan",
+                "工作区无暂存变更，scan_staged_secrets 仅扫描索引；分支增量密钥由 CI secrets-scan 兜底",
+            )
+        )
     if skip_runtime:
         if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files) or web_quality_py_changed:
             skipped_steps.append(SkippedStep("python-runtime-tests", "指定了 --skip-runtime"))
+        if ci_workflow_changed:
+            skipped_steps.append(SkippedStep("ci-workflow-pytest", "指定了 --skip-runtime"))
         if java_modules or sql_changed:
             skipped_steps.append(SkippedStep("maven-runtime-tests", "指定了 --skip-runtime"))
         if web_files or web_openapi_changed:
             skipped_steps.append(SkippedStep("web-runtime-checks", "指定了 --skip-runtime"))
+    if changed_files and not steps:
+        skipped_steps.append(
+            SkippedStep(
+                "unmapped-changes",
+                f"变更文件未命中自动切片路由（共 {len(changed_files)} 个），需结合目标模块或完整 CI 验收",
+            )
+        )
 
     return SlicePlan(
         base=base,
@@ -661,15 +699,22 @@ def render_acceptance_markdown(evidence: dict[str, object]) -> str:
 
 
 def execute_slice_plan(plan: SlicePlan) -> tuple[int, list[dict[str, object]]]:
-    """顺序执行切片检查计划并记录每一步耗时与退出码。"""
+    """顺序执行切片检查计划并记录每一步耗时与退出码；保留环境错误码 2 高于规则失败 1。"""
     results: list[dict[str, object]] = []
     overall = 0
     for step in plan.steps:
         started = time.monotonic()
-        completed = subprocess.run(step.command, cwd=step.cwd, check=False)
+        try:
+            completed = subprocess.run(step.command, cwd=step.cwd, check=False)
+            code = completed.returncode
+        except OSError as exc:
+            print(f"错误：步骤 {step.name} 启动失败：{exc}", file=sys.stderr)
+            code = 2
         elapsed = round(time.monotonic() - started, 3)
-        results.append({"name": step.name, "code": completed.returncode, "seconds": elapsed})
-        if completed.returncode != 0 and overall == 0:
+        results.append({"name": step.name, "code": code, "seconds": elapsed})
+        if code not in (0, 1):
+            overall = 2
+        elif code == 1 and overall == 0:
             overall = 1
     return overall, results
 

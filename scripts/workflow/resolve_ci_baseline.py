@@ -49,7 +49,7 @@ def resolve_ci_baseline(cwd: Path, event_base: str | None) -> str:
     """
     base = (event_base or "").strip()
     if base and base != ZERO_SHA:
-        return base
+        return _git(cwd, "rev-parse", "--verify", f"{base}^{{commit}}")
     empty_tree = _git(cwd, "hash-object", "-t", "tree", "/dev/null")
     return _git(cwd, "commit-tree", empty_tree, "-m", "quality gate empty baseline", env=EMPTY_TREE_IDENTITY)
 

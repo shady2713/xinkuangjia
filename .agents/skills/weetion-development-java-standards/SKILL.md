@@ -1,6 +1,9 @@
 ---
 name: weetion-development-java-standards
 description: 在 basic-framework 项目设计、修改或评审 Java 后端及相关 SQL、配置、部署，或分析项目架构约束时使用；简单检索和通用 Java 问答不触发。
+verification:
+  - "mvn -B -ntp -Pquality-gate verify"
+  - "python -B -X utf8 scripts/code/java/check_worktree_java_comments.py"
 ---
 
 # basic-framework Java 开发规范

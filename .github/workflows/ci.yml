@@ -54,10 +54,29 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Shared frontend quality, test, build and security gates
         run: pnpm run quality:gates
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('前端代码/basic-framework-admin/pnpm-lock.yaml') }}
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            pnpm exec playwright install-deps chromium
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
       - name: Critical browser E2E path (production preview)
         run: pnpm run test:e2e:ci
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-ci-results
+          path: 前端代码/basic-framework-admin/apps/web-ele/test-results
+          retention-days: 7
+          if-no-files-found: ignore
 
   docs-comments:
     name: docs + comments

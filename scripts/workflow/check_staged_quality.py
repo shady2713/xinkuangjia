@@ -157,20 +157,35 @@ def document_scopes(
                         and target.relative_to(view).as_posix() in removed_docs
                     ):
                         incoming["doc-refs"].setdefault(name, set()).add(number)
-    skill_folders = {
-        "/".join(name.split("/")[:3])
-        for name in touched
-        if name.startswith(".agents/skills/")
-        and (name.endswith("/SKILL.md") or name.endswith("/agents/openai.yaml"))
-    }
-    skill_paths = sorted(
-        name
-        for name in available
-        if any(
-            name in {folder + "/SKILL.md", folder + "/agents/openai.yaml"}
-            for folder in skill_folders
-        )
+    deleted_skills = any(
+        item.status == "D"
+        and item.path.startswith(".agents/skills/")
+        and item.path.endswith("/SKILL.md")
+        for item in changes
     )
+    if deleted_skills:
+        # 删除技能可能使其他技能的 replaced-by 或跨技能引用悬空，须补查全部剩余技能。
+        skill_paths = sorted(
+            name
+            for name in available
+            if name.startswith(".agents/skills/")
+            and (name.endswith("/SKILL.md") or name.endswith("/agents/openai.yaml"))
+        )
+    else:
+        skill_folders = {
+            "/".join(name.split("/")[:3])
+            for name in touched
+            if name.startswith(".agents/skills/")
+            and (name.endswith("/SKILL.md") or name.endswith("/agents/openai.yaml"))
+        }
+        skill_paths = sorted(
+            name
+            for name in available
+            if any(
+                name in {folder + "/SKILL.md", folder + "/agents/openai.yaml"}
+                for folder in skill_folders
+            )
+        )
     notes = sorted(name for name in selected_md if name.startswith(".agents/notes/"))
     scopes = {
         "md-links": sorted(selected_md | incoming["md-links"].keys()),

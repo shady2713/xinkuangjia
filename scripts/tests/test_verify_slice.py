@@ -302,3 +302,63 @@ def test_web_comments_and_task_card_remote_delivery_docs_stay_aligned() -> None:
         text = (task_cards_root / rel).read_text(encoding="utf-8")
         assert "推送仅由用户人工操作" not in text, f"{rel} 仍残留过期绝对禁止推送表述"
         assert "git-workflow.md#授权与交付边界" in text, f"{rel} 未统一引用 git-workflow.md#授权与交付边界"
+
+
+def test_execute_slice_plan_preserves_env_error_code_and_handles_os_error(tmp_path: Path) -> None:
+    """环境错误码 2 优先级高于规则失败 1，且启动失败 OSError 归类为退出码 2。"""
+    plan = verify_slice.SlicePlan(
+        base="HEAD",
+        effective_base="HEAD",
+        changed_files=("a.py",),
+        java_modules=(),
+        web_files=(),
+        python_files=("a.py",),
+        doc_files=(),
+        steps=(
+            verify_slice.SliceStep("rule-fail", str(tmp_path), (sys.executable, "-c", "import sys; sys.exit(1)")),
+            verify_slice.SliceStep("env-fail", str(tmp_path), (sys.executable, "-c", "import sys; sys.exit(2)")),
+        ),
+    )
+    code, outcomes = verify_slice.execute_slice_plan(plan)
+    assert code == 2
+    assert [item["code"] for item in outcomes] == [1, 2]
+
+    os_err_plan = verify_slice.SlicePlan(
+        base="HEAD",
+        effective_base="HEAD",
+        changed_files=("a.py",),
+        java_modules=(),
+        web_files=(),
+        python_files=("a.py",),
+        doc_files=(),
+        steps=(
+            verify_slice.SliceStep("missing-bin", str(tmp_path), ("definitely-missing-executable-xyz",)),
+        ),
+    )
+    os_code, os_outcomes = verify_slice.execute_slice_plan(os_err_plan)
+    assert os_code == 2
+    assert os_outcomes[0]["code"] == 2
+
+
+def test_verify_slice_routes_ci_workflow_and_reports_skipped_coverage(tmp_path: Path) -> None:
+    """ci.yml 变更路由到基线单测；无暂存分支增量与未映射变更均显式记录 skipped_steps。"""
+    repo = _init_git_repo(tmp_path / "ci-route-repo")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", "feat/ci"], check=True, capture_output=True)
+    ci_file = repo / ".github/workflows/ci.yml"
+    ci_file.parent.mkdir(parents=True)
+    ci_file.write_text("name: CI\n", encoding="utf-8", newline="\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "touch ci"], check=True, capture_output=True)
+
+    changed = verify_slice.collect_changed_files(repo, "main")
+    plan = verify_slice.build_slice_plan(repo, changed, base="main", skip_runtime=False)
+    step_names = [step.name for step in plan.steps]
+    assert "ci-workflow-pytest" in step_names
+    skipped_names = {item.name for item in plan.skipped_steps}
+    assert "base-secrets-scan" in skipped_names
+
+    unmapped_plan = verify_slice.build_slice_plan(
+        repo, ["docker-compose.dev.yml"], base="HEAD", skip_runtime=False
+    )
+    assert unmapped_plan.steps == ()
+    assert any(item.name == "unmapped-changes" for item in unmapped_plan.skipped_steps)
