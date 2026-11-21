@@ -1,6 +1,6 @@
 # 本地开发基础设施栈（仅绑定 127.0.0.1 环回地址，禁止直接用于生产环境）。
 # 先运行：python -B -X utf8 scripts/runtime/init_local_dev.py --apply
-# 再启动：docker compose --env-file .env.dev -f docker-compose.dev.yml up -d
+# 再运行 sh scripts/runtime/start_dev_stack.sh，同步验证新桶或复用桶的策略。
 # MinIO bucket policy: init_local_dev.py --apply writes .e2e-env/minio-bucket-policy.json
 # 读取后端 MINIO_PUBLIC_ACCESS 生成策略，minio-init 在 MinIO 就绪后应用。
 

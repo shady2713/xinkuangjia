@@ -84,7 +84,6 @@ def test_native_plan_and_failed_or_missing_jobs_keep_valid_outcomes(env, monkeyp
     """校验混合文件计划及失败和缺失作业的记录。"""
     bad = {"frontend_gates": {"outcome": "failure", "conclusion": "failure", "counts": {"failed": 1}}}
     jobs = good_needs(frontend=dict(need("frontend", steps=bad, status="failure"), result="failure"))
-    jobs["independent-review"] = {"result": "skipped", "outputs": {}}
     del jobs["secrets-scan"]
     code, acceptance, skill = assemble(env, monkeypatch, jobs)
     assert code == 1 and set(acceptance["reasons"]) == {
@@ -93,7 +92,6 @@ def test_native_plan_and_failed_or_missing_jobs_keep_valid_outcomes(env, monkeyp
     assert acceptance["plan"] == {"base": BASE, "effective_base": "e" * 40, "changed_files": ["backend/App.java", "misc/blob.bin"],
                                   "unmatched_files": ["misc/blob.bin"], "steps": ["maven_verify"],
                                   "skipped_steps": [{"name": "x", "reason": "y"}]}
-    assert acceptance["jobs"]["independent-review"]["reason"] == "intentionally skipped on push"
     assert skill == {"tested_sha": HEAD, "run_id": "42", "run_attempt": "1", "steps": {
         "backend/maven_verify": {"outcome": "success", **STAMP},
         "frontend/frontend_gates": {"outcome": "failure", **STAMP},
@@ -110,8 +108,7 @@ def test_valid_pull_request_merge_identity_and_github_sha(env, monkeypatch):
                        "GITHUB_SHA": HEAD}.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr(ce, "git", lambda *args: f"{HEAD} {BASE} {pr_head}" if args[0] == "rev-list" else HEAD)
-    code, acceptance, skill = assemble(env, monkeypatch, good_needs(**{"independent-review": need(
-        "independent-review", "verify_review")}))
+    code, acceptance, skill = assemble(env, monkeypatch, good_needs())
     assert code == 0, acceptance["reasons"]
     assert (acceptance["tested_sha"], acceptance["pr_base_sha"], acceptance["pr_head_sha"]) == (HEAD, BASE, pr_head)
     assert set(skill["steps"]) == {*ce.SKILL_IDS, "acceptance/slice_plan"}

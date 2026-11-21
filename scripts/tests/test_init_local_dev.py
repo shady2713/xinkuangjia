@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -181,6 +183,40 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     helper = (DEFAULT_ROOT / "tools/minio/apply-bucket-policy.sh").read_text(encoding="utf-8")
     assert "mc anonymous set-json" in helper and "mc --json anonymous get-json" in helper
     assert "apk add --no-cache jq" in dockerfile
+
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要顺序执行 POSIX Compose 启动入口")
+@pytest.mark.parametrize("init_exit", [0, 1])
+def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int) -> None:
+    """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
+    repo = _prepare_fake_repo(tmp_path)
+    shell = repo / "scripts/runtime/start_dev_stack.sh"
+    shell.parent.mkdir(parents=True)
+    shutil.copyfile(DEFAULT_ROOT / "scripts/runtime/start_dev_stack.sh", shell)
+    (repo / ".gitignore").write_text(".env.dev\n.e2e-env/\n", encoding="utf-8")
+    (repo / ".env.dev").write_text("# synthetic existing volume\n", encoding="utf-8")
+    policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    policy.parent.mkdir()
+    policy.write_text("{}", encoding="utf-8")
+    commands = tmp_path / "compose.log"
+    fake_docker = tmp_path / "docker"
+    fake_docker.write_text(
+        '#!/bin/sh\n[ "$1" = compose ] || exit 2\nshift 5\n'
+        'printf "%s\\n" "$*" >> "$COMMANDS"\n'
+        'case "$1" in up) exit 0 ;; run) exit "$INIT_EXIT" ;; *) exit 2 ;; esac\n',
+        encoding="utf-8",
+    )
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit)}
+    result = subprocess.run(["sh", str(shell), "--", "sh", "-c", 'echo downstream >> "$COMMANDS"'],
+                            cwd=tmp_path, env=env, check=False, capture_output=True, text=True, timeout=10)
+    expected = ["up --build -d --wait mysql redis minio", "run --rm --no-deps minio-init"]
+    if init_exit == 0:
+        expected.append("downstream")
+    assert result.returncode == init_exit, result.stderr
+    assert commands.read_text(encoding="utf-8").splitlines() == expected
 
 
 def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:

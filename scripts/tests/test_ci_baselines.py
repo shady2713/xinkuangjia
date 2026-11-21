@@ -21,8 +21,6 @@ from scripts.common.quality_common import DEFAULT_ROOT
 WORKFLOW = DEFAULT_ROOT / ".github" / "workflows" / "ci.yml"
 BASELINE_STEP = "Resolve comparison baseline"
 SCAN_STEP = "Scan changed files for secrets"
-FETCH_REVIEW_STEP = "Fetch PR comments and reviews"
-VERIFY_REVIEW_STEP = "Verify independent review"
 CHECKOUT_ACTION = "actions/checkout@"
 SETUP_PYTHON_ACTION = "actions/setup-python@"
 PYTEST_COMMAND = "python -B -X utf8 -m pytest scripts/tests"
@@ -153,20 +151,6 @@ def named_job_step(job_name: str, step_name: str) -> dict:
     return next(step for step in steps if step.get("name") == step_name)
 
 
-def run_bash_step(script: str, cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    """以独立目录和给定环境执行受验工作流中的 Bash 步骤。"""
-    return subprocess.run(
-        ["bash", "-c", script],
-        cwd=cwd,
-        env={**os.environ, **env},
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-        timeout=60,
-    )
-
-
 def test_baseline_resolution_is_shared_between_jobs() -> None:
     """docs-comments 与 secrets-scan 共用同一基线解析脚本，不重复内联 shell。"""
     docs_step = step_run("docs-comments", BASELINE_STEP).strip()
@@ -227,9 +211,9 @@ def test_all_jobs_share_one_checkout_version() -> None:
     versions = {checkout["uses"] for checkout in checkouts.values()}
     assert len(versions) == 1
     assert next(iter(versions)).startswith(f"{CHECKOUT_ACTION}v")
-    for name in ("docs-comments", "secrets-scan", "independent-review", "acceptance"):
+    for name in ("docs-comments", "secrets-scan", "acceptance"):
         assert checkouts[name]["with"]["fetch-depth"] == 0
-    assert checkouts["independent-review"]["with"]["persist-credentials"] is False
+    assert checkouts["acceptance"]["with"]["persist-credentials"] is False
     for name in ("backend", "frontend", "pytest"):
         assert "fetch-depth" not in checkouts[name].get("with", {})
 
@@ -253,7 +237,6 @@ def test_job_display_names_are_stable() -> None:
         "docs-comments": "docs + comments",
         "pytest": "pytest (scripts/tests)",
         "secrets-scan": "secrets scan (staged-equivalent)",
-        "independent-review": "independent review",
         "acceptance": "acceptance",
     }
 
@@ -272,7 +255,6 @@ def test_quality_steps_have_stable_ids() -> None:
         },
         "pytest": {"pytest_tests": "Pytest tooling tests"},
         "secrets-scan": {"scan_history": SCAN_STEP},
-        "independent-review": {"verify_review": VERIFY_REVIEW_STEP},
     }
     jobs = workflow_jobs()
     for job_name, step_ids in expected.items():
@@ -326,99 +308,14 @@ def test_secret_scan_reads_event_head_without_moving_checkout(tmp_path: Path) ->
     assert git(repo, "diff", "--cached", "--name-only").stdout == ""
 
 
-def test_independent_review_job_is_pr_only_and_read_only() -> None:
-    """使用只读凭据校验受验合并提交及其双亲。"""
-    job = workflow_jobs()["independent-review"]
-    assert job["if"] == "github.event_name == 'pull_request'"
-    assert job["permissions"] == {"contents": "read", "pull-requests": "read"}
-    assert action_step(job, CHECKOUT_ACTION)["with"] == {
-        "fetch-depth": 0,
-        "persist-credentials": False,
-    }
-    fetch = named_job_step("independent-review", FETCH_REVIEW_STEP)
-    assert fetch["env"] == {"GH_TOKEN": "${{ github.token }}"}
-    assert "${{" not in fetch["run"]
-    assert fetch["run"].count("gh api --paginate --slurp") == 2
-    verify = named_job_step("independent-review", VERIFY_REVIEW_STEP)
-    assert verify["env"] == {
-        "MODE": "${{ vars.INDEPENDENT_REVIEW_MODE || 'solo' }}",
-        "MAINTAINERS": "${{ vars.INDEPENDENT_REVIEW_MAINTAINERS }}",
-    }
-    assert "${{" not in verify["run"]
-    assert '--checkout-sha "$(git rev-parse HEAD)"' in verify["run"]
-
-
-@pytest.mark.skipif(shutil.which("jq") is None, reason="fetch step parses the event with jq")
-def test_review_fetch_uses_validated_event_number(tmp_path: Path) -> None:
-    """仅对事件中的有效正整数 PR 编号获取评论和审批。"""
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_gh = bin_dir / "gh"
-    fake_gh.write_text(
-        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GH_LOG"\necho "[[]]"\n', encoding="utf-8"
-    )
-    fake_gh.chmod(0o755)
-    gh_log = tmp_path / "gh.log"
-    event = tmp_path / "event.json"
-    env = {
-        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
-        "GH_LOG": str(gh_log),
-        "GITHUB_EVENT_PATH": str(event),
-        "GITHUB_REPOSITORY": "example/repo",
-        "RUNNER_TEMP": str(tmp_path),
-    }
-    script = step_run("independent-review", FETCH_REVIEW_STEP)
-    event.write_text(json.dumps({"pull_request": {"number": "7; id"}}), encoding="utf-8")
-    rejected = run_bash_step(script, tmp_path, env)
-    assert rejected.returncode == 1
-    assert not gh_log.exists()
-    event.write_text(json.dumps({"pull_request": {"number": 7}}), encoding="utf-8")
-    accepted = run_bash_step(script, tmp_path, env)
-    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
-    assert gh_log.read_text(encoding="utf-8").splitlines() == [
-        "api --paginate --slurp repos/example/repo/issues/7/comments",
-        "api --paginate --slurp repos/example/repo/pulls/7/reviews",
-    ]
-    assert json.loads((tmp_path / "pr-comments.json").read_text(encoding="utf-8")) == [[]]
-
-
-def test_review_verifier_receives_literal_array_arguments(tmp_path: Path) -> None:
-    """核对审查模式和维护者参数保留为独立字面参数。"""
-    repo = tmp_path / "repo"
-    init_repository(repo)
-    verifier = repo / "scripts/workflow/verify_pr_review.py"
-    verifier.parent.mkdir(parents=True)
-    verifier.write_text(
-        "import json, os, sys\n"
-        "with open(os.environ['ARGS_OUT'], 'w', encoding='utf-8') as handle:\n"
-        "    json.dump(sys.argv[1:], handle)\n",
-        encoding="utf-8",
-    )
-    head_commit = commit_all(repo, "head")
-    args_out = tmp_path / "args.json"
-    event = tmp_path / "event.json"
-    event.write_text("{}", encoding="utf-8")
-    script = step_run("independent-review", VERIFY_REVIEW_STEP)
-    env = {
-        "ARGS_OUT": str(args_out),
-        "GITHUB_EVENT_PATH": str(event),
-        "RUNNER_TEMP": str(tmp_path),
-        "MODE": "solo",
-        "MAINTAINERS": "",
-    }
-    expected = ["--event", str(event), "--checkout-sha", head_commit]
-    expected += ["--comments", str(tmp_path / "pr-comments.json")]
-    expected += ["--reviews", str(tmp_path / "pr-reviews.json"), "--mode", "solo"]
-    result = run_bash_step(script, repo, env)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert json.loads(args_out.read_text(encoding="utf-8")) == expected
-    env["MAINTAINERS"] = " alice, ,bob ,$(id),;id"
-    result = run_bash_step(script, repo, env)
-    assert result.returncode == 0, result.stdout + result.stderr
-    for login in ("alice", "bob", "$(id)", ";id"):
-        expected += ["--maintainer", login]
-    assert json.loads(args_out.read_text(encoding="utf-8")) == expected
-
+def test_candidate_ci_does_not_assert_trusted_review() -> None:
+    """候选作业只归集构建证据，独立复核由受信入口生成。"""
+    jobs = workflow_jobs()
+    assert "independent-review" not in jobs
+    actions_source = WORKFLOW.read_text(encoding="utf-8")
+    assert "verify_pr_review.py" not in actions_source
+    assert "run_trusted_pr_gate.py" not in actions_source
+    assert "pull_request_target" not in ci_workflow_triggers()
 
 
 def test_acceptance_jobs_export_matching_records() -> None:
@@ -427,7 +324,7 @@ def test_acceptance_jobs_export_matching_records() -> None:
     aggregate = jobs["acceptance"]
     assert aggregate["if"] == "always()"
     assert set(aggregate["needs"]) == {
-        "backend", "frontend", "docs-comments", "pytest", "secrets-scan", "independent-review"
+        "backend", "frontend", "docs-comments", "pytest", "secrets-scan"
     }
     for name in aggregate["needs"]:
         job = jobs[name]
@@ -436,6 +333,30 @@ def test_acceptance_jobs_export_matching_records() -> None:
         assert evidence["if"] == "always()"
         assert f"ci_evidence.py record {name}" in evidence["run"]
     assert next(step for step in aggregate["steps"] if step.get("id") == "slice_plan")
+
+
+
+def test_acceptance_requires_both_artifact_files(tmp_path: Path) -> None:
+    """核对固定依赖和缺少验收制品时的实际失败行为。"""
+    job = workflow_jobs()["acceptance"]
+    steps = job["steps"]
+    install = next(step for step in steps if step.get("name") == "Install pinned quality tools")
+    assemble = next(step for step in steps if step.get("id") == "assemble")
+    assert steps.index(install) < steps.index(assemble)
+    assert "-r tools/quality/requirements.txt" in install["run"]
+    strict = next(step for step in steps if step.get("id") == "skills_report")
+    result = run_shell(strict["run"], DEFAULT_ROOT, {"RUNNER_TEMP": str(tmp_path)})
+    assert result.returncode == 1 and "skill-outcomes.json" in result.stdout
+    proof_dir = tmp_path / "acceptance"
+    proof_dir.mkdir()
+    (proof_dir / "skill-outcomes.json").write_text("{}", encoding="utf-8")
+    result = run_shell(strict["run"], DEFAULT_ROOT, {"RUNNER_TEMP": str(tmp_path)})
+    assert result.returncode == 1 and "acceptance.json" in result.stdout
+    upload = next(step for step in steps if step.get("name") == "Upload acceptance proof")
+    assert upload["if"] == "success()"
+    assert {path.rsplit("/", 1)[-1] for path in upload["with"]["path"].splitlines()} == {
+        "acceptance.json", "skill-evidence.json"
+    }
 
 
 def test_real_attachment_job_is_available_on_first_pr() -> None:

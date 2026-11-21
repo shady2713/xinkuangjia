@@ -27,13 +27,13 @@
 ## 独立审查与托管合并门禁承接
 
 - 核对 `acceptance-proof-<attempt>` 中的实际受验 SHA、PR head、基线、测试计数及未执行项。附件变更同时核对 `attachment-integration-summary-<attempt>` 的同一 PR head、合并 SHA、服务版本及结果。
-- 默认单维护者模式。由独立只读审查后，仓库所有者以单条 PR 评论签收实际报告。多人模式还需要符合条件的非作者维护者在本 head 上的 GitHub `APPROVED`，并由同一维护者签收当前 head 和 base。使用当前 PR 编号及两个完整 SHA。
+- 按[受信验收流程](../docs/开发指南/受信PR验收.md)取独立门禁结果。单维护者完成独立只读审查后，仓库所有者以单条 PR 评论签收实际报告。多人模式还需要符合条件的非作者维护者在本 head 上的 GitHub `APPROVED`，并由同一维护者签收当前 head 和 base。使用当前 PR 编号及两个完整 SHA。
 
 ```text
 pr-review-receipt v1 type=pass pr=<number> head=<sha> base=<sha> review=<link-or-id> access=readonly
 ```
 
-- 若变更涉及受保护的扫描器或规则文件，用相同格式另签 `type=security-rules`。head 或 base 更新后重新审核和签收。签收后重新运行 CI 全部作业，或编辑 PR 正文触发一次完整运行。
+- 若变更涉及受保护的扫描器或规则文件，用相同格式另签 `type=security-rules`。head 或 base 更新后重新审核和签收。签收后从受信入口重新执行门禁。需要刷新候选 CI 制品时，重新运行 CI 全部作业。
 - [ ] 已核对上方证据与当前 PR，并确认托管严格状态检查要求分支为最新基线。多人模式同时核对 GitHub 原生审批和关键目录的 CODEOWNERS 评审。
 - 若必须在单个 PR 交付多环节修复且触发切片大小门禁，在正文以独立一行填写 `[slice-override]: <原因>`。
 

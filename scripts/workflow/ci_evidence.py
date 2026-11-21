@@ -22,7 +22,7 @@ COUNT_KEYS = {"passed", "failed", "skipped", "flaky"}
 SKILL_IDS = ("backend/maven_verify", "frontend/frontend_gates", "frontend/browser_e2e",
              "docs-comments/docs_checks", "docs-comments/changed_comments")
 REQUIRED_STEPS = {"backend": ("maven_verify",), "pytest": ("pytest_tests",), "secrets-scan": ("scan_history",),
-                  "frontend": ("frontend_gates", "browser_e2e"), "independent-review": ("verify_review",),
+                  "frontend": ("frontend_gates", "browser_e2e"),
                   "docs-comments": ("docs_checks", "changed_comments")}
 COUNTED = {"backend/maven_verify", "pytest/pytest_tests", "frontend/frontend_gates", "frontend/browser_e2e"}
 JUNIT_STEP = {"backend": "maven_verify", "pytest": "pytest_tests"}
@@ -241,9 +241,6 @@ def assemble(args):
     expect = {"run_id": run_id, "run_attempt": attempt, "sha": head}
     jobs, steps = {}, {}
     for name in sorted(set(REQUIRED_STEPS) | set(needs)):
-        if name == "independent-review" and event_name == "push":
-            jobs[name] = {"result": None, "reason": "intentionally skipped on push"}
-            continue
         job, job_steps, why = check_proof(name, needs.get(name), expect)
         if not why and name in REQUIRED_STEPS and job["result"] != "success":
             why = f"required job {job['result']}"

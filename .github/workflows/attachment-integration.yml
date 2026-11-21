@@ -26,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 2
           persist-credentials: false
       - uses: actions/setup-java@v6
         with:
@@ -42,11 +43,9 @@ jobs:
       - name: Initialize gitignored env files with random values
         run: python -B -X utf8 scripts/runtime/init_local_dev.py --apply
       - name: Start MySQL, Redis and MinIO
-        run: |
-          dc="docker compose -f docker-compose.dev.yml --env-file .env.dev --project-name issue103"
-          $dc up --build -d --wait mysql redis minio
-          # minio-init 创建桶并读回核验策略。
-          $dc run --rm minio-init
+        env:
+          COMPOSE_PROJECT_NAME: issue103
+        run: sh scripts/runtime/start_dev_stack.sh
       - name: Start loopback-only Nginx signing proxy
         run: |
           src=docs/部署/object-storage.conf

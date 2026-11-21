@@ -113,6 +113,32 @@ class CommitRangeScanTest(unittest.TestCase):
             self.assertIn((path, 1), {(item.path, item.line) for item in findings})
             self.assertTrue(all(marker not in item.detail for item in findings))
 
+    def test_type_change_to_regular_file_is_scanned_and_fails_closed(self) -> None:
+        """核对符号链接转为普通文件后完整扫描，无法检查的字节有脱敏错误。"""
+        path = "config/app.yml"
+        (self.repo / "link-target").write_text("real.yml", encoding="utf-8")
+        oid = self.git("hash-object", "-w", "link-target")
+
+        def link() -> str:
+            """以 Git 索引合成符号链接类型，可在无符号链接权限的主机运行。"""
+            self.git("update-index", "--add", "--cacheinfo", f"120000,{oid},{path}")
+            self.git("commit", "-q", "-m", "synthetic symlink")
+            return self.git("rev-parse", "HEAD")
+
+        start = link()
+        marker = "sk-" + "t" * 24  # synthetic, generated at runtime
+        regular = self.commit(path, f"api_token: {marker}\n")
+        findings = scanner._scan_commit_range(start, regular)[1]
+        self.assertIn((regular, path, 1), {(item.commit, item.path, item.line) for item in findings})
+        self.assertTrue(all(marker not in item.detail for item in findings))
+        relinked = link()
+        (self.repo / path).write_bytes(b"api_token: \xff\n")
+        self.git("add", "--", path)
+        self.git("commit", "-q", "-m", "invalid bytes")
+        with self.assertRaises(RuntimeError) as caught:
+            scanner._scan_commit_range(relinked, self.git("rev-parse", "HEAD"))
+        self.assertNotIn("api_token", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

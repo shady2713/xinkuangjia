@@ -53,7 +53,7 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 
 开发运行按 Java 与管理前端 README 完成下列步骤；服务器安装按[部署说明](docs/部署/部署说明.md)准备完整项目。依赖版本、环境变量和完整命令由所属文档维护。
 
-1. 运行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply` 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并启用 `.githooks` 提交前检查；使用 [`docker-compose.dev.yml`](docker-compose.dev.yml) 或既有环境准备 MySQL、Redis 和 MinIO。
+1. 运行 `python -B -X utf8 scripts/runtime/init_local_dev.py --apply` 生成被 Git 忽略的 `.env.dev`、后端 `.env` 并启用 `.githooks` 提交前检查；使用 [`sh scripts/runtime/start_dev_stack.sh`](scripts/runtime/start_dev_stack.sh) 启动本地 MySQL、Redis 和 MinIO。脚本等桶策略应用且读回一致后才完成。
 2. 核对本地配置与目标库无误后，安装前端锁定依赖，准备 Java 应用包，按顺序启动中间件、后端和管理前端；本地联调可按需用 `python -B -X utf8 scripts/runtime/seed_local_dev.py --apply` 导入本地演示组织/岗位/角色，如需同时写入 `admin` 口令可显式传入 `--admin-password-hash`（或环境变量 `SEED_ADMIN_PASSWORD_HASH`）。
 3. 新增模块或 CRUD 可使用 `scripts/scaffold/new_java_module.py`、`scripts/scaffold/new_java_crud.py` 与 `scripts/scaffold/new_web_crud.py` 生成标准骨架，日常小切片自检使用 `python -B -X utf8 scripts/workflow/verify_slice.py`。
 4. 检查登录页面、验证码、受保护接口与菜单；文件和外部短信按各自配置单独验证。
@@ -77,4 +77,4 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 
 ## CI
 
-Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 并行执行后端 quality-gate、前端契约/工作区/循环依赖/单测/类型检查/lint/构建与产物体积扫描、文档与增量注释及 PR 切片规模检查、`pytest` 工具测试以及提交范围密钥扫描。CI 汇总制品包含实际受验提交、PR head、基线、用例计数和跳过原因。PR 还检查独立审查回执，并通过 [真实附件集成](.github/workflows/attachment-integration.yml) 验证隔离环境中的上传、授权下载和拒绝访问。
+Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 并行执行后端 quality-gate、前端契约/工作区/循环依赖/单测/类型检查/lint/构建与产物体积扫描、文档与增量注释及 PR 切片规模检查、`pytest` 工具测试以及提交范围密钥扫描。CI 汇总制品包含实际受验提交、PR head、基线、用例计数和跳过原因。PR 的独立审查及规则扫描由[受信验收入口](docs/开发指南/受信PR验收.md)校验。候选作业还通过 [真实附件集成](.github/workflows/attachment-integration.yml) 验证隔离环境中的上传、授权下载和拒绝访问。

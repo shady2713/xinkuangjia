@@ -8,7 +8,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-    # 更新 PR 正文时重新核对当前版本的审查签收。
+    # 更新 PR 正文时重新核对切片和候选证据。
     types: [opened, reopened, synchronize, edited]
 
 concurrency:
@@ -259,76 +259,10 @@ jobs:
           CI_JOB_STATUS: ${{ job.status }}
         run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record secrets-scan
 
-  independent-review:
-    name: independent review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    outputs:
-      proof: ${{ steps.ci_evidence.outputs.proof }}
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      # 受验合并提交的双亲用于核对 PR 基线与 head。
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - name: Fetch PR comments and reviews
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          # 读取与审查校验共用的事件编号。
-          PR_NUMBER="$(jq -r '.pull_request.number // empty' "$GITHUB_EVENT_PATH")"
-          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            echo "Event payload has no valid pull request number." >&2
-            exit 1
-          fi
-          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" > "$RUNNER_TEMP/pr-comments.json"
-          gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" > "$RUNNER_TEMP/pr-reviews.json"
-      - name: Verify independent review
-        id: verify_review
-        shell: bash
-        env:
-          MODE: ${{ vars.INDEPENDENT_REVIEW_MODE || 'solo' }}
-          MAINTAINERS: ${{ vars.INDEPENDENT_REVIEW_MAINTAINERS }}
-        run: |
-          set -euo pipefail
-          args=(
-            --event "$GITHUB_EVENT_PATH"
-            --checkout-sha "$(git rev-parse HEAD)"
-            --comments "$RUNNER_TEMP/pr-comments.json"
-            --reviews "$RUNNER_TEMP/pr-reviews.json"
-            --mode "$MODE"
-          )
-          # 每个已配置的维护者登录名独立传参。
-          if [[ -n "${MAINTAINERS:-}" ]]; then
-            IFS=',' read -r -a maintainer_list <<< "$MAINTAINERS"
-            for maintainer in "${maintainer_list[@]}"; do
-              maintainer="${maintainer//[[:space:]]/}"
-              if [[ -n "$maintainer" ]]; then
-                args+=(--maintainer "$maintainer")
-              fi
-            done
-          fi
-          python -B -X utf8 scripts/workflow/verify_pr_review.py "${args[@]}"
-      - name: Record CI evidence
-        id: ci_evidence
-        if: always()
-        env:
-          CI_STEPS_JSON: ${{ toJSON(steps) }}
-          CI_JOB_STATUS: ${{ job.status }}
-        run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record independent-review
-
   acceptance:
     name: acceptance
     if: always()
-    needs: [backend, frontend, docs-comments, pytest, secrets-scan, independent-review]
+    needs: [backend, frontend, docs-comments, pytest, secrets-scan]
     runs-on: ubuntu-latest
     env:
       EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
@@ -340,6 +274,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Install pinned quality tools
+        run: python -m pip install --disable-pip-version-check -r tools/quality/requirements.txt
       - name: Resolve comparison baseline
         id: baseline
         shell: bash
@@ -362,13 +298,23 @@ jobs:
         id: skills_report
         if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/acceptance/skill-outcomes.json" ]; then
-            python3 -B -X utf8 scripts/skills/record_skill_evidence.py --strict \
-              --outcomes "$RUNNER_TEMP/acceptance/skill-outcomes.json" \
-              --output "$RUNNER_TEMP/acceptance/skill-evidence.json"
-          fi
+          dir="$RUNNER_TEMP/acceptance"
+          # 只在两份输入都存在时生成技能验收制品。
+          for f in skill-outcomes.json acceptance.json; do
+            [ -s "$dir/$f" ] || { echo "::error::$f is missing or empty"; exit 1; }
+          done
+          python3 -B -X utf8 scripts/skills/record_skill_evidence.py --strict \
+            --outcomes "$dir/skill-outcomes.json" --output "$dir/skill-evidence.json"
+          [ -s "$dir/skill-evidence.json" ] || { echo "::error::skill-evidence.json is missing or empty"; exit 1; }
+      - name: Upload diagnostic acceptance
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-diagnostic-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/acceptance/acceptance.json
+          if-no-files-found: warn
       - name: Upload acceptance proof
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v7
         with:
           name: acceptance-proof-${{ github.run_attempt }}
