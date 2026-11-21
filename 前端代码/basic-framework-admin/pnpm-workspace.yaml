@@ -17,20 +17,20 @@ overrides:
   pinia: 'catalog:'
   vue: 'catalog:'
 catalog:
-  '@ast-grep/napi': ^0.51.1
-  '@changesets/cli': ^2.29.8
+  '@ast-grep/napi': ^0.51.3
+  '@changesets/cli': ^2.31.1
   '@changesets/git': ^3.0.4
   '@clack/prompts': ^0.11.0
   '@commitlint/cli': ^19.8.1
   '@commitlint/config-conventional': ^19.8.1
-  '@ctrl/tinycolor': ^4.3.0
-  '@eslint/js': ^9.39.2
-  '@iconify/json': ^2.2.554
+  '@ctrl/tinycolor': ^4.3.1
+  '@eslint/js': ^9.39.5
+  '@iconify/json': ^2.2.556
   '@iconify/tailwind': ^1.2.0
   '@iconify/vue': ^5.0.5
-  '@intlify/core-base': ^11.4.18
+  '@intlify/core-base': ^11.4.22
   '@manypkg/get-packages': ^3.1.0
-  '@playwright/test': ^1.65.0
+  '@playwright/test': ^1.65.1
   '@stylistic/stylelint-plugin': ^4.0.1
   '@tailwindcss/nesting': 0.0.0-insiders.565cd3e
   '@tailwindcss/typography': ^0.5.20
@@ -38,21 +38,21 @@ catalog:
   '@types/crypto-js': ^4.2.2
   '@types/eslint': ^9.6.1
   '@types/lodash.clonedeep': ^4.5.9
-  '@types/node': ^24.10.12
+  '@types/node': ^24.19.2
   '@types/nprogress': ^0.2.3
   '@types/postcss-import': ^14.0.3
   '@types/qs': ^6.15.1
   '@types/sortablejs': ^1.15.9
-  '@typescript-eslint/eslint-plugin': ^8.72.2
-  '@typescript-eslint/parser': ^8.72.2
+  '@typescript-eslint/eslint-plugin': ^8.73.0
+  '@typescript-eslint/parser': ^8.73.0
   '@vee-validate/zod': ^4.15.1
-  '@vitejs/plugin-vue': ^6.0.10
+  '@vitejs/plugin-vue': ^6.0.11
   '@vitejs/plugin-vue-jsx': ^5.1.6
-  '@vitest/coverage-v8': 3.2.4
+  '@vitest/coverage-v8': 3.2.7
   '@vue/compiler-sfc': 3.5.45
   '@vue/shared': ^3.5.45
-  '@vue/test-utils': ^2.5.1
-  '@vueuse/core': ^14.1.0
+  '@vue/test-utils': ^2.6.0
+  '@vueuse/core': ^14.4.0
   autoprefixer: ^10.6.2
   axios: ^1.21.1
   axios-mock-adapter: ^2.1.0
@@ -63,11 +63,11 @@ catalog:
   clsx: ^2.1.1
   commitlint-plugin-function-rules: ^4.3.1
   consola: ^3.4.2
-  cropperjs: ^1.6.2
+  cropperjs: ^1.7.0
   cross-env: ^10.1.0
   crypto-js: ^4.2.0
-  cspell: ^9.6.4
-  cssnano: ^7.1.2
+  cspell: ^9.8.0
+  cssnano: ^7.1.9
   cz-git: ^1.14.0
   czg: ^1.14.0
   dayjs: ^1.11.23
@@ -78,8 +78,8 @@ catalog:
   es-toolkit: ^1.53.2
   esbuild: ^0.28.2
   eslint: ^9.39.2
-  eslint-config-turbo: ^2.11.10
-  eslint-plugin-command: ^3.4.0
+  eslint-config-turbo: ^2.11.12
+  eslint-plugin-command: ^3.5.3
   eslint-plugin-eslint-comments: ^3.2.0
   eslint-plugin-import-x: ^4.18.1
   eslint-plugin-jsdoc: ^61.7.1
@@ -105,34 +105,34 @@ catalog:
   jsencrypt: ^3.5.4
   jsonc-eslint-parser: ^2.4.2
   lodash.clonedeep: ^4.5.0
-  lucide-vue-next: ^0.553.0
-  markdown-it: ^14.1.0
-  mermaid: 11.16.0
+  lucide-vue-next: ^0.577.0
+  markdown-it: ^14.3.3
+  mermaid: 11.17.2
   nprogress: ^0.2.0
   ora: ^8.2.0
   pinia: ^3.0.4
   pinia-plugin-persistedstate: ^4.7.1
   pkg-types: ^2.4.0
-  playwright: ^1.65.0
-  postcss: ^8.5.32
+  playwright: ^1.65.1
+  postcss: ^8.5.33
   postcss-antd-fixes: ^0.2.0
   postcss-html: ^1.8.1
-  postcss-import: ^16.1.1
+  postcss-import: ^16.2.0
   postcss-preset-env: ^10.6.1
   postcss-scss: ^4.0.9
-  prettier: ^3.9.10
+  prettier: ^3.10.1
   prettier-plugin-tailwindcss: ^0.8.1
   publint: ^0.3.25
   qs: ^6.17.1
   reka-ui: ^2.11.0
   rimraf: ^6.1.4
-  rollup: ^4.68.2
-  sass: ^1.108.1
+  rollup: ^4.68.7
+  sass: ^1.108.2
   secure-ls: ^2.0.0
-  sm-crypto: ^0.5.8
+  sm-crypto: ^0.5.9
   sortablejs: ^1.15.6
   stylelint: ^16.26.1
-  stylelint-config-recess-order: ^7.10.0
+  stylelint-config-recess-order: ^7.10.1
   stylelint-config-recommended: ^17.0.0
   stylelint-config-recommended-scss: ^16.0.2
   stylelint-config-recommended-vue: ^1.6.1
@@ -144,22 +144,22 @@ catalog:
   tailwindcss: ^3.4.19
   tailwindcss-animate: ^1.0.7
   theme-colors: ^0.1.0
-  turbo: ^2.11.10
+  turbo: ^2.11.12
   typescript: ^5.9.3
   unbuild: ^3.6.1
   unplugin-element-plus: ^0.11.2
   vee-validate: ^4.15.1
-  vite: ^7.3.1
+  vite: ^7.3.8
   vite-plugin-dts: ^4.5.4
   vite-plugin-html: ^3.2.2
-  vitest: ^3.2.4
+  vitest: ^3.2.7
   vue: ^3.5.45
   vue-eslint-parser: ^10.4.2
-  vue-i18n: ^11.4.18
-  vue-router: ^4.6.4
+  vue-i18n: ^11.4.22
+  vue-router: ^4.6.5
   vue-tsc: ^3.3.14
-  vxe-pc-ui: ^4.20.40
-  vxe-table: ^4.23.16
+  vxe-pc-ui: ^4.21.4
+  vxe-table: ^4.24.2
   watermark-js-plus: ^1.6.6
   yaml-eslint-parser: ^1.3.2
   zod: ^3.25.76
