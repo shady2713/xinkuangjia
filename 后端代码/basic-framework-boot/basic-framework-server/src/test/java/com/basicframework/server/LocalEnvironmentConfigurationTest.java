@@ -36,19 +36,39 @@ class LocalEnvironmentConfigurationTest {
     /** 匹配应用配置中的占位符引用，例如 {@code ${DB_HOST:127.0.0.1}}。 */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Z][A-Z0-9_]*)(?::[^}]*)?}");
 
-    /** 验证端口、主数据源和 Redis 使用显式环境配置，避免退回默认实例。 */
+    /** 验证本地开发 profile 下端口、数据源和 Redis 绑定，并保留独立的本地关闭 TLS 配置。 */
     @Test
     void bindsLocalDatasourceAndRedisVariables() throws IOException {
         Map<String, Object> values = localValues();
-        StandardEnvironment environment = environment(values);
+        StandardEnvironment environment = environment(values, true);
         assertEquals("48080", environment.getProperty("server.port"));
         assertEquals("local", environment.getProperty("spring.profiles.active"));
-        assertEquals("jdbc:mysql://127.0.0.1:3306/framework_test?useSSL=false&serverTimezone=Asia/Shanghai"
-                        + "&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true",
+        assertEquals("jdbc:mysql://127.0.0.1:3306/framework_test?sslMode=DISABLED&allowPublicKeyRetrieval=true"
+                        + "&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true",
                 environment.getProperty("spring.datasource.dynamic.datasource.master.url"));
         assertEquals(values.get("DB_PASSWORD"),
                 environment.getProperty("spring.datasource.dynamic.datasource.master.password"));
         assertEquals(values.get("REDIS_PASSWORD"), environment.getProperty("spring.data.redis.password"));
+    }
+
+    /** 验证生产/默认配置强制启用 MySQL TLS 与服务端身份校验，并关闭公钥自动拉取。 */
+    @Test
+    void productionDatasourceDefaultsRequireTlsAndIdentityVerification() throws IOException {
+        Map<String, Object> values = localValues();
+        values.put("SPRING_PROFILES_ACTIVE", "prod");
+        StandardEnvironment environment = environment(values, false);
+        String masterUrl = environment.getProperty("spring.datasource.dynamic.datasource.master.url");
+        String slaveUrl = environment.getProperty("spring.datasource.dynamic.datasource.slave.url");
+        String expected = "jdbc:mysql://127.0.0.1:3306/framework_test?sslMode=VERIFY_IDENTITY"
+                + "&allowPublicKeyRetrieval=false&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
+        assertEquals(expected, masterUrl);
+        assertEquals(expected, slaveUrl);
+        assertFalse(masterUrl.contains("useSSL=false"));
+
+        values.put("DB_SSL_MODE", "VERIFY_CA");
+        StandardEnvironment custom = environment(values, false);
+        assertTrue(custom.getProperty("spring.datasource.dynamic.datasource.master.url")
+                .contains("sslMode=VERIFY_CA"));
     }
 
     /** 未单独配置从库时复用主库参数，保持单数据库开发环境可运行。 */
@@ -153,7 +173,7 @@ class LocalEnvironmentConfigurationTest {
      */
     private static Set<String> loadReferencedPlaceholders() throws IOException {
         Set<String> referenced = new LinkedHashSet<>();
-        for (String resourceName : List.of("application.yaml", "logback-spring.xml")) {
+        for (String resourceName : List.of("application.yaml", "application-local.yaml", "logback-spring.xml")) {
             String content = new ClassPathResource(resourceName).getContentAsString(StandardCharsets.UTF_8);
             Matcher matcher = PLACEHOLDER_PATTERN.matcher(content);
             while (matcher.find()) {
@@ -180,15 +200,33 @@ class LocalEnvironmentConfigurationTest {
      * 构造隔离环境，避免开发者机器上的变量影响绑定结果。
      *
      * @param values 本例需要的环境配置
-     * @return 加载当前应用 YAML 的隔离环境
+     * @return 加载基础应用 YAML 的隔离环境
      * @throws IOException 当前应用 YAML 无法读取时抛出
      */
     private static StandardEnvironment environment(Map<String, Object> values) throws IOException {
+        return environment(values, false);
+    }
+
+    /**
+     * 按是否启用 {@code local} profile 构造隔离环境。
+     *
+     * @param values 本例需要的环境配置
+     * @param includeLocalProfile 是否加载 {@code application-local.yaml}
+     * @return 加载对应配置层级的隔离环境
+     * @throws IOException 配置文件无法读取时抛出
+     */
+    private static StandardEnvironment environment(Map<String, Object> values,
+                                                   boolean includeLocalProfile) throws IOException {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
         environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
         environment.getPropertySources().addFirst(new MapPropertySource("local-test-values", values));
-        new YamlPropertySourceLoader().load("application-test", new ClassPathResource("application.yaml"))
+        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+        if (includeLocalProfile) {
+            loader.load("application-local-test", new ClassPathResource("application-local.yaml"))
+                    .forEach(environment.getPropertySources()::addLast);
+        }
+        loader.load("application-test", new ClassPathResource("application.yaml"))
                 .forEach(environment.getPropertySources()::addLast);
         return environment;
     }

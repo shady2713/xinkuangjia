@@ -18,10 +18,29 @@ public class DataPermissionContextHolder {
     /**
      * 当前线程的数据权限栈。
      *
-     * <p>使用 {@link TransmittableThreadLocal} 是为了在异步任务场景下传递调用方的数据权限上下文。</p>
+     * <p>使用自定义 {@link TransmittableThreadLocal} 并在跨线程传递与快照复制时深拷贝栈容器，
+     * 避免父子线程或线程池并发任务共享同一个可变 {@link LinkedList} 引发状态污染。</p>
      */
-    private static final ThreadLocal<LinkedList<DataPermission>> DATA_PERMISSIONS =
-            TransmittableThreadLocal.withInitial(LinkedList::new);
+    private static final TransmittableThreadLocal<LinkedList<DataPermission>> DATA_PERMISSIONS =
+            new TransmittableThreadLocal<>() {
+                /** 初始化当前线程的空数据权限栈。 */
+                @Override
+                protected LinkedList<DataPermission> initialValue() {
+                    return new LinkedList<>();
+                }
+
+                /** 线程池懒创建或裸线程启动时返回空栈，避免将触发建线程请求的禁用权限固化为工作线程基线。 */
+                @Override
+                protected LinkedList<DataPermission> childValue(LinkedList<DataPermission> parentValue) {
+                    return new LinkedList<>();
+                }
+
+                /** 为 TTL 异步捕获建立独立浅拷贝快照，防止父子线程与并发任务共享可变栈导致状态串扰。 */
+                @Override
+                public LinkedList<DataPermission> copy(LinkedList<DataPermission> parentValue) {
+                    return parentValue == null ? new LinkedList<>() : new LinkedList<>(parentValue);
+                }
+            };
 
     /**
      * 获得当前生效的 DataPermission 注解。
@@ -44,23 +63,24 @@ public class DataPermissionContextHolder {
     /**
      * 移除当前线程最近一次压入的数据权限注解。
      *
-     * @return 被移除的数据权限注解
+     * @return 被移除的数据权限注解；栈为空时返回 null
      */
     public static DataPermission remove() {
-        DataPermission dataPermission = DATA_PERMISSIONS.get().removeLast();
-        if (DATA_PERMISSIONS.get().isEmpty()) {
+        LinkedList<DataPermission> stack = DATA_PERMISSIONS.get();
+        DataPermission dataPermission = stack.pollLast();
+        if (stack.isEmpty()) {
             DATA_PERMISSIONS.remove();
         }
         return dataPermission;
     }
 
     /**
-     * 获得当前线程的完整数据权限栈。
+     * 获得当前线程数据权限栈的不可变快照。
      *
-     * @return 当前线程的数据权限栈
+     * @return 当前线程数据权限栈的只读副本
      */
     public static List<DataPermission> getAll() {
-        return DATA_PERMISSIONS.get();
+        return List.copyOf(DATA_PERMISSIONS.get());
     }
 
     /**
