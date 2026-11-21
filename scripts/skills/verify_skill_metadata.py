@@ -1,7 +1,12 @@
-"""检查技能名称、YAML 结构及跨宿主调用策略。
+"""检查技能名称、YAML 结构、跨宿主调用策略及可选的生命周期与行为验收元数据。
 
 用法：python scripts/skills/verify_skill_metadata.py [技能目录]
 允许不提供 openai.yaml；已有配置必须合法且默认提示引用当前技能。
+可选前置元数据字段：
+- status: active | deprecated | retired（退役技能须设置 disable-model-invocation: true）
+- replaced-by / retirement-reason: deprecated 或 retired 技能须声明替代技能或退役说明
+- supersedes: 可选字符串列表，记录被当前技能替代的旧技能名
+- verification: 可选非空字符串列表，声明该技能的行为验收命令或判据
 @author 李杰
 """
 
@@ -80,6 +85,68 @@ def frontmatter(source: str) -> dict:
     return load_mapping("\n".join(lines[1:end]))
 
 
+SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+ALLOWED_LIFECYCLE_STATUSES = frozenset({"active", "deprecated", "retired"})
+
+
+def _validate_lifecycle_and_verification(
+    metadata: dict,
+    name: str,
+    skill_file: Path,
+    fail,
+) -> None:
+    """校验可选的技能生命周期（状态、替代、退役）与行为验收元数据约定。
+
+    Args:
+        metadata: 解析后的 SKILL.md 前置元数据字典。
+        name: 当前技能目录名。
+        skill_file: SKILL.md 路径。
+        fail: 收集校验诊断的回调函数。
+    """
+    status = metadata.get("status", "active")
+    if not isinstance(status, str) or status not in ALLOWED_LIFECYCLE_STATUSES:
+        fail(skill_file, "status 必须是 active、deprecated 或 retired")
+        status = "active"
+
+    replaced_by = metadata.get("replaced-by")
+    if replaced_by is not None:
+        if not isinstance(replaced_by, str) or not SKILL_NAME_RE.fullmatch(replaced_by):
+            fail(skill_file, "replaced-by 必须是合法技能名")
+        elif replaced_by == name:
+            fail(skill_file, "replaced-by 不能指向技能自身")
+        elif not (skill_file.parent.parent / replaced_by / "SKILL.md").is_file():
+            fail(skill_file, f"replaced-by 指向不存在的技能：{replaced_by}")
+
+    reason = metadata.get("retirement-reason")
+    if reason is not None and (not isinstance(reason, str) or not reason.strip()):
+        fail(skill_file, "retirement-reason 必须是非空文字")
+
+    if status in {"deprecated", "retired"} and not (replaced_by or (isinstance(reason, str) and reason.strip())):
+        fail(skill_file, f"状态为 {status} 的技能必须声明 replaced-by 或 retirement-reason")
+    if status == "retired" and metadata.get("disable-model-invocation") is not True:
+        fail(skill_file, "状态为 retired 的技能必须设置 disable-model-invocation: true")
+
+    if "supersedes" in metadata:
+        supersedes = metadata["supersedes"]
+        if (
+            not isinstance(supersedes, list)
+            or not supersedes
+            or any(not isinstance(item, str) or not SKILL_NAME_RE.fullmatch(item) for item in supersedes)
+        ):
+            fail(skill_file, "supersedes 必须是非空合法技能名列表")
+        elif name in supersedes or len(set(supersedes)) != len(supersedes):
+            fail(skill_file, "supersedes 不能包含技能自身或重复项")
+
+    if "verification" in metadata:
+        verification = metadata["verification"]
+        if (
+            not isinstance(verification, list)
+            or not verification
+            or any(not isinstance(item, str) or not item.strip() for item in verification)
+        ):
+            fail(skill_file, "verification 必须是非空字符串列表，用于声明行为验收命令或判据")
+
+
 def validate(skill_file: Path, openai_file: Path, root: Path) -> list[Finding]:
     """核对一个技能的命名和调用配置，收集规则错误而不改写文件。
 
@@ -119,6 +186,7 @@ def validate(skill_file: Path, openai_file: Path, root: Path) -> list[Finding]:
     manual = metadata.get("disable-model-invocation") is True
     if manual and metadata.get("user-invocable") is False:
         fail(skill_file, "仅手动调用的技能必须允许用户调用")
+    _validate_lifecycle_and_verification(metadata, name, skill_file, fail)
     if not openai_file.exists():
         return findings
     try:

@@ -104,7 +104,7 @@ Web 文件不强制作者标签；目标模块已有作者头注惯例且本次�
 
 管理前端在既有 ESLint 中维护中文注释规则。Web 代码修改后，在所属工程运行 `pnpm quality:comments`，或运行已集成同一增量规则的 `pnpm lint`，检查当前工程相对 HEAD 改动涉及的 TS、JS 和 Vue 声明；覆盖职责注释及可机械核验的公开调用契约。`pnpm quality:comments:all` 仅用于明确要求的全量审计。所属工程独立安装依赖并运行检查；环境和调用方式见[质量检查脚本](../../../../docs/开发指南/质量检查脚本.md)。
 
-仓库级兼容入口 `scripts/code/web/check_worktree_web_comments.py` 按文件所属前端调用其解析实现。`scripts/code/check_worktree_comments.py` 只覆盖 Java 与 Python，不能证明 Web 注释通过；`scripts/workflow/run_checks.py` 的 comments 组可运行三个语言检查。
+仓库级兼容入口 `scripts/code/web/check_worktree_web_comments.py` 按文件所属前端调用其解析实现。`scripts/code/check_worktree_comments.py` 已统一串联 Java、Python 与 Web 三类工作区增量注释检查；`scripts/workflow/run_checks.py` 的 comments 组同样可运行三个语言检查。
 
 按目标前端配置执行相关 lint、类型检查和必要测试，例如 `pnpm lint`、`pnpm check:type`；注释工具不能替代上文人工语义复核和行为验证。不得降低阈值或扩大忽略范围，缺少工具、依赖、跳过和失败须如实报告。纯只读且未修改代码的任务无需执行修改后的交付门禁。
 

@@ -259,6 +259,67 @@ def test_frontmatter_crlf_and_wrong_policy(tmp_path: Path) -> None:
     assert validate(skill, tmp_path / "absent.yaml", tmp_path)
 
 
+def test_skill_lifecycle_and_verification_metadata(tmp_path: Path) -> None:
+    """技能生命周期状态、替代、退役与行为验收元数据按契约通过或阻断。"""
+    write(
+        tmp_path,
+        "new-skill/SKILL.md",
+        (
+            "---\n"
+            "name: new-skill\n"
+            "description: 新技能\n"
+            "status: active\n"
+            "supersedes:\n"
+            "  - legacy-skill\n"
+            "verification:\n"
+            "  - python -B -X utf8 -m pytest scripts/tests/test_documents.py\n"
+            "---\n"
+        ),
+    )
+    assert not validate(tmp_path / "new-skill/SKILL.md", tmp_path / "new-skill/agents/openai.yaml", tmp_path)
+
+    valid_retired = write(
+        tmp_path,
+        "legacy-skill/SKILL.md",
+        (
+            "---\n"
+            "name: legacy-skill\n"
+            "description: 已退役旧技能\n"
+            "status: retired\n"
+            "disable-model-invocation: true\n"
+            "replaced-by: new-skill\n"
+            "---\n"
+        ),
+    )
+    assert not validate(valid_retired, tmp_path / "legacy-skill/agents/openai.yaml", tmp_path)
+
+    bad_deprecated = write(
+        tmp_path,
+        "old-missing/SKILL.md",
+        "---\nname: old-missing\ndescription: 缺替代说明\nstatus: deprecated\n---\n",
+    )
+    assert any("replaced-by" in item.message for item in validate(bad_deprecated, tmp_path / "absent.yaml", tmp_path))
+
+    bad_retired = write(
+        tmp_path,
+        "retired-auto/SKILL.md",
+        (
+            "---\n"
+            "name: retired-auto\n"
+            "description: 退役但仍允许模型隐式调用\n"
+            "status: retired\n"
+            "retirement-reason: 功能已合入主流程\n"
+            "replaced-by: missing-skill\n"
+            "verification: []\n"
+            "---\n"
+        ),
+    )
+    messages = [item.message for item in validate(bad_retired, tmp_path / "absent.yaml", tmp_path)]
+    assert any("disable-model-invocation" in msg for msg in messages)
+    assert any("不存在的技能" in msg for msg in messages)
+    assert any("verification" in msg for msg in messages)
+
+
 def test_note_paths_without_creating_hidden_dirs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

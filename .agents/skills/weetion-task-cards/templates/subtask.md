@@ -57,4 +57,4 @@
 
 执行与交付遵循 [需求卡 Skill](../SKILL.md)，实际进度和结果不回写本卡。
 
-Git 遵循 [Git 分支与交付流程](../references/git-workflow.md)；开组及提交、合并、交付前核对，上下文缺失时重读。推送仅由用户人工操作。
+Git 遵循 [Git 分支与交付流程](../references/git-workflow.md)；开组及提交、合并、交付前核对，上下文缺失时重读。远端交付授权遵循[授权与交付边界](../references/git-workflow.md#授权与交付边界)。

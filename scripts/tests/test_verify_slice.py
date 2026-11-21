@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -225,3 +226,79 @@ def test_verify_slice_frontend_plan_covers_typecheck_api_check_and_quality_pytho
     )
     openapi_steps = [step.name for step in openapi_only.steps]
     assert openapi_steps == ["web-slice-api-check"]
+
+
+def test_verify_slice_exports_unified_pr_and_head_sha_acceptance_evidence(tmp_path: Path) -> None:
+    """按 PR 与 head SHA 导出同一份验收证据，准确记录执行步骤、跳过原因与工作区状态。"""
+    repo = _init_git_repo(tmp_path / "evidence-repo")
+    py_checker = repo / "scripts/code/python/check_worktree_python_comments.py"
+    py_checker.parent.mkdir(parents=True)
+    py_checker.write_text('"""桩检查器。"""\nraise SystemExit(0)\n', encoding="utf-8", newline="\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "add checker"], check=True, capture_output=True)
+    py_file = repo / "scripts/demo.py"
+    py_file.write_text('"""演示模块。"""\n', encoding="utf-8", newline="\n")
+
+    evidence_json = tmp_path / "evidence" / "pr-95.json"
+    evidence_md = tmp_path / "evidence" / "pr-95.md"
+    head_sha = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    code = verify_slice.main(
+        [
+            "--root",
+            str(repo),
+            "--base",
+            "HEAD",
+            "--skip-runtime",
+            "--pr",
+            "#95",
+            "--evidence-json",
+            str(evidence_json),
+            "--evidence-md",
+            str(evidence_md),
+        ]
+    )
+    assert code == 0
+    payload = json.loads(evidence_json.read_text(encoding="utf-8"))
+    assert payload["pr"] == "#95"
+    assert payload["head_sha"] == head_sha
+    assert payload["worktree_dirty"] is True
+    assert payload["overall_code"] == 0
+    assert any(item["name"] == "python-comments" and item["status"] == "passed" for item in payload["executed_steps"])
+    assert any(
+        item["name"] == "python-runtime-tests" and "--skip-runtime" in item["reason"]
+        for item in payload["skipped_steps"]
+    )
+
+    markdown = evidence_md.read_text(encoding="utf-8")
+    assert "#95" in markdown
+    assert head_sha in markdown
+    assert "python-runtime-tests" in markdown
+    assert "--skip-runtime" in markdown
+
+
+def test_web_comments_and_task_card_remote_delivery_docs_stay_aligned() -> None:
+    """Web 注释规范与任务卡模板/执行说明不得回退为过期口径或冲突远端推送规则。"""
+    web_comments_doc = (
+        DEFAULT_ROOT
+        / ".agents/skills/weetion-development-web-standards/references/web-comments.md"
+    ).read_text(encoding="utf-8")
+    assert "只覆盖 Java 与 Python" not in web_comments_doc
+    assert "Java、Python 与 Web" in web_comments_doc
+
+    task_cards_root = DEFAULT_ROOT / ".agents/skills/weetion-task-cards"
+    for rel in (
+        "SKILL.md",
+        "references/execution.md",
+        "templates/overview.md",
+        "templates/subtask.md",
+        "templates/plan.md",
+    ):
+        text = (task_cards_root / rel).read_text(encoding="utf-8")
+        assert "推送仅由用户人工操作" not in text, f"{rel} 仍残留过期绝对禁止推送表述"
+        assert "git-workflow.md#授权与交付边界" in text, f"{rel} 未统一引用 git-workflow.md#授权与交付边界"
