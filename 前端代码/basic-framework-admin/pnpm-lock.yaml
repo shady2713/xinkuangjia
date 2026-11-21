@@ -423,9 +423,6 @@ catalogs:
     zod:
       specifier: ^3.25.76
       version: 3.25.76
-    zod-defaults:
-      specifier: 0.2.3
-      version: 0.2.3
 
 overrides:
   '@ast-grep/napi': ^0.51.1
@@ -1054,9 +1051,6 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
-      zod-defaults:
-        specifier: 'catalog:'
-        version: 0.2.3(zod@3.25.76)
 
   packages/@core/ui-kit/layout-ui:
     dependencies:
@@ -8332,11 +8326,6 @@ packages:
   yoctocolors@2.1.2:
     resolution: {integrity: sha512-CzhO+pFNo8ajLM2d2IW/R93ipy99LWjtwblvC1RsoSUMZgyLbYFr221TnSNT7GjGdYui6P459mw9JH/g/zW2ug==}
     engines: {node: '>=18'}
-
-  zod-defaults@0.2.3:
-    resolution: {integrity: sha512-7pYkOH1/c+Ril5AZUYtsbhMkehkI8CMqzFZ7YZXfC9SMLRvZuLyonQE7BAIVSNxeTpqTZmW5BLxGSzWMnKNdIw==}
-    peerDependencies:
-      zod: ^4.1.12
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
@@ -15668,10 +15657,6 @@ snapshots:
   yocto-queue@1.2.2: {}
 
   yoctocolors@2.1.2: {}
-
-  zod-defaults@0.2.3(zod@3.25.76):
-    dependencies:
-      zod: 3.25.76
 
   zod@3.25.76: {}
 

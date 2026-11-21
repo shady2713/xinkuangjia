@@ -1,4 +1,5 @@
-import type { ZodRawShape } from 'zod';
+/** 表单上下文、初始值推导（Zod v3 兼容）与插槽代理逻辑。 */
+import type { ZodRawShape, ZodTypeAny } from 'zod';
 
 import type { ComputedRef } from 'vue';
 
@@ -10,8 +11,95 @@ import { createContext } from '@vben-core/shadcn-ui';
 import { isString, mergeWithArrayOverride, set } from '@vben-core/shared/utils';
 
 import { useForm } from 'vee-validate';
-import { object, ZodIntersection, ZodNumber, ZodObject, ZodString } from 'zod';
-import { getDefaultsForSchema } from 'zod-defaults';
+import {
+  object,
+  ZodArray,
+  ZodBoolean,
+  ZodDefault,
+  ZodEffects,
+  ZodIntersection,
+  ZodNumber,
+  ZodObject,
+  ZodOptional,
+  ZodPipeline,
+  ZodRecord,
+  ZodString,
+  ZodTuple,
+  ZodUnion,
+} from 'zod';
+
+/**
+ * 递归提取 Zod v3 字段 schema 的默认值，替代仅兼容 Zod v4 的 `zod-defaults`。
+ *
+ * @param schema 单个字段的 Zod v3 规则节点
+ * @returns 推导出的字段默认值；无显式或内置默认值时返回 undefined
+ */
+function getZodFieldDefault(schema: ZodTypeAny): unknown {
+  if (schema instanceof ZodDefault) return schema._def.defaultValue();
+  if (schema instanceof ZodEffects)
+    return getZodFieldDefault(schema._def.schema);
+  if (schema instanceof ZodPipeline) return getZodFieldDefault(schema._def.in);
+  if (schema instanceof ZodOptional) {
+    const inner = schema._def.innerType;
+    return inner instanceof ZodDefault ? inner._def.defaultValue() : undefined;
+  }
+  if (schema instanceof ZodBoolean) return false;
+  if (schema instanceof ZodNumber) return 0;
+  if (schema instanceof ZodString) return '';
+  if (schema instanceof ZodArray) return [];
+  if (schema instanceof ZodRecord) return {};
+  if (schema instanceof ZodTuple) {
+    return (schema._def.items as ZodTypeAny[]).map(
+      /** 逐项推导元组元素的默认值。 */
+      (item) => getZodFieldDefault(item),
+    );
+  }
+  if (schema instanceof ZodUnion) {
+    return getZodFieldDefault(schema._def.options[0]);
+  }
+  if (schema instanceof ZodObject || schema instanceof ZodIntersection) {
+    return getDefaultsForSchema(schema);
+  }
+  return undefined;
+}
+
+/**
+ * 提取 Zod v3 对象或交集 schema 的初始默认值映射。
+ *
+ * @param schema 顶层对象、管道或交集 Zod v3 schema
+ * @returns 过滤掉 undefined 后的默认值键值对象
+ */
+export function getDefaultsForSchema(schema: ZodTypeAny): Record<string, any> {
+  if (schema instanceof ZodRecord) return {};
+  if (schema instanceof ZodEffects)
+    return getDefaultsForSchema(schema._def.schema);
+  if (schema instanceof ZodPipeline)
+    return getDefaultsForSchema(schema._def.in);
+  if (schema instanceof ZodIntersection) {
+    return {
+      ...getDefaultsForSchema(schema._def.left),
+      ...getDefaultsForSchema(schema._def.right),
+    };
+  }
+  if (schema instanceof ZodUnion) {
+    const match = (schema._def.options as ZodTypeAny[]).find(
+      /** 在联合类型中查找首个对象分支作为默认结构来源。 */
+      (option) => option instanceof ZodObject,
+    );
+    return match ? getDefaultsForSchema(match) : {};
+  }
+  if (!(schema instanceof ZodObject)) return {};
+  const entries = Object.entries(schema.shape as Record<string, ZodTypeAny>)
+    .map(
+      /** 逐字段计算默认值并组装为键值二元组。 */
+      ([key, field]) => [key, getZodFieldDefault(field)] as const,
+    )
+    .filter(
+      /** 过滤无默认值的字段，避免覆盖外部传入的初始值。 */
+      ([, value]) => value !== undefined,
+    );
+  return Object.fromEntries(entries);
+}
 
 type ExtendFormProps = VbenFormProps & { formApi?: ExtendedFormApi };
 
