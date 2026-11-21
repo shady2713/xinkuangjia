@@ -3,6 +3,8 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const appRoot = join(workspaceRoot, 'apps', 'web-ele');
 const sourceRoots = [join(appRoot, 'src'), join(workspaceRoot, 'packages')];
@@ -127,23 +129,88 @@ function validateProductionConfiguration(findings) {
 
   const runtimeConfigPath = join(appRoot, 'docker', 'app.config.js');
   const runtimeConfig = requireText(runtimeConfigPath);
-  const apiURL = readJavaScriptStringField(runtimeConfig, 'VITE_GLOB_API_URL');
-  const defaultUsername = readJavaScriptStringField(
+  validateRuntimeConfigContent(
     runtimeConfig,
+    'apps/web-ele/docker/app.config.js',
+    findings,
+  );
+}
+
+/**
+ * 校验生产运行时配置脚本中的关键安全字段，显式区分缺失字段、合法空值与解析失败。
+ *
+ * @param content 运行时配置 JS 源码文本
+ * @param displayFile 用于错误报告的相对文件路径
+ * @param findings 收集扫描问题的数组
+ */
+function validateRuntimeConfigContent(content, displayFile, findings) {
+  const parsed = inspectRuntimeConfigSource(content);
+  if (!parsed.ok) {
+    findings.push(`${displayFile}：运行时配置解析失败（${parsed.reason}）`);
+    return;
+  }
+  for (const structuralError of parsed.structuralErrors) {
+    findings.push(`${displayFile}：运行时配置结构不合法（${structuralError}）`);
+  }
+
+  const apiField = readRuntimeConfigField(parsed, 'VITE_GLOB_API_URL');
+  if (apiField.status === 'missing') {
+    findings.push(`${displayFile}：缺少必填字段 VITE_GLOB_API_URL`);
+  } else if (apiField.status === 'invalid') {
+    findings.push(
+      `${displayFile}：字段 VITE_GLOB_API_URL 解析失败（${apiField.reason}）`,
+    );
+  } else if (!apiField.value.trim()) {
+    findings.push(`${displayFile}：字段 VITE_GLOB_API_URL 不能为空`);
+  } else if (/localhost|127\.0\.0\.1/iu.test(apiField.value)) {
+    findings.push(`${displayFile}：默认 API 地址指向本机`);
+  }
+
+  validateRequiredEmptyField(
+    parsed,
     'VITE_APP_DEFAULT_USERNAME',
+    '不应预填登录用户名',
+    displayFile,
+    findings,
   );
-  const defaultPassword = readJavaScriptStringField(
-    runtimeConfig,
+  validateRequiredEmptyField(
+    parsed,
     'VITE_APP_DEFAULT_PASSWORD',
+    '不应预填登录密码',
+    displayFile,
+    findings,
   );
-  if (/localhost|127\.0\.0\.1/iu.test(apiURL)) {
-    findings.push('apps/web-ele/docker/app.config.js：默认 API 地址指向本机');
+}
+
+/**
+ * 校验必须在运行时配置中显式声明为空字符串字面量的字段。
+ *
+ * 缺失字段、非静态字符串字面量或非空值均视为失败；仅显式空字符串（`''`）通过。
+ *
+ * @param parsed 静态解析后的运行时配置结果
+ * @param key 字段名
+ * @param nonEmptyMessage 非空时输出的阻断信息
+ * @param displayFile 相对文件路径
+ * @param findings 收集扫描问题的数组
+ */
+function validateRequiredEmptyField(
+  parsed,
+  key,
+  nonEmptyMessage,
+  displayFile,
+  findings,
+) {
+  const field = readRuntimeConfigField(parsed, key);
+  if (field.status === 'missing') {
+    findings.push(`${displayFile}：缺少必填字段 ${key}`);
+    return;
   }
-  if (defaultUsername.trim()) {
-    findings.push('apps/web-ele/docker/app.config.js：不应预填登录用户名');
+  if (field.status === 'invalid') {
+    findings.push(`${displayFile}：字段 ${key} 解析失败（${field.reason}）`);
+    return;
   }
-  if (defaultPassword.trim()) {
-    findings.push('apps/web-ele/docker/app.config.js：不应预填登录密码');
+  if (field.value.trim()) {
+    findings.push(`${displayFile}：${nonEmptyMessage}`);
   }
 }
 
@@ -177,6 +244,9 @@ async function validateProductionArtifacts(findings) {
       }
     }
     const content = await readFile(file, 'utf8');
+    if (displayPath(file) === 'apps/web-ele/dist/_app.config.js') {
+      validateRuntimeConfigContent(content, displayPath(file), findings);
+    }
     if (ext === '.html') {
       const hasInlineScript = [
         ...content.matchAll(/<script\b([^>]*)>/giu),
@@ -214,13 +284,194 @@ function displayPath(path) {
   return relative(workspaceRoot, path).replaceAll('\\', '/');
 }
 
-/** 从受控运行时配置脚本中读取一个普通字符串字段，不执行脚本。 */
-function readJavaScriptStringField(content, key) {
-  const escapedKey = key.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
-  const match = content.match(
-    new RegExp(String.raw`(?:^|\n)\s*${escapedKey}\s*:\s*(['"])(.*?)\1`, 'u'),
+/**
+ * 静态解析运行时配置脚本中的 `window._VBEN_ADMIN_PRO_APP_CONF_` 对象字面量，不执行脚本。
+ *
+ * 使用 TypeScript JavaScript 语法解析器检查语法错误、赋值目标唯一性、重复键与字段类型，
+ * 避免正则在字段删除、非字符串表达式或语法损坏时静默回退为空字符串。
+ *
+ * @param content 运行时配置 JS 源码文本
+ * @returns 结构化解析结果，区分语法/结构失败与各字段的静态字符串字面量
+ */
+function inspectRuntimeConfigSource(content) {
+  const sourceFile = ts.createSourceFile(
+    'app.config.js',
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
   );
-  return match?.[2] ?? '';
+  const parseDiagnostics = sourceFile.parseDiagnostics ?? [];
+  if (parseDiagnostics.length > 0) {
+    const message = ts.flattenDiagnosticMessageText(
+      parseDiagnostics[0].messageText,
+      ' ',
+    );
+    return {
+      fields: new Map(),
+      ok: false,
+      reason: `JavaScript 语法错误：${message}`,
+      status: 'parse_error',
+      structuralErrors: [],
+    };
+  }
+
+  const assignments = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isBinaryExpression(statement.expression) ||
+      statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+    ) {
+      continue;
+    }
+    if (isAppConfigTarget(statement.expression.left)) {
+      assignments.push(statement.expression.right);
+    }
+  }
+
+  if (assignments.length === 0) {
+    return {
+      fields: new Map(),
+      ok: false,
+      reason: '未找到 window._VBEN_ADMIN_PRO_APP_CONF_ 顶层赋值',
+      status: 'parse_error',
+      structuralErrors: [],
+    };
+  }
+  if (assignments.length > 1) {
+    return {
+      fields: new Map(),
+      ok: false,
+      reason: '存在多处 window._VBEN_ADMIN_PRO_APP_CONF_ 赋值',
+      status: 'parse_error',
+      structuralErrors: [],
+    };
+  }
+
+  const rhs = unwrapParenthesized(assignments[0]);
+  if (!ts.isObjectLiteralExpression(rhs)) {
+    return {
+      fields: new Map(),
+      ok: false,
+      reason: 'window._VBEN_ADMIN_PRO_APP_CONF_ 必须赋值为静态对象字面量',
+      status: 'parse_error',
+      structuralErrors: [],
+    };
+  }
+
+  const fields = new Map();
+  const structuralErrors = [];
+  for (const prop of rhs.properties) {
+    if (!ts.isPropertyAssignment(prop)) {
+      structuralErrors.push('对象字面量仅允许静态键值属性，禁止展开或简写属性');
+      continue;
+    }
+    const key = readStaticPropertyName(prop.name);
+    if (key === null) {
+      structuralErrors.push('存在无法静态解析的计算属性名');
+      continue;
+    }
+    if (fields.has(key)) {
+      structuralErrors.push(`存在重复配置字段 ${key}`);
+      continue;
+    }
+    const initializer = unwrapParenthesized(prop.initializer);
+    if (
+      ts.isStringLiteral(initializer) ||
+      ts.isNoSubstitutionTemplateLiteral(initializer)
+    ) {
+      fields.set(key, { status: 'ok', value: initializer.text });
+    } else {
+      fields.set(key, {
+        reason: '字段值必须是静态字符串字面量，不能是变量、拼接或动态表达式',
+        status: 'invalid',
+      });
+    }
+  }
+
+  return {
+    fields,
+    ok: true,
+    reason: '',
+    status: 'ok',
+    structuralErrors,
+  };
+}
+
+/**
+ * 从已解析的运行时配置中读取指定字段，显式区分缺失、解析失败与合法字符串值。
+ *
+ * @param parsed `inspectRuntimeConfigSource` 返回的解析结果
+ * @param key 目标字段名
+ * @returns `{ status: 'ok', value }`、`{ status: 'missing', reason }` 或 `{ status: 'invalid', reason }`
+ */
+function readRuntimeConfigField(parsed, key) {
+  if (!parsed.ok) {
+    return { reason: parsed.reason, status: 'invalid' };
+  }
+  if (!parsed.fields.has(key)) {
+    return { reason: `缺少必填字段 ${key}`, status: 'missing' };
+  }
+  return parsed.fields.get(key);
+}
+
+/**
+ * 判断赋值左值是否为 `window._VBEN_ADMIN_PRO_APP_CONF_` 或 `globalThis._VBEN_ADMIN_PRO_APP_CONF_`。
+ *
+ * @param node 赋值表达式左值 AST 节点
+ * @returns 匹配运行时配置全局属性时返回 true
+ */
+function isAppConfigTarget(node) {
+  const target = unwrapParenthesized(node);
+  if (
+    ts.isPropertyAccessExpression(target) &&
+    target.name.text === '_VBEN_ADMIN_PRO_APP_CONF_' &&
+    ts.isIdentifier(target.expression) &&
+    (target.expression.text === 'window' ||
+      target.expression.text === 'globalThis')
+  ) {
+    return true;
+  }
+  if (
+    ts.isElementAccessExpression(target) &&
+    ts.isIdentifier(target.expression) &&
+    (target.expression.text === 'window' ||
+      target.expression.text === 'globalThis') &&
+    target.argumentExpression &&
+    ts.isStringLiteral(target.argumentExpression) &&
+    target.argumentExpression.text === '_VBEN_ADMIN_PRO_APP_CONF_'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 提取对象字面量属性的静态名称；动态计算属性返回 null。
+ *
+ * @param name 属性名 AST 节点
+ * @returns 静态键名或 null
+ */
+function readStaticPropertyName(name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) {
+    return name.text;
+  }
+  return null;
+}
+
+/**
+ * 去除外层括号表达式以获取实际语义节点。
+ *
+ * @param node 任意表达式 AST 节点
+ * @returns 去括号后的最内层表达式节点
+ */
+function unwrapParenthesized(node) {
+  let current = node;
+  while (ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return current;
 }
 
 /** 同步读取简单 KEY=VALUE 环境文件，避免在扫描日志中输出配置值。 */
@@ -254,4 +505,16 @@ function requireText(path) {
   }
 }
 
-await main();
+const isDirectExecution =
+  process.argv[1] !== undefined &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  await main();
+}
+
+export {
+  inspectRuntimeConfigSource,
+  readRuntimeConfigField,
+  validateRuntimeConfigContent,
+};
