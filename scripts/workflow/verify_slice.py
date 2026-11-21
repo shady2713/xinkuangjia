@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 import shutil
 import subprocess
@@ -39,6 +40,14 @@ class SliceStep:
 
 
 @dataclass(frozen=True)
+class SkippedStep:
+    """描述未执行或按参数跳过的检查步骤及明确原因。"""
+
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SlicePlan:
     """描述当前工作区相对基线的改动归类与待运行步骤。"""
 
@@ -50,6 +59,35 @@ class SlicePlan:
     python_files: tuple[str, ...]
     doc_files: tuple[str, ...]
     steps: tuple[SliceStep, ...]
+    skipped_steps: tuple[SkippedStep, ...] = ()
+
+
+def resolve_head_sha(root: Path) -> str:
+    """读取当前仓库 HEAD 提交标识，用于将验收证据绑定到精确受验版本。"""
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "rev-parse", "HEAD"],
+        cwd=root.resolve(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=15,
+    )
+    return proc.stdout.strip() if proc.returncode == 0 and proc.stdout.strip() else "UNKNOWN"
+
+
+def is_worktree_dirty(root: Path) -> bool:
+    """检测当前工作区或暂存区是否存在未提交改动，避免用脏树结果冒充干净提交证据。"""
+    proc = subprocess.run(
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain"],
+        cwd=root.resolve(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=15,
+    )
+    return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
 def resolve_effective_base(root: Path, base: str = "HEAD") -> str:
@@ -391,6 +429,7 @@ def build_slice_plan(
             )
         )
 
+    sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
     if not skip_runtime:
         if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files):
             py_tests = [p for p in python_files if p.startswith("scripts/tests/test_")]
@@ -426,7 +465,6 @@ def build_slice_plan(
                     ),
                 )
             )
-        sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
         if java_modules or sql_changed:
             mvn_bin = shutil.which("mvn") or shutil.which("mvn.cmd")
             if mvn_bin is None:
@@ -523,6 +561,15 @@ def build_slice_plan(
                     )
                 )
 
+    skipped_steps: list[SkippedStep] = []
+    if skip_runtime:
+        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files) or web_quality_py_changed:
+            skipped_steps.append(SkippedStep("python-runtime-tests", "指定了 --skip-runtime"))
+        if java_modules or sql_changed:
+            skipped_steps.append(SkippedStep("maven-runtime-tests", "指定了 --skip-runtime"))
+        if web_files or web_openapi_changed:
+            skipped_steps.append(SkippedStep("web-runtime-checks", "指定了 --skip-runtime"))
+
     return SlicePlan(
         base=base,
         effective_base=effective_base,
@@ -532,7 +579,85 @@ def build_slice_plan(
         python_files=tuple(python_files),
         doc_files=tuple(doc_files),
         steps=tuple(steps),
+        skipped_steps=tuple(skipped_steps),
     )
+
+
+def build_acceptance_evidence(
+    root: Path,
+    plan: SlicePlan,
+    outcomes: list[dict[str, object]],
+    *,
+    code: int,
+    pr_ref: str = "",
+) -> dict[str, object]:
+    """按 PR 与 head SHA 汇总可交接的结构化验收证据。
+
+    Args:
+        root: 仓库根目录。
+        plan: 本次构建的增量切片计划。
+        outcomes: 实际执行步骤的退出码与耗时记录。
+        code: 本次验收汇总退出码。
+        pr_ref: 可选关联 PR 编号或链接。
+    Returns:
+        包含受验版本、工作区状态、执行步骤与跳过原因的验收证据字典。
+    """
+    step_commands = {step.name: " ".join(step.command) for step in plan.steps}
+    executed = [
+        {
+            "name": item["name"],
+            "code": item["code"],
+            "status": "passed" if item["code"] == 0 else "failed",
+            "seconds": item["seconds"],
+            "command": step_commands.get(str(item["name"]), ""),
+        }
+        for item in outcomes
+    ]
+    return {
+        "pr": pr_ref or "unassigned",
+        "head_sha": resolve_head_sha(root),
+        "base": plan.base,
+        "effective_base": plan.effective_base,
+        "worktree_dirty": is_worktree_dirty(root),
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "overall_code": code,
+        "changed_files": list(plan.changed_files),
+        "executed_steps": executed,
+        "skipped_steps": [asdict(item) for item in plan.skipped_steps],
+    }
+
+
+def render_acceptance_markdown(evidence: dict[str, object]) -> str:
+    """将结构化验收证据渲染为可直接粘贴至 PR 或独立审查交接的 Markdown 摘要。"""
+    lines = [
+        "## 统一验收证据",
+        "",
+        f"- 关联 PR：`{evidence['pr']}`",
+        f"- 受验版本（head SHA）：`{evidence['head_sha']}`"
+        + ("（存在未提交工作区改动）" if evidence["worktree_dirty"] else "（工作区干净）"),
+        f"- 比较基线：`{evidence['base']}`（有效对比点 `{evidence['effective_base']}`）",
+        f"- 生成时间（UTC）：`{evidence['generated_at']}`",
+        f"- 汇总退出码：`{evidence['overall_code']}`（变更文件 {len(evidence['changed_files'])} 个）",
+        "",
+        "### 执行步骤",
+        "",
+    ]
+    executed = evidence["executed_steps"]
+    if executed:
+        lines.extend(["| 步骤 | 状态 | 退出码 | 耗时 (s) |", "| --- | --- | --- | --- |"])
+        for item in executed:
+            lines.append(f"| `{item['name']}` | {item['status']} | {item['code']} | {item['seconds']} |")
+    else:
+        lines.append("- 无实际执行步骤。")
+
+    lines.extend(["", "### 跳过项与原因", ""])
+    skipped = evidence["skipped_steps"]
+    if skipped:
+        for item in skipped:
+            lines.append(f"- `{item['name']}`：{item['reason']}")
+    else:
+        lines.append("- 无跳过项。")
+    return "\n".join(lines) + "\n"
 
 
 def execute_slice_plan(plan: SlicePlan) -> tuple[int, list[dict[str, object]]]:
@@ -550,13 +675,16 @@ def execute_slice_plan(plan: SlicePlan) -> tuple[int, list[dict[str, object]]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """解析命令行参数并输出切片计划或执行增量门禁。"""
+    """解析命令行参数并输出切片计划、执行增量门禁或汇出 PR/SHA 验收证据。"""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT, help="仓库根目录")
     parser.add_argument("--base", default="HEAD", help="Git 比较基线（默认 HEAD）")
     parser.add_argument("--plan", action="store_true", help="仅打印命中切片与命令计划，不执行子进程")
     parser.add_argument("--skip-runtime", action="store_true", help="跳过 Maven、pytest 与前端运行时步骤")
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出结果")
+    parser.add_argument("--pr", default="", help="关联 PR 编号或链接，用于写入统一验收证据")
+    parser.add_argument("--evidence-json", type=Path, help="将绑定 PR 与 head SHA 的结构化验收证据写入 JSON 文件")
+    parser.add_argument("--evidence-md", type=Path, help="将绑定 PR 与 head SHA 的验收证据摘要写入 Markdown 文件")
     args = parser.parse_args(argv)
 
     try:
@@ -581,12 +709,31 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not plan.steps:
-        print("当前工作区未命中需要执行的增量检查步骤。")
+        code, outcomes = 0, []
+    else:
+        code, outcomes = execute_slice_plan(plan)
+
+    evidence = build_acceptance_evidence(args.root, plan, outcomes, code=code, pr_ref=args.pr)
+    if args.evidence_json is not None:
+        args.evidence_json.parent.mkdir(parents=True, exist_ok=True)
+        args.evidence_json.write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
+    if args.evidence_md is not None:
+        args.evidence_md.parent.mkdir(parents=True, exist_ok=True)
+        args.evidence_md.write_text(
+            render_acceptance_markdown(evidence), encoding="utf-8", newline="\n"
+        )
+
+    if not plan.steps:
+        if args.json:
+            print(json.dumps(evidence, ensure_ascii=False, indent=2))
+        else:
+            print("当前工作区未命中需要执行的增量检查步骤。")
         return 0
 
-    code, outcomes = execute_slice_plan(plan)
     if args.json:
-        print(json.dumps({"code": code, "outcomes": outcomes}, ensure_ascii=False, indent=2))
+        print(json.dumps({"code": code, "outcomes": outcomes, "evidence": evidence}, ensure_ascii=False, indent=2))
     else:
         total_sec = sum(float(item["seconds"]) for item in outcomes)
         print(f"增量切片检查完成：{len(outcomes)} 项，总耗时 {total_sec:.2f}s，退出码 {code}。")
