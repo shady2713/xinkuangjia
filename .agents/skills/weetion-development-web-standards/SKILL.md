@@ -1,6 +1,10 @@
 ---
 name: weetion-development-web-standards
 description: "在 basic-framework 仓库开发、修改、测试或评审 Web（Vue、TypeScript、JavaScript）代码，以及生成 Vue Vben Admin CRUD 模块时使用；统一前端工作入口、组件参考、完整中文注释和相关验证，不用于 Java 或 Python 开发。"
+verification:
+  - "pnpm run quality:gates"
+  - "pnpm run test:e2e:ci"
+  - "python -B -X utf8 scripts/code/web/check_worktree_web_comments.py"
 ---
 
 # basic-framework Web 开发规范

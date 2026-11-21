@@ -1,6 +1,9 @@
 ---
 name: weetion-task-cards
 description: 按固定命名和已有 Markdown 模板生成、修订或检查需求卡；也支持单文档计划及按卡执行。生成前必须读取对应模板文件。
+verification:
+  - "python -B -X utf8 scripts/workflow/run_checks.py --group docs"
+  - "python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan"
 ---
 
 # 需求卡生成规范

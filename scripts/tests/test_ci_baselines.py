@@ -331,3 +331,37 @@ def test_baseline_step_falls_back_to_empty_tree(tmp_path: Path, event_base: str)
     assert baseline != ZERO_SHA
     assert git(repo, "cat-file", "-t", baseline).stdout.strip() == "commit"
     assert git(repo, "diff", "--name-only", baseline, "HEAD").stdout.strip() == "README.md"
+
+
+def test_baseline_step_rejects_unreachable_sha(tmp_path: Path) -> None:
+    """不可达或非法基线提交必须立即失败，避免后续 diff 产生误导性错误。"""
+    repo = tmp_path / "repo"
+    init_repository(repo)
+    (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    commit_all(repo, "root")
+    helper = repo / "scripts/workflow/resolve_ci_baseline.py"
+    helper.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(DEFAULT_ROOT / "scripts/workflow/resolve_ci_baseline.py", helper)
+    result = run_shell(
+        step_run("secrets-scan", BASELINE_STEP),
+        repo,
+        {"EVENT_BASE_SHA": "deadbeef" * 5},
+    )
+    assert result.returncode != 0
+
+
+def test_frontend_job_caches_playwright_and_uploads_failure_artifacts() -> None:
+    """前端 CI 必须缓存 Playwright 浏览器并在失败时上传测试诊断产物。"""
+    steps = workflow_jobs()["frontend"]["steps"]
+    cache_step = next((step for step in steps if step.get("id") == "playwright-cache"), None)
+    assert cache_step is not None
+    assert str(cache_step.get("uses", "")).startswith("actions/cache@")
+    assert cache_step["with"]["path"] == "~/.cache/ms-playwright"
+
+    upload_step = next(
+        (step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact@")),
+        None,
+    )
+    assert upload_step is not None
+    assert upload_step.get("if") == "failure()"
+    assert "test-results" in upload_step["with"]["path"]

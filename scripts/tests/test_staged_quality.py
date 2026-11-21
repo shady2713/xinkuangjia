@@ -638,3 +638,51 @@ def test_web_staged_mode_reads_base_to_head_diff(
     assert count == 1 and findings == []
     assert [item["path"] for item in captured] == [web_file]
     assert captured[0]["new"] is True
+
+
+def test_deleted_skill_expands_scope_to_catch_broken_replaced_by(
+    private_index: dict[str, str],
+) -> None:
+    """删除技能时必须扩大技能校验范围，拦截其他技能悬空的 replaced-by 引用。"""
+    stage_blob(
+        private_index,
+        ".agents/skills/weetion-old-probe/SKILL.md",
+        (
+            "---\n"
+            "name: weetion-old-probe\n"
+            "description: 指向待删除技能的测试样本。\n"
+            "status: deprecated\n"
+            "replaced-by: weetion-doc-trim-cot-leakage\n"
+            "---\n# 样本\n"
+        ),
+    )
+    subprocess.run(
+        [
+            "git",
+            "update-index",
+            "--force-remove",
+            ".agents/skills/weetion-doc-trim-cot-leakage/SKILL.md",
+        ],
+        cwd=DEFAULT_ROOT,
+        env=private_index,
+        check=True,
+        capture_output=True,
+        timeout=30,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-B",
+            str(DEFAULT_ROOT / "scripts/workflow/check_staged_quality.py"),
+        ],
+        cwd=DEFAULT_ROOT,
+        env=private_index,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "replaced-by 指向不存在的技能：weetion-doc-trim-cot-leakage" in result.stdout
