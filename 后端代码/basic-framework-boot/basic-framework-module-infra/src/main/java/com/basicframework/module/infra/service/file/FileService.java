@@ -91,12 +91,48 @@ public interface FileService {
     void deleteFileList(List<Long> ids) throws Exception;
 
     /**
-     * 按对象路径以流式方式打开未软删除文件的内容流及字节长度。
+     * 按对象路径以流式方式打开未软删除的公开文件内容流及字节长度。
      *
      * @param path 文件路径
      * @return 文件内容流与长度封装；记录不存在、已删除或存储对象缺失时返回 null
      * @throws Exception 读取存储失败时抛出
      */
     FileContentStream openFileContent(String path) throws Exception;
+
+    /**
+     * 判断指定对象路径按当前存储策略是否属于私有附件。
+     *
+     * @param path 对象相对路径
+     * @return 私有桶模式或命中 {@code private/} 路径约定时返回 true
+     */
+    default boolean isPrivateObject(String path) {
+        return false;
+    }
+
+    /**
+     * 执行统一私有对象级授权后，返回指定文件的元数据。
+     *
+     * @param id 文件记录编号
+     * @return 已通过访问授权校验的文件元数据
+     */
+    FileDO getAuthorizedPrivateFile(Long id);
+
+    /**
+     * 执行统一私有对象级授权后，按契约（60~3600 秒，默认 900 秒）生成私有附件的限时读取地址。
+     *
+     * @param id 文件记录编号
+     * @param expirationSeconds 访问有效期，单位秒；为空时使用默认值 900 秒
+     * @return 限时预签名读取地址
+     */
+    String presignPrivateGetUrl(Long id, Integer expirationSeconds);
+
+    /**
+     * 执行统一私有对象级授权后，以流式方式打开私有附件内容流及字节长度。
+     *
+     * @param id 文件记录编号
+     * @return 文件内容流与长度封装；存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    FileContentStream openPrivateFileContent(Long id) throws Exception;
 
 }

@@ -164,6 +164,17 @@ public interface FileClient extends AutoCloseable {
     }
 
     /**
+     * 强制为私有附件生成限时 GET 预签名地址，不因桶公开开关退化为长期公开 URL。
+     *
+     * @param path 对象相对路径
+     * @param expirationSeconds 访问有效期，单位秒（受 60~3600 秒契约约束）
+     * @return 限时临时读取地址
+     */
+    default String presignPrivateGetUrl(String path, Integer expirationSeconds) {
+        return presignGetUrl(path, expirationSeconds);
+    }
+
+    /**
      * 关闭客户端持有的连接池、线程和其他外部资源。
      *
      * <p>无状态实现默认无需处理；持有 SDK 客户端的实现必须覆写。</p>

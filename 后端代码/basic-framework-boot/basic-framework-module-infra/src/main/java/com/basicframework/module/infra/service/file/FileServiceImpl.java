@@ -4,6 +4,7 @@ import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
+import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
@@ -75,6 +76,10 @@ public class FileServiceImpl implements FileService {
     /** Redis 模板（未配置 Redis 时按单机有界内存凭证表降级）。 */
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
+
+    /** 权限校验公共 API，用于私有附件统一对象级授权（上传人本人或具备 {@code infra:file:query} 权限）。 */
+    @Autowired(required = false)
+    private PermissionCommonApi permissionCommonApi;
 
     /** 无 Redis 时的有界本地一次性直传凭证表，键为对象路径。 */
     private final ConcurrentHashMap<String, PresignTicket> localPresignTickets = new ConcurrentHashMap<>();
@@ -268,11 +273,14 @@ public class FileServiceImpl implements FileService {
      * 生成对象读取地址。
      *
      * @param url 对象路径或完整访问地址
-     * @param expirationSeconds 私有存储有效期，单位秒；公开存储时忽略
+     * @param expirationSeconds 私有存储有效期，单位秒（受 60~3600 秒约束）；公开存储时忽略
      * @return 文件读取地址
      */
     @Override
     public String presignGetUrl(String url, Integer expirationSeconds) {
+        if (expirationSeconds != null) {
+            resolveContractExpirationSeconds(expirationSeconds);
+        }
         return fileStorageService.presignGetUrl(url, expirationSeconds);
     }
 
@@ -500,7 +508,7 @@ public class FileServiceImpl implements FileService {
     }
 
     /**
-     * 先核验数据库元数据记录仍存在且未软删除，再流式打开底层存储内容并补齐字节长度。
+     * 先校验公开访问契约与元数据未软删除，再流式打开公开资源内容并补齐字节长度。
      *
      * @param path 对象路径
      * @return 文件内容流与权威字节长度；记录不存在、已删除或存储对象缺失时返回 null
@@ -508,11 +516,94 @@ public class FileServiceImpl implements FileService {
      */
     @Override
     public FileContentStream openFileContent(String path) throws Exception {
+        if (isPrivateObject(path)) {
+            throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
+        }
         FileDO file = fileMapper.selectByPath(path);
         if (file == null) {
             return null;
         }
-        FileContentStream content = fileStorageService.openContent(path);
+        return openContentWithAuthoritativeSize(file);
+    }
+
+    /**
+     * 判断对象路径是否按私有附件契约受保护（私有桶模式或命中 {@code private/} 目录前缀）。
+     *
+     * @param path 对象相对路径
+     * @return 属于私有附件返回 true
+     */
+    @Override
+    public boolean isPrivateObject(String path) {
+        return !fileStorageService.isPublicAccess() || FilePathUtils.isPrivateObjectPath(path);
+    }
+
+    /**
+     * 校验文件存在并执行统一私有附件对象级授权。
+     *
+     * @param id 文件记录编号
+     * @return 已通过访问授权校验的文件元数据
+     */
+    @Override
+    public FileDO getAuthorizedPrivateFile(Long id) {
+        FileDO file = validateFileExists(id);
+        assertCanAccessPrivateFile(file);
+        return file;
+    }
+
+    /**
+     * 执行统一对象级授权后，按 60~3600 秒契约生成私有附件的限时读取预签名地址。
+     *
+     * @param id 文件记录编号
+     * @param expirationSeconds 有效期，单位秒；为空时默认 900 秒
+     * @return 限时预签名读取地址
+     */
+    @Override
+    public String presignPrivateGetUrl(Long id, Integer expirationSeconds) {
+        int resolvedSeconds = resolveContractExpirationSeconds(expirationSeconds);
+        FileDO file = getAuthorizedPrivateFile(id);
+        return fileStorageService.presignPrivateGetUrl(file.getPath(), resolvedSeconds);
+    }
+
+    /**
+     * 执行统一对象级授权后，以流式方式打开私有附件内容流。
+     *
+     * @param id 文件记录编号
+     * @return 文件内容流与长度封装；存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    @Override
+    public FileContentStream openPrivateFileContent(Long id) throws Exception {
+        FileDO file = getAuthorizedPrivateFile(id);
+        return openContentWithAuthoritativeSize(file);
+    }
+
+    /** 按统一对象级授权规则校验当前登录用户是否有权读取私有附件（仅允许上传人本人或具备 infra:file:query 权限）。 */
+    private void assertCanAccessPrivateFile(FileDO file) {
+        Long loginUserId = SecurityFrameworkUtils.getLoginUserId();
+        if (loginUserId == null) {
+            throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
+        }
+        if (StrUtil.isNotBlank(file.getCreator()) && Objects.equals(String.valueOf(loginUserId), file.getCreator())) {
+            return;
+        }
+        if (permissionCommonApi != null && permissionCommonApi.hasAnyPermissions(loginUserId, "infra:file:query")) {
+            return;
+        }
+        throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
+    }
+
+    /** 按契约解析私有附件临时地址有效期，越界时抛出稳定业务异常。 */
+    private static int resolveContractExpirationSeconds(Integer expirationSeconds) {
+        try {
+            return FilePathUtils.resolvePresignGetExpirationSeconds(expirationSeconds);
+        } catch (IllegalArgumentException ex) {
+            throw exception(ErrorCodeConstants.FILE_PRESIGN_EXPIRATION_INVALID);
+        }
+    }
+
+    /** 打开底层存储对象流并优先保留存储端返回的权威字节长度。 */
+    private FileContentStream openContentWithAuthoritativeSize(FileDO file) throws Exception {
+        FileContentStream content = fileStorageService.openContent(file.getPath());
         if (content == null) {
             return null;
         }

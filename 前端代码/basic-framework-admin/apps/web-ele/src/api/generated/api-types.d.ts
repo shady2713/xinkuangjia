@@ -1895,7 +1895,7 @@ export interface OpenApiPaths {
     put: { body: OpenApiSchemas.ConfigSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/infra/file/content/**": {
-    /** 下载文件 */
+    /** 下载公开文件 */
     get: { body: never; query: never; response: void };
   };
   "/admin-api/infra/file/create": {
@@ -1921,6 +1921,14 @@ export interface OpenApiPaths {
   "/admin-api/infra/file/presigned-url": {
     /** 获取文件预签名地址（上传） */
     get: { body: never; query: { name: string; directory?: string }; response: OpenApiSchemas.CommonResult_FilePresignedUrlRespVO };
+  };
+  "/admin-api/infra/file/private/content": {
+    /** 下载私有附件 */
+    get: { body: never; query: { id: number | string }; response: void };
+  };
+  "/admin-api/infra/file/private/presigned-get-url": {
+    /** 获取私有附件限时读取地址 */
+    get: { body: never; query: { id: number | string; expirationSeconds?: number }; response: OpenApiSchemas.CommonResult_String };
   };
   "/admin-api/infra/file/upload": {
     /** 上传文件 */

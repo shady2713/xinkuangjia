@@ -40,6 +40,8 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_METADATA_INVALID = new ErrorCode(1_001_003_005, "文件元数据超过数据库字段限制");
     ErrorCode FILE_TOO_LARGE = new ErrorCode(1_001_003_006, "上传文件超过大小上限（单文件 50MB）");
     ErrorCode FILE_PRESIGN_TICKET_INVALID = new ErrorCode(1_001_003_007, "上传凭证无效或已过期，请重新获取上传地址");
+    ErrorCode FILE_ACCESS_DENIED = new ErrorCode(1_001_003_008, "无权访问该私有文件");
+    ErrorCode FILE_PRESIGN_EXPIRATION_INVALID = new ErrorCode(1_001_003_009, "临时访问地址有效期必须在 60 至 3600 秒之间");
 
     // ========= 数据导出 1-001-004-000 =================
     ErrorCode EXPORT_SIZE_EXCEEDED = new ErrorCode(1_001_004_000, "单次最多导出 10000 条数据，请缩小查询范围");

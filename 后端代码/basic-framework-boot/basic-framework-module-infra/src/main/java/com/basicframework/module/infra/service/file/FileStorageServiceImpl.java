@@ -217,4 +217,26 @@ public class FileStorageServiceImpl implements FileStorageService {
         return fileClient.presignGetUrl(url, expirationSeconds);
     }
 
+    /**
+     * 返回当前 MinIO 存储的公开访问开关。
+     *
+     * @return 默认公开资源模式返回 true；私有附件模式返回 false
+     */
+    @Override
+    public boolean isPublicAccess() {
+        return minioFileProperties.isPublicAccess();
+    }
+
+    /**
+     * 为私有附件生成限时 GET 预签名地址。
+     *
+     * @param path 对象相对路径
+     * @param expirationSeconds 有效期，单位秒（受 60~3600 秒约束）
+     * @return 限时预签名读取地址
+     */
+    @Override
+    public String presignPrivateGetUrl(String path, Integer expirationSeconds) {
+        return fileClient.presignPrivateGetUrl(path, expirationSeconds);
+    }
+
 }

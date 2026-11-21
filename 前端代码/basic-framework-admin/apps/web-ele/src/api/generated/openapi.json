@@ -4705,7 +4705,7 @@
           }
         },
         "security" : [ ],
-        "summary" : "下载文件",
+        "summary" : "下载公开文件",
         "tags" : [ "管理后台 - 文件存储" ]
       }
     },
@@ -4928,6 +4928,63 @@
           }
         },
         "summary" : "获取文件预签名地址（上传）",
+        "tags" : [ "管理后台 - 文件存储" ]
+      }
+    },
+    "/admin-api/infra/file/private/content" : {
+      "get" : {
+        "operationId" : "FileController_getPrivateFileContent",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "下载私有附件",
+        "tags" : [ "管理后台 - 文件存储" ]
+      }
+    },
+    "/admin-api/infra/file/private/presigned-get-url" : {
+      "get" : {
+        "operationId" : "FileController_getPrivateFilePresignedUrl",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "expirationSeconds",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonResult_String"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "获取私有附件限时读取地址",
         "tags" : [ "管理后台 - 文件存储" ]
       }
     },

@@ -3,6 +3,7 @@ package com.basicframework.module.infra.controller.admin.file;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadReqVO;
+import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.service.file.FileService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -169,6 +170,37 @@ class FileControllerTest {
         assertThat(badResp.getStatus()).isEqualTo(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE.value());
         assertThat(badResp.getHeader("Content-Range")).isEqualTo("bytes */10");
         assertThat(badResp.getContentAsByteArray()).isEmpty();
+    }
+
+    /** 验证公开下载接口拦截私有附件返回 403，且私有下载与限时预签名接口正常委托服务层授权。 */
+    @Test
+    void publicEndpointRejectsPrivatePathAndPrivateEndpointsDelegateToFileService() throws Exception {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+
+        HttpServletRequest publicReq = mock(HttpServletRequest.class);
+        HttpServletResponse publicResp = mock(HttpServletResponse.class);
+        when(publicReq.getRequestURI()).thenReturn("/admin-api/infra/file/content/private/2026/a.pdf");
+        when(fileService.isPrivateObject("private/2026/a.pdf")).thenReturn(true);
+        controller.getFileContent(publicReq, publicResp);
+        verify(publicResp).setStatus(HttpStatus.FORBIDDEN.value());
+        verify(fileService, never()).openFileContent(any());
+
+        when(fileService.presignPrivateGetUrl(7L, 600)).thenReturn("https://signed.local/7");
+        assertThat(controller.getPrivateFilePresignedUrl(7L, 600).getData()).isEqualTo("https://signed.local/7");
+
+        FileDO fileDO = new FileDO();
+        fileDO.setId(7L);
+        fileDO.setPath("private/2026/a.txt");
+        when(fileService.getAuthorizedPrivateFile(7L)).thenReturn(fileDO);
+        byte[] data = "secret-doc".getBytes(StandardCharsets.UTF_8);
+        when(fileService.openPrivateFileContent(7L))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream(data), (long) data.length));
+        MockHttpServletResponse privateResp = new MockHttpServletResponse();
+        controller.getPrivateFileContent(7L, mock(HttpServletRequest.class), privateResp);
+        assertThat(privateResp.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(privateResp.getContentAsByteArray()).isEqualTo(data);
     }
 
 }
