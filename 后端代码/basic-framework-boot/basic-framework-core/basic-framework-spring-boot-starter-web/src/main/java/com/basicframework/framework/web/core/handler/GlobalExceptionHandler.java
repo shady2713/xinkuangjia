@@ -5,6 +5,8 @@ import cn.hutool.core.exceptions.ExceptionUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
+import com.basicframework.framework.apilog.core.interceptor.ApiAccessLogInterceptor;
 import com.basicframework.framework.common.biz.infra.logger.ApiErrorLogCommonApi;
 import com.basicframework.framework.common.biz.infra.logger.dto.ApiErrorLogCreateReqDTO;
 import com.basicframework.framework.common.exception.ServiceException;
@@ -15,7 +17,6 @@ import com.basicframework.framework.common.util.monitor.TracerUtils;
 import com.basicframework.framework.common.util.servlet.ServletUtils;
 import com.basicframework.framework.web.core.util.SensitiveDataUtils;
 import com.basicframework.framework.web.core.util.WebFrameworkUtils;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,13 +37,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,8 +59,6 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 @AllArgsConstructor
 @Slf4j
 public class GlobalExceptionHandler {
-
-    private static final String SANITIZE_FAILURE_PLACEHOLDER = "{\"_sanitized\":true}";
 
     /**
      * 忽略的 ServiceException 错误提示，避免打印过多 logger
@@ -415,9 +414,10 @@ public class GlobalExceptionHandler {
         errorLog.setTraceId(TracerUtils.getTraceId());
         errorLog.setApplicationName(applicationName);
         errorLog.setRequestUrl(request.getRequestURI());
+        String[] sanitizeKeys = resolveSanitizeKeys(request);
         Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", sanitizeMap(ServletUtils.getParamMap(request)))
-                .put("body", sanitizeJson(ServletUtils.getBody(request))).build();
+                .put("query", SensitiveDataUtils.sanitizeMap(ServletUtils.getParamMap(request), sanitizeKeys))
+                .put("body", SensitiveDataUtils.sanitizeJson(ServletUtils.getBody(request), sanitizeKeys)).build();
         errorLog.setRequestParams(JsonUtils.toJsonString(requestParams));
         errorLog.setRequestMethod(request.getMethod());
         errorLog.setUserAgent(ServletUtils.getUserAgent(request));
@@ -426,69 +426,18 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 移除查询参数中的敏感字段后序列化。
+     * 读取当前请求关联处理器方法上的 {@link ApiAccessLog#sanitizeKeys()} 配置。
      *
-     * @param map 查询参数
-     * @return 脱敏后的 JSON；空参数返回 null
+     * @param request 当前 HTTP 请求
+     * @return 自定义敏感字段数组；未关联处理方法或未声明注解时返回 null
      */
-    private static String sanitizeMap(Map<String, ?> map) {
-        if (CollUtil.isEmpty(map)) {
+    private static String[] resolveSanitizeKeys(HttpServletRequest request) {
+        Object handlerAttribute = request.getAttribute(ApiAccessLogInterceptor.ATTRIBUTE_HANDLER_METHOD);
+        if (!(handlerAttribute instanceof HandlerMethod handlerMethod)) {
             return null;
         }
-        Map<String, Object> sanitizedMap = MapUtil.newHashMap(map.size());
-        sanitizedMap.putAll(map);
-        sanitizedMap.keySet().removeIf(key -> SensitiveDataUtils.isSensitiveKey(key));
-        return JsonUtils.toJsonString(sanitizedMap);
-    }
-
-    /**
-     * 递归移除异常请求 JSON 中的敏感字段。
-     *
-     * @param jsonString 请求 JSON
-     * @return 脱敏后的 JSON；解析失败返回安全占位内容
-     */
-    private static String sanitizeJson(String jsonString) {
-        if (StrUtil.isBlank(jsonString)) {
-            return null;
-        }
-        try {
-            JsonNode rootNode = JsonUtils.parseTree(jsonString);
-            sanitizeJson(rootNode);
-            return JsonUtils.toJsonString(rootNode);
-        } catch (Exception ex) {
-            log.warn("[sanitizeJson][payloadLength({}) 脱敏失败，降级为占位内容，exception({})]",
-                    jsonString.length(), ex.getClass().getSimpleName());
-            return SANITIZE_FAILURE_PLACEHOLDER;
-        }
-    }
-
-    /**
-     * 遍历 JSON 节点并原地移除敏感字段。
-     *
-     * @param node JSON 节点
-     */
-    private static void sanitizeJson(JsonNode node) {
-        if (node == null) {
-            return;
-        }
-        if (node.isArray()) {
-            for (JsonNode childNode : node) {
-                sanitizeJson(childNode);
-            }
-            return;
-        }
-        if (!node.isObject()) {
-            return;
-        }
-        Iterator<Map.Entry<String, JsonNode>> iterator = node.properties().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, JsonNode> entry = iterator.next();
-            if (SensitiveDataUtils.isSensitiveKey(entry.getKey())) {
-                iterator.remove();
-                continue;
-            }
-            sanitizeJson(entry.getValue());
-        }
+        ApiAccessLog accessLogAnnotation = handlerMethod.getMethodAnnotation(ApiAccessLog.class);
+        return accessLogAnnotation != null ? accessLogAnnotation.sanitizeKeys() : null;
     }
 
 }
