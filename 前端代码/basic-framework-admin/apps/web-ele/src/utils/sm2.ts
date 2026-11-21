@@ -35,19 +35,17 @@ function normalizePublicKey(publicKey: string): string {
 }
 
 /**
- * 生成 16 字节随机 nonce，优先使用浏览器加密随机源。
+ * 生成 16 字节随机 nonce，使用浏览器安全加密随机源。
  *
  * @returns 32 位十六进制随机串
+ * @throws 运行环境缺少 `crypto.getRandomValues` 时抛出异常
  */
 function createNonce(): string {
-  const bytes = new Uint8Array(16);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(bytes);
-  } else {
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256);
-    }
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('当前运行环境缺少安全随机数生成器 crypto.getRandomValues');
   }
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
   const parts: string[] = [];
   for (const value of bytes) {
     parts.push(value.toString(16).padStart(2, '0'));
@@ -90,6 +88,9 @@ export function encryptPasswordWithPublicKey(
     normalizePublicKey(publicKey),
     SM2_CIPHER_MODE_C1C3C2,
   );
+  if (!encrypted) {
+    throw new Error('SM2 加密结果为空');
+  }
   // sm-crypto 输出省略 C1 的 04 前缀，后端按未压缩点解析，这里统一补齐。
   return `04${encrypted}`;
 }
@@ -103,14 +104,15 @@ export function encryptPasswordWithPublicKey(
  */
 export async function encryptPassword(plain: string): Promise<string> {
   publicKeyPromise ??= resolvePublicKey();
+  let publicKey: string;
   try {
-    const publicKey = await publicKeyPromise;
-    return encryptPasswordWithPublicKey(plain, publicKey);
+    publicKey = await publicKeyPromise;
   } catch (error) {
-    // 公钥请求失败后允许下一次重试，不缓存失败状态。
+    // 仅在公钥拉取失败时清空缓存以便重试，不因调用方空密码等入参错误反复请求公钥。
     publicKeyPromise = undefined;
     throw error;
   }
+  return encryptPasswordWithPublicKey(plain, publicKey);
 }
 
 /**

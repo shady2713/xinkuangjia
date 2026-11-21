@@ -92,6 +92,11 @@ async function viteExtraAppConfigPlugin({
       publicPath = ensureTrailingSlash(config.base);
       source = await getConfigSource(root, config.mode);
     },
+    /**
+     * 向构建产物输出 `_app.config.js` 运行时配置资源。
+     *
+     * @throws 输出运行时配置资源失败时向上抛出异常以阻断构建
+     */
     async generateBundle() {
       try {
         this.emitFile({
@@ -102,9 +107,10 @@ async function viteExtraAppConfigPlugin({
 
         console.log(colors.cyan('configuration file is build successfully!'));
       } catch (error) {
-        console.log(
+        console.error(
           colors.red(`configuration file failed to package:\n${String(error)}`),
         );
+        throw error;
       }
     },
     name: 'vite:extra-app-config',

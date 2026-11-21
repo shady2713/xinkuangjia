@@ -1,0 +1,37 @@
+/** 验证 Pinia 初始化在空白存储密钥下的原生 localStorage 回退与全量 Store 重置。 */
+import { createApp, nextTick } from 'vue';
+
+import { defineStore } from 'pinia';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { initStores, resetAllStores } from '../setup';
+
+const originalConfig = (window as any)._VBEN_ADMIN_PRO_APP_CONF_;
+
+afterEach(() => {
+  (window as any)._VBEN_ADMIN_PRO_APP_CONF_ = originalConfig;
+  localStorage.clear();
+});
+
+describe('stores/setup 初始化与复位', () => {
+  it('空白混淆密钥时直接持久化到 localStorage 且 resetAllStores 能复位状态', async () => {
+    (window as any)._VBEN_ADMIN_PRO_APP_CONF_ = {
+      VITE_APP_STORE_SECURE_KEY: '   ',
+    };
+    const app = createApp({});
+    const pinia = await initStores(app, { namespace: 'unit-ns' });
+
+    const useCounterStore = defineStore('counter', {
+      persist: true,
+      /** 初始化演示计数器状态。 */
+      state: () => ({ count: 0 }),
+    });
+    const store = useCounterStore(pinia);
+    store.count = 42;
+    await nextTick();
+    expect(localStorage.getItem('unit-ns-counter')).toContain('42');
+
+    resetAllStores();
+    expect(store.count).toBe(0);
+  });
+});
