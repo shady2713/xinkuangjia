@@ -71,6 +71,7 @@ class FileServiceImplTest {
     @Test
     void createFileUsesAuthoritativeObjectSizeAndConsumesTicket() {
         setLoginUser(10L);
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
         when(fileStorageService.presignPutUrl(any(), eq("image/png"))).thenReturn("https://minio.local/put");
         when(fileStorageService.presignGetUrl(any(), eq(null))).thenReturn("https://minio.local/files/a.png");
 
@@ -236,6 +237,43 @@ class FileServiceImplTest {
         assertThat(props.toClientConfig().getEnablePublicAccess()).isFalse();
         assertThat(FilePathUtils.isPrivateObjectPath("Private/a.pdf")).isTrue();
         assertThat(FilePathUtils.isPrivateObjectPath("avatar/a.png")).isFalse();
+    }
+
+    /** 验证私有附件上传入库时持久化空 URL，不落库短期预签名凭据。 */
+    @Test
+    void createPrivateFileShouldNotPersistSignedUrl() throws Exception {
+        byte[] content = "private-report".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+        when(fileStorageService.upload(eq(content), any(), eq("text/plain")))
+                .thenReturn("https://minio.local/basic-framework/private/a.txt?X-Amz-Signature=deadbeef");
+
+        String returnedUrl = fileService.createFile(content, "report.txt", "private/hr", "text/plain");
+
+        assertThat(returnedUrl).isEmpty();
+        org.mockito.ArgumentCaptor<FileDO> captor = org.mockito.ArgumentCaptor.forClass(FileDO.class);
+        verify(fileMapper).insert(captor.capture());
+        assertThat(captor.getValue().getPath()).startsWith("private/hr/");
+        assertThat(captor.getValue().getUrl()).isEmpty();
+    }
+
+    /** 验证 S3 预签名客户端在配置对外 path-style domain 时使用浏览器可达基址。 */
+    @Test
+    void s3PresignerShouldResolveExternalPublicBaseWhenConfigured() {
+        com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig cfg =
+                new com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig();
+        cfg.setEndpoint("http://basic-framework-minio:9000");
+        cfg.setDomain("https://admin.example.com/files/basic-framework");
+        cfg.setBucket("basic-framework");
+        cfg.setAccessKey("ak");
+        cfg.setAccessSecret("sk");
+        cfg.setEnablePathStyleAccess(true);
+        cfg.setEnablePublicAccess(false);
+        com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient client =
+                new com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient(1L, cfg);
+        java.net.URI internal = java.net.URI.create("http://basic-framework-minio:9000");
+        java.net.URI resolved = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                client, "resolvePresignerEndpoint", internal);
+        assertThat(resolved).isEqualTo(java.net.URI.create("https://admin.example.com/files"));
     }
 
     /** 构造文件登记请求对象。 */

@@ -149,6 +149,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
         AwsCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(config.getAccessKey(), config.getAccessSecret()));
         URI endpoint = URI.create(buildEndpoint());
+        URI presignerEndpoint = resolvePresignerEndpoint(endpoint);
         S3Configuration serviceConfiguration = S3Configuration.builder() // Path-style 访问
                 .pathStyleAccessEnabled(Boolean.TRUE.equals(config.getEnablePathStyleAccess()))
                 .chunkedEncodingEnabled(false) // 禁用分块编码，避免部分兼容实现上传失败
@@ -163,7 +164,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
             S3Presigner newPresigner = S3Presigner.builder()
                     .credentialsProvider(credentialsProvider)
                     .region(region)
-                    .endpointOverride(endpoint)
+                    .endpointOverride(presignerEndpoint)
                     .serviceConfiguration(serviceConfiguration)
                     .build();
             closeCurrentClients();
@@ -439,6 +440,34 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
                 .getObjectRequest(b -> b.bucket(config.getBucket()).key(path)).build())
                 .url();
         return signedUrl.toString();
+    }
+
+    /**
+     * 解析预签名客户端使用的对外可达地址；配置了 path-style 的对外 domain 时剥离桶后缀作为预签名基址，
+     * 避免签发出仅容器内网可达的 MinIO 主机地址。
+     *
+     * @param endpoint 服务端直连 S3 endpoint
+     * @return 预签名客户端使用的 endpoint URI
+     */
+    URI resolvePresignerEndpoint(URI endpoint) {
+        String domain = config.getDomain();
+        if (!Boolean.TRUE.equals(config.getEnablePathStyleAccess()) || StrUtil.isBlank(domain)) {
+            return endpoint;
+        }
+        String normalized = StrUtil.removeSuffix(domain.trim(), "/");
+        String bucketSuffix = "/" + config.getBucket();
+        if (!StrUtil.endWith(normalized, bucketSuffix)) {
+            return endpoint;
+        }
+        String base = StrUtil.removeSuffix(normalized, bucketSuffix);
+        if (!HttpUtil.isHttp(base) && !HttpUtil.isHttps(base)) {
+            return endpoint;
+        }
+        try {
+            return URI.create(base);
+        } catch (IllegalArgumentException ex) {
+            return endpoint;
+        }
     }
 
     /**

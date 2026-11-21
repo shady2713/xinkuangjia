@@ -117,8 +117,9 @@ public class DeptDataPermissionRule implements DataPermissionRule {
             deptDataPermission = permissionApi.getDeptDataPermission(loginUser.getId());
             if (deptDataPermission == null) {
                 log.error("[getExpression][loginUserId({}) 获取数据权限为 null]", loginUser.getId());
+                String aliasName = tableAlias != null ? tableAlias.getName() : "";
                 throw new NullPointerException(String.format("LoginUser(%d) Table(%s/%s) 未返回数据权限",
-                        loginUser.getId(), tableName, tableAlias.getName()));
+                        loginUser.getId(), tableName, aliasName));
             }
             // 添加到上下文中，避免重复计算
             loginUser.setContext(CONTEXT_KEY, deptDataPermission);

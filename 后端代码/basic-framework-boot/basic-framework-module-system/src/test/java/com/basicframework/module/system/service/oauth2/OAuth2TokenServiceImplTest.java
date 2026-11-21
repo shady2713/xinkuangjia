@@ -315,7 +315,8 @@ class OAuth2TokenServiceImplTest {
         superAdminToken.setUserType(UserTypeEnum.ADMIN.getValue());
         superAdminToken.setUserId(99L);
         when(oauth2AccessTokenMapper.selectById(12L)).thenReturn(superAdminToken);
-        when(adminUserService.getUserTypeOrDefault(99L)).thenReturn(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
+        when(adminUserService.validateUserManageable(99L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenThrow(new ServiceException(SYSTEM_PLATFORM_ACCESS_DENIED));
 
         String businessPlatform = AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
         assertThatThrownBy(() -> tokenService.removeAccessTokenById(10L, businessPlatform))
@@ -327,6 +328,7 @@ class OAuth2TokenServiceImplTest {
         assertThatThrownBy(() -> tokenService.removeAccessTokenById(12L, businessPlatform))
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(adminUserService).validateUserManageable(99L, businessPlatform);
         verify(oauth2AccessTokenMapper, never()).deleteByIds(any());
         verify(oauth2AccessTokenRedisDAO, never()).deleteList(any());
     }

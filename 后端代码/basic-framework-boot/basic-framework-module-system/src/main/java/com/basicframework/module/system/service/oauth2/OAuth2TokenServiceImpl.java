@@ -267,10 +267,8 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if (!UserTypeEnum.ADMIN.getValue().equals(accessTokenDO.getUserType())) {
             throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
-        String targetPlatform = adminUserService.getUserTypeOrDefault(accessTokenDO.getUserId());
-        if (!AdminPlatformTypeEnum.isSame(targetPlatform, operatorPlatformType)) {
-            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
-        }
+        // 同步校验目标用户的平台归属、部门数据权限范围及超级管理员保护边界，防止按令牌编号越权强退。
+        adminUserService.validateUserManageable(accessTokenDO.getUserId(), operatorPlatformType);
         revokeAccessTokenRecord(accessTokenDO);
         return accessTokenDO;
     }

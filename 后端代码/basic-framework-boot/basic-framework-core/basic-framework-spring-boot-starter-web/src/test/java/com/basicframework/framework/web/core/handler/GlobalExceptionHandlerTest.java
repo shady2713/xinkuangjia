@@ -100,6 +100,26 @@ class GlobalExceptionHandlerTest {
         assertThat(captor.getValue().getRequestParams()).doesNotContain("raw-secret");
     }
 
+    /** 验证 400 参数类型异常响应只返回参数名，不回显原始异常堆栈或非法输入值。 */
+    @Test
+    void typeMismatchAndInvalidFormatShouldNotEchoRawInternals() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("basic-framework-server", mock(ApiErrorLogCommonApi.class));
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException mismatch =
+                new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException(
+                        "bad-secret-value", Long.class, "userId", null, new NumberFormatException("For input string: \"bad-secret-value\""));
+        com.basicframework.framework.common.pojo.CommonResult<?> mismatchResult =
+                handler.methodArgumentTypeMismatchExceptionHandler(mismatch);
+        assertThat(mismatchResult.getMsg()).contains("userId").doesNotContain("bad-secret-value").doesNotContain("NumberFormatException");
+
+        com.fasterxml.jackson.databind.exc.InvalidFormatException invalidFormat =
+                com.fasterxml.jackson.databind.exc.InvalidFormatException.from(null, "invalid", "raw-input-payload", Integer.class);
+        invalidFormat.prependPath(Object.class, "status");
+        com.basicframework.framework.common.pojo.CommonResult<?> formatResult =
+                handler.methodArgumentTypeInvalidFormatExceptionHandler(
+                        new org.springframework.http.converter.HttpMessageNotReadableException("bad body", invalidFormat, null));
+        assertThat(formatResult.getMsg()).contains("status").doesNotContain("raw-input-payload");
+    }
+
     /** 用于提供 {@link ApiAccessLog#sanitizeKeys()} 元数据的测试控制器桩。 */
     private static final class AnnotatedEndpoint {
 

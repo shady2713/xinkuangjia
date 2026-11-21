@@ -247,6 +247,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * @param reqVO 已解密的旧密码和新密码
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateUserPassword(Long id, UserProfileUpdatePasswordReqVO reqVO) {
         String lockKey = "profile-pwd:" + id;
         LoginFailureLockService lockService = loginFailureLockServiceProvider != null
@@ -298,6 +299,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * @param password password 参数
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password) {
@@ -336,6 +338,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * @param userType 当前管理平台类型
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password, String userType) {
@@ -372,6 +375,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * @param userType 当前管理平台类型
      */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateUserStatus(Long id, Integer status, String userType) {
         // 平台归属和用户存在性必须在写入前由 Service 一并校验。
         validateUserForPlatform(id, userType);
@@ -522,6 +526,18 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         validateUserPlatform(user, userType);
         return user;
+    }
+
+    /**
+     * 校验目标用户处于当前操作者可管理的平台、部门数据范围与角色边界内。
+     *
+     * @param id 目标用户编号
+     * @param userType 当前操作者所属管理平台类型
+     * @return 校验通过的目标用户对象
+     */
+    @Override
+    public AdminUserDO validateUserManageable(Long id, String userType) {
+        return validateUserForPlatform(id, userType);
     }
 
     /**

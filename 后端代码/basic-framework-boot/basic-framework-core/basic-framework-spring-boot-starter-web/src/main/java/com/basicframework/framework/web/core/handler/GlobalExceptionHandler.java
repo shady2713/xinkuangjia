@@ -140,7 +140,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public CommonResult<?> methodArgumentTypeMismatchExceptionHandler(MethodArgumentTypeMismatchException ex) {
         log.warn("[methodArgumentTypeMismatchExceptionHandler]", ex);
-        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", ex.getMessage()));
+        String paramName = StrUtil.blankToDefault(ex.getName(), "未知参数");
+        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", paramName));
     }
 
     /**
@@ -197,7 +198,13 @@ public class GlobalExceptionHandler {
         log.warn("[methodArgumentTypeInvalidFormatExceptionHandler]", ex);
         if (ex.getCause() instanceof InvalidFormatException) {
             InvalidFormatException invalidFormatException = (InvalidFormatException) ex.getCause();
-            return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", invalidFormatException.getValue()));
+            String fieldName = CollUtil.isNotEmpty(invalidFormatException.getPath())
+                    ? invalidFormatException.getPath().get(invalidFormatException.getPath().size() - 1).getFieldName()
+                    : null;
+            String message = StrUtil.isNotBlank(fieldName)
+                    ? String.format("请求参数类型错误:%s", fieldName)
+                    : "请求参数类型错误";
+            return CommonResult.error(BAD_REQUEST.getCode(), message);
         }
         if (StrUtil.startWith(ex.getMessage(), "Required request body is missing")) {
             return CommonResult.error(BAD_REQUEST.getCode(), "请求参数类型错误: request body 缺失");
