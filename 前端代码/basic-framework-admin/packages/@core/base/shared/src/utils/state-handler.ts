@@ -1,49 +1,84 @@
+/** 基于状态条件的异步等待控制器，同一未就绪周期的并发等待共享同一 Promise。 */
+/** 状态就绪回调签名。 */
+type ResolveCondition = () => void;
+/** 状态失败回调签名。 */
+type RejectCondition = (reason?: unknown) => void;
+
+/** 管理组件或表单挂载前的异步条件等待周期。 */
 export class StateHandler {
   private condition: boolean = false;
-  private rejectCondition: (() => void) | null = null;
-  private resolveCondition: (() => void) | null = null;
+  private pendingPromise: null | Promise<void> = null;
+  private rejectCondition: null | RejectCondition = null;
+  private resolveCondition: null | ResolveCondition = null;
 
+  /**
+   * 判断当前条件是否已经就绪。
+   *
+   * @returns 已就绪返回 true，否则返回 false
+   */
   isConditionTrue(): boolean {
     return this.condition;
   }
 
+  /**
+   * 重置状态条件并清理当前周期的待决回调。
+   */
   reset() {
     this.condition = false;
     this.clearPromises();
   }
 
-  // 触发状态为 false 时，reject
+  /**
+   * 标记条件失败并唤醒拒绝当前周期所有挂起调用。
+   */
   setConditionFalse() {
     this.condition = false;
-    if (this.rejectCondition) {
-      this.rejectCondition();
-      this.clearPromises();
-    }
+    const reject = this.rejectCondition;
+    this.clearPromises();
+    reject?.(new Error('StateHandler condition rejected'));
   }
 
-  // 触发状态为 true 时，resolve
+  /**
+   * 标记条件就绪并唤醒当前周期所有等待中的并发调用。
+   */
   setConditionTrue() {
     this.condition = true;
-    if (this.resolveCondition) {
-      this.resolveCondition();
-      this.clearPromises();
-    }
+    const resolve = this.resolveCondition;
+    this.clearPromises();
+    resolve?.();
   }
 
-  // 返回一个 Promise，等待 condition 变为 true
+  /**
+   * 等待条件变为就绪；同一未就绪挂载周期内的多次调用共享同一 Promise。
+   *
+   * @returns 条件就绪后完成的 Promise
+   */
   waitForCondition(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.condition) {
-        resolve(); // 如果 condition 已经为 true，立即 resolve
-      } else {
+    if (this.condition) {
+      return Promise.resolve();
+    }
+    if (!this.pendingPromise) {
+      /**
+       * 注册共享等待 Promise 的成功与失败回调引用。
+       *
+       * @param resolve 就绪唤醒回调
+       * @param reject 失败拒绝回调
+       */
+      const registerWaiter = (
+        resolve: ResolveCondition,
+        reject: RejectCondition,
+      ) => {
         this.resolveCondition = resolve;
         this.rejectCondition = reject;
-      }
-    });
+      };
+      this.pendingPromise = new Promise<void>(registerWaiter);
+    }
+    return this.pendingPromise;
   }
 
-  // 清理 resolve/reject 函数
+  /** 清理当前等待周期的共享 Promise 与回调引用。 */
   private clearPromises() {
+    this.pendingPromise = null;
     this.resolveCondition = null;
     this.rejectCondition = null;
   }

@@ -212,15 +212,22 @@ export class FormApi {
     return proxy;
   }
 
+  /**
+   * 挂载底层表单动作与字段组件引用映射，并在就绪后唤醒并发等待的调用方。
+   *
+   * @param formActions 底层表单动作集合
+   * @param componentRefMap 字段组件引用映射表
+   */
   mount(formActions: FormActions, componentRefMap: Map<string, unknown>) {
     if (!this.isMounted) {
       Object.assign(this.form, formActions);
-      this.stateHandler.setConditionTrue();
       this.setLatestSubmissionValues({
         ...toRaw(this.handleRangeTimeValue(this.form.values)),
       });
       this.componentRefMap = componentRefMap;
       this.isMounted = true;
+      // 先完成挂载状态与引用装配，再触发共享就绪事件
+      this.stateHandler.setConditionTrue();
     }
   }
 

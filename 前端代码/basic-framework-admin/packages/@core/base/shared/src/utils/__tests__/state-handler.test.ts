@@ -1,3 +1,8 @@
+/**
+ * 验证 StateHandler 在单次等待、并发等待共享 Promise、失败拒绝及重置周期下的行为。
+ *
+ * @author shady2713
+ */
 import { describe, expect, it } from 'vitest';
 
 import { StateHandler } from '../state-handler';
@@ -56,5 +61,54 @@ describe('stateHandler', () => {
 
     await handler.waitForCondition();
     expect(handler.isConditionTrue()).toBe(true);
+  });
+
+  it('should share readiness promise across concurrent waiters when resolved', async () => {
+    const handler = new StateHandler();
+
+    const firstWait = handler.waitForCondition();
+    const secondWait = handler.waitForCondition();
+    const thirdWait = handler.waitForCondition();
+
+    expect(secondWait).toBe(firstWait);
+    expect(thirdWait).toBe(firstWait);
+
+    handler.setConditionTrue();
+    await expect(
+      Promise.all([firstWait, secondWait, thirdWait]),
+    ).resolves.toEqual([undefined, undefined, undefined]);
+    expect(handler.isConditionTrue()).toBe(true);
+  });
+
+  it('should reject all concurrent waiters when condition becomes false', async () => {
+    const handler = new StateHandler();
+
+    const firstWait = handler.waitForCondition();
+    const secondWait = handler.waitForCondition();
+
+    handler.setConditionFalse();
+    await expect(firstWait).rejects.toThrow();
+    await expect(secondWait).rejects.toThrow();
+    expect(handler.isConditionTrue()).toBe(false);
+  });
+
+  it('should create a fresh promise across reset cycles without leaking old state', async () => {
+    const handler = new StateHandler();
+    const firstCycle = handler.waitForCondition();
+    handler.setConditionTrue();
+    await firstCycle;
+
+    handler.reset();
+    let secondSettled = false;
+    const secondCycle = handler.waitForCondition().then(() => {
+      secondSettled = true;
+    });
+
+    await Promise.resolve();
+    expect(secondSettled).toBe(false);
+
+    handler.setConditionTrue();
+    await secondCycle;
+    expect(secondSettled).toBe(true);
   });
 });
