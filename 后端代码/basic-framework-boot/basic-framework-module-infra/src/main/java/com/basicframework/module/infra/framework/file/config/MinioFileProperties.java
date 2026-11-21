@@ -1,6 +1,7 @@
 package com.basicframework.module.infra.framework.file.config;
 
 import com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
@@ -60,6 +61,23 @@ public class MinioFileProperties {
     private boolean publicAccess = true;
 
     /**
+     * 仅用于预签名的 HTTP(S) 站点根地址。
+     *
+     * <p>留空时沿用公开 URL 推导。网关必须保留请求的 Host 和桶路径，供 MinIO 验签。</p>
+     */
+    private String signingEndpoint;
+
+    /**
+     * 校验可选的签名配置是否为 HTTP(S) 站点根地址。
+     *
+     * @return 未配置或配置合法时返回 true
+     */
+    @AssertTrue(message = "MinIO signing-endpoint must be a root HTTP(S) origin")
+    public boolean isSigningEndpointValid() {
+        return signingEndpoint == null || signingEndpoint.isBlank() || S3FileClientConfig.isRootHttpOrigin(signingEndpoint);
+    }
+
+    /**
      * 生成 S3 客户端配置。
      *
      * <p>MinIO 固定使用 Path-Style；公开访问开关由 {@link #publicAccess} 决定。</p>
@@ -76,6 +94,7 @@ public class MinioFileProperties {
         clientConfig.setEnablePathStyleAccess(true);
         clientConfig.setEnablePublicAccess(publicAccess);
         clientConfig.setRegion(region.trim());
+        clientConfig.setSigningEndpoint(resolveSigningEndpoint());
         return clientConfig;
     }
 
@@ -106,6 +125,18 @@ public class MinioFileProperties {
             return normalizedPublicUrl;
         }
         return normalizedPublicUrl + bucketSuffix;
+    }
+
+    /**
+     * 规范化可选的签名地址，便于 SDK 拼接桶路径。
+     *
+     * @return 去掉末尾斜线的根地址，未配置时为 {@code null}
+     */
+    private String resolveSigningEndpoint() {
+        if (signingEndpoint == null || signingEndpoint.isBlank()) {
+            return null;
+        }
+        return trimTrailingSlash(signingEndpoint.trim());
     }
 
     /**

@@ -19,11 +19,13 @@ import re
 import subprocess
 import sys
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 
 # 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
-RULESET_VERSION = "2026.11"
+RULESET_VERSION = "2026.12"
+# Empty tree object id (SHA-1 repositories); used as the parent of root commits.
+EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 # Windows 的 Git Hook 可能继承非 UTF-8 控制台编码；统一输出编码，避免中文提示乱码。
 if hasattr(sys.stdout, "reconfigure"):
@@ -97,6 +99,7 @@ class Finding:
         rule: 命中的安全规则。
         detail: 可安全展示的字段名或原因，不包含字段值。
         severity: error 表示阻断项，warning 表示不阻断的人工核查提示。
+        commit: Commit id that introduced the finding; empty for staged scans.
     """
 
     path: str
@@ -104,6 +107,7 @@ class Finding:
     rule: str
     detail: str
     severity: str = "error"
+    commit: str = ""
 
 
 def _run_git(arguments: list[str], *, text: bool = True) -> str | bytes:
@@ -134,15 +138,18 @@ def _run_git(arguments: list[str], *, text: bool = True) -> str | bytes:
     return completed.stdout
 
 
-def _staged_paths() -> list[str]:
+def _staged_paths(revisions: list[str] | None = None) -> list[str]:
     """读取本次提交将新增或修改的文件路径。
+
+    Args:
+        revisions: Diff revisions; defaults to ``--cached`` (the staged index).
 
     Returns:
         使用正斜杠表示的仓库相对路径列表。
     """
 
     output = _run_git(
-        ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR", "--"],
+        ["diff", *(revisions or ["--cached"]), "--name-only", "-z", "--diff-filter=ACMR", "--"],
         text=False,
     )
     assert isinstance(output, bytes)
@@ -840,20 +847,26 @@ def _python_assignment_candidates(source: str) -> list[tuple[int, int, str, bool
     return candidates
 
 
-def _scan_staged_diff() -> list[Finding]:
+def _scan_staged_diff(target: str | None = None, base: str | None = None) -> list[Finding]:
     """扫描暂存区新增行及禁止提交的环境文件。
+
+    Args:
+        target: Commit to scan; ``None`` scans the staged index.
+        base: Commit to diff ``target`` against; defaults to the empty tree.
 
     Returns:
         全部安全问题列表；删除行不会重复报告历史中已经存在的凭据。
     """
 
+    revisions = ["--cached"] if target is None else [base or EMPTY_TREE_HASH, target]
+    show_prefix = ":" if target is None else f"{target}:"
     findings = [
         Finding(path, 0, "forbidden-env-file", "真实环境文件不得提交")
-        for path in _staged_paths()
+        for path in _staged_paths(revisions)
         if _is_forbidden_env_path(path)
     ]
     output = _run_git(
-        ["diff", "--cached", "--unified=0", "--no-color", "--diff-filter=ACMR", "--"]
+        ["diff", *revisions, "--unified=0", "--no-color", "--no-ext-diff", "--diff-filter=ACMR", "--"]
     )
     assert isinstance(output, str)
     current_path = ""
@@ -869,13 +882,13 @@ def _scan_staged_diff() -> list[Finding]:
             python_code_lines = set()
             if current_path.lower().endswith(".py"):
                 # 必须读取暂存版本；工作区中未暂存的引号变化不能影响提交判定。
-                source = _run_git(["show", f":{current_path}"])
+                source = _run_git(["show", f"{show_prefix}{current_path}"])
                 assert isinstance(source, str)
                 docstring_lines = _python_docstring_lines(source)
                 python_candidates[current_path] = _python_assignment_candidates(source)
             elif current_path.lower().endswith(".md"):
                 # 围栏可能处于未修改的上下文中，必须从完整暂存文档定位语言。
-                source = _run_git(["show", f":{current_path}"])
+                source = _run_git(["show", f"{show_prefix}{current_path}"])
                 assert isinstance(source, str)
                 python_code_lines = _markdown_python_lines(source)
             continue
@@ -912,6 +925,83 @@ def _scan_staged_diff() -> list[Finding]:
                 findings.extend(_scan_added_line(path, min(changed), text, literal_text=literal_text))
         findings.extend(_scan_added_private_keys(path, added_lines))
     return list(dict.fromkeys(findings))
+
+
+def _resolve_commit(revision: str) -> str:
+    """将输入解析为确定的提交标识，缺失或格式无效时失败。"""
+
+    if not revision or revision.startswith("-"):
+        raise RuntimeError(f"invalid revision: {revision!r}")
+    output = _run_git(["rev-parse", "--verify", f"{revision}^{{commit}}"])
+    assert isinstance(output, str)
+    return output.strip()
+
+
+def _ruleset_version(source: str) -> tuple[int, ...] | None:
+    """从源文件常量解析可比较的数值版本。"""
+
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "RULESET_VERSION"
+            for target in node.targets
+        ):
+            value = node.value
+            if not (
+                isinstance(value, ast.Constant)
+                and isinstance(value.value, str)
+                and re.fullmatch(r"\d+(?:\.\d+)*", value.value)
+            ):
+                raise ValueError("RULESET_VERSION must be a dotted numeric string")
+            return tuple(int(part) for part in value.value.split("."))
+    return None
+
+
+def _ruleset_version_at(revision: str) -> tuple[int, ...] | None:
+    """只读提取目标提交中的扫描规则版本。"""
+
+    listing = _run_git(["ls-tree", "--full-tree", "--name-only", revision, "--", SELF_TEST_PATH])
+    if not str(listing).strip():
+        return None
+    source = _run_git(["show", f"{revision}:{SELF_TEST_PATH}"])
+    assert isinstance(source, str)
+    return _ruleset_version(source)
+
+
+def _check_ruleset_version(base: str, head: str) -> list[Finding]:
+    """在扫描规则文件变更时要求版本严格递增。"""
+
+    changed = _run_git(["diff", "--name-only", base, head, "--", f":(top){SELF_TEST_PATH}"])
+    if not str(changed).strip():
+        return []
+    try:
+        baseline, current = _ruleset_version_at(base), _ruleset_version_at(head)
+    except (SyntaxError, ValueError) as error:
+        return [Finding(SELF_TEST_PATH, 0, "ruleset-version", f"cannot parse RULESET_VERSION: {error}")]
+    if current is None:
+        detail = "RULESET_VERSION is missing at head"
+    elif baseline is not None and current <= baseline:
+        detail = "scanner changed without a RULESET_VERSION increase"
+    else:
+        return []
+    return [Finding(SELF_TEST_PATH, 0, "ruleset-version", detail)]
+
+
+def _scan_commit_range(base: str, head: str) -> tuple[list[str], list[Finding]]:
+    """逐提交扫描相对第一父提交的增量并记录对应版本。"""
+
+    if _run_git(["rev-parse", "--is-shallow-repository"]).strip() == "true":
+        raise RuntimeError("提交范围扫描需要完整 Git 历史")
+    base_sha, head_sha = _resolve_commit(base), _resolve_commit(head)
+    output = _run_git(["rev-list", "--reverse", "--topo-order", f"{base_sha}..{head_sha}"])
+    assert isinstance(output, str)
+    commits = output.split()
+    findings: list[Finding] = []
+    for commit in commits:
+        parents = str(_run_git(["rev-list", "--parents", "-n", "1", commit])).split()
+        parent = parents[1] if len(parents) > 1 else EMPTY_TREE_HASH
+        findings.extend(replace(item, commit=commit) for item in _scan_staged_diff(commit, parent))
+    findings.extend(_check_ruleset_version(base_sha, head_sha))
+    return commits, list(dict.fromkeys(findings))
 
 
 def _test_python_syntax_regressions() -> None:
@@ -1212,7 +1302,12 @@ def _parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="扫描 Git 暂存区新增内容中的疑似凭据")
     parser.add_argument("--self-test", action="store_true", help="运行内置伪造样本测试")
-    return parser.parse_args()
+    parser.add_argument("--base", help="Base revision (exclusive); requires --head")
+    parser.add_argument("--head", help="Head revision (inclusive); requires --base")
+    args = parser.parse_args()
+    if (args.base is None) != (args.head is None):
+        parser.error("--base and --head must be provided together")
+    return args
 
 
 def main() -> int:
@@ -1227,12 +1322,21 @@ def main() -> int:
         _run_self_test()
         return 0
     try:
-        findings = _scan_staged_diff()
+        if args.base is not None:
+            base, head = _resolve_commit(args.base), _resolve_commit(args.head)
+            commits, findings = _scan_commit_range(base, head)
+            print(
+                f"Ruleset version {RULESET_VERSION}; checked range "
+                f"{base}..{head}; {len(commits)} commit(s); {len(findings)} finding(s)"
+            )
+        else:
+            findings = _scan_staged_diff()
     except RuntimeError as error:
         print(f"密钥扫描失败：{error}", file=sys.stderr)
         return 2
     if not findings:
-        print("密钥扫描通过：暂存区新增内容未发现疑似凭据")
+        scope = "提交范围" if args.base is not None else "暂存区新增内容"
+        print(f"密钥扫描通过：{scope}未发现疑似凭据")
         return 0
     errors = [finding for finding in findings if finding.severity == "error"]
     if errors:
@@ -1243,6 +1347,8 @@ def main() -> int:
         location = (
             finding.path if finding.line == 0 else f"{finding.path}:{finding.line}"
         )
+        if finding.commit:
+            location = f"{finding.commit} {location}"
         label = "阻断" if finding.severity == "error" else "提示，需人工核查"
         print(f"- {location} [{label}][{finding.rule}] {finding.detail}", file=sys.stderr)
     if errors:

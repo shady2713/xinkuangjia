@@ -29,7 +29,13 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SM2_CURVE_ORDER = int("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123", 16)
 REQUIRED_TOOLS = ("git", "python", "java", "mvn", "node", "pnpm")
 OPTIONAL_TOOLS = ("docker",)
+# Compose 使用同一份本地生成的桶策略。该路径不进入版本控制。
+MINIO_POLICY_RELATIVE_PATH = Path(".e2e-env") / "minio-bucket-policy.json"
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(DEFAULT_ROOT))
+
+from scripts.runtime.render_minio_bucket_policy import render_policy_json
 
 @dataclass(frozen=True)
 class BootstrapPlan:
@@ -208,7 +214,15 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         "MINIO_ACCESS_KEY": minio_access,
         "MINIO_SECRET_KEY": minio_secret,
         "MINIO_BUCKET": existing_vals.get("MINIO_BUCKET") or "basic-framework",
+        "MINIO_PUBLIC_ACCESS": existing_vals.get("MINIO_PUBLIC_ACCESS") or "true",
+        "MINIO_SIGNING_ENDPOINT": existing_vals.get("MINIO_SIGNING_ENDPOINT", ""),
     }
+
+    public_access = generated_values["MINIO_PUBLIC_ACCESS"].lower()
+    if public_access not in {"true", "false"}:
+        raise ValueError("MINIO_PUBLIC_ACCESS 必须是 true 或 false")
+    minio_mode = "mixed" if public_access == "true" else "private"
+    policy_text = render_policy_json(generated_values["MINIO_BUCKET"], minio_mode)
 
     if not compose_env_path.exists() or force:
         verb = "写入" if apply else "将写入"
@@ -232,6 +246,14 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
             )
     else:
         actions.append("保留已有 后端代码/basic-framework-boot/.env（未传 --force 不覆盖）")
+
+    # 重新生成策略并保留已有凭据文件，便于同步公开访问配置。
+    verb = "写入" if apply else "将写入"
+    actions.append(f"{verb} {MINIO_POLICY_RELATIVE_PATH.as_posix()}（MinIO 桶策略，模式 {minio_mode}）")
+    if apply:
+        policy_path = resolved_root / MINIO_POLICY_RELATIVE_PATH
+        policy_path.parent.mkdir(parents=True, exist_ok=True)
+        policy_path.write_text(policy_text, encoding="utf-8", newline="\n")
 
     hooks_value = current_hooks_path(resolved_root)
     if (resolved_root / ".git").exists():

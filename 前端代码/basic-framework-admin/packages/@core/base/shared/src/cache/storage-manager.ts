@@ -17,6 +17,14 @@ interface StorageItem<T> {
 
 /** 封装命名空间前缀与 TTL 淘汰策略的 Web Storage 管理类。 */
 class StorageManager {
+  /**
+   * 空前缀时记录本实例写入的原始键和序列化值，供批量操作识别可清理的条目。
+   *
+   * 实例销毁后记录随之消失，旧条目仍可按原始键读取和移除。若同名键的值
+   * 随后改变，清理时会保留新值。完全相同的序列化值无法判别写入方。
+   */
+  private readonly ownedRawEntries = new Map<string, string>();
+
   private prefix: string;
   private storage: Storage;
 
@@ -39,9 +47,13 @@ class StorageManager {
   }
 
   /**
-   * 清除当前命名空间前缀下的所有存储项。
+   * 清除当前命名空间的存储项。空前缀只清理本实例成功写入且值仍一致的键。
    */
   clear(): void {
+    if (this.isUnprefixed()) {
+      this.getOwnedRawKeys().forEach((key) => this.removeRawItem(key));
+      return;
+    }
     const keysToRemove: string[] = [];
     for (let i = 0; i < this.storage.length; i++) {
       const key = this.storage.key(i);
@@ -53,9 +65,13 @@ class StorageManager {
   }
 
   /**
-   * 主动扫描并移除当前命名空间下所有已过期的存储项。
+   * 主动移除与 `clear` 范围相同的过期条目。空前缀的旧值仍可在按键读取时淘汰。
    */
   clearExpiredItems(): void {
+    if (this.isUnprefixed()) {
+      this.getOwnedRawKeys().forEach((key) => this.getItem(key));
+      return;
+    }
     // 先收集短键快照再读取删除，避免遍历过程中 removeItem 导致底层索引位移漏扫
     const keysToInspect: string[] = [];
     for (let i = 0; i < this.storage.length; i++) {
@@ -88,29 +104,29 @@ class StorageManager {
     try {
       const item: StorageItem<T> = JSON.parse(itemStr);
       if (item.expiry && Date.now() > item.expiry) {
-        this.storage.removeItem(fullKey);
+        this.removeRawItem(fullKey);
         return defaultValue;
       }
       return item.value;
     } catch (error) {
       console.error(`Error parsing item with key "${fullKey}":`, error);
-      this.storage.removeItem(fullKey); // 如果解析失败，删除该项
+      this.removeRawItem(fullKey); // 如果解析失败，删除该项
       return defaultValue;
     }
   }
 
   /**
-   * 移除存储项。
+   * 按键移除存储项并清除本实例对该键的写入记录。
    *
    * @param key 键
    */
   removeItem(key: string): void {
     const fullKey = this.getFullKey(key);
-    this.storage.removeItem(fullKey);
+    this.removeRawItem(fullKey);
   }
 
   /**
-   * 设置存储项并可选附带过期时间。
+   * 设置存储项并可选附带过期时间。空前缀时仅在写入成功后登记本实例的批量清理范围。
    *
    * @param key 键
    * @param value 值
@@ -121,7 +137,11 @@ class StorageManager {
     const expiry = ttl ? Date.now() + ttl : undefined;
     const item: StorageItem<T> = { expiry, value };
     try {
-      this.storage.setItem(fullKey, JSON.stringify(item));
+      const serialized = JSON.stringify(item);
+      this.storage.setItem(fullKey, serialized);
+      if (this.isUnprefixed()) {
+        this.ownedRawEntries.set(fullKey, serialized);
+      }
     } catch (error) {
       console.error(`Error setting item with key "${fullKey}":`, error);
     }
@@ -161,6 +181,42 @@ class StorageManager {
       return '';
     }
     return this.prefix.endsWith('-') ? this.prefix : `${this.prefix}-`;
+  }
+
+  /**
+   * 筛出本实例写入后仍保持原值的键，并丢弃已移除或被覆盖的记录。
+   *
+   * @returns 空前缀模式下可批量清理的原始键
+   */
+  private getOwnedRawKeys(): string[] {
+    const ownedKeys: string[] = [];
+    this.ownedRawEntries.forEach((serialized, key) => {
+      if (this.storage.getItem(key) === serialized) {
+        ownedKeys.push(key);
+      } else {
+        this.ownedRawEntries.delete(key);
+      }
+    });
+    return ownedKeys;
+  }
+
+  /**
+   * 判断存储项是否使用兼容旧数据的原始键。
+   *
+   * @returns 空前缀时返回 true
+   */
+  private isUnprefixed(): boolean {
+    return this.getKeyPrefix() === '';
+  }
+
+  /**
+   * 移除底层条目并清除写入记录。底层移除失败时保留记录。
+   *
+   * @param fullKey 含命名空间前缀的完整键
+   */
+  private removeRawItem(fullKey: string): void {
+    this.storage.removeItem(fullKey);
+    this.ownedRawEntries.delete(fullKey);
   }
 }
 

@@ -415,13 +415,15 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     /**
      * 强制生成受契约约束（60~3600 秒）的私有附件限时 GET 预签名地址。
      *
-     * @param path 对象相对路径或完整文件地址
+     * <p>使用文件记录中保存的原始对象键，避免百分号、井号与加号被当作 URL 转义处理。</p>
+     *
+     * @param path 文件记录中的对象相对路径
      * @param expirationSeconds 访问有效期，单位秒；为空时使用默认值 900 秒
      * @return 限时预签名读取地址
      */
     @Override
     public String presignPrivateGetUrl(String path, Integer expirationSeconds) {
-        return signGetObjectUrl(extractObjectPath(path), expirationSeconds);
+        return signGetObjectUrl(path, expirationSeconds);
     }
 
     /** 将完整访问 URL 或相对路径归一化为解码后的对象 Key。 */
@@ -446,10 +448,20 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
      * 解析预签名客户端使用的对外可达地址；配置了 path-style 的对外 domain 时剥离桶后缀作为预签名基址，
      * 避免签发出仅容器内网可达的 MinIO 主机地址。
      *
+     * <p>优先使用显式签名根地址。对应网关需保留 Host 和桶路径，才能通过 MinIO 的 SigV4 验签。</p>
+     *
      * @param endpoint 服务端直连 S3 endpoint
      * @return 预签名客户端使用的 endpoint URI
+     * @throws IllegalArgumentException 显式签名地址不符合根地址约束时抛出
      */
     URI resolvePresignerEndpoint(URI endpoint) {
+        String signingEndpoint = config.getSigningEndpoint();
+        if (StrUtil.isNotBlank(signingEndpoint)) {
+            if (!S3FileClientConfig.isRootHttpOrigin(signingEndpoint)) {
+                throw new IllegalArgumentException("signingEndpoint must be a root HTTP(S) origin");
+            }
+            return URI.create(StrUtil.removeSuffix(signingEndpoint.trim(), "/"));
+        }
         String domain = config.getDomain();
         if (!Boolean.TRUE.equals(config.getEnablePathStyleAccess()) || StrUtil.isBlank(domain)) {
             return endpoint;

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -144,8 +145,11 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     assert {"mysql", "redis", "minio", "minio-init"} <= set(services)
     assert services["mysql"]["image"] == "mysql:8.0.46"
     assert services["redis"]["image"] == "redis:7.4.10-alpine"
-    assert services["minio"]["image"] == "minio/minio:RELEASE.2025-09-07T16-13-09Z"
-    assert services["minio-init"]["image"] == "minio/mc:RELEASE.2025-08-13T08-35-41Z"
+    assert services["minio"]["build"]["context"] == "./tools/minio"
+    assert services["minio-init"]["image"] == services["minio"]["image"]
+    dockerfile = (DEFAULT_ROOT / "tools/minio/Dockerfile").read_text(encoding="utf-8")
+    assert "RELEASE.2025-09-07T16-13-09Z" in dockerfile
+    assert "RELEASE.2025-08-13T08-35-41Z" in dockerfile
     assert services["minio"]["ports"] == [
         "127.0.0.1:${MINIO_API_PORT:-19000}:9000",
         "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001",
@@ -167,9 +171,29 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     minio_health_test = services["minio"]["healthcheck"]["test"]
     assert minio_health_test == ["CMD", "mc", "ready", "local"]
     assert "curl" not in " ".join(minio_health_test)
-    # MinIO 初始化容器必须为开发桶设置匿名下载策略，避免本地上传文件预览 403
-    minio_init_ep = "\n".join(services["minio-init"]["entrypoint"])
-    assert "mc anonymous set download" in minio_init_ep
+    minio_init_cmd = "\n".join(services["minio-init"]["command"])
+    assert "mc anonymous set-json /policy/bucket-policy.json" in minio_init_cmd
+    assert "mc anonymous set none" in minio_init_cmd
+    assert services["minio-init"]["volumes"][0]["source"] == "./.e2e-env/minio-bucket-policy.json"
+
+
+def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:
+    """验证初始化根据已有后端配置切换匿名权限，且保留本地环境内容。"""
+    repo = _prepare_fake_repo(tmp_path)
+    backend_env = repo / "后端代码/basic-framework-boot/.env"
+    policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    mixed = json.loads(policy.read_text(encoding="utf-8"))
+    blocked = mixed["Statement"][1]["Resource"]
+    assert "arn:aws:s3:::basic-framework/PRIVATE/*" in blocked
+    assert "arn:aws:s3:::basic-framework/private" in blocked
+    assert "arn:aws:s3:::basic-framework/ *" in blocked
+
+    content = backend_env.read_text(encoding="utf-8") + "MINIO_PUBLIC_ACCESS=false\n"
+    backend_env.write_text(content, encoding="utf-8")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    assert json.loads(policy.read_text(encoding="utf-8"))["Statement"] == []
+    assert backend_env.read_text(encoding="utf-8") == content
 
 
 def test_ci_workflow_and_documentation_have_no_drift() -> None:

@@ -1,6 +1,8 @@
 # 本地开发基础设施栈（仅绑定 127.0.0.1 环回地址，禁止直接用于生产环境）。
 # 先运行：python -B -X utf8 scripts/runtime/init_local_dev.py --apply
 # 再启动：docker compose --env-file .env.dev -f docker-compose.dev.yml up -d
+# MinIO bucket policy: init_local_dev.py --apply writes .e2e-env/minio-bucket-policy.json
+# 读取后端 MINIO_PUBLIC_ACCESS 生成策略，minio-init 在 MinIO 就绪后应用。
 
 name: basic-framework-dev
 
@@ -49,9 +51,14 @@ services:
       retries: 15
 
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    # Local image from pinned official GitHub release binaries (tools/minio/Dockerfile);
+    # Docker Hub/Quay MinIO images are unavailable. Shared with minio-init.
+    build:
+      context: ./tools/minio
+    image: localhost/basic-framework-minio:test
+    pull_policy: build
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    command: ["minio", "server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
@@ -67,21 +74,37 @@ services:
       retries: 15
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: localhost/basic-framework-minio:test
+    pull_policy: never
     depends_on:
       minio:
         condition: service_healthy
-    entrypoint:
+    # Applies the generated anonymous bucket policy (mixed) or clears it (private).
+    command:
       - /bin/sh
       - -c
       - |
-        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY" &&
-        mc mb --ignore-existing "local/$${MINIO_BUCKET:-basic-framework}" &&
-        mc anonymous set download "local/$${MINIO_BUCKET:-basic-framework}"
+        set -eu
+        target="local/$${MINIO_BUCKET:-basic-framework}"
+        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+        mc mb --ignore-existing "$$target"
+        if grep -Fq '"Statement":[]' /policy/bucket-policy.json; then
+          mc anonymous set none "$$target"
+        else
+          mc anonymous set-json /policy/bucket-policy.json "$$target"
+        fi
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_BUCKET: ${MINIO_BUCKET:-basic-framework}
+    volumes:
+      # Written by: python -B -X utf8 scripts/runtime/init_local_dev.py --apply
+      - type: bind
+        source: ./.e2e-env/minio-bucket-policy.json
+        target: /policy/bucket-policy.json
+        read_only: true
+        bind:
+          create_host_path: false
     restart: "no"
 
 volumes:

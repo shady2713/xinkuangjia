@@ -134,6 +134,8 @@ basic-framework:
       # 对象 URL 默认作为公开资源访问（public-access=true）；私有附件可存放于 private/ 目录或将 MINIO_PUBLIC_ACCESS 置为 false。
       public-url: ${MINIO_PUBLIC_URL}
       public-access: ${MINIO_PUBLIC_ACCESS:true}
+      # 签名只使用 HTTP(S) 站点根地址；留空时沿用公开 URL 推导。
+      signing-endpoint: ${MINIO_SIGNING_ENDPOINT:}
   web:
     admin-ui:
       url: ${ADMIN_UI_URL:http://localhost:5175}

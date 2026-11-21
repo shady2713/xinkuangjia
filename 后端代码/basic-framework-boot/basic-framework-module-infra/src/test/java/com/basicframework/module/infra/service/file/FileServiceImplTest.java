@@ -11,6 +11,8 @@ import com.basicframework.module.infra.dal.mysql.file.FileMapper;
 import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
+import com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient;
+import com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -24,8 +26,14 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.io.ByteArrayInputStream;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
@@ -274,6 +282,76 @@ class FileServiceImplTest {
         java.net.URI resolved = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
                 client, "resolvePresignerEndpoint", internal);
         assertThat(resolved).isEqualTo(java.net.URI.create("https://admin.example.com/files"));
+    }
+
+    /** Verifies the optional signing endpoint overrides legacy inference and only accepts a root HTTP(S) origin. */
+    @Test
+    void s3PresignerShouldUseConfiguredRootSigningEndpoint() {
+        MinioFileProperties props = buildMinioProperties();
+        URI internal = URI.create("http://127.0.0.1:9000");
+        assertThat(props.isSigningEndpointValid()).isTrue();
+        assertThat(props.toClientConfig().getSigningEndpoint()).isNull();
+        URI legacy = ReflectionTestUtils.invokeMethod(new S3FileClient(1L, props.toClientConfig()),
+                "resolvePresignerEndpoint", internal);
+        assertThat(legacy).isEqualTo(URI.create("http://localhost:9000"));
+
+        props.setSigningEndpoint(" https://files.example.test:8443/ ");
+        S3FileClientConfig cfg = props.toClientConfig();
+        assertThat(props.isSigningEndpointValid()).isTrue();
+        assertThat(cfg.isSigningEndpointValid()).isTrue();
+        URI resolved = ReflectionTestUtils.invokeMethod(new S3FileClient(2L, cfg),
+                "resolvePresignerEndpoint", internal);
+        assertThat(resolved).isEqualTo(URI.create("https://files.example.test:8443"));
+
+        props.setSigningEndpoint("https://files.example.test/basic-framework");
+        S3FileClientConfig invalidCfg = props.toClientConfig();
+        assertThat(props.isSigningEndpointValid()).isFalse();
+        assertThat(invalidCfg.isSigningEndpointValid()).isFalse();
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(new S3FileClient(3L, invalidCfg),
+                "resolvePresignerEndpoint", internal))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(S3FileClientConfig.isRootHttpOrigin("https://user@files.example.test")).isFalse();
+        assertThat(S3FileClientConfig.isRootHttpOrigin("https://files.example.test?a=b")).isFalse();
+    }
+
+    /** Verifies file-by-ID signing keeps the raw stored key verbatim on the root gateway Host and path-style path. */
+    @Test
+    void s3PrivateGetShouldSignExactRawObjectKey() {
+        MinioFileProperties props = buildMinioProperties();
+        props.setPublicAccess(false);
+        props.setSigningEndpoint("https://files.example.test");
+        S3FileClientConfig cfg = props.toClientConfig();
+        S3FileClient client = new S3FileClient(4L, cfg);
+        URI signingEndpoint = ReflectionTestUtils.invokeMethod(client,
+                "resolvePresignerEndpoint", URI.create(cfg.getEndpoint()));
+        try (S3Presigner presigner = S3Presigner.builder()
+                .region(Region.of(cfg.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(cfg.getAccessKey(), cfg.getAccessSecret())))
+                .endpointOverride(signingEndpoint)
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .build()) {
+            ReflectionTestUtils.setField(client, "presigner", presigner);
+
+            URI signed = URI.create(client.presignPrivateGetUrl("private/a%20b#c+d.pdf", 300));
+
+            assertThat(signed.getScheme()).isEqualTo("https");
+            assertThat(signed.getRawAuthority()).isEqualTo("files.example.test");
+            assertThat(signed.getRawPath()).isEqualTo("/basic-framework/private/a%2520b%23c%2Bd.pdf");
+            assertThat(signed.getRawQuery()).contains("X-Amz-Signature=");
+        }
+    }
+
+    /** Builds synthetic MinIO properties for presigner tests. */
+    private static MinioFileProperties buildMinioProperties() {
+        MinioFileProperties props = new MinioFileProperties();
+        props.setEndpoint("http://127.0.0.1:9000");
+        props.setAccessKey("ak");
+        props.setSecretKey("sk");
+        props.setBucket("basic-framework");
+        props.setRegion("us-east-1");
+        props.setPublicUrl("http://localhost:9000");
+        return props;
     }
 
     /** 构造文件登记请求对象。 */
