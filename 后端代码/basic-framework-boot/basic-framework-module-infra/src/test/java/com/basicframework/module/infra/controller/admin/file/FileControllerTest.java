@@ -195,12 +195,13 @@ class FileControllerTest {
         fileDO.setPath("private/2026/a.txt");
         when(fileService.getAuthorizedPrivateFile(7L)).thenReturn(fileDO);
         byte[] data = "secret-doc".getBytes(StandardCharsets.UTF_8);
-        when(fileService.openPrivateFileContent(7L))
+        when(fileService.openAuthorizedPrivateFileContent(fileDO))
                 .thenReturn(new FileContentStream(new ByteArrayInputStream(data), (long) data.length));
         MockHttpServletResponse privateResp = new MockHttpServletResponse();
         controller.getPrivateFileContent(7L, mock(HttpServletRequest.class), privateResp);
         assertThat(privateResp.getStatus()).isEqualTo(HttpStatus.OK.value());
         assertThat(privateResp.getContentAsByteArray()).isEqualTo(data);
+        verify(fileService, never()).openPrivateFileContent(7L);
     }
 
 }

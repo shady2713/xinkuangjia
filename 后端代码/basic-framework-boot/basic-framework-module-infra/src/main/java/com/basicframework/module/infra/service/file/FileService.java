@@ -135,4 +135,15 @@ public interface FileService {
      */
     FileContentStream openPrivateFileContent(Long id) throws Exception;
 
+    /**
+     * 对已通过对象级授权校验的私有附件元数据直接打开内容流，避免重复查库与鉴权。
+     *
+     * @param file 已授权校验的文件元数据
+     * @return 文件内容流与长度封装；存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    default FileContentStream openAuthorizedPrivateFileContent(FileDO file) throws Exception {
+        return openPrivateFileContent(file.getId());
+    }
+
 }

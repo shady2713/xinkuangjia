@@ -281,4 +281,13 @@ public interface AdminUserService {
      */
     void updatePasswordHash(Long id, String rawPassword);
 
+    /**
+     * 校验目标用户存在且处于当前操作者可管理的平台、部门数据范围与角色边界内，越权时抛出业务异常。
+     *
+     * @param id 目标用户编号
+     * @param userType 当前操作者所属管理平台类型
+     * @return 校验通过的目标用户对象
+     */
+    AdminUserDO validateUserManageable(Long id, String userType);
+
 }

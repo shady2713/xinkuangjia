@@ -298,7 +298,7 @@ public class FileController {
                                       HttpServletRequest request,
                                       HttpServletResponse response) throws Exception {
         FileDO file = fileService.getAuthorizedPrivateFile(id);
-        try (FileContentStream content = fileService.openPrivateFileContent(id)) {
+        try (FileContentStream content = fileService.openAuthorizedPrivateFileContent(file)) {
             if (content == null) {
                 response.setStatus(HttpStatus.NOT_FOUND.value());
                 return;

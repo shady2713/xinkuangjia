@@ -165,8 +165,11 @@ public class FileServiceImpl implements FileService {
 
         // 生成唯一上传路径，避免不同目录/同名文件互相覆盖。
         String path = generateUploadPath(name, directory);
-        String url = fileStorageService.upload(content, path, type);
-        if (!FilePathUtils.isFileUrlValid(url)) {
+        String uploadedUrl = fileStorageService.upload(content, path, type);
+        boolean privateObject = isPrivateObject(path);
+        // 私有附件不向数据库持久化带临时签名的短期地址，须通过 /infra/file/private/* 按需授权获取。
+        String persistedUrl = privateObject ? "" : uploadedUrl;
+        if (!privateObject && !FilePathUtils.isFileUrlValid(persistedUrl)) {
             // 对象已经上传但元数据无法入库时立即补偿删除，避免留下无法管理的孤立对象。
             var metadataException = exception(ErrorCodeConstants.FILE_METADATA_INVALID);
             try {
@@ -181,11 +184,11 @@ public class FileServiceImpl implements FileService {
         FileDO file = new FileDO();
         file.setName(name);
         file.setPath(path);
-        file.setUrl(url);
+        file.setUrl(persistedUrl);
         file.setType(type);
         file.setSize((long) content.length);
         fileMapper.insert(file);
-        return url;
+        return persistedUrl;
     }
 
     /**
@@ -320,10 +323,14 @@ public class FileServiceImpl implements FileService {
         if (StrUtil.isBlank(file.getType())) {
             file.setType(StrUtil.blankToDefault(ticket.contentType(), FileTypeUtils.getMineType(createReqVO.getName())));
         }
-        // 只持久化受控对象存储生成的稳定 URL，不采信客户端提交的任意外部地址。
-        file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
-        if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
-            throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+        // 公开资源持久化稳定访问 URL；私有附件留空，避免将短期预签名凭据落库。
+        if (isPrivateObject(file.getPath())) {
+            file.setUrl("");
+        } else {
+            file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
+            if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
+                throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+            }
         }
         try {
             fileMapper.insert(file);
@@ -574,6 +581,18 @@ public class FileServiceImpl implements FileService {
     @Override
     public FileContentStream openPrivateFileContent(Long id) throws Exception {
         FileDO file = getAuthorizedPrivateFile(id);
+        return openContentWithAuthoritativeSize(file);
+    }
+
+    /**
+     * 对已通过对象级授权校验的私有附件直接打开内容流，避免控制器重复查库与鉴权。
+     *
+     * @param file 已授权校验的文件元数据
+     * @return 文件内容流与长度封装；存储对象缺失时返回 null
+     * @throws Exception 读取存储失败时抛出
+     */
+    @Override
+    public FileContentStream openAuthorizedPrivateFileContent(FileDO file) throws Exception {
         return openContentWithAuthoritativeSize(file);
     }
 
