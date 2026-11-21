@@ -52,34 +52,12 @@ jobs:
           cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
       - name: Install
         run: pnpm install --frozen-lockfile
-      - name: OpenAPI contract check
-        run: pnpm api:check
-      - name: Workspace & architecture audit
-        run: |
-          pnpm quality:workspace
-          pnpm quality:development
-          pnpm graph:modules:check
-      - name: Quality tooling tests
-        run: |
-          pnpm quality:test
-          pnpm quality:analysis:test
-          pnpm quality:workspace:test
-          pnpm quality:development:test
-          pnpm quality:delivery:test
-      - name: Circular & dependency check
-        run: |
-          pnpm check:circular
-          pnpm check:dep
-      - name: Unit tests
-        run: pnpm test:unit
-      - name: Typecheck
-        run: pnpm check:type
-      - name: Lint
-        run: pnpm lint
-      - name: Build web-ele
-        run: pnpm build:ele
-      - name: Production security & bundle budget scan
-        run: pnpm quality:prod-scan
+      - name: Shared frontend quality, test, build and security gates
+        run: pnpm run quality:gates
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Critical browser E2E path (production preview)
+        run: pnpm run test:e2e:ci
 
   docs-comments:
     name: docs + comments
@@ -98,14 +76,7 @@ jobs:
       - name: Resolve comparison baseline
         id: baseline
         shell: bash
-        run: |
-          set -euo pipefail
-          base="${EVENT_BASE_SHA:-}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            empty_tree="$(git hash-object -t tree /dev/null)"
-            base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
-          fi
-          echo "sha=$base" >> "$GITHUB_OUTPUT"
+        run: python -B -X utf8 scripts/workflow/resolve_ci_baseline.py
       - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
@@ -190,14 +161,7 @@ jobs:
       - name: Resolve comparison baseline
         id: baseline
         shell: bash
-        run: |
-          set -euo pipefail
-          base="${EVENT_BASE_SHA:-}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            empty_tree="$(git hash-object -t tree /dev/null)"
-            base="$(GIT_AUTHOR_NAME=quality-gate GIT_AUTHOR_EMAIL=quality-gate@invalid GIT_COMMITTER_NAME=quality-gate GIT_COMMITTER_EMAIL=quality-gate@invalid git commit-tree "$empty_tree" -m "quality gate empty baseline")"
-          fi
-          echo "sha=$base" >> "$GITHUB_OUTPUT"
+        run: python -B -X utf8 scripts/workflow/resolve_ci_baseline.py
       - name: Scan changed files for secrets
         run: |
           set -euo pipefail

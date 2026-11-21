@@ -7,7 +7,7 @@ kind: package-reference
 
 ## 摘要
 
-本目录在现有 Playwright 体系上覆盖登录、权限、文件上传下载和用户导入四条关键路径。用例运行在生产构建的 vite preview 上，通过 Playwright 路由把 `/admin-api` 转发到真实后端，不修改产品源码与后端接口。e2e 暂不进入 GitHub Actions 门禁，执行命令与测试环境要求如下。
+本目录在现有 Playwright 体系上覆盖登录、权限、文件上传下载和用户导入四条关键路径，以及面向 CI 可重复执行的生产安全与确定性 SM2 登录关键路径。其中 `production-security.spec.ts` 与 `ci-critical-login.spec.ts` 已通过 `pnpm run test:e2e:ci` 接入 GitHub Actions `frontend` 门禁并输出执行记录；其余联调用例通过 Playwright 路由把 `/admin-api` 转发到真实后端，不修改产品源码与后端接口。
 
 ## 目录
 
@@ -66,12 +66,13 @@ pnpm -F @vben/web-ele exec playwright test e2e/login.spec.ts
 | `permission.spec.ts` | 受限账号无系统管理/用户管理菜单、直达路由落到未找到页、用户分页接口返回 403；管理员可进入用户管理 |
 | `file-upload-download.spec.ts` | 通过文件管理页上传图片、列表出现记录、下载内容与上传字节一致 |
 | `user-import.spec.ts` | 通过导入弹窗上传 Excel、提示新增或更新成功、列表可按账号检索到导入用户 |
+| `ci-critical-login.spec.ts` | 在无外部中间件依赖的 CI 生产预览环境中验证 SM2 加密登录跳转、动态菜单渲染与错误口令提示 |
 
-`production-security.spec.ts` 继续覆盖生产登录页不预填密码，与其他用例共用同一配置。
+`production-security.spec.ts` 与 `ci-critical-login.spec.ts` 通过根目录命令 `pnpm run test:e2e:ci` 在 GitHub Actions 中自动运行并写入执行摘要，与真实后端联调用例共用同一 Playwright 配置。
 
 ## 已知限制与暂缓工作
 
-- e2e 暂未纳入 GitHub Actions 门禁，执行前需要本地准备 MySQL、Redis、S3 兼容存储和后端进程。
+- 需要真实 MySQL、Redis、S3 兼容存储和后端进程的联调用例（`login.spec.ts`、`permission.spec.ts`、`file-upload-download.spec.ts`、`user-import.spec.ts`）仍需本地隔离环境运行；CI 当前仅自动运行 `production-security.spec.ts` 与 `ci-critical-login.spec.ts`。
 - 构建产物中的验证码开关由测试上下文关闭，不能替代验证码本身的自动化；后端需以 `BASIC_FRAMEWORK_CAPTCHA_ENABLE=false` 和 `LOGIN_LOCK_ENABLED=false` 启动。
 - 文件下载断言覆盖对象存储公开地址可达和字节一致，不覆盖私有桶签名或网关转发。
 - 用户导入夹具不携带邮箱，覆盖新增与覆盖更新；失败明细的逐项展示未纳入断言。

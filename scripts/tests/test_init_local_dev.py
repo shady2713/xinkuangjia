@@ -70,7 +70,10 @@ def check_ci_doc_alignment(workflow_data: dict, index_text: str, readme_text: st
     errors: list[str] = []
     jobs = workflow_data.get("jobs", {})
     frontend_steps = [step.get("run", "") for step in jobs.get("frontend", {}).get("steps", [])]
-    if "pnpm lint" in frontend_steps:
+    if any(
+        cmd in frontend_steps
+        for cmd in ("pnpm lint", "pnpm run quality:gates", "pnpm quality:gates")
+    ):
         if "lint 暂不作为必过门禁" in index_text:
             errors.append("脚本使用索引仍声称前端 lint 暂不作为必过门禁，与 ci.yml 冲突")
         if "lint" not in index_text.lower():

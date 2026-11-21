@@ -2,6 +2,9 @@
 """扫描 Git 暂存区新增内容，明确凭据阻断，名称歧义提示核查。
 
 扫描结果只报告文件、行号和规则，不回显命中的敏感值，避免检查工具造成二次泄露。
+覆盖边界：本脚本面向增量暂存差异或 CI 相对基线差异，不回溯历史提交；首次接入、安全事件排查或
+规则大版本升级后，须另行执行全仓或历史提交专项审计。任何规则放宽、豁免增删与 RULESET_VERSION
+变更均须由安全审查方独立复核并附带正反例回归测试。
 Python 测试文件允许 unit- 加 8 至 128 个相同小写字母或数字的虚拟凭据，
 支持字符串字面量及 "unit-" + "a" * 16 写法；其他凭据检查保持生效。
 
@@ -18,6 +21,9 @@ import sys
 import warnings
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+
+# 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
+RULESET_VERSION = "2026.11"
 
 # Windows 的 Git Hook 可能继承非 UTF-8 控制台编码；统一输出编码，避免中文提示乱码。
 if hasattr(sys.stdout, "reconfigure"):
