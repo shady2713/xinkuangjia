@@ -9,6 +9,7 @@ import com.basicframework.module.infra.framework.file.core.client.AbstractFileCl
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectPage;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
+import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -51,8 +52,9 @@ import java.util.List;
  */
 public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 
-    /** 默认预签名读取地址有效期。 */
-    private static final Duration EXPIRATION_DEFAULT = Duration.ofHours(24);
+    /** 私有附件默认预签名读取地址有效期（15 分钟），按契约限制在 60~3600 秒内。 */
+    private static final Duration EXPIRATION_DEFAULT =
+            Duration.ofSeconds(FilePathUtils.DEFAULT_PRESIGN_GET_EXPIRATION_SECONDS);
     /** 前端预签名直传地址的最长有效窗口，过期后需重新签发，缩短泄露暴露面。 */
     private static final Duration PRESIGN_PUT_EXPIRATION = Duration.ofMinutes(15);
 
@@ -394,30 +396,47 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
-     * 生成对象读取地址；公开桶返回稳定 URL，私有桶返回限时预签名 URL。
+     * 生成对象读取地址；非私有路径的公开桶返回稳定公开 URL，私有桶或 {@code private/} 路径返回限时预签名 URL。
      *
      * @param url 对象路径或完整文件地址
-     * @param expirationSeconds 私有桶签名有效期，单位秒；为空时使用 24 小时
+     * @param expirationSeconds 私有读取签名有效期，单位秒（受 60~3600 秒约束；为空时默认 900 秒）
      * @return 对象读取地址
      */
     @Override
     public String presignGetUrl(String url, Integer expirationSeconds) {
-        // 1. 将 url 转换为 path
-        String path = StrUtil.removePrefix(url, config.getDomain() + "/");
-        path = HttpUtils.decodeUtf8(HttpUtils.removeUrlQuery(path));
-
-        // 2.1 情况一：公开访问：无需签名
-        // 考虑到老版本的兼容，所以必须是 config.getEnablePublicAccess() 为 false 时，才进行签名
-        if (!BooleanUtil.isFalse(config.getEnablePublicAccess())) {
+        String path = extractObjectPath(url);
+        if (!BooleanUtil.isFalse(config.getEnablePublicAccess()) && !FilePathUtils.isPrivateObjectPath(path)) {
             return config.getDomain() + "/" + path;
         }
+        return signGetObjectUrl(path, expirationSeconds);
+    }
 
-        // 2.2 情况二：私有访问：生成 GET 预签名 URL
-        String finalPath = path;
-        Duration expiration = expirationSeconds != null ? Duration.ofSeconds(expirationSeconds) : EXPIRATION_DEFAULT;
+    /**
+     * 强制生成受契约约束（60~3600 秒）的私有附件限时 GET 预签名地址。
+     *
+     * @param path 对象相对路径或完整文件地址
+     * @param expirationSeconds 访问有效期，单位秒；为空时使用默认值 900 秒
+     * @return 限时预签名读取地址
+     */
+    @Override
+    public String presignPrivateGetUrl(String path, Integer expirationSeconds) {
+        return signGetObjectUrl(extractObjectPath(path), expirationSeconds);
+    }
+
+    /** 将完整访问 URL 或相对路径归一化为解码后的对象 Key。 */
+    private String extractObjectPath(String url) {
+        String path = StrUtil.removePrefix(url, config.getDomain() + "/");
+        return HttpUtils.decodeUtf8(HttpUtils.removeUrlQuery(path));
+    }
+
+    /** 按契约校验有效期边界并签发 S3 GET 预签名地址。 */
+    private String signGetObjectUrl(String path, Integer expirationSeconds) {
+        Duration expiration = expirationSeconds != null
+                ? Duration.ofSeconds(FilePathUtils.resolvePresignGetExpirationSeconds(expirationSeconds))
+                : EXPIRATION_DEFAULT;
         URL signedUrl = presigner.presignGetObject(GetObjectPresignRequest.builder()
                 .signatureDuration(expiration)
-                .getObjectRequest(b -> b.bucket(config.getBucket()).key(finalPath)).build())
+                .getObjectRequest(b -> b.bucket(config.getBucket()).key(path)).build())
                 .url();
         return signedUrl.toString();
     }

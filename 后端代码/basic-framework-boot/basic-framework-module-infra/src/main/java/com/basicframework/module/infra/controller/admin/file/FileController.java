@@ -26,6 +26,8 @@ import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -215,10 +217,10 @@ public class FileController {
     }
 
     /**
-     * 按对象路径读取公开文件内容。
+     * 按对象路径读取公开资源内容。
      *
-     * <p>业务约束要求文件 URL 长期可访问，因此该入口允许匿名读取，但不提供目录列举和写操作。
-     * 路径必须是登记时的相对对象路径；包含父目录、绝对路径或控制字符时按不存在处理，不访问存储。</p>
+     * <p>公开资源允许匿名按完整相对路径读取；私有附件（位于 {@code private/} 前缀或存储处于私有模式）
+     * 严禁走匿名公开入口，固定返回 403，须通过已认证的私有附件接口获取。</p>
      *
      * @param request HTTP 请求，用于提取对象路径
      * @param response HTTP 响应，用于写入文件内容
@@ -226,7 +228,7 @@ public class FileController {
      */
     @GetMapping("/content/**")
     @PermitAll
-    @Operation(summary = "下载文件")
+    @Operation(summary = "下载公开文件")
     public void getFileContent(HttpServletRequest request,
                                HttpServletResponse response) throws Exception {
         // 获取请求的路径
@@ -240,6 +242,10 @@ public class FileController {
             response.setStatus(HttpStatus.NOT_FOUND.value());
             return;
         }
+        if (fileService.isPrivateObject(path)) {
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            return;
+        }
 
         // 流式读取内容，校验元数据未软删除且透传 Content-Length 与 Range 断点续传头。
         try (FileContentStream content = fileService.openFileContent(path)) {
@@ -249,6 +255,55 @@ public class FileController {
                 return;
             }
             writeAttachment(response, path, content.inputStream(), content.contentLength(),
+                    request.getHeader("Range"));
+        }
+    }
+
+    /**
+     * 校验私有附件对象级授权后，签发受契约约束（60~3600 秒，默认 900 秒）的临时读取预签名地址。
+     *
+     * @param id 文件记录编号
+     * @param expirationSeconds 可选临时地址有效期（秒）
+     * @return 限时临时读取地址
+     */
+    @GetMapping("/private/presigned-get-url")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "获取私有附件限时读取地址")
+    @Parameters({
+            @Parameter(name = "id", description = "文件编号", required = true),
+            @Parameter(name = "expirationSeconds", description = "临时地址有效期（秒，60~3600，默认 900）")
+    })
+    public CommonResult<String> getPrivateFilePresignedUrl(
+            @RequestParam("id") Long id,
+            @RequestParam(value = "expirationSeconds", required = false)
+            @Min(value = FilePathUtils.MIN_PRESIGN_GET_EXPIRATION_SECONDS, message = "临时地址有效期不能小于 60 秒")
+            @Max(value = FilePathUtils.MAX_PRESIGN_GET_EXPIRATION_SECONDS, message = "临时地址有效期不能大于 3600 秒")
+            Integer expirationSeconds) {
+        return success(fileService.presignPrivateGetUrl(id, expirationSeconds));
+    }
+
+    /**
+     * 校验私有附件对象级授权后，以流式方式下载单个私有附件。
+     *
+     * @param id 文件记录编号
+     * @param request HTTP 请求，用于透传 Range 请求头
+     * @param response HTTP 响应，用于输出附件内容
+     * @throws Exception 存储读取或响应输出失败时抛出
+     */
+    @GetMapping("/private/content")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "下载私有附件")
+    @Parameter(name = "id", description = "文件编号", required = true)
+    public void getPrivateFileContent(@RequestParam("id") Long id,
+                                      HttpServletRequest request,
+                                      HttpServletResponse response) throws Exception {
+        FileDO file = fileService.getAuthorizedPrivateFile(id);
+        try (FileContentStream content = fileService.openPrivateFileContent(id)) {
+            if (content == null) {
+                response.setStatus(HttpStatus.NOT_FOUND.value());
+                return;
+            }
+            writeAttachment(response, file.getPath(), content.inputStream(), content.contentLength(),
                     request.getHeader("Range"));
         }
     }

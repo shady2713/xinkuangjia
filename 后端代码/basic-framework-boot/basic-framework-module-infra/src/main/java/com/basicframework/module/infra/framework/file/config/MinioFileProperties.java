@@ -52,9 +52,17 @@ public class MinioFileProperties {
     private String publicUrl;
 
     /**
+     * 存储桶默认是否作为公开资源访问。
+     *
+     * <p>保持默认 {@code true} 以兼容既有公开资源部署；设为 {@code false} 时全部对象均按私有附件处理，
+     * 禁止匿名读取且仅通过受控临时预签名地址或已授权私有下载入口访问。</p>
+     */
+    private boolean publicAccess = true;
+
+    /**
      * 生成 S3 客户端配置。
      *
-     * <p>MinIO 固定使用 Path-Style；根据业务约束固定返回公开、无时效的对象 URL。</p>
+     * <p>MinIO 固定使用 Path-Style；公开访问开关由 {@link #publicAccess} 决定。</p>
      *
      * @return 可供文件客户端初始化的 S3 配置
      */
@@ -66,7 +74,7 @@ public class MinioFileProperties {
         clientConfig.setAccessKey(accessKey.trim());
         clientConfig.setAccessSecret(secretKey.trim());
         clientConfig.setEnablePathStyleAccess(true);
-        clientConfig.setEnablePublicAccess(true);
+        clientConfig.setEnablePublicAccess(publicAccess);
         clientConfig.setRegion(region.trim());
         return clientConfig;
     }

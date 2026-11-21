@@ -138,12 +138,32 @@ public interface FileStorageService {
     /**
      * 生成读取地址。
      *
-     * <p>当前 MinIO 配置固定公开访问；有效期参数仅保留给底层 S3 能力。</p>
+     * <p>公开资源返回稳定公开地址；私有桶或 {@code private/} 对象返回受 60~3600 秒约束的临时预签名地址。</p>
      *
      * @param url 对象路径或完整文件地址
      * @param expirationSeconds 有效期，单位秒；公开访问时可为空
      * @return 文件读取地址
      */
     String presignGetUrl(String url, Integer expirationSeconds);
+
+    /**
+     * 判断当前存储是否默认按公开资源模式提供访问。
+     *
+     * @return 默认公开返回 true；私有桶模式返回 false
+     */
+    default boolean isPublicAccess() {
+        return true;
+    }
+
+    /**
+     * 为私有附件签发受契约约束（60~3600 秒）的临时读取预签名地址。
+     *
+     * @param path 对象相对路径
+     * @param expirationSeconds 访问有效期，单位秒；为空时使用默认值 900 秒
+     * @return 限时读取地址
+     */
+    default String presignPrivateGetUrl(String path, Integer expirationSeconds) {
+        return presignGetUrl(path, expirationSeconds);
+    }
 
 }

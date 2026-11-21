@@ -2,6 +2,8 @@ package com.basicframework.module.infra.framework.file.core.utils;
 
 import cn.hutool.core.util.StrUtil;
 
+import java.util.Locale;
+
 /**
  * 对象存储文件元数据和路径校验工具。
  *
@@ -23,6 +25,14 @@ public final class FilePathUtils {
     public static final int MAX_MIME_TYPE_LENGTH = 128;
     /** 单个上传文件允许的最大字节数（50 MB），与 multipart 及反向代理配置保持一致。 */
     public static final long MAX_UPLOAD_BYTES = 50L * 1024 * 1024;
+    /** 私有附件约定的顶层对象目录前缀；命中该前缀的对象禁止匿名公开读取。 */
+    public static final String PRIVATE_DIRECTORY_PREFIX = "private/";
+    /** 私有附件临时访问预签名地址的最短有效期（60 秒）。 */
+    public static final int MIN_PRESIGN_GET_EXPIRATION_SECONDS = 60;
+    /** 私有附件临时访问预签名地址的默认有效期（15 分钟）。 */
+    public static final int DEFAULT_PRESIGN_GET_EXPIRATION_SECONDS = 900;
+    /** 私有附件临时访问预签名地址的最长有效期（1 小时）。 */
+    public static final int MAX_PRESIGN_GET_EXPIRATION_SECONDS = 3600;
 
     /**
      * 禁止实例化纯静态工具类。
@@ -116,6 +126,38 @@ public final class FilePathUtils {
         return StrUtil.isEmpty(mimeType)
                 || mimeType.length() <= MAX_MIME_TYPE_LENGTH
                 && !containsControlCharacter(mimeType);
+    }
+
+    /**
+     * 判断对象路径是否属于私有附件目录契约（不区分大小写识别 {@code private/} 前缀）。
+     *
+     * @param path 对象相对路径
+     * @return 命中私有附件路径约定时返回 true
+     */
+    public static boolean isPrivateObjectPath(String path) {
+        if (StrUtil.isBlank(path)) {
+            return false;
+        }
+        String normalized = path.trim().toLowerCase(Locale.ROOT);
+        return "private".equals(normalized) || normalized.startsWith(PRIVATE_DIRECTORY_PREFIX);
+    }
+
+    /**
+     * 校验并解析临时读取预签名地址有效期，确保落在 {@code [60, 3600]} 秒契约区间内。
+     *
+     * @param expirationSeconds 调用方请求的秒数；为空时回退默认值 900 秒
+     * @return 规范化后的有效期秒数
+     * @throws IllegalArgumentException 有效期越界时抛出
+     */
+    public static int resolvePresignGetExpirationSeconds(Integer expirationSeconds) {
+        if (expirationSeconds == null) {
+            return DEFAULT_PRESIGN_GET_EXPIRATION_SECONDS;
+        }
+        if (expirationSeconds < MIN_PRESIGN_GET_EXPIRATION_SECONDS
+                || expirationSeconds > MAX_PRESIGN_GET_EXPIRATION_SECONDS) {
+            throw new IllegalArgumentException("临时访问地址有效期必须在 60 至 3600 秒之间");
+        }
+        return expirationSeconds;
     }
 
     /**

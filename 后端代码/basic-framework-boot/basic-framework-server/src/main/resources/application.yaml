@@ -131,8 +131,9 @@ basic-framework:
       bucket: ${MINIO_BUCKET}
       secure: ${MINIO_SECURE}
       region: ${MINIO_REGION}
-      # 对象 URL 按业务要求保持长期公开访问；代码会自动补齐 /{bucket} 路径。
+      # 对象 URL 默认作为公开资源访问（public-access=true）；私有附件可存放于 private/ 目录或将 MINIO_PUBLIC_ACCESS 置为 false。
       public-url: ${MINIO_PUBLIC_URL}
+      public-access: ${MINIO_PUBLIC_ACCESS:true}
   web:
     admin-ui:
       url: ${ADMIN_UI_URL:http://localhost:5175}

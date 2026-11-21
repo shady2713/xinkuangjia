@@ -1,12 +1,15 @@
 package com.basicframework.module.infra.service.file;
 
 import cn.hutool.crypto.digest.DigestUtil;
+import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.core.LoginUser;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateReqVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.dal.mysql.file.FileMapper;
+import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
+import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -22,10 +25,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_ACCESS_DENIED;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXISTS;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PATH_EXISTS;
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRESIGN_EXPIRATION_INVALID;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRESIGN_TICKET_INVALID;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_TOO_LARGE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -168,6 +175,67 @@ class FileServiceImplTest {
         Long id = fileService.createFile(buildCreateReqVO(presigned.getPath(), "redis.png", "image/png", 1L));
         assertThat(id).isEqualTo(99L);
         verify(valueOps).getAndDelete(ticketKey);
+    }
+
+    /** 验证私有附件统一对象级授权（上传人本人与 infra:file:query 放行，未登录/越权拒绝）及临时地址 60~3600 秒有效期契约。 */
+    @Test
+    void privateAttachmentEnforcesUnifiedAuthorizationAndBoundedPresignTtl() throws Exception {
+        FileDO privateFile = new FileDO();
+        privateFile.setId(501L);
+        privateFile.setPath("private/20261121/contract.pdf");
+        privateFile.setCreator("10");
+        privateFile.setSize(12L);
+        when(fileMapper.selectById(501L)).thenReturn(privateFile);
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+
+        // 匿名公开下载入口拒绝 private/ 前缀对象；未登录无法获取私有临时地址。
+        assertThatThrownBy(() -> fileService.openFileContent("private/20261121/contract.pdf"))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(FILE_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> fileService.presignPrivateGetUrl(501L, 300))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(FILE_ACCESS_DENIED.getCode()));
+
+        // 非上传人且无 infra:file:query 权限被拒绝；具备 infra:file:query 权限放行。
+        PermissionCommonApi permissionApi = mock(PermissionCommonApi.class);
+        ReflectionTestUtils.setField(fileService, "permissionCommonApi", permissionApi);
+        setLoginUser(20L);
+        when(permissionApi.hasAnyPermissions(20L, "infra:file:query")).thenReturn(false);
+        assertThatThrownBy(() -> fileService.openPrivateFileContent(501L))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(FILE_ACCESS_DENIED.getCode()));
+
+        when(permissionApi.hasAnyPermissions(20L, "infra:file:query")).thenReturn(true);
+        when(fileStorageService.presignPrivateGetUrl(privateFile.getPath(), 900)).thenReturn("https://signed/900");
+        assertThat(fileService.presignPrivateGetUrl(501L, null)).isEqualTo("https://signed/900");
+
+        // 上传人本人放行流式下载，但越界 TTL（<60 或 >3600）按契约拒绝。
+        setLoginUser(10L);
+        when(fileStorageService.openContent(privateFile.getPath()))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream("pdf".getBytes(StandardCharsets.UTF_8)), 3L));
+        try (FileContentStream stream = fileService.openPrivateFileContent(501L)) {
+            assertThat(stream.contentLength()).isEqualTo(3L);
+        }
+        assertThatThrownBy(() -> fileService.presignPrivateGetUrl(501L, 59))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(FILE_PRESIGN_EXPIRATION_INVALID.getCode()));
+        assertThatThrownBy(() -> fileService.presignPrivateGetUrl(501L, 3601))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(FILE_PRESIGN_EXPIRATION_INVALID.getCode()));
+
+        // MinioFileProperties 默认公开访问，支持显式切换为私有模式。
+        MinioFileProperties props = new MinioFileProperties();
+        props.setEndpoint("http://127.0.0.1:9000");
+        props.setAccessKey("ak");
+        props.setSecretKey("sk");
+        props.setBucket("basic-framework");
+        props.setRegion("us-east-1");
+        props.setPublicUrl("http://localhost:9000");
+        assertThat(props.toClientConfig().getEnablePublicAccess()).isTrue();
+        props.setPublicAccess(false);
+        assertThat(props.toClientConfig().getEnablePublicAccess()).isFalse();
+        assertThat(FilePathUtils.isPrivateObjectPath("Private/a.pdf")).isTrue();
+        assertThat(FilePathUtils.isPrivateObjectPath("avatar/a.png")).isFalse();
     }
 
     /** 构造文件登记请求对象。 */
