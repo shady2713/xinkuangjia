@@ -22,6 +22,51 @@ const VBEN_ADMIN_PRO_APP_CONF = '_VBEN_ADMIN_PRO_APP_CONF_';
 const RUNTIME_CONFIG_FILE_NAME = 'app.config.js';
 
 /**
+ * 通用构建回退到环境变量生成 `_app.config.js` 时允许暴露到浏览器的公开配置键白名单。
+ *
+ * 默认登录凭据、客户端加密密钥、持久化混淆密钥及其他服务端环境变量均不进入白名单，
+ * 避免未提供 `docker/app.config.js` 的应用在生产构建时把 `.env`/`.env.local` 中的敏感变量打入前端静态产物。
+ */
+const PUBLIC_RUNTIME_CONFIG_KEYS = [
+  'VITE_APP_TITLE',
+  'VITE_APP_NAMESPACE',
+  'VITE_APP_CAPTCHA_ENABLE',
+  'VITE_GLOB_API_URL',
+  'VITE_UPLOAD_TYPE',
+  'VITE_APP_AUTH_PAGE_LAYOUT',
+  'VITE_APP_ENABLE_PREFERENCES',
+  'VITE_APP_GLOBAL_SEARCH_ENABLE',
+  'VITE_APP_THEME_BUILTIN_TYPE',
+  'VITE_APP_THEME_COLOR_PRIMARY',
+  'VITE_APP_THEME_MODE',
+  'VITE_APP_THEME_TOGGLE_ENABLE',
+  'VITE_APP_API_ENCRYPT_ENABLE',
+  'VITE_APP_API_ENCRYPT_HEADER',
+  'VITE_APP_API_ENCRYPT_ALGORITHM',
+] as const;
+
+/**
+ * 按公开键白名单过滤回退环境变量，避免将非公开配置或凭据写入浏览器运行时脚本。
+ *
+ * @param env 合并后的环境变量键值表
+ * @returns 仅包含白名单内字符串配置项的公开运行时配置对象
+ */
+function pickPublicRuntimeConfig(
+  env: Record<string, unknown>,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const key of PUBLIC_RUNTIME_CONFIG_KEYS) {
+    if (
+      Object.prototype.hasOwnProperty.call(env, key) &&
+      typeof env[key] === 'string'
+    ) {
+      result[key] = env[key];
+    }
+  }
+  return result;
+}
+
+/**
  * 将应用运行时配置生成独立资源并注入 HTML。
  *
  * @param options 插件选项
@@ -91,7 +136,8 @@ async function getConfigSource(root: string, mode: string | undefined) {
     return await readFile(runtimeConfigPath, 'utf8');
   }
 
-  const config = await loadEnv(root, mode);
+  const rawEnv = await loadEnv(root, mode);
+  const config = pickPublicRuntimeConfig(rawEnv);
   const windowVariable = `window.${VBEN_ADMIN_PRO_APP_CONF}`;
   let source = `${windowVariable}=${JSON.stringify(config)};`;
   source += `
@@ -109,4 +155,9 @@ function ensureTrailingSlash(path: string) {
   return path.endsWith('/') ? path : `${path}/`;
 }
 
-export { viteExtraAppConfigPlugin };
+export {
+  getConfigSource,
+  pickPublicRuntimeConfig,
+  PUBLIC_RUNTIME_CONFIG_KEYS,
+  viteExtraAppConfigPlugin,
+};

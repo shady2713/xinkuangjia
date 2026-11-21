@@ -73,7 +73,7 @@
     "quality:comments": "node ./scripts/check-quality.mjs web",
     "quality:comments:all": "node ./scripts/check-quality.mjs web --all",
     "quality:mermaid": "node ./scripts/check-quality.mjs mermaid",
-    "quality:test": "node --test ./internal/lint-configs/eslint-config/tests/quality.node.mjs"
+    "quality:test": "node --test ./internal/lint-configs/eslint-config/tests/quality.node.mjs ./scripts/quality/tests/scan-production.node.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "catalog:",
