@@ -1,6 +1,5 @@
 package com.basicframework.module.system.api.logger.dto;
 
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -46,8 +45,9 @@ public class LoginLogCreateReqDTO {
 
     /**
      * 用户 IP
+     *
+     * 允许空字符串，原因：非 HTTP 请求或定时任务上下文中可能无法获取客户端 IP
      */
-    @NotEmpty(message = "用户 IP 不能为空")
     private String userIp;
     /**
      * 浏览器 UserAgent

@@ -7,11 +7,10 @@ import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
 
 import com.basicframework.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
+import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import org.apache.ibatis.annotations.Mapper;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -49,31 +48,41 @@ public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO
      * @return 查询结果
      */
     default PageResult<OAuth2AccessTokenDO> selectPage(OAuth2AccessTokenPageReqVO reqVO) {
-        return selectPage(reqVO, (Collection<Long>) null);
-    }
-
-    /**
-     * 按允许的用户编号范围过滤查询有效令牌分页；当 {@code allowedAdminUserIds} 非 null 且为空集合时直接返回空分页。
-     *
-     * @param reqVO 分页条件
-     * @param allowedAdminUserIds 当前平台允许访问的后台用户编号集合；为 null 时不额外限制
-     * @return 令牌分页结果
-     */
-    default PageResult<OAuth2AccessTokenDO> selectPage(OAuth2AccessTokenPageReqVO reqVO,
-                                                       Collection<Long> allowedAdminUserIds) {
-        if (allowedAdminUserIds != null && allowedAdminUserIds.isEmpty()) {
-            return new PageResult<>(Collections.emptyList(), 0L);
-        }
-        Integer userTypeFilter = allowedAdminUserIds != null
-                ? UserTypeEnum.ADMIN.getValue() : reqVO.getUserType();
         return selectPage(reqVO, new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
                 .eqIfPresent(OAuth2AccessTokenDO::getUserId, reqVO.getUserId())
-                // 管理员在线会话分页仅允许查询 ADMIN 令牌，防止自增主键与会员或客户端令牌碰撞越权。
-                .eqIfPresent(OAuth2AccessTokenDO::getUserType, userTypeFilter)
-                .inIfPresent(OAuth2AccessTokenDO::getUserId, allowedAdminUserIds)
+                .eqIfPresent(OAuth2AccessTokenDO::getUserType, reqVO.getUserType())
                 .likeIfPresent(OAuth2AccessTokenDO::getClientId, reqVO.getClientId())
                 .gt(OAuth2AccessTokenDO::getExpiresTime, LocalDateTime.now())
                 .orderByDesc(OAuth2AccessTokenDO::getId));
+    }
+
+    /**
+     * 按调用者管理平台分页查询有效的后台访问令牌，并在数据库端关联 {@code system_users} 执行平台隔离与数据权限过滤。
+     *
+     * @param reqVO 分页条件
+     * @param operatorPlatformType 操作者所属管理平台类型
+     * @return 过滤后的有效在线令牌分页
+     */
+    default PageResult<OAuth2AccessTokenDO> selectPageByPlatform(OAuth2AccessTokenPageReqVO reqVO,
+                                                               String operatorPlatformType) {
+        String normalizedPlatform = AdminPlatformTypeEnum.defaultType(operatorPlatformType);
+        LambdaQueryWrapperX<OAuth2AccessTokenDO> query = new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
+                .eqIfPresent(OAuth2AccessTokenDO::getUserId, reqVO.getUserId())
+                // 管理员在线会话分页仅允许查询 ADMIN 令牌，防止自增主键与会员或客户端令牌碰撞越权。
+                .eq(OAuth2AccessTokenDO::getUserType, UserTypeEnum.ADMIN.getValue())
+                .likeIfPresent(OAuth2AccessTokenDO::getClientId, reqVO.getClientId())
+                .orderByDesc(OAuth2AccessTokenDO::getId);
+        query.gt(OAuth2AccessTokenDO::getExpiresTime, LocalDateTime.now());
+        if (AdminPlatformTypeEnum.BUSINESS_ADMIN.getType().equals(normalizedPlatform)) {
+            query.apply("EXISTS (SELECT 1 FROM system_users u WHERE u.id = system_oauth2_access_token.user_id"
+                            + " AND u.deleted = 0 AND (u.user_type = {0} OR u.user_type IS NULL OR u.user_type = {1}))",
+                    normalizedPlatform, "");
+        } else {
+            query.apply("EXISTS (SELECT 1 FROM system_users u WHERE u.id = system_oauth2_access_token.user_id"
+                            + " AND u.deleted = 0 AND u.user_type = {0})",
+                    normalizedPlatform);
+        }
+        return selectPage(reqVO, query);
     }
 
     /**

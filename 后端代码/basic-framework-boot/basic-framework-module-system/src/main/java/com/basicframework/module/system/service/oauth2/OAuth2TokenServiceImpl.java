@@ -320,7 +320,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 按调用者管理平台隔离查询在线访问令牌分页，防止业务管理平台看见超级管理平台的在线会话。
+     * 按调用者管理平台分页查询在线访问令牌，并将平台隔离与 {@code system_users} 数据权限下推至数据库执行。
      *
      * @param reqVO 分页条件
      * @param operatorPlatformType 操作者所属管理平台类型
@@ -328,11 +328,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
      */
     @Override
     public PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO, String operatorPlatformType) {
-        String normalizedPlatform = AdminPlatformTypeEnum.defaultType(operatorPlatformType);
-        List<AdminUserDO> platformUsers = com.basicframework.framework.datapermission.core.util.DataPermissionUtils.executeIgnore(
-                () -> adminUserService.getUserListByStatusAndType(null, normalizedPlatform));
-        Set<Long> allowedUserIds = convertSet(platformUsers, AdminUserDO::getId);
-        return oauth2AccessTokenMapper.selectPage(reqVO, allowedUserIds);
+        return oauth2AccessTokenMapper.selectPageByPlatform(reqVO, AdminPlatformTypeEnum.defaultType(operatorPlatformType));
     }
 
     /**
