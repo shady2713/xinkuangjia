@@ -4,6 +4,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
+import com.basicframework.framework.security.core.LoginUser;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
@@ -21,6 +22,7 @@ import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,11 +32,15 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
+import java.util.List;
 import java.util.Set;
 
 import static com.basicframework.module.system.enums.ErrorCodeConstants.PASSWORD_POLICY_NOT_MATCH;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PASSWORD_FAILED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,6 +83,21 @@ class AdminUserServiceImplTest {
     @InjectMocks
     private AdminUserServiceImpl userService;
 
+    /** 每个用例后清理线程安全上下文，防止认证身份串扰。 */
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    /** 绑定当前测试线程的已认证操作者上下文。 */
+    private static void setOperator(Long operatorId) {
+        LoginUser loginUser = new LoginUser();
+        loginUser.setId(operatorId);
+        loginUser.setUserType(UserTypeEnum.ADMIN.getValue());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(loginUser, null));
+    }
+
     /** 验证历史 bcrypt(md5(明文)) 能被识别，而当前格式只接受明文。 */
     @Test
     void recognizesLegacyMd5DerivedHash() {
@@ -102,6 +123,9 @@ class AdminUserServiceImplTest {
     /** 验证管理员重置密码后置位首次改密标志。 */
     @Test
     void adminResetPasswordSetsChangeRequiredFlag() {
+        setOperator(99L);
+        PermissionService permissionService = mock(PermissionService.class);
+        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
         when(userMapper.selectById(1L)).thenReturn(buildUser(1L, "super_admin"));
 
         userService.updateUserPassword(1L, "New#Pass1", "super_admin");
@@ -193,9 +217,11 @@ class AdminUserServiceImplTest {
     /** 验证删除用户后立即发布令牌失效事件。 */
     @Test
     void deleteUserRevokesTokens() {
+        setOperator(99L);
         when(userMapper.selectById(1L))
                 .thenReturn(buildUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()));
         PermissionService permissionService = mock(PermissionService.class);
+        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
         when(permissionServiceProvider.getObject()).thenReturn(permissionService);
 
         userService.deleteUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
@@ -275,6 +301,9 @@ class AdminUserServiceImplTest {
     /** 验证通过编辑用户接口停用账号时发布状态变更事件，未变更状态时不重复发布。 */
     @Test
     void updateUserPublishesStatusChangedEventOnlyWhenStatusChanges() {
+        setOperator(99L);
+        PermissionService permissionService = mock(PermissionService.class);
+        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
         AdminUserDO oldUser = buildUser(2L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         oldUser.setStatus(CommonStatusEnum.ENABLE.getStatus());
         when(userMapper.selectById(2L)).thenReturn(oldUser);
@@ -317,6 +346,46 @@ class AdminUserServiceImplTest {
             var violations = validator.validate(reqVO);
             assertThat(violations).anyMatch(v -> "status".equals(v.getPropertyPath().toString()));
         }
+    }
+
+    /** 验证缺少认证上下文或权限服务时，受保护账号管理操作默认 fail-closed 拒绝写入。 */
+    @Test
+    void protectedAccountOperationsFailClosedWithoutPermissionContext() {
+        AdminUserDO target = buildUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        when(userMapper.selectById(1L)).thenReturn(target);
+        when(userMapper.selectByIds(List.of(1L))).thenReturn(List.of(target));
+        UserSaveReqVO updateReq = new UserSaveReqVO();
+        updateReq.setId(1L);
+        updateReq.setUsername("test-user");
+        updateReq.setNickname("Updated");
+
+        assertThatThrownBy(() -> userService.updateUser(updateReq, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> userService.updateUserPassword(
+                1L, "New#Pass1", AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> userService.updateUserStatus(
+                1L, CommonStatusEnum.DISABLE.getStatus(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> userService.deleteUser(1L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        assertThatThrownBy(() -> userService.deleteUserList(List.of(1L), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+
+        // 有登录操作者但 PermissionService 不可用时同样拒绝管理其他账号。
+        setOperator(20L);
+        when(permissionServiceProvider.getIfAvailable()).thenReturn(null);
+        assertThatThrownBy(() -> userService.updateUserStatus(
+                1L, CommonStatusEnum.DISABLE.getStatus(), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(userMapper, never()).updateById(any(AdminUserDO.class));
+        verify(userMapper, never()).deleteById(1L);
     }
 
     /**

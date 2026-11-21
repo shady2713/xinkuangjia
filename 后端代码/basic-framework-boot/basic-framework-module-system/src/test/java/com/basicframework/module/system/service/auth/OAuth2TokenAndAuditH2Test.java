@@ -48,7 +48,9 @@ import com.basicframework.module.system.framework.security.login.SmsLoginFailure
 import com.basicframework.module.system.service.logger.LoginLogService;
 import com.basicframework.module.system.service.logger.LoginLogServiceImpl;
 import com.basicframework.module.system.service.oauth2.OAuth2TokenService;
+import com.basicframework.module.system.service.permission.PermissionService;
 import com.basicframework.module.system.service.user.AdminUserService;
+import com.basicframework.module.system.service.user.AdminUserServiceImpl;
 import jakarta.validation.Validator;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -58,14 +60,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.mybatis.spring.transaction.SpringManagedTransactionFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -108,6 +114,7 @@ class OAuth2TokenAndAuditH2Test {
     @Autowired private PermissionCommonApi permissionCommonApi;
     @Autowired private AdminUserService adminUserService;
     @Autowired private SmsCodeApi smsCodeApi;
+    @Autowired private SecurityAuditService securityAuditService;
 
     /** 每个用例前清空测试表与 Mock 状态。 */
     @BeforeEach
@@ -198,6 +205,40 @@ class OAuth2TokenAndAuditH2Test {
             assertThat(row.getUserId()).isEqualTo(sup.getId());
             assertThat(row.getResult()).isEqualTo(LoginResultEnum.BAD_CREDENTIALS.getResult());
         });
+    }
+
+    /** 验证受保护的账号管理操作在 H2 真实 SQL 数据权限过滤下拒绝跨部门修改并放行同部门操作。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void adminUserProtectedOperationsShouldEnforceRealDeptDataScope() {
+        AdminUserDO dept10User = insertUser("scope_d10", "13900003331", 10L, 0, "business_admin");
+        AdminUserDO dept20User = insertUser("scope_d20", "13900003332", 20L, 0, "business_admin");
+        AdminUserServiceImpl realUserService = new AdminUserServiceImpl();
+        ObjectProvider<PermissionService> permProvider = mock(ObjectProvider.class);
+        when(permProvider.getIfAvailable()).thenReturn(mock(PermissionService.class));
+        ReflectionTestUtils.setField(realUserService, "userMapper", adminUserMapper);
+        ReflectionTestUtils.setField(realUserService, "permissionServiceProvider", permProvider);
+        ReflectionTestUtils.setField(realUserService, "applicationContext", mock(ApplicationContext.class));
+        ReflectionTestUtils.setField(realUserService, "passwordEncoder", new BCryptPasswordEncoder(4));
+        ReflectionTestUtils.setField(realUserService, "securityAuditService", securityAuditService);
+
+        SecurityFrameworkUtils.setLoginUser(adminUser(9010L), new MockHttpServletRequest());
+        when(permissionCommonApi.getDeptDataPermission(9010L)).thenReturn(perm(false, Set.of(10L)));
+        assertThatThrownBy(() -> realUserService.updateUserStatus(dept20User.getId(), 1, "business_admin"))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(ErrorCodeConstants.USER_NOT_EXISTS.getCode()));
+        assertThatThrownBy(() -> realUserService.updateUserPassword(dept20User.getId(), "New#Pass1", "business_admin"))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(ErrorCodeConstants.USER_NOT_EXISTS.getCode()));
+        assertThatThrownBy(() -> realUserService.deleteUser(dept20User.getId(), "business_admin"))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(ErrorCodeConstants.USER_NOT_EXISTS.getCode()));
+
+        realUserService.updateUserStatus(dept10User.getId(), 1, "business_admin");
+        SecurityFrameworkUtils.setLoginUser(adminUser(9011L), new MockHttpServletRequest());
+        when(permissionCommonApi.getDeptDataPermission(9011L)).thenReturn(perm(true, Set.of()));
+        assertThat(adminUserMapper.selectById(dept20User.getId()).getStatus()).isEqualTo(0);
+        assertThat(adminUserMapper.selectById(dept10User.getId()).getStatus()).isEqualTo(1);
     }
 
     /** 插入测试用户。 */

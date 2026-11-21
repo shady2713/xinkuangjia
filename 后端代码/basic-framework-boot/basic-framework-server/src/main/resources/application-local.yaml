@@ -1,0 +1,11 @@
+# 本地开发专用配置（SPRING_PROFILES_ACTIVE=local 生效）。
+# 生产与默认配置保持 application.yaml 的 TLS 校验（sslMode=VERIFY_IDENTITY, allowPublicKeyRetrieval=false）；
+# 仅本地开发容器直连 MySQL 时允许关闭 TLS 与启用公钥拉取。
+spring:
+  datasource:
+    dynamic:
+      datasource:
+        master:
+          url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME}?sslMode=${DB_SSL_MODE:DISABLED}&allowPublicKeyRetrieval=${DB_ALLOW_PUBLIC_KEY_RETRIEVAL:true}&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+        slave:
+          url: jdbc:mysql://${DB_SLAVE_HOST:${DB_HOST:127.0.0.1}}:${DB_SLAVE_PORT:${DB_PORT:3306}}/${DB_SLAVE_NAME:${DB_NAME}}?sslMode=${DB_SSL_MODE:DISABLED}&allowPublicKeyRetrieval=${DB_ALLOW_PUBLIC_KEY_RETRIEVAL:true}&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true

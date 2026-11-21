@@ -740,7 +740,8 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 校验非超管操作员不得越权修改、重置、禁用或删除持有 {@code super_admin} 角色的账号。
+     * 校验非超管操作员不得越权修改、重置、禁用或删除持有 {@code super_admin} 角色的账号；
+     * 缺少认证操作者上下文或权限服务时按 fail-closed 拒绝，防止非 HTTP 调用绕过角色边界。
      *
      * <p>防止同属 {@code super_admin} 管理平台的普通子管理员通过用户管理或导入接口接管超级管理员账号。</p>
      *
@@ -751,13 +752,16 @@ public class AdminUserServiceImpl implements AdminUserService {
             return;
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        if (operatorId == null || Objects.equals(operatorId, target.getId())) {
+        if (operatorId == null) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (Objects.equals(operatorId, target.getId())) {
             return;
         }
         PermissionService permissionService = permissionServiceProvider != null
                 ? permissionServiceProvider.getIfAvailable() : null;
         if (permissionService == null) {
-            return;
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         boolean targetIsSuperAdmin = permissionService.hasAnyRoles(
                 target.getId(), RoleCodeEnum.SUPER_ADMIN.getCode());
