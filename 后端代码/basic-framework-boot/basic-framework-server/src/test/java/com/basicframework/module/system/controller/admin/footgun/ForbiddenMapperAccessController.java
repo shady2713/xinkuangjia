@@ -1,6 +1,7 @@
 package com.basicframework.module.system.controller.admin.footgun;
 
 import com.basicframework.module.system.dal.mysql.footgun.ForbiddenFootgunMapper;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * @author shady2713
  */
+@Profile("!real-attachment-it")
 @RestController
 public class ForbiddenMapperAccessController {
 

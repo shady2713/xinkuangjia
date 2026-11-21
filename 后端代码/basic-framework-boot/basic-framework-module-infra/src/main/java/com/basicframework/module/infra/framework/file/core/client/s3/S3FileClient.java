@@ -423,13 +423,18 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
      */
     @Override
     public String presignPrivateGetUrl(String path, Integer expirationSeconds) {
-        return signGetObjectUrl(path, expirationSeconds);
+        return signGetObjectUrl(extractObjectPath(path), expirationSeconds);
     }
 
-    /** 将完整访问 URL 或相对路径归一化为解码后的对象 Key。 */
+    /** 从历史完整 URL 还原对象键，已存储的原始对象键保持原样。 */
     private String extractObjectPath(String url) {
-        String path = StrUtil.removePrefix(url, config.getDomain() + "/");
-        return HttpUtils.decodeUtf8(HttpUtils.removeUrlQuery(path));
+        String prefix = config.getDomain() + "/";
+        if (url == null || !url.startsWith(prefix)) {
+            return url;
+        }
+        String encodedKey = url.substring(prefix.length()).split("[?#]", 2)[0];
+        // URL 路径的加号属于键值，按路径解码时不能当成表单空格。
+        return HttpUtils.decodeUtf8(encodedKey.replace("+", "%2B"));
     }
 
     /** 按契约校验有效期边界并签发 S3 GET 预签名地址。 */

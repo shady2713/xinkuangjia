@@ -267,6 +267,8 @@ def test_verify_slice_exports_unified_pr_and_head_sha_acceptance_evidence(tmp_pa
     payload = json.loads(evidence_json.read_text(encoding="utf-8"))
     assert payload["pr"] == "#95"
     assert payload["head_sha"] == head_sha
+    assert payload["tested_sha"] == head_sha
+    assert payload["pr_head_sha"] is None
     assert payload["worktree_dirty"] is True
     assert payload["overall_code"] == 0
     assert any(item["name"] == "python-comments" and item["status"] == "passed" for item in payload["executed_steps"])
@@ -280,6 +282,20 @@ def test_verify_slice_exports_unified_pr_and_head_sha_acceptance_evidence(tmp_pa
     assert head_sha in markdown
     assert "python-runtime-tests" in markdown
     assert "--skip-runtime" in markdown
+    assert "实际受验 SHA" in markdown
+    assert "未匹配文件" in markdown
+
+    # A caller-supplied PR head SHA is recorded verbatim; tested_sha stays the real checkout.
+    pr_sha = "0123456789abcdef" * 2 + "01234567"
+    override_json = tmp_path / "evidence" / "pr-95-override.json"
+    override_args = ["--root", str(repo), "--skip-runtime", "--pr-head-sha", pr_sha]
+    override_args += ["--evidence-json", str(override_json)]
+    assert verify_slice.main(override_args) == 0
+    override = json.loads(override_json.read_text(encoding="utf-8"))
+    assert override["pr_head_sha"] == pr_sha
+    assert override["tested_sha"] == override["head_sha"] == head_sha
+    with pytest.raises(SystemExit):
+        verify_slice.main(["--root", str(repo), "--plan", "--pr-head-sha", "not-a-sha"])
 
 
 def test_web_comments_and_task_card_remote_delivery_docs_stay_aligned() -> None:
@@ -356,6 +372,12 @@ def test_verify_slice_routes_ci_workflow_and_reports_skipped_coverage(tmp_path: 
     assert "ci-workflow-pytest" in step_names
     skipped_names = {item.name for item in plan.skipped_steps}
     assert "base-secrets-scan" in skipped_names
+
+    mixed_plan = verify_slice.build_slice_plan(
+        repo, [".github/workflows/ci.yml", "docker-compose.dev.yml"], base="HEAD", skip_runtime=False
+    )
+    assert "ci-workflow-pytest" in [step.name for step in mixed_plan.steps]
+    assert mixed_plan.unmatched_files == ("docker-compose.dev.yml",)
 
     unmapped_plan = verify_slice.build_slice_plan(
         repo, ["docker-compose.dev.yml"], base="HEAD", skip_runtime=False

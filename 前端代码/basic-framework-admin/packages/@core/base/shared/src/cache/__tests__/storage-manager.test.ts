@@ -237,6 +237,16 @@ describe('storageManager', () => {
       expect(localStorage.getItem('shared')).toBeNull();
     });
 
+    it('should not clear a same-value key that a later instance wrote', () => {
+      const otherStorage = new StorageManager();
+      rawStorage.setItem('shared', 'same');
+      otherStorage.setItem('shared', 'same');
+      rawStorage.clear();
+      expect(otherStorage.getItem('shared')).toBe('same');
+      otherStorage.clear();
+      expect(localStorage.getItem('shared')).toBeNull();
+    });
+
     it('should sweep only its own expired keys', () => {
       const otherStorage = new StorageManager();
       localStorage.setItem(

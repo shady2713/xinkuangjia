@@ -20,6 +20,9 @@ from scripts.common.quality_common import DEFAULT_ROOT
 
 WORKFLOW = DEFAULT_ROOT / ".github" / "workflows" / "ci.yml"
 BASELINE_STEP = "Resolve comparison baseline"
+SCAN_STEP = "Scan changed files for secrets"
+FETCH_REVIEW_STEP = "Fetch PR comments and reviews"
+VERIFY_REVIEW_STEP = "Verify independent review"
 CHECKOUT_ACTION = "actions/checkout@"
 SETUP_PYTHON_ACTION = "actions/setup-python@"
 PYTEST_COMMAND = "python -B -X utf8 -m pytest scripts/tests"
@@ -133,6 +136,37 @@ def resolve_baseline(root: Path, tmp_path: Path, event_base: str) -> str:
     return match.group(1)
 
 
+def load_ci_workflow() -> dict:
+    """解析实际 CI 工作流定义供门禁契约测试读取。"""
+    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+
+
+def ci_workflow_triggers() -> dict:
+    """读取工作流的 push 和 pull_request 事件配置。"""
+    workflow = load_ci_workflow()
+    return workflow.get("on", workflow.get(True))
+
+
+def named_job_step(job_name: str, step_name: str) -> dict:
+    """按 CI 作业和步骤名称定位待测试的步骤定义。"""
+    steps = workflow_jobs()[job_name]["steps"]
+    return next(step for step in steps if step.get("name") == step_name)
+
+
+def run_bash_step(script: str, cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """以独立目录和给定环境执行受验工作流中的 Bash 步骤。"""
+    return subprocess.run(
+        ["bash", "-c", script],
+        cwd=cwd,
+        env={**os.environ, **env},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=60,
+    )
+
+
 def test_baseline_resolution_is_shared_between_jobs() -> None:
     """docs-comments 与 secrets-scan 共用同一基线解析脚本，不重复内联 shell。"""
     docs_step = step_run("docs-comments", BASELINE_STEP).strip()
@@ -148,16 +182,18 @@ def test_root_commit_secrets_are_scanned(tmp_path: Path) -> None:
     scanner = repo / "scripts/security/scan_staged_secrets.py"
     scanner.parent.mkdir(parents=True)
     shutil.copy2(DEFAULT_ROOT / "scripts/security/scan_staged_secrets.py", scanner)
+    shutil.copy2(DEFAULT_ROOT / "scripts/security/rules_scope.py", scanner.with_name("rules_scope.py"))
     fake_password = "unit-" + "a" * 8
     config = repo / "config/prod.yaml"
     config.parent.mkdir()
     config.write_text(f"database:\n  password: {fake_password}\n", encoding="utf-8")
     commit_all(repo, "root")
     baseline = resolve_baseline(repo, tmp_path, ZERO_SHA)
-    script = step_run("secrets-scan", "Scan changed files for secrets").replace(
-        "${{ steps.baseline.outputs.sha }}", baseline
+    result = run_shell(
+        step_run("secrets-scan", SCAN_STEP),
+        repo,
+        {"BASE_SHA": baseline, "EVENT_HEAD_SHA": ""},
     )
-    result = run_shell(script, repo)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "config/prod.yaml" in result.stderr
     assert "No changed files to scan." not in result.stdout
@@ -168,15 +204,20 @@ def test_empty_push_diff_still_succeeds(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     init_repository(repo)
     (repo / "README.md").write_text("# 基线\n", encoding="utf-8")
+    scanner_dir = repo / "scripts/security"
+    scanner_dir.mkdir(parents=True)
+    for name in ("scan_staged_secrets.py", "rules_scope.py"):
+        shutil.copy2(DEFAULT_ROOT / "scripts/security" / name, scanner_dir / name)
     baseline_commit = commit_all(repo, "base")
     commit_all(repo, "empty", allow_empty=True)
     baseline = resolve_baseline(repo, tmp_path, baseline_commit)
-    script = step_run("secrets-scan", "Scan changed files for secrets").replace(
-        "${{ steps.baseline.outputs.sha }}", baseline
+    result = run_shell(
+        step_run("secrets-scan", SCAN_STEP),
+        repo,
+        {"BASE_SHA": baseline, "EVENT_HEAD_SHA": ""},
     )
-    result = run_shell(script, repo)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "No changed files to scan." in result.stdout
+    assert git(repo, "diff", "--cached", "--name-only").stdout == ""
 
 
 def test_all_jobs_share_one_checkout_version() -> None:
@@ -186,10 +227,228 @@ def test_all_jobs_share_one_checkout_version() -> None:
     versions = {checkout["uses"] for checkout in checkouts.values()}
     assert len(versions) == 1
     assert next(iter(versions)).startswith(f"{CHECKOUT_ACTION}v")
-    for name in ("docs-comments", "secrets-scan"):
+    for name in ("docs-comments", "secrets-scan", "independent-review", "acceptance"):
         assert checkouts[name]["with"]["fetch-depth"] == 0
+    assert checkouts["independent-review"]["with"]["persist-credentials"] is False
     for name in ("backend", "frontend", "pytest"):
         assert "fetch-depth" not in checkouts[name].get("with", {})
+
+
+def test_workflow_triggers_keep_main_and_refresh_on_edit() -> None:
+    """确认主干事件范围和更新 PR 正文后的再次验证。"""
+    triggers = ci_workflow_triggers()
+    assert triggers["push"] == {"branches": ["main"]}
+    assert triggers["pull_request"] == {
+        "branches": ["main"],
+        "types": ["opened", "reopened", "synchronize", "edited"],
+    }
+
+
+def test_job_display_names_are_stable() -> None:
+    """保留托管分支保护所依赖的 CI 检查名称。"""
+    names = {key: job["name"] for key, job in workflow_jobs().items()}
+    assert names == {
+        "backend": "backend (Maven quality-gate)",
+        "frontend": "frontend (unit + typecheck + lint + build)",
+        "docs-comments": "docs + comments",
+        "pytest": "pytest (scripts/tests)",
+        "secrets-scan": "secrets scan (staged-equivalent)",
+        "independent-review": "independent review",
+        "acceptance": "acceptance",
+    }
+
+
+def test_quality_steps_have_stable_ids() -> None:
+    """确认行为门禁使用固定 CI 步骤标识。"""
+    expected = {
+        "backend": {"maven_verify": "Maven quality-gate verify"},
+        "frontend": {
+            "frontend_gates": "Shared frontend quality, test, build and security gates",
+            "browser_e2e": "Critical browser E2E path (production preview)",
+        },
+        "docs-comments": {
+            "docs_checks": "Docs checks (with mermaid)",
+            "changed_comments": "Comments checks",
+        },
+        "pytest": {"pytest_tests": "Pytest tooling tests"},
+        "secrets-scan": {"scan_history": SCAN_STEP},
+        "independent-review": {"verify_review": VERIFY_REVIEW_STEP},
+    }
+    jobs = workflow_jobs()
+    for job_name, step_ids in expected.items():
+        steps = jobs[job_name]["steps"]
+        actual = {step["id"]: step.get("name") for step in steps if "id" in step}
+        for step_id, step_name in step_ids.items():
+            assert actual.get(step_id) == step_name, (job_name, step_id)
+
+
+def test_secret_scan_step_uses_env_and_never_touches_index() -> None:
+    """验证扫描使用固定提交且保持 Git 索引和 checkout。"""
+    job = workflow_jobs()["secrets-scan"]
+    assert job["env"] == {
+        "EVENT_BASE_SHA": "${{ github.event.pull_request.base.sha || github.event.before }}",
+        "EVENT_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+    }
+    step = named_job_step("secrets-scan", SCAN_STEP)
+    assert step["env"] == {"BASE_SHA": "${{ steps.baseline.outputs.sha }}"}
+    script = step["run"]
+    assert "${{" not in script
+    assert "git reset" not in script
+    assert "git add" not in script
+    assert 'HEAD_SHA="${EVENT_HEAD_SHA:-$(git rev-parse HEAD)}"' in script
+    assert '--base "$BASE_SHA" --head "$HEAD_SHA"' in script
+
+
+def test_secret_scan_reads_event_head_without_moving_checkout(tmp_path: Path) -> None:
+    """验证从事件 head 读取历史的扫描结果及工作区原状。"""
+    repo = tmp_path / "repo"
+    init_repository(repo)
+    scanner = repo / "scripts/security/scan_staged_secrets.py"
+    scanner.parent.mkdir(parents=True)
+    shutil.copy2(DEFAULT_ROOT / "scripts/security/scan_staged_secrets.py", scanner)
+    shutil.copy2(DEFAULT_ROOT / "scripts/security/rules_scope.py", scanner.with_name("rules_scope.py"))
+    base_commit = commit_all(repo, "base")
+    fake_password = "unit-" + "b" * 8
+    config = repo / "config/prod.yaml"
+    config.parent.mkdir()
+    config.write_text(f"database:\n  password: {fake_password}\n", encoding="utf-8")
+    head_commit = commit_all(repo, "head")
+    baseline = resolve_baseline(repo, tmp_path, base_commit)
+    assert git(repo, "checkout", "--quiet", "--detach", base_commit).returncode == 0
+    result = run_shell(
+        step_run("secrets-scan", SCAN_STEP),
+        repo,
+        {"BASE_SHA": baseline, "EVENT_HEAD_SHA": head_commit},
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "config/prod.yaml" in result.stderr
+    assert git(repo, "rev-parse", "HEAD").stdout.strip() == base_commit
+    assert git(repo, "diff", "--cached", "--name-only").stdout == ""
+
+
+def test_independent_review_job_is_pr_only_and_read_only() -> None:
+    """使用只读凭据校验受验合并提交及其双亲。"""
+    job = workflow_jobs()["independent-review"]
+    assert job["if"] == "github.event_name == 'pull_request'"
+    assert job["permissions"] == {"contents": "read", "pull-requests": "read"}
+    assert action_step(job, CHECKOUT_ACTION)["with"] == {
+        "fetch-depth": 0,
+        "persist-credentials": False,
+    }
+    fetch = named_job_step("independent-review", FETCH_REVIEW_STEP)
+    assert fetch["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    assert "${{" not in fetch["run"]
+    assert fetch["run"].count("gh api --paginate --slurp") == 2
+    verify = named_job_step("independent-review", VERIFY_REVIEW_STEP)
+    assert verify["env"] == {
+        "MODE": "${{ vars.INDEPENDENT_REVIEW_MODE || 'solo' }}",
+        "MAINTAINERS": "${{ vars.INDEPENDENT_REVIEW_MAINTAINERS }}",
+    }
+    assert "${{" not in verify["run"]
+    assert '--checkout-sha "$(git rev-parse HEAD)"' in verify["run"]
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="fetch step parses the event with jq")
+def test_review_fetch_uses_validated_event_number(tmp_path: Path) -> None:
+    """仅对事件中的有效正整数 PR 编号获取评论和审批。"""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_gh = bin_dir / "gh"
+    fake_gh.write_text(
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GH_LOG"\necho "[[]]"\n', encoding="utf-8"
+    )
+    fake_gh.chmod(0o755)
+    gh_log = tmp_path / "gh.log"
+    event = tmp_path / "event.json"
+    env = {
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "GH_LOG": str(gh_log),
+        "GITHUB_EVENT_PATH": str(event),
+        "GITHUB_REPOSITORY": "example/repo",
+        "RUNNER_TEMP": str(tmp_path),
+    }
+    script = step_run("independent-review", FETCH_REVIEW_STEP)
+    event.write_text(json.dumps({"pull_request": {"number": "7; id"}}), encoding="utf-8")
+    rejected = run_bash_step(script, tmp_path, env)
+    assert rejected.returncode == 1
+    assert not gh_log.exists()
+    event.write_text(json.dumps({"pull_request": {"number": 7}}), encoding="utf-8")
+    accepted = run_bash_step(script, tmp_path, env)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert gh_log.read_text(encoding="utf-8").splitlines() == [
+        "api --paginate --slurp repos/example/repo/issues/7/comments",
+        "api --paginate --slurp repos/example/repo/pulls/7/reviews",
+    ]
+    assert json.loads((tmp_path / "pr-comments.json").read_text(encoding="utf-8")) == [[]]
+
+
+def test_review_verifier_receives_literal_array_arguments(tmp_path: Path) -> None:
+    """核对审查模式和维护者参数保留为独立字面参数。"""
+    repo = tmp_path / "repo"
+    init_repository(repo)
+    verifier = repo / "scripts/workflow/verify_pr_review.py"
+    verifier.parent.mkdir(parents=True)
+    verifier.write_text(
+        "import json, os, sys\n"
+        "with open(os.environ['ARGS_OUT'], 'w', encoding='utf-8') as handle:\n"
+        "    json.dump(sys.argv[1:], handle)\n",
+        encoding="utf-8",
+    )
+    head_commit = commit_all(repo, "head")
+    args_out = tmp_path / "args.json"
+    event = tmp_path / "event.json"
+    event.write_text("{}", encoding="utf-8")
+    script = step_run("independent-review", VERIFY_REVIEW_STEP)
+    env = {
+        "ARGS_OUT": str(args_out),
+        "GITHUB_EVENT_PATH": str(event),
+        "RUNNER_TEMP": str(tmp_path),
+        "MODE": "solo",
+        "MAINTAINERS": "",
+    }
+    expected = ["--event", str(event), "--checkout-sha", head_commit]
+    expected += ["--comments", str(tmp_path / "pr-comments.json")]
+    expected += ["--reviews", str(tmp_path / "pr-reviews.json"), "--mode", "solo"]
+    result = run_bash_step(script, repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(args_out.read_text(encoding="utf-8")) == expected
+    env["MAINTAINERS"] = " alice, ,bob ,$(id),;id"
+    result = run_bash_step(script, repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    for login in ("alice", "bob", "$(id)", ";id"):
+        expected += ["--maintainer", login]
+    assert json.loads(args_out.read_text(encoding="utf-8")) == expected
+
+
+
+def test_acceptance_jobs_export_matching_records() -> None:
+    """保证汇总作业接收各真实作业使用的版本化证据输出。"""
+    jobs = workflow_jobs()
+    aggregate = jobs["acceptance"]
+    assert aggregate["if"] == "always()"
+    assert set(aggregate["needs"]) == {
+        "backend", "frontend", "docs-comments", "pytest", "secrets-scan", "independent-review"
+    }
+    for name in aggregate["needs"]:
+        job = jobs[name]
+        assert job["outputs"]["proof"] == "${{ steps.ci_evidence.outputs.proof }}"
+        evidence = next(step for step in job["steps"] if step.get("id") == "ci_evidence")
+        assert evidence["if"] == "always()"
+        assert f"ci_evidence.py record {name}" in evidence["run"]
+    assert next(step for step in aggregate["steps"] if step.get("id") == "slice_plan")
+
+
+def test_real_attachment_job_is_available_on_first_pr() -> None:
+    """真实附件测试监听首个 PR，并把所测试的版本和用例结果作为制品。"""
+    workflow = yaml.safe_load(WORKFLOW.with_name("attachment-integration.yml").read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["pull_request"]["branches"] == ["main"]
+    steps = workflow["jobs"]["real-attachment-it"]["steps"]
+    assert "-Dtest=RealAttachmentServiceIT" in next(step for step in steps if step.get("id") == "test")["run"]
+    summary = next(step for step in steps if step.get("id") == "summary")
+    assert summary["if"] == "always()"
+    assert all(key in summary["run"] for key in ("git_head", "pr_head", "service_versions", "surefire"))
+    assert any(step.get("with", {}).get("name", "").startswith("attachment-integration-summary-") for step in steps)
 
 
 def test_comments_job_uses_baseline_and_installs_web_parser() -> None:
@@ -234,7 +493,7 @@ def test_frontend_job_runs_lint_after_install() -> None:
     runs = [step.get("run") for step in steps]
     assert (
         runs.index("pnpm install --frozen-lockfile")
-        < runs.index("pnpm run quality:gates")
+        < next(i for i, run in enumerate(runs) if run and "pnpm run quality:gates" in run)
         < runs.index("pnpm run test:e2e:ci")
     )
 

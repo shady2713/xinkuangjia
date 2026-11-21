@@ -79,7 +79,7 @@ services:
     depends_on:
       minio:
         condition: service_healthy
-    # Applies the generated anonymous bucket policy (mixed) or clears it (private).
+    # Applies the generated anonymous bucket policy (mixed or private) and verifies it by readback.
     command:
       - /bin/sh
       - -c
@@ -88,11 +88,7 @@ services:
         target="local/$${MINIO_BUCKET:-basic-framework}"
         mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
         mc mb --ignore-existing "$$target"
-        if grep -Fq '"Statement":[]' /policy/bucket-policy.json; then
-          mc anonymous set none "$$target"
-        else
-          mc anonymous set-json /policy/bucket-policy.json "$$target"
-        fi
+        sh /opt/minio-tools/apply-bucket-policy.sh /policy/bucket-policy.json "$$target"
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
@@ -102,6 +98,12 @@ services:
       - type: bind
         source: ./.e2e-env/minio-bucket-policy.json
         target: /policy/bucket-policy.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./tools/minio/apply-bucket-policy.sh
+        target: /opt/minio-tools/apply-bucket-policy.sh
         read_only: true
         bind:
           create_host_path: false

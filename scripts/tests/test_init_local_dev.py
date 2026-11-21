@@ -70,11 +70,13 @@ def check_ci_doc_alignment(workflow_data: dict, index_text: str, readme_text: st
     """
     errors: list[str] = []
     jobs = workflow_data.get("jobs", {})
-    frontend_steps = [step.get("run", "") for step in jobs.get("frontend", {}).get("steps", [])]
-    if any(
-        cmd in frontend_steps
-        for cmd in ("pnpm lint", "pnpm run quality:gates", "pnpm quality:gates")
-    ):
+    frontend_steps = jobs.get("frontend", {}).get("steps", [])
+    frontend_commands = {
+        line.partition("|")[0].strip().removesuffix(" 2>&1").rstrip()
+        for step in frontend_steps
+        for line in step.get("run", "").splitlines()
+    }
+    if not frontend_commands.isdisjoint(("pnpm lint", "pnpm run quality:gates", "pnpm quality:gates")):
         if "lint 暂不作为必过门禁" in index_text:
             errors.append("脚本使用索引仍声称前端 lint 暂不作为必过门禁，与 ci.yml 冲突")
         if "lint" not in index_text.lower():
@@ -172,9 +174,13 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     assert minio_health_test == ["CMD", "mc", "ready", "local"]
     assert "curl" not in " ".join(minio_health_test)
     minio_init_cmd = "\n".join(services["minio-init"]["command"])
-    assert "mc anonymous set-json /policy/bucket-policy.json" in minio_init_cmd
-    assert "mc anonymous set none" in minio_init_cmd
+    assert "apply-bucket-policy.sh /policy/bucket-policy.json" in minio_init_cmd
+    assert "set none" not in minio_init_cmd
     assert services["minio-init"]["volumes"][0]["source"] == "./.e2e-env/minio-bucket-policy.json"
+    assert services["minio-init"]["volumes"][1]["source"] == "./tools/minio/apply-bucket-policy.sh"
+    helper = (DEFAULT_ROOT / "tools/minio/apply-bucket-policy.sh").read_text(encoding="utf-8")
+    assert "mc anonymous set-json" in helper and "mc --json anonymous get-json" in helper
+    assert "apk add --no-cache jq" in dockerfile
 
 
 def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:
@@ -192,7 +198,9 @@ def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:
     content = backend_env.read_text(encoding="utf-8") + "MINIO_PUBLIC_ACCESS=false\n"
     backend_env.write_text(content, encoding="utf-8")
     assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
-    assert json.loads(policy.read_text(encoding="utf-8"))["Statement"] == []
+    deny = {"Sid": "DenyAnonymousGetObject", "Effect": "Deny", "Principal": {"AWS": ["*"]},
+            "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::basic-framework/*"]}
+    assert json.loads(policy.read_text(encoding="utf-8"))["Statement"] == [deny]
     assert backend_env.read_text(encoding="utf-8") == content
 
 

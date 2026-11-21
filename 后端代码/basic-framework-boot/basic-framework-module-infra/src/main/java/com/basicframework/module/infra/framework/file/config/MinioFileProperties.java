@@ -78,6 +78,27 @@ public class MinioFileProperties {
     }
 
     /**
+     * 缺少显式签名地址时，公开 URL 只允许根地址或仅含桶名的路径。
+     * 网关挂载路径必须另设签名根地址，确保浏览器发送的路径与签名一致。
+     *
+     * @return 配置允许生成可用的签名链接时返回 true
+     */
+    @AssertTrue(message = "MinIO public-url below the root (e.g. /files) requires signing-endpoint")
+    public boolean isPublicUrlSignable() {
+        // Blank values are reported by @NotBlank.
+        if ((signingEndpoint != null && !signingEndpoint.isBlank())
+                || publicUrl == null || publicUrl.isBlank() || bucket == null || bucket.isBlank()) {
+            return true;
+        }
+        String base = trimTrailingSlash(publicUrl.trim());
+        String bucketSuffix = "/" + bucket.trim();
+        if (base.endsWith(bucketSuffix)) {
+            base = base.substring(0, base.length() - bucketSuffix.length());
+        }
+        return S3FileClientConfig.isRootHttpOrigin(base);
+    }
+
+    /**
      * 生成 S3 客户端配置。
      *
      * <p>MinIO 固定使用 Path-Style；公开访问开关由 {@link #publicAccess} 决定。</p>

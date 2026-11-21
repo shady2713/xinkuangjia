@@ -42,7 +42,18 @@ TEAM_ARGS = (
     "--maintainer",
     "pr-author",
 )
-SCANNER_PATHS = ("tools/scanner/rules.yml",)
+SCANNER_PATHS = ("scripts/security/scan_staged_secrets.py",)
+RULES_SCOPE_FILE = "scripts/security/rules_scope.py"
+# Similarly named paths that must not count as scanner rules changes.
+SIMILAR_PATHS = (
+    "tools/scanner/rules.yml",
+    "notes/scanner.md",
+    "scripts/security/scan_staged_secrets.py.orig",
+    "scripts/security/scan_staged_secrets_test.py",
+    "scripts/Security/scan_staged_secrets.py",
+    "vendor/scripts/security/scan_staged_secrets.py",
+    "scripts/security/rules_scope.pyc",
+)
 SECURITY = "security-rules"
 PRIVATE_MARKER = "SYNTHETIC-PRIVATE-NOTE-7f3a"
 
@@ -101,6 +112,16 @@ def review(
         "author_association": association,
         "body": "",
     }
+
+
+def team_receipt(user=None, head=HEAD, base=BASE, comment_id=31):
+    """生成团队维护者的合成独立审查签收。"""
+    return comment(
+        comment_id,
+        receipt(head=head, base=base),
+        user=user or MAINTAINER,
+        association="MEMBER",
+    )
 
 
 def without(obj, *keys):
@@ -480,11 +501,12 @@ class FailClosedTests(GateCase):
 class TeamModeTests(GateCase):
     """验证团队模式中独立审批及决定顺序。"""
 
-    def run_team(self, reviews, comments=(), extra=TEAM_ARGS, event=None, **kwargs):
+    def run_team(self, reviews, comments=None, extra=TEAM_ARGS, event=None, **kwargs):
         """以团队模式执行一个合成 PR 检查。"""
+        # By default one approving maintainer also posts a fresh pass receipt.
         return self.run_gate(
             event=event or make_event(author=AUTHOR),
-            comments=comments,
+            comments=[team_receipt()] if comments is None else comments,
             reviews=reviews,
             mode="team",
             extra=extra,
@@ -496,8 +518,70 @@ class TeamModeTests(GateCase):
         outcome = self.run_team([review(21, "APPROVED")])
         result = self.assert_status(outcome, "pass", "fresh_independent_review")
         self.assertEqual(result["required"], ["approval"])
-        self.assertEqual(result["evidence"], [{"type": "approval", "review_id": 21}])
+        self.assertEqual(
+            result["evidence"],
+            [
+                {"type": "approval", "review_id": 21},
+                {"type": "pass", "comment_id": 31},
+            ],
+        )
         self.assertEqual((result["head"], result["base"]), (HEAD, BASE))
+
+    def test_approval_requires_pass_receipt_from_head_approver(self):
+        """确认当前 head 的批准者还必须签收同一基线下的复核。"""
+        approvals = [review(21, "APPROVED")]
+        security_only = comment(
+            31, receipt(kind=SECURITY), user=MAINTAINER, association="MEMBER"
+        )
+        cases = {
+            "no receipt": ([], "fail"),
+            "non-approving maintainer": ([team_receipt(user=SECOND_MAINTAINER)], "fail"),
+            "pr author": ([team_receipt(user=AUTHOR)], "fail"),
+            "repository owner": ([comment(31, receipt())], "fail"),
+            "security receipt only": ([security_only], "fail"),
+            "approving maintainer": ([team_receipt()], "pass"),
+        }
+        for label, (comments, status) in cases.items():
+            with self.subTest(label):
+                outcome = self.run_team(approvals, comments=comments)
+                result = self.assert_status(outcome, status)
+                self.assertEqual(result["required"], ["approval"])
+                expected = [] if status == "pass" else ["approval"]
+                self.assertEqual(result["missing"], expected)
+
+    def test_receipt_from_any_head_approver_is_accepted(self):
+        """接受任一符合条件且已有同版本批准的维护者签收。"""
+        reviews = [
+            review(21, "APPROVED"),
+            review(22, "APPROVED", user=SECOND_MAINTAINER),
+        ]
+        outcome = self.run_team(reviews, comments=[team_receipt(user=SECOND_MAINTAINER)])
+        result = self.assert_status(outcome, "pass")
+        self.assertEqual(
+            result["evidence"],
+            [
+                {"type": "approval", "review_id": 21},
+                {"type": "approval", "review_id": 22},
+                {"type": "pass", "comment_id": 31},
+            ],
+        )
+
+    def test_base_movement_needs_new_receipt_while_head_approval_remains(self):
+        """验证主干移动后原签收失效，仍需更新复核证据。"""
+        event = make_event(base=NEW_BASE, author=AUTHOR)
+        approvals = [review(21, "APPROVED", commit=HEAD)]
+        outcome = self.run_team(approvals, event=event, parents=(NEW_BASE, HEAD))
+        result = self.assert_status(outcome, "fail", "missing_evidence")
+        self.assertEqual(result["missing"], ["approval"])
+        self.assertEqual(result["evidence"], [{"type": "approval", "review_id": 21}])
+        self.assertEqual((result["head"], result["base"]), (HEAD, NEW_BASE))
+        outcome = self.run_team(
+            approvals,
+            comments=[team_receipt(base=NEW_BASE)],
+            event=event,
+            parents=(NEW_BASE, HEAD),
+        )
+        self.assert_status(outcome, "pass")
 
     def test_authorized_associations(self):
         """验证账号与仓库的关系符合团队审批条件。"""
@@ -643,7 +727,7 @@ class ScannerRulesTests(GateCase):
         """以团队模式检查密钥规则变更及额外签收。"""
         return self.run_gate(
             event=event or make_event(author=AUTHOR),
-            comments=comments,
+            comments=[team_receipt(), *comments],
             reviews=[review(21, "APPROVED")],
             mode="team",
             extra=extra,
@@ -715,7 +799,7 @@ class ScannerRulesTests(GateCase):
     def test_unrelated_changes_do_not_require_security_receipt(self):
         """验证普通变更只需要常规复核签收。"""
         outcome = self.run_gate(
-            comments=[comment(11, receipt())], paths=("docs/scanning.md", "src/app.py")
+            comments=[comment(11, receipt())], paths=SIMILAR_PATHS + ("src/app.py",)
         )
         result = self.assert_status(outcome, "pass")
         self.assertFalse(result["scanner_rules_changed"])
@@ -763,10 +847,13 @@ class ScannerRulesTests(GateCase):
 
     def test_is_scanner_path(self):
         """验证受规则复核约束的路径匹配边界。"""
-        for path in ("tools/scanner/rules.yml", "Secret_Scanner.yaml", "a/SCANNERS/b"):
+        self.assertEqual(
+            gate.load_rules_scope(), frozenset({*SCANNER_PATHS, RULES_SCOPE_FILE})
+        )
+        for path in (*SCANNER_PATHS, RULES_SCOPE_FILE):
             with self.subTest(path=path):
                 self.assertTrue(gate.is_scanner_path(path))
-        for path in ("docs/scanning.md", "src/app.py"):
+        for path in SIMILAR_PATHS + ("src/app.py",):
             with self.subTest(path=path):
                 self.assertFalse(gate.is_scanner_path(path))
         self.assertTrue(gate.is_scanner_path("config/rules/a.yml", ["config/rules"]))

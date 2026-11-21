@@ -135,11 +135,17 @@ public final class FilePathUtils {
      * @return 命中私有附件路径约定时返回 true
      */
     public static boolean isPrivateObjectPath(String path) {
-        if (StrUtil.isBlank(path)) {
+        if (StrUtil.isEmpty(path)) {
             return false;
         }
-        String normalized = path.trim().toLowerCase(Locale.ROOT);
-        return "private".equals(normalized) || normalized.startsWith(PRIVATE_DIRECTORY_PREFIX);
+        // 与 MinIO 和 Nginx 使用相同规则：保留前导空格，以及首段为 private 的旧键。
+        if (path.charAt(0) == ' ') {
+            return true;
+        }
+        if (path.length() < 7 || !"private".equals(path.substring(0, 7).toLowerCase(Locale.ROOT))) {
+            return false;
+        }
+        return path.length() == 7 || path.charAt(7) == '/' || path.charAt(7) == ' ';
     }
 
     /**

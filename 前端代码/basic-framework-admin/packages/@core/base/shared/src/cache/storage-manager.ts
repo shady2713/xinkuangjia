@@ -15,18 +15,30 @@ interface StorageItem<T> {
   value: T;
 }
 
+/**
+ * 按底层 Storage 记录每个原始键的最后写入实例，以识别多个实例写入相同值的情况。
+ * 原生 Storage API 或其他页面上下文的写入不会登记，批量清理会比较现值。
+ * 外部写入完全相同的字节时，无法区分写入来源。成功移除条目或同名带前缀写入会结束原始键的归属。
+ */
+const rawKeyWriters = new WeakMap<Storage, Map<string, symbol>>();
+
 /** 封装命名空间前缀与 TTL 淘汰策略的 Web Storage 管理类。 */
 class StorageManager {
   /**
    * 空前缀时记录本实例写入的原始键和序列化值，供批量操作识别可清理的条目。
    *
    * 实例销毁后记录随之消失，旧条目仍可按原始键读取和移除。若同名键的值
-   * 随后改变，清理时会保留新值。完全相同的序列化值无法判别写入方。
+   * 随后改变，清理时会保留新值。完全相同的外部序列化值无法判别写入方。
    */
   private readonly ownedRawEntries = new Map<string, string>();
 
   private prefix: string;
   private storage: Storage;
+
+  /**
+   * 每个实例用独立标识登记自己写入的原始键。
+   */
+  private readonly writerId = Symbol('StorageManager raw key writer');
 
   /**
    * 创建本地存储管理器实例。
@@ -61,6 +73,7 @@ class StorageManager {
         keysToRemove.push(key);
       }
     }
+    // 成功移除后也结束该键的原始键归属。
     keysToRemove.forEach((key) => this.storage.removeItem(key));
   }
 
@@ -141,6 +154,10 @@ class StorageManager {
       this.storage.setItem(fullKey, serialized);
       if (this.isUnprefixed()) {
         this.ownedRawEntries.set(fullKey, serialized);
+        this.getRawKeyWriters().set(fullKey, this.writerId);
+      } else {
+        // 带前缀写入成功后，同名原始键不再归空前缀实例所有。
+        rawKeyWriters.get(this.storage)?.delete(fullKey);
       }
     } catch (error) {
       console.error(`Error setting item with key "${fullKey}":`, error);
@@ -186,18 +203,38 @@ class StorageManager {
   /**
    * 筛出本实例写入后仍保持原值的键，并丢弃已移除或被覆盖的记录。
    *
+   * 批量清理要求当前实例仍是最后写入实例，且存储字节与写入记录相符。
+   *
    * @returns 空前缀模式下可批量清理的原始键
    */
   private getOwnedRawKeys(): string[] {
     const ownedKeys: string[] = [];
+    const writers = rawKeyWriters.get(this.storage);
     this.ownedRawEntries.forEach((serialized, key) => {
-      if (this.storage.getItem(key) === serialized) {
+      if (
+        writers?.get(key) === this.writerId &&
+        this.storage.getItem(key) === serialized
+      ) {
         ownedKeys.push(key);
       } else {
         this.ownedRawEntries.delete(key);
       }
     });
     return ownedKeys;
+  }
+
+  /**
+   * 读取底层 Storage 的最后写入记录，首次写入时创建。
+   *
+   * @returns 从原始键到最后写入实例标识的映射
+   */
+  private getRawKeyWriters(): Map<string, symbol> {
+    let writers = rawKeyWriters.get(this.storage);
+    if (!writers) {
+      writers = new Map<string, symbol>();
+      rawKeyWriters.set(this.storage, writers);
+    }
+    return writers;
   }
 
   /**
@@ -217,6 +254,8 @@ class StorageManager {
   private removeRawItem(fullKey: string): void {
     this.storage.removeItem(fullKey);
     this.ownedRawEntries.delete(fullKey);
+    // 成功移除后清除底层 Storage 中该键的写入记录。
+    rawKeyWriters.get(this.storage)?.delete(fullKey);
   }
 }
 

@@ -22,8 +22,14 @@ import warnings
 from dataclasses import dataclass, replace
 from pathlib import PurePosixPath
 
+# Shared exact rules scope: relative import as a package, sibling import as a script.
+if __package__:
+    from .rules_scope import SCANNER_RULES_PATHS
+else:
+    from rules_scope import SCANNER_RULES_PATHS
+
 # 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
-RULESET_VERSION = "2026.12"
+RULESET_VERSION = "2026.13"
 # Empty tree object id (SHA-1 repositories); used as the parent of root commits.
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
@@ -136,26 +142,6 @@ def _run_git(arguments: list[str], *, text: bool = True) -> str | bytes:
         stderr = completed.stderr.strip() if text else "Git 命令执行失败"
         raise RuntimeError(stderr or "Git 命令执行失败")
     return completed.stdout
-
-
-def _staged_paths(revisions: list[str] | None = None) -> list[str]:
-    """读取本次提交将新增或修改的文件路径。
-
-    Args:
-        revisions: Diff revisions; defaults to ``--cached`` (the staged index).
-
-    Returns:
-        使用正斜杠表示的仓库相对路径列表。
-    """
-
-    output = _run_git(
-        ["diff", *(revisions or ["--cached"]), "--name-only", "-z", "--diff-filter=ACMR", "--"],
-        text=False,
-    )
-    assert isinstance(output, bytes)
-    return [
-        item.decode("utf-8", errors="replace") for item in output.split(b"\0") if item
-    ]
 
 
 def _is_forbidden_env_path(path: str) -> bool:
@@ -859,61 +845,79 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
     """
 
     revisions = ["--cached"] if target is None else [base or EMPTY_TREE_HASH, target]
-    show_prefix = ":" if target is None else f"{target}:"
+    # ":0:" pins stage 0 so index paths resembling stage specs stay literal.
+    blob_prefix = ":0:" if target is None else f"{target}:"
+
+    def git(arguments: list[str], action: str) -> bytes:
+        """执行扫描所需的只读 Git 查询，失败时提供无源码的诊断。"""
+        try:
+            output = _run_git(arguments, text=False)
+        except RuntimeError:
+            # Content-free message: never surface Git stderr or file data.
+            raise RuntimeError(f"git failed to {action}; scan aborted") from None
+        assert isinstance(output, bytes)
+        return output
+
+    raw_paths = git(
+        ["diff", *revisions, "--name-only", "-z", "--no-renames", "--diff-filter=ACMR", "--"],
+        "list changed paths",
+    )
+    try:
+        paths = [item.decode("utf-8") for item in raw_paths.split(b"\0") if item]
+    except UnicodeDecodeError:
+        raise RuntimeError("changed path is not valid UTF-8; scan aborted") from None
     findings = [
         Finding(path, 0, "forbidden-env-file", "真实环境文件不得提交")
-        for path in _staged_paths(revisions)
+        for path in paths
         if _is_forbidden_env_path(path)
     ]
-    output = _run_git(
-        ["diff", *revisions, "--unified=0", "--no-color", "--no-ext-diff", "--diff-filter=ACMR", "--"]
-    )
-    assert isinstance(output, str)
-    current_path = ""
-    current_line = 0
-    docstring_lines: set[int] = set()
-    python_code_lines: set[int] = set()
     added_lines_by_path: dict[str, list[tuple[int, str]]] = {}
     python_candidates: dict[str, list[tuple[int, int, str, bool]] | None] = {}
-    for diff_line in output.splitlines():
-        if diff_line.startswith("+++ b/"):
-            current_path = diff_line[6:]
-            docstring_lines = set()
-            python_code_lines = set()
+    for current_path in paths:
+        docstring_lines: set[int] = set()
+        python_code_lines: set[int] = set()
+        if current_path.lower().endswith((".py", ".md")):
+            blob = git(["cat-file", "blob", f"{blob_prefix}{current_path}"], f"read {current_path!r}")
+            source = blob.decode("utf-8", errors="replace")
             if current_path.lower().endswith(".py"):
                 # 必须读取暂存版本；工作区中未暂存的引号变化不能影响提交判定。
-                source = _run_git(["show", f"{show_prefix}{current_path}"])
-                assert isinstance(source, str)
                 docstring_lines = _python_docstring_lines(source)
                 python_candidates[current_path] = _python_assignment_candidates(source)
-            elif current_path.lower().endswith(".md"):
+            else:
                 # 围栏可能处于未修改的上下文中，必须从完整暂存文档定位语言。
-                source = _run_git(["show", f"{show_prefix}{current_path}"])
-                assert isinstance(source, str)
                 python_code_lines = _markdown_python_lines(source)
-            continue
-        hunk = HUNK_HEADER_PATTERN.match(diff_line)
-        if hunk:
-            current_line = int(hunk.group("line"))
-            continue
-        if diff_line.startswith("+") and not diff_line.startswith("+++"):
-            added_line = diff_line[1:]
-            findings.extend(
-                _scan_added_line(
-                    current_path,
-                    current_line,
-                    added_line,
-                    is_docstring=current_line in docstring_lines,
-                    is_python_code=current_line in python_code_lines,
-                    scan_assignment=python_candidates.get(current_path) is None,
+        # Force text and bypass external/textconv drivers so attributes cannot hide content.
+        output = git(
+            ["diff", *revisions, "--no-ext-diff", "--no-textconv", "--text", "--no-color",
+             "--no-renames", "--unified=0", "--", f":(top,literal){current_path}"],
+            f"diff {current_path!r}",
+        ).decode("utf-8", errors="replace")
+        current_line = 0
+        in_hunk = False
+        # Split on "\n" only; file headers precede the first hunk and are never scanned.
+        for diff_line in output.split("\n"):
+            hunk = HUNK_HEADER_PATTERN.match(diff_line)
+            if hunk:
+                current_line = int(hunk.group("line"))
+                in_hunk = True
+            elif in_hunk and diff_line.startswith("+"):
+                added_line = diff_line[1:]
+                findings.extend(
+                    _scan_added_line(
+                        current_path,
+                        current_line,
+                        added_line,
+                        is_docstring=current_line in docstring_lines,
+                        is_python_code=current_line in python_code_lines,
+                        scan_assignment=python_candidates.get(current_path) is None,
+                    )
                 )
-            )
-            added_lines_by_path.setdefault(current_path, []).append(
-                (current_line, added_line)
-            )
-            current_line += 1
-        elif diff_line.startswith(" "):
-            current_line += 1
+                added_lines_by_path.setdefault(current_path, []).append(
+                    (current_line, added_line)
+                )
+                current_line += 1
+            elif in_hunk and diff_line.startswith(" "):
+                current_line += 1
     for path, added_lines in added_lines_by_path.items():
         for start, end, text, literal_text in python_candidates.get(path) or []:
             changed = [
@@ -970,7 +974,8 @@ def _ruleset_version_at(revision: str) -> tuple[int, ...] | None:
 def _check_ruleset_version(base: str, head: str) -> list[Finding]:
     """在扫描规则文件变更时要求版本严格递增。"""
 
-    changed = _run_git(["diff", "--name-only", base, head, "--", f":(top){SELF_TEST_PATH}"])
+    scope = [f":(top,literal){path}" for path in sorted(SCANNER_RULES_PATHS)]
+    changed = _run_git(["diff", "--name-only", "--no-renames", base, head, "--", *scope])
     if not str(changed).strip():
         return []
     try:

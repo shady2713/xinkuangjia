@@ -31,8 +31,10 @@ RUN set -eu; \
     printf '%s  minio\n%s  mc\n' "$minio_sha" "$mc_sha" | sha256sum -c -; \
     chmod 0755 minio mc
 
-# Stage 2: minimal BusyBox runtime with both tools on PATH.
+# Stage 2: minimal BusyBox runtime with minio, mc and jq on PATH.
 FROM alpine:3.22
+# jq canonicalizes policy readback in apply-bucket-policy.sh (mounted by compose).
+RUN apk add --no-cache jq
 COPY --from=download /dl/minio /dl/mc /usr/local/bin/
-# Smoke test: both binaries execute on this platform.
-RUN minio --version && mc --version
+# Smoke test: all tools execute on this platform.
+RUN minio --version && mc --version && jq --version

@@ -116,21 +116,16 @@ class VerificationGate:
     Attributes:
         command: Exact command string accepted in SKILL.md ``verification``.
         job: Job key in .github/workflows/ci.yml.
-        step_id: Stable step id; matched first so the mapping survives step renames.
-        step_name: Current step name, matched until the stable id lands; None when the
-            step is planned and not yet part of the workflow.
+        step_id: Stable step id; the only key used to select the workflow step.
         script: Repository-relative entrypoint for file-based commands, else None.
         criteria: Pass criteria recorded in evidence reports.
-        pins_head_sha: Whether passing evidence must name the commit under test.
     """
 
     command: str
     job: str
     step_id: str
-    step_name: str | None
     script: str | None
     criteria: str
-    pins_head_sha: bool = False
 
     @property
     def gate_id(self) -> str:
@@ -138,7 +133,6 @@ class VerificationGate:
         return f"{self.job}/{self.step_id}"
 
 
-_COMMENTS_STEP = "Comments checks"
 _COMMENTS_CRITERIA = "Changed Java and web comment checks concluded with outcome success."
 
 # Only these verification commands may be declared. Adding one requires mapping it to a
@@ -150,7 +144,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "mvn -B -ntp -Pquality-gate verify",
             "backend",
             "maven_verify",
-            "Maven quality-gate verify",
             None,
             "Maven quality-gate verify step concluded with outcome success.",
         ),
@@ -158,7 +151,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "python -B -X utf8 scripts/code/java/check_worktree_java_comments.py",
             "docs-comments",
             "changed_comments",
-            _COMMENTS_STEP,
             "scripts/code/java/check_worktree_java_comments.py",
             _COMMENTS_CRITERIA,
         ),
@@ -166,7 +158,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "pnpm run quality:gates",
             "frontend",
             "frontend_gates",
-            "Shared frontend quality, test, build and security gates",
             None,
             "Shared frontend quality, test, build and security gates concluded with outcome success.",
         ),
@@ -174,7 +165,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "pnpm run test:e2e:ci",
             "frontend",
             "browser_e2e",
-            "Critical browser E2E path (production preview)",
             None,
             "Critical browser E2E step concluded with outcome success.",
         ),
@@ -182,7 +172,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "python -B -X utf8 scripts/code/web/check_worktree_web_comments.py",
             "docs-comments",
             "changed_comments",
-            _COMMENTS_STEP,
             "scripts/code/web/check_worktree_web_comments.py",
             _COMMENTS_CRITERIA,
         ),
@@ -190,7 +179,6 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "python -B -X utf8 scripts/workflow/run_checks.py --group docs",
             "docs-comments",
             "docs_checks",
-            "Docs checks (with mermaid)",
             "scripts/workflow/run_checks.py",
             "Docs checks step concluded with outcome success.",
         ),
@@ -198,10 +186,8 @@ VERIFICATION_GATES: dict[str, VerificationGate] = {
             "python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan",
             "acceptance",
             "slice_plan",
-            None,
             "scripts/workflow/verify_slice.py",
             "verify_slice plan step concluded with outcome success for the commit under test.",
-            pins_head_sha=True,
         ),
     )
 }
@@ -242,16 +228,14 @@ def load_workflow_jobs(root: Path) -> dict | None:
 
 
 def find_workflow_step(jobs: dict, gate: VerificationGate) -> dict | None:
-    """按稳定步骤标识查找对应门禁，兼容旧步骤名。"""
+    """根据 CI 作业和稳定步骤 ID 找到技能声明引用的可执行步骤。"""
     job = jobs.get(gate.job)
     steps = job.get("steps") if isinstance(job, dict) else None
     if not isinstance(steps, list):
         return None
-    candidates = [step for step in steps if isinstance(step, dict)]
-    for key, expected in (("id", gate.step_id), ("name", gate.step_name)):
-        for step in candidates:
-            if expected is not None and step.get(key) == expected:
-                return step
+    for step in steps:
+        if isinstance(step, dict) and step.get("id") == gate.step_id:
+            return step
     return None
 
 
@@ -342,7 +326,8 @@ def _validate_verification_gates(entries: list[str], root: Path, skill_file: Pat
             target = root / gate.script
             if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
                 fail(skill_file, f"verification script not found in checkout: {gate.script}")
-    workflow_gates = [gate for gate in gates if gate is not None and gate.script is None]
+    # Every allowlisted gate, file-based or shell, must map to a CI step by its stable id.
+    workflow_gates = [gate for gate in gates if gate is not None]
     if not workflow_gates:
         return
     try:
@@ -351,13 +336,15 @@ def _validate_verification_gates(entries: list[str], root: Path, skill_file: Pat
         fail(skill_file, str(exc))
         return
     if jobs is None:
-        fail(skill_file, f"{WORKFLOW_PATH} is missing; workflow-run verification commands cannot be confirmed")
+        fail(skill_file, f"{WORKFLOW_PATH} is missing; verification gates cannot be confirmed")
         return
+    # Shell gates must also run the declared command; file gates (comments go through
+    # run_checks.py) only need the step, since their entrypoint was checked above.
     for gate in workflow_gates:
         step = find_workflow_step(jobs, gate)
         if step is None:
             fail(skill_file, f"CI step {gate.gate_id} not found in {WORKFLOW_PATH}")
-        elif gate.command not in str(step.get("run", "")):
+        elif gate.script is None and gate.command not in str(step.get("run", "")):
             fail(skill_file, f"CI step {gate.gate_id} does not run: {gate.command}")
 
 

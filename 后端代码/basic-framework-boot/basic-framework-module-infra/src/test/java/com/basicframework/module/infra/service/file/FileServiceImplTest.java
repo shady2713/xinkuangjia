@@ -243,6 +243,12 @@ class FileServiceImplTest {
         assertThat(props.toClientConfig().getEnablePublicAccess()).isTrue();
         props.setPublicAccess(false);
         assertThat(props.toClientConfig().getEnablePublicAccess()).isFalse();
+        assertThat(FilePathUtils.isPrivateObjectPath("private")).isTrue();
+        assertThat(FilePathUtils.isPrivateObjectPath("PRIVATE ")).isTrue();
+        assertThat(FilePathUtils.isPrivateObjectPath("pRiVaTe copy/a.pdf")).isTrue();
+        assertThat(FilePathUtils.isPrivateObjectPath(" avatar/a.png")).isTrue();
+        assertThat(FilePathUtils.isPrivateObjectPath("private-assets/a.png")).isFalse();
+        assertThat(FilePathUtils.isPrivateObjectPath("public/private/a.png")).isFalse();
         assertThat(FilePathUtils.isPrivateObjectPath("Private/a.pdf")).isTrue();
         assertThat(FilePathUtils.isPrivateObjectPath("avatar/a.png")).isFalse();
     }
@@ -290,6 +296,17 @@ class FileServiceImplTest {
         MinioFileProperties props = buildMinioProperties();
         URI internal = URI.create("http://127.0.0.1:9000");
         assertThat(props.isSigningEndpointValid()).isTrue();
+        assertThat(props.isPublicUrlSignable()).isTrue();
+        props.setPublicUrl("http://localhost:9000/basic-framework/");
+        assertThat(props.isPublicUrlSignable()).isTrue();
+        props.setPublicUrl("https://admin.example.com/files/basic-framework");
+        assertThat(props.isPublicUrlSignable()).isFalse();
+        props.setPublicUrl("https://admin.example.com/files");
+        assertThat(props.isPublicUrlSignable()).isFalse();
+        props.setSigningEndpoint("https://files.example.test");
+        assertThat(props.isPublicUrlSignable()).isTrue();
+        props.setSigningEndpoint(null);
+        props.setPublicUrl("http://localhost:9000");
         assertThat(props.toClientConfig().getSigningEndpoint()).isNull();
         URI legacy = ReflectionTestUtils.invokeMethod(new S3FileClient(1L, props.toClientConfig()),
                 "resolvePresignerEndpoint", internal);
@@ -314,7 +331,7 @@ class FileServiceImplTest {
         assertThat(S3FileClientConfig.isRootHttpOrigin("https://files.example.test?a=b")).isFalse();
     }
 
-    /** Verifies file-by-ID signing keeps the raw stored key verbatim on the root gateway Host and path-style path. */
+    /** 核对签名保留存储原始键、网关 Host 及路径式桶名。 */
     @Test
     void s3PrivateGetShouldSignExactRawObjectKey() {
         MinioFileProperties props = buildMinioProperties();
@@ -338,7 +355,15 @@ class FileServiceImplTest {
             assertThat(signed.getScheme()).isEqualTo("https");
             assertThat(signed.getRawAuthority()).isEqualTo("files.example.test");
             assertThat(signed.getRawPath()).isEqualTo("/basic-framework/private/a%2520b%23c%2Bd.pdf");
-            assertThat(signed.getRawQuery()).contains("X-Amz-Signature=");
+            assertThat(signed.getRawQuery().contains("X-Amz-Signature=")).isTrue();
+            // 同时验证原始键和历史完整 URL 均能还原正确对象。
+            URI viaRawKey = URI.create(client.presignGetUrl("private/a%20b#c+d.pdf", 300));
+            assertThat(viaRawKey.getRawPath()).isEqualTo(signed.getRawPath());
+            URI viaLegacyUrl = URI.create(client.presignGetUrl(cfg.getDomain() + "/private/a%20b+c.pdf?v=1", 300));
+            assertThat(viaLegacyUrl.getRawPath()).isEqualTo("/basic-framework/private/a%20b%2Bc.pdf");
+            URI viaLegacyPrivateUrl = URI.create(client.presignPrivateGetUrl(
+                    cfg.getDomain() + "/private/a%20b+c.pdf?v=1", 300));
+            assertThat(viaLegacyPrivateUrl.getRawPath()).isEqualTo(viaLegacyUrl.getRawPath());
         }
     }
 

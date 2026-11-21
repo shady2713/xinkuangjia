@@ -57,6 +57,10 @@ decision (APPROVED, CHANGES_REQUESTED or DISMISSED, ordered by
 CHANGES_REQUESTED or DISMISSED does not, and any authorized reviewer whose
 latest decision is CHANGES_REQUESTED fails the gate.
 
+The ``approval`` requirement is met only when a reviewer whose latest
+decision approves the head has also posted a ``pass`` receipt for the same
+PR, head and base, which binds the approval to the tested base.
+
 GitHub binds reviews to the head commit only. Team mode is therefore valid
 only when the protected branch actually enforces, in hosted settings that
 are managed separately and must be verified:
@@ -72,7 +76,8 @@ CODEOWNERS should cover this gate and all scanner rules sources.
 Scanner rules
 -------------
 When ``git diff --name-only`` between the base and the merge checkout lists
-a path with a component containing ``scanner`` (case-insensitive) or under a
+a path in ``SCANNER_RULES_PATHS`` of ``scripts/security/rules_scope.py``
+(exact match; the scope file itself is always protected) or under a
 ``--scanner-path`` prefix, a ``security-rules`` receipt on the same PR, head
 and base is additionally required: from the owner in solo mode, and from an
 authorized independent reviewer (same criteria as approvals) in team mode.
@@ -91,12 +96,15 @@ unsupported input.
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, Sequence
 
 PASS_TYPE = "pass"
@@ -125,7 +133,7 @@ REVIEW_STATES = frozenset(
 )
 DECISION_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
 REVIEWER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
-SCANNER_MARKER = "scanner"
+RULES_SCOPE_PATH = "scripts/security/rules_scope.py"
 EXIT_CODES = {"pass": 0, "fail": 1, "error": 2}
 GIT_TIMEOUT_SECONDS = 60
 
@@ -413,9 +421,32 @@ def make_eligibility(
     raise GateError("invalid_mode")
 
 
+@functools.lru_cache(maxsize=1)
+def load_rules_scope() -> frozenset[str]:
+    """加载版本门禁与独立复核共用的完整规则路径。
+
+    The set is loaded from ``scripts/security/rules_scope.py`` by file
+    location, so no import search path can substitute another module. The
+    scope file itself is always protected, even if a change rewrites the set.
+    """
+    location = Path(__file__).resolve().parents[1] / "security" / "rules_scope.py"
+    try:
+        spec = importlib.util.spec_from_file_location("_pr_gate_rules_scope", location)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        paths = module.SCANNER_RULES_PATHS
+    except Exception:  # noqa: BLE001 - any load failure fails closed
+        raise GateError("rules_scope_unavailable") from None
+    if not isinstance(paths, frozenset) or not all(
+        isinstance(path, str) and path for path in paths
+    ):
+        raise GateError("rules_scope_unavailable")
+    return paths | {RULES_SCOPE_PATH}
+
+
 def is_scanner_path(path: str, extra_prefixes: Iterable[str] = ()) -> bool:
     """辨认须额外复核的密钥扫描规则路径。"""
-    if any(SCANNER_MARKER in part.lower() for part in path.split("/")):
+    if path in load_rules_scope():
         return True
     for prefix in extra_prefixes:
         prefix = prefix.strip("/")
@@ -545,16 +576,29 @@ def evaluate(
         blocked = any(
             review.state == "CHANGES_REQUESTED" for review in decisions.values()
         )
-        approvals = sorted(
-            review.id
+        approved = [
+            review
             for review in decisions.values()
             if review.state == "APPROVED" and review.commit_id == pr.head
-        )
-        if approvals:
-            satisfied.add(APPROVAL_TYPE)
+        ]
+        approvals = sorted(review.id for review in approved)
         evidence.extend(
             {"type": APPROVAL_TYPE, "review_id": review_id} for review_id in approvals
         )
+        # GitHub approvals record only the head, so the approval requirement
+        # also needs a pass receipt for this exact PR, head and base from one
+        # of the reviewers whose latest decision approves this head.
+        approver_ids = frozenset(review.author.id for review in approved)
+        receipt = find_fresh_receipt(
+            comments,
+            pr,
+            PASS_TYPE,
+            lambda actor, association: actor.id in approver_ids
+            and eligible(actor, association),
+        )
+        if receipt is not None:
+            satisfied.add(APPROVAL_TYPE)
+            evidence.append(_receipt_evidence(receipt))
 
     if scanner_changed:
         receipt = find_fresh_receipt(comments, pr, SECURITY_TYPE, eligible)

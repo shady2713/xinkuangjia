@@ -35,15 +35,24 @@ CI_WORKFLOW_FIXTURE = (
     "jobs:\n"
     "  backend:\n"
     "    steps:\n"
-    "      - name: Maven quality-gate verify\n"
+    "      - id: maven_verify\n"
+    "        name: Maven quality-gate verify\n"
     "        run: mvn -B -ntp -Pquality-gate verify\n"
     "  frontend:\n"
     "    steps:\n"
-    "      - name: Shared frontend quality, test, build and security gates\n"
+    "      - id: frontend_gates\n"
+    "        name: Shared frontend quality, test, build and security gates\n"
     "        run: pnpm run quality:gates\n"
     "      - id: browser_e2e\n"
     "        name: Browser E2E step renamed by the follow-up\n"
     "        run: pnpm run test:e2e:ci\n"
+    "  docs-comments:\n"
+    "    steps:\n"
+    "      - id: docs_checks\n"
+    "      - id: changed_comments\n"
+    "  acceptance:\n"
+    "    steps:\n"
+    "      - id: slice_plan\n"
 )
 
 
@@ -381,7 +390,7 @@ def test_skill_verification_allowlist_and_entrypoints(tmp_path: Path) -> None:
             '  - "python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan"',
         ),
     )
-    # The E2E step resolves through its stable id although its name differs from today's CI.
+    # Every gate, including file-based verify_slice, resolves through its stable CI step id.
     assert not skill_messages(tmp_path, folder)
 
     (tmp_path / "scripts/workflow/verify_slice.py").unlink()
@@ -390,8 +399,13 @@ def test_skill_verification_allowlist_and_entrypoints(tmp_path: Path) -> None:
     seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("run: mvn -B -ntp -Pquality-gate verify", "run: mvn -B verify"))
     assert any("does not run" in msg and "backend/maven_verify" in msg for msg in skill_messages(tmp_path, folder))
 
+    # The same stable id survives a display-name change; a missing id fails the gate.
     seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("name: Shared frontend", "name: Renamed frontend"))
+    assert not skill_messages(tmp_path, folder)
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("id: frontend_gates", "id: renamed_gates"))
     assert any("frontend/frontend_gates not found" in msg for msg in skill_messages(tmp_path, folder))
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("id: slice_plan", "name: Slice plan"))
+    assert any("acceptance/slice_plan not found" in msg for msg in skill_messages(tmp_path, folder))
 
     (tmp_path / ".github/workflows/ci.yml").unlink()
     assert any(".github/workflows/ci.yml is missing" in msg for msg in skill_messages(tmp_path, folder))
@@ -468,12 +482,14 @@ def test_skill_evidence_report_from_ci_outcomes(tmp_path: Path) -> None:
     write(base, "java/SKILL.md", skill_source("java", "verification:", '  - "mvn -B -ntp -Pquality-gate verify"'))
     write(base, "plain/SKILL.md", skill_source("plain"))
     head = "a" * 40
+    envelope = {"tested_sha": head, "run_id": "101", "run_attempt": "1"}
+    run = {"sha": head, "run_id": "101", "run_attempt": "1"}
     outcomes = {
-        "head_sha": head,
+        **envelope,
         "steps": {
-            "docs-comments/docs_checks": {"outcome": "success"},
-            "acceptance/slice_plan": {"outcome": "success", "sha": head},
-            "backend/maven_verify": {"outcome": "failure"},
+            "docs-comments/docs_checks": {"outcome": "success", **run},
+            "acceptance/slice_plan": {"outcome": "success", **run},
+            "backend/maven_verify": {"outcome": "failure", **run},
         },
     }
     report = build_report(tmp_path, outcomes)
@@ -483,19 +499,28 @@ def test_skill_evidence_report_from_ci_outcomes(tmp_path: Path) -> None:
     assert by_skill["java"]["result"] == "failed"
     assert by_skill["plain"]["result"] == "undeclared"
     assert report["result"] == "failed"
+    assert (report["tested_sha"], report["run_id"], report["run_attempt"]) == (head, "101", "1")
 
     del outcomes["steps"]["docs-comments/docs_checks"]
     outcomes["steps"]["acceptance/slice_plan"]["sha"] = "b" * 40
     tasks = next(item for item in build_report(tmp_path, outcomes)["skills"] if item["skill"] == "tasks")
     assert [item["status"] for item in tasks["behaviors"]] == ["missing", "stale"]
+    # A successful non-slice gate from another attempt, or lacking run identity, is stale.
+    outcomes["steps"]["backend/maven_verify"] = {"outcome": "success", **run, "run_attempt": "2"}
+    outcomes["steps"]["docs-comments/docs_checks"] = {"outcome": "success", "sha": head}
+    by_skill = {item["skill"]: item for item in build_report(tmp_path, outcomes)["skills"]}
+    assert by_skill["java"]["behaviors"][0]["status"] == "stale"
+    assert by_skill["tasks"]["behaviors"][0]["status"] == "stale"
 
     with pytest.raises(CheckError):
-        build_report(tmp_path, {"steps": {"backend/unknown_step": {"outcome": "success"}}})
+        build_report(tmp_path, {**envelope, "steps": {"backend/unknown_step": {"outcome": "success"}}})
     with pytest.raises(CheckError):
-        build_report(tmp_path, {"steps": {"backend/maven_verify": {"outcome": "green"}}})
+        build_report(tmp_path, {**envelope, "steps": {"backend/maven_verify": {"outcome": "green"}}})
+    with pytest.raises(CheckError):
+        build_report(tmp_path, {"tested_sha": head, "run_attempt": "1", "steps": {}})
     write(base, "plain/SKILL.md", skill_source("plain", "verification:", "  - echo unapproved"))
     with pytest.raises(CheckError):
-        build_report(tmp_path, {"steps": {}})
+        build_report(tmp_path, {**envelope, "steps": {}})
 
 
 def test_note_paths_without_creating_hidden_dirs(

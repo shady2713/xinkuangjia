@@ -86,6 +86,33 @@ class CommitRangeScanTest(unittest.TestCase):
             rules = [item.rule for item in scanner._scan_commit_range(base, bumped)[1]]
             self.assertNotIn("ruleset-version", rules)
 
+    def test_rules_scope_change_gates_version_but_similar_name_does_not(self) -> None:
+        """检查版本门禁依赖实际规则路径而非类似名称。"""
+        self.commit(scanner.SELF_TEST_PATH, 'RULESET_VERSION = "1.0"\n')
+        scope = "scripts/security/rules_scope.py"
+        source = SCRIPT.with_name("rules_scope.py").read_text(encoding="utf-8")
+        start = self.commit(scope, source)
+        changed = self.commit(scope, source + "# synthetic change\n")
+        doc = self.commit(scope + ".md", "Synthetic scanner notes.\n")
+        for base, head, gated in ((start, changed, True), (changed, doc, False)):
+            rules = [item.rule for item in scanner._scan_commit_range(base, head)[1]]
+            self.assertEqual("ruleset-version" in rules, gated)
+
+    def test_unusual_name_with_binary_attribute_is_scanned(self) -> None:
+        """用合成数据证明特殊文件名和 Git 属性不影响提交扫描。"""
+        marker = "sk-" + "q" * 24  # synthetic, generated at runtime
+        self.commit(".gitattributes", "*.yml -diff\n")
+        path = "odd dir/[x] +plus.yml"
+        (self.repo / "odd dir").mkdir()
+        (self.repo / path).write_text(f"++api_token: {marker}\n", encoding="utf-8")
+        self.git("add", "--", f":(literal){path}")
+        staged = scanner._scan_staged_diff()
+        self.git("commit", "-q", "-m", "odd name")
+        _, history = scanner._scan_commit_range(self.base, self.git("rev-parse", "HEAD"))
+        for findings in (staged, history):
+            self.assertIn((path, 1), {(item.path, item.line) for item in findings})
+            self.assertTrue(all(marker not in item.detail for item in findings))
+
 
 if __name__ == "__main__":
     unittest.main()

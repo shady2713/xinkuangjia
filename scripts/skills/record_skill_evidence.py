@@ -9,16 +9,18 @@ verification entry is mapped through VERIFICATION_GATES to its gate and pass cri
 
 Outcomes file (JSON):
     {
-      "head_sha": "<commit under test>",
+      "tested_sha": "<commit under test>",
+      "run_id": "<GITHUB_RUN_ID>",
+      "run_attempt": "<GITHUB_RUN_ATTEMPT>",
       "steps": {
-        "backend/maven_verify": {"outcome": "success"},
-        "acceptance/slice_plan": {"outcome": "success", "sha": "<commit the plan covered>"}
+        "backend/maven_verify": {"outcome": "success", "sha": "...", "run_id": "...", "run_attempt": "..."}
       }
     }
 
 Outcome values follow GitHub Actions step outcomes: success, failure, cancelled, skipped.
-Behavior status: passed | failed | stale (success recorded for another commit) |
-not-run (cancelled or skipped) | missing (no outcome supplied for the gate).
+Every record must carry sha, run_id and run_attempt equal to the envelope; otherwise it is
+stale and never passes. Behavior status: passed | failed | stale | not-run (cancelled or
+skipped) | missing (no outcome supplied for the gate).
 
 @author Claude Code
 """
@@ -38,7 +40,6 @@ if __package__ in (None, ""):
 from scripts.common.quality_common import CheckError, entry, read_text
 from scripts.skills.verify_skill_metadata import (
     VERIFICATION_GATES,
-    VerificationGate,
     collect,
     frontmatter,
     skill_folders,
@@ -49,23 +50,25 @@ SKILLS_DIR = ".agents/skills"
 STEP_OUTCOMES = frozenset({"success", "failure", "cancelled", "skipped"})
 KNOWN_GATES = frozenset(gate.gate_id for gate in VERIFICATION_GATES.values())
 FAILING_STATUSES = frozenset({"failed", "stale"})
+# Record identity key -> envelope key; every counted record must match the envelope.
+IDENTITY_KEYS = {"sha": "tested_sha", "run_id": "run_id", "run_attempt": "run_attempt"}
 
 
-def parse_outcomes(data: object) -> tuple[str | None, dict[str, dict]]:
+def parse_outcomes(data: object) -> tuple[dict[str, str], dict[str, dict]]:
     """校验 CI 步骤结果结构及受验提交。
 
     Args:
         data: Decoded JSON produced by CI assembly from trusted job/step results.
     Returns:
-        The head SHA (or None) and the outcome records keyed by ``job/step`` identifier.
+        The envelope identity keyed by record key and the outcome records keyed by ``job/step``.
     Raises:
         CheckError: The payload is malformed or names a gate outside the allowlist.
     """
     if not isinstance(data, dict):
         raise CheckError("outcomes must be a JSON object")
-    head_sha = data.get("head_sha")
-    if head_sha is not None and (not isinstance(head_sha, str) or not head_sha.strip()):
-        raise CheckError("head_sha must be a non-empty string when present")
+    identity = {key: data.get(source) for key, source in IDENTITY_KEYS.items()}
+    if any(not isinstance(value, str) or not value.strip() for value in identity.values()):
+        raise CheckError("tested_sha, run_id and run_attempt must be non-empty strings")
     steps = data.get("steps", {})
     if not isinstance(steps, dict):
         raise CheckError("steps must be an object keyed by job/step identifier")
@@ -75,22 +78,23 @@ def parse_outcomes(data: object) -> tuple[str | None, dict[str, dict]]:
         outcome = record.get("outcome") if isinstance(record, dict) else None
         if not isinstance(outcome, str) or outcome not in STEP_OUTCOMES:
             raise CheckError(f"{gate_id}: outcome must be one of {', '.join(sorted(STEP_OUTCOMES))}")
-        if record.get("sha") is not None and not isinstance(record["sha"], str):
-            raise CheckError(f"{gate_id}: sha must be a string when present")
-    return head_sha, steps
+        if any(record.get(key) is not None and not isinstance(record[key], str) for key in IDENTITY_KEYS):
+            raise CheckError(f"{gate_id}: sha, run_id and run_attempt must be strings when present")
+    return identity, steps
 
 
-def behavior_status(gate: VerificationGate, record: dict | None, head_sha: str | None) -> str:
+def behavior_status(record: dict | None, identity: dict[str, str]) -> str:
     """依据门禁结论与提交版本计算单项技能行为状态。"""
     if record is None:
         return "missing"
+    # Evidence from another commit, run or attempt (or without identity) never counts.
+    if any(record.get(key) != value for key, value in identity.items()):
+        return "stale"
     outcome = record["outcome"]
     if outcome == "failure":
         return "failed"
     if outcome != "success":
         return "not-run"
-    if gate.pins_head_sha and (head_sha is None or record.get("sha") != head_sha):
-        return "stale"
     return "passed"
 
 
@@ -119,7 +123,7 @@ def build_report(root: Path, outcomes: object) -> dict:
     root = root.resolve()
     if not (root / SKILLS_DIR).is_dir():
         raise CheckError(f"{SKILLS_DIR} not found under {root}")
-    head_sha, steps = parse_outcomes(outcomes)
+    identity, steps = parse_outcomes(outcomes)
     # Only metadata that passes the static allowlist checks may contribute evidence.
     _, findings = collect(root, [SKILLS_DIR])
     if findings:
@@ -137,7 +141,7 @@ def build_report(root: Path, outcomes: object) -> dict:
                     "gate": gate.gate_id,
                     "criteria": gate.criteria,
                     "outcome": record["outcome"] if record else None,
-                    "status": behavior_status(gate, record, head_sha),
+                    "status": behavior_status(record, identity),
                 }
             )
         skills.append(
@@ -149,7 +153,14 @@ def build_report(root: Path, outcomes: object) -> dict:
             }
         )
     declared = [item["result"] for item in skills if item["result"] != "undeclared"]
-    return {"schema": REPORT_SCHEMA, "head_sha": head_sha, "result": summarize(declared), "skills": skills}
+    return {
+        "schema": REPORT_SCHEMA,
+        "tested_sha": identity["sha"],
+        "run_id": identity["run_id"],
+        "run_attempt": identity["run_attempt"],
+        "result": summarize(declared),
+        "skills": skills,
+    }
 
 
 def main() -> int:

@@ -77,4 +77,4 @@ basic-framework 提供 Java 后端与 Vue 管理前端的公共能力，包含�
 
 ## CI
 
-Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 并行执行后端 quality-gate、前端契约/工作区/循环依赖/单测/类型检查/lint/构建与产物体积扫描、文档与增量注释及 PR 切片规模检查、`pytest` 工具测试以及变更密钥扫描。
+Pull request 与 `main` 推送由 [GitHub Actions CI](.github/workflows/ci.yml) 并行执行后端 quality-gate、前端契约/工作区/循环依赖/单测/类型检查/lint/构建与产物体积扫描、文档与增量注释及 PR 切片规模检查、`pytest` 工具测试以及提交范围密钥扫描。CI 汇总制品包含实际受验提交、PR head、基线、用例计数和跳过原因。PR 还检查独立审查回执，并通过 [真实附件集成](.github/workflows/attachment-integration.yml) 验证隔离环境中的上传、授权下载和拒绝访问。

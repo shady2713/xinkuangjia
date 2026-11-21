@@ -4,10 +4,10 @@
 Modes:
   mixed    Anonymous s3:GetObject on every object, then an explicit Deny for
            the reserved first key segment "private" in all 128 letter-case
-           spellings (exact key and "private/*") and for keys starting with
+           spellings (exact, "private/*" and "private *") and for keys starting with
            a space (reserved).
-  private  Whole-private bucket: no anonymous grants (empty statement list).
-           Clear the anonymous policy with `mc anonymous set none ALIAS/BUCKET`.
+  private  Whole-private bucket: one explicit anonymous Deny of s3:GetObject on
+           every object and no Allow; applied with set-json like mixed mode.
 
 MinIO evaluates bucket policies for anonymous requests only; signed (SigV4)
 requests are authorized by IAM policies. Output is compact JSON on stdout and
@@ -62,7 +62,7 @@ def private_resources(bucket: str) -> list[str]:
     Args:
         bucket: Validated bucket name.
     Returns:
-        Exact and prefix ARNs for every spelling of the private segment, plus
+        Exact, "/*" and " *" ARNs for every spelling of the private segment, plus
         the reserved leading-space key range.
     """
     base = f"arn:aws:s3:::{bucket}/"
@@ -70,6 +70,8 @@ def private_resources(bucket: str) -> list[str]:
     for spelling in case_variants(PRIVATE_SEGMENT):
         resources.append(base + spelling)
         resources.append(base + spelling + "/*")
+        # A trailing space also covers older trimmed exact names ("private ").
+        resources.append(base + spelling + " *")
     # Keys starting with a space are reserved (e.g. " private/...").
     resources.append(base + " *")
     return resources
@@ -91,7 +93,10 @@ def render_policy(bucket: str, mode: str) -> dict:
     if not BUCKET_PATTERN.fullmatch(bucket) or ".." in bucket:
         raise PolicyError(f"invalid bucket name {bucket!r}; use 3-63 lowercase letters, digits, '.' or '-'")
     if mode == "private":
-        return {"Version": POLICY_VERSION, "Statement": []}
+        # Explicit anonymous Deny with no Allow; signed requests remain authorized by IAM.
+        deny_all = {"Sid": "DenyAnonymousGetObject", "Effect": "Deny", "Principal": ANONYMOUS_PRINCIPAL,
+                    "Action": ["s3:GetObject"], "Resource": [f"arn:aws:s3:::{bucket}/*"]}
+        return {"Version": POLICY_VERSION, "Statement": [deny_all]}
     return {
         "Version": POLICY_VERSION,
         "Statement": [
