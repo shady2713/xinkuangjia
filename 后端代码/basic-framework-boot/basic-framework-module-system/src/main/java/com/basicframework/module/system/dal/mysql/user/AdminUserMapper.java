@@ -106,13 +106,14 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
     /**
      * 按状态和管理平台类型查询用户列表。
      *
-     * @param status 目标状态
+     * @param status 目标状态；为 null 时不限制状态
      * @param userType 管理平台类型
      * @return 查询结果
      */
     default List<AdminUserDO> selectListByStatusAndUserType(Integer status, String userType) {
         LambdaQueryWrapperX<AdminUserDO> query = new LambdaQueryWrapperX<AdminUserDO>()
-                .eq(AdminUserDO::getStatus, status);
+                // 允许 status 为空时查询全部状态账号，避免生成 status = NULL 条件。
+                .eqIfPresent(AdminUserDO::getStatus, status);
         if (AdminPlatformTypeEnum.BUSINESS_ADMIN.getType().equals(userType)) {
             // 老账号的平台字段可能为空；只允许业务管理平台兼容读取，不能扩大到其他平台。
             query.and(item -> item.eq(AdminUserDO::getUserType, userType)

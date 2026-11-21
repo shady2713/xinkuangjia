@@ -3,7 +3,9 @@ package com.basicframework.module.system.service.oauth2;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
+import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.security.config.SecurityProperties;
+import com.basicframework.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2ClientDO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2RefreshTokenDO;
@@ -327,6 +329,21 @@ class OAuth2TokenServiceImplTest {
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
         verify(oauth2AccessTokenMapper, never()).deleteByIds(any());
         verify(oauth2AccessTokenRedisDAO, never()).deleteList(any());
+    }
+
+    /** 验证平台隔离访问令牌分页直接下推到 Mapper 查询，不再先全量查询并物化用户 ID 集合。 */
+    @Test
+    void getAccessTokenPageShouldDelegatePlatformFilterToMapper() {
+        OAuth2AccessTokenPageReqVO reqVO = new OAuth2AccessTokenPageReqVO();
+        PageResult<OAuth2AccessTokenDO> expected = new PageResult<>(List.of(buildAccessToken("active-token")), 1L);
+        when(oauth2AccessTokenMapper.selectPageByPlatform(reqVO, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenReturn(expected);
+
+        PageResult<OAuth2AccessTokenDO> actual = tokenService.getAccessTokenPage(reqVO, null);
+
+        assertThat(actual).isSameAs(expected);
+        verify(oauth2AccessTokenMapper).selectPageByPlatform(reqVO, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        verify(adminUserService, never()).getUserListByStatusAndType(any(), anyString());
     }
 
     /**
