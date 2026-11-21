@@ -37,17 +37,20 @@ function summarizePlaywrightSuites(suites) {
     for (const suite of suiteList ?? []) {
       const currentFile = suite.title || fallbackFile;
       for (const spec of suite.specs ?? []) {
-        const latest = spec.tests?.[0]?.results?.at(-1);
-        const status = latest?.status ?? (spec.ok ? 'passed' : 'failed');
-        counts[
-          status === 'passed' || status === 'skipped' ? status : 'failed'
-        ] += 1;
-        details.push({
-          durationMs: latest?.duration ?? 0,
-          file: spec.file ?? currentFile,
-          status,
-          title: spec.title ?? '',
-        });
+        const tests = spec.tests?.length ? spec.tests : [null];
+        for (const testEntry of tests) {
+          const latest = testEntry?.results?.at(-1);
+          const status = latest?.status ?? (spec.ok ? 'passed' : 'failed');
+          counts[
+            status === 'passed' || status === 'skipped' ? status : 'failed'
+          ] += 1;
+          details.push({
+            durationMs: latest?.duration ?? 0,
+            file: spec.file ?? currentFile,
+            status,
+            title: spec.title ?? '',
+          });
+        }
       }
       visit(suite.suites, currentFile);
     }

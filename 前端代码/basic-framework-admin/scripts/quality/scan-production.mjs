@@ -233,6 +233,7 @@ async function validateProductionArtifacts(findings) {
     (value) => value && /^(?:https?:)?\/\//iu.test(value),
   );
 
+  let hasRuntimeConfigArtifact = false;
   for (const file of artifactFiles) {
     const ext = extname(file);
     if (ext === '.js' || ext === '.mjs') {
@@ -245,6 +246,7 @@ async function validateProductionArtifacts(findings) {
     }
     const content = await readFile(file, 'utf8');
     if (displayPath(file) === 'apps/web-ele/dist/_app.config.js') {
+      hasRuntimeConfigArtifact = true;
       validateRuntimeConfigContent(content, displayPath(file), findings);
     }
     if (ext === '.html') {
@@ -271,6 +273,11 @@ async function validateProductionArtifacts(findings) {
     if (forbiddenValues.some((value) => content.includes(value))) {
       findings.push(`${displayPath(file)}：产物包含开发地址或预填凭证`);
     }
+  }
+  if (!hasRuntimeConfigArtifact) {
+    findings.push(
+      'apps/web-ele/dist/_app.config.js：生产产物缺少运行时配置文件',
+    );
   }
 }
 

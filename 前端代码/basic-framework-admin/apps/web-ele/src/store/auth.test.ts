@@ -261,6 +261,29 @@ async function revokesServerTokenBeforeClearingStoreOnLogout() {
   expect(routerReplace).toHaveBeenCalledTimes(1);
 }
 
+/** 验证非弹窗登录阶段拉取用户信息失败时回滚已写入的令牌，防止半登录态残留。 */
+async function clearsTokensWhenFetchUserInfoFailsDuringNormalLogin() {
+  vi.mocked(loginApi).mockResolvedValue({
+    accessToken: 'CHANGE_ME_NEW_ACCESS',
+    passwordChangeRequired: false,
+    refreshToken: 'CHANGE_ME_NEW_REFRESH',
+  } as any);
+  vi.mocked(getAuthPermissionInfoApi).mockRejectedValue(
+    new Error('permission service unavailable'),
+  );
+
+  const authStore = useAuthStore();
+  await expect(
+    authStore.authLogin('username', {
+      password: 'CHANGE_ME_PASSWORD',
+      username: 'admin',
+    }),
+  ).rejects.toThrow('permission service unavailable');
+
+  expect(mockAccessState.accessToken).toBeNull();
+  expect(mockAccessState.refreshToken).toBeNull();
+}
+
 /** 认证 store 行为测试套件。 */
 function authStoreSuite() {
   beforeEach(setupAuthStoreTest);
@@ -272,6 +295,10 @@ function authStoreSuite() {
   it(
     '退出登录时在清空本地状态前向后端吊销当前访问令牌',
     revokesServerTokenBeforeClearingStoreOnLogout,
+  );
+  it(
+    '普通登录拉取权限信息失败时回滚已写入令牌',
+    clearsTokensWhenFetchUserInfoFailsDuringNormalLogin,
   );
 }
 

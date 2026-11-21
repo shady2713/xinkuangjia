@@ -34,6 +34,7 @@ function useAuthState() {
    * @param params 登录表单数据
    * @param onSuccess 登录成功后的自定义回调
    * @returns 登录后的用户信息
+   * @throws 登录接口或权限信息拉取失败时向上抛出异常
    */
   async function authLogin(
     type: 'mobile' | 'username',
@@ -58,16 +59,27 @@ function useAuthState() {
       const { accessToken, refreshToken } = loginResult;
 
       if (accessToken) {
+        const wasModalExpired = accessStore.loginExpired;
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
         passwordChangeRequired.value = Boolean(
           loginResult.passwordChangeRequired,
         );
 
-        const fetchUserInfoResult = await fetchUserInfo();
+        let fetchUserInfoResult: AuthPermissionInfo;
+        try {
+          fetchUserInfoResult = await fetchUserInfo();
+        } catch (error) {
+          // 非弹窗重登录阶段拉取权限失败时回滚已持久化令牌，避免刷新后落入异常路由循环。
+          if (!wasModalExpired) {
+            accessStore.setAccessToken(null);
+            accessStore.setRefreshToken(null);
+            passwordChangeRequired.value = false;
+          }
+          throw error;
+        }
         userInfo = fetchUserInfoResult.user;
 
-        const wasModalExpired = accessStore.loginExpired;
         if (wasModalExpired) {
           accessStore.setLoginExpired(false);
         }
