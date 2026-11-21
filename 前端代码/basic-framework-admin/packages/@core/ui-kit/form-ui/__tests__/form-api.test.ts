@@ -1,3 +1,8 @@
+/**
+ * 验证 FormApi 挂载、值读写、并发挂载前等待与校验行为。
+ *
+ * @author shady2713
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FormApi } from '../src/form-api';
@@ -124,6 +129,38 @@ describe('formApi', () => {
     const isValid = await formApi.validate();
     expect(validateMock).toHaveBeenCalled();
     expect(isValid).toBe(true);
+  });
+
+  it('should resolve concurrent calls issued before mount and across unmount cycles', async () => {
+    const setFieldValueMock = vi.fn();
+    const validateMock = vi.fn().mockResolvedValue({ valid: true });
+    const formActions: any = {
+      meta: {},
+      resetForm: vi.fn(),
+      setFieldValue: setFieldValueMock,
+      validate: validateMock,
+      values: { name: 'initial' },
+    };
+
+    const getValuesPromise = formApi.getValues();
+    const setFieldPromise = formApi.setFieldValue('name', 'next');
+    const validatePromise = formApi.validate();
+
+    formApi.mount(formActions, new Map());
+
+    const [values, , validation] = await Promise.all([
+      getValuesPromise,
+      setFieldPromise,
+      validatePromise,
+    ]);
+    expect(values).toEqual({ name: 'initial' });
+    expect(setFieldValueMock).toHaveBeenCalledWith('name', 'next', undefined);
+    expect(validation).toEqual({ valid: true });
+
+    formApi.unmount();
+    const secondCycleValues = formApi.getValues();
+    formApi.mount({ ...formActions, values: { name: 'remounted' } }, new Map());
+    await expect(secondCycleValues).resolves.toEqual({ name: 'remounted' });
   });
 });
 

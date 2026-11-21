@@ -22,6 +22,7 @@ coverage/
 .env.*.local
 
 # IDE 和系统生成文件只保留在个人工作区。
+.claude/
 .idea/
 .vscode/*
 !.vscode/extensions.json

@@ -4,6 +4,7 @@
 /后端代码/basic-framework-boot/**/.flattened-pom.xml
 *.iml
 /.vscode/
+.claude/
 /前端代码/basic-framework-admin/node_modules/
 /前端代码/basic-framework-admin/.turbo/
 /前端代码/basic-framework-admin/packages/**/node_modules/
