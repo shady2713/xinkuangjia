@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -63,6 +64,7 @@ def resolve_bash_executable() -> str:
 def run_shell(script: str, root: Path, extra_env: dict[str, str] | None = None):
     """用 bash 执行步骤脚本，保留真实退出码和输出。"""
     effective_script = (
+        'python() { "$PYTEST_PYTHON_EXECUTABLE" "$@"; }\n'
         'python3() { "$PYTEST_PYTHON_EXECUTABLE" "$@"; }\n' + script
         if os.name == "nt"
         else script
@@ -114,6 +116,10 @@ def commit_all(root: Path, message: str, *, allow_empty: bool = False) -> str:
 
 def resolve_baseline(root: Path, tmp_path: Path, event_base: str) -> str:
     """执行工作流基线步骤并取出解析后的提交标识。"""
+    helper = root / "scripts/workflow/resolve_ci_baseline.py"
+    if not helper.exists():
+        helper.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(DEFAULT_ROOT / "scripts/workflow/resolve_ci_baseline.py", helper)
     output = tmp_path / "github-output"
     output.write_text("", encoding="utf-8")
     result = run_shell(
@@ -125,6 +131,14 @@ def resolve_baseline(root: Path, tmp_path: Path, event_base: str) -> str:
     match = re.search(r"^sha=([0-9a-f]{40})$", output.read_text(encoding="utf-8"), re.MULTILINE)
     assert match is not None
     return match.group(1)
+
+
+def test_baseline_resolution_is_shared_between_jobs() -> None:
+    """docs-comments 与 secrets-scan 共用同一基线解析脚本，不重复内联 shell。"""
+    docs_step = step_run("docs-comments", BASELINE_STEP).strip()
+    secrets_step = step_run("secrets-scan", BASELINE_STEP).strip()
+    assert docs_step == secrets_step
+    assert "scripts/workflow/resolve_ci_baseline.py" in docs_step
 
 
 def test_root_commit_secrets_are_scanned(tmp_path: Path) -> None:
@@ -213,27 +227,48 @@ def test_pytest_job_installs_requirements_and_runs_suite() -> None:
 
 
 def test_frontend_job_runs_lint_after_install() -> None:
-    """前端 job 在既有安装之后、构建之前执行契约与 lint 门禁，并在构建后扫描产物。"""
+    """前端本地与 CI 共用同一门禁清单并接入可重复关键浏览器路径。"""
     job = workflow_jobs()["frontend"]
     assert job["defaults"]["run"]["working-directory"] == "前端代码/basic-framework-admin"
     steps = job["steps"]
     runs = [step.get("run") for step in steps]
     assert (
         runs.index("pnpm install --frozen-lockfile")
-        < runs.index("pnpm api:check")
-        < runs.index("pnpm lint")
-        < runs.index("pnpm build:ele")
-        < runs.index("pnpm quality:prod-scan")
+        < runs.index("pnpm run quality:gates")
+        < runs.index("pnpm run test:e2e:ci")
     )
-    joined_runs = "\n".join(item or "" for item in runs)
+
+    pkg_path = DEFAULT_ROOT / "前端代码/basic-framework-admin/package.json"
+    pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
+    assert "pnpm run quality:gates" in pkg["scripts"]["quality:verify"]
+
+    node_bin = shutil.which("node")
+    assert node_bin is not None
+    listed = subprocess.run(
+        [node_bin, "scripts/quality/run-shared-gates.mjs", "--list", "--json"],
+        cwd=DEFAULT_ROOT / "前端代码/basic-framework-admin",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+        timeout=30,
+    )
+    gate_scripts = [item["script"] for item in json.loads(listed.stdout)]
+    assert (
+        gate_scripts.index("api:check")
+        < gate_scripts.index("quality:source-scan")
+        < gate_scripts.index("lint")
+        < gate_scripts.index("build:ele")
+        < gate_scripts.index("quality:prod-scan")
+    )
     for test_cmd in (
-        "pnpm quality:test",
-        "pnpm quality:analysis:test",
-        "pnpm quality:workspace:test",
-        "pnpm quality:development:test",
-        "pnpm quality:delivery:test",
+        "quality:test",
+        "quality:analysis:test",
+        "quality:workspace:test",
+        "quality:development:test",
+        "quality:delivery:test",
     ):
-        assert test_cmd in joined_runs
+        assert test_cmd in gate_scripts
 
 
 def test_pr_slice_size_guard_blocks_oversized_pr_without_override(tmp_path: Path) -> None:
