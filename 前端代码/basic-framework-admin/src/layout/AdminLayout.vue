@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
- * 1:1 复刻原管理平台经典浅色布局：
- * 左侧白底可折叠侧边栏 + 顶部 50px 白底面包屑/用户信息栏 + 38px 多标签页栏 + 浅灰底主内容区。
+ * 1:1 复刻原 Vben Admin 5 经典浅色布局：
+ * - 左侧 224px 白底圆角胶囊菜单（折叠 60px，折叠展开记忆父菜单展开状态，底部折叠切换）
+ * - 顶部 50px 白底导航栏（侧栏切换、刷新、带图标面包屑、全屏、用户头像下拉）
+ * - 38px Chrome 风格曲线多标签页栏（支持右键菜单、局部刷新与内容区最大化）
+ * - 浅灰画布主内容区 + Vben 5 fade-slide 切换动画
  */
 import {
-  Close,
   Expand,
   Fold,
   FullScreen,
@@ -13,17 +15,20 @@ import {
   SwitchButton,
   User as UserIcon,
 } from '@element-plus/icons-vue';
-import { ElMessageBox } from 'element-plus';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
+import type { MenuRouteItem } from '@/api/auth';
+import MenuIcon from '@/components/MenuIcon.vue';
 import { getAppConfig } from '@/config/app';
 import SidebarMenuItem from '@/layout/SidebarMenuItem.vue';
+import TabsChrome from '@/layout/TabsChrome.vue';
 import { clearDynamicRoutes } from '@/router';
 import { useAppStore } from '@/stores/app';
 import { useDictStore } from '@/stores/dict';
 import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
+import { confirmAction } from '@/utils/confirm';
 
 const route = useRoute();
 const router = useRouter();
@@ -34,18 +39,78 @@ const dictStore = useDictStore();
 
 const { appTitle } = getAppConfig();
 const logoUrl = `${import.meta.env.BASE_URL}brand-logo.svg`;
+const contentMaximized = ref(false);
 
 const activeMenu = computed(() => route.path);
 
-const breadcrumbs = computed(() => {
-  const list: string[] = [];
-  if (route.path !== '/dashboard') {
-    list.push('首页');
+/** 根据当前路由路径收集父级目录路径，保证侧边栏折叠再展开后自动还原展开状态 */
+function findParentPaths(
+  items: MenuRouteItem[],
+  targetPath: string,
+  parentPath = '',
+  trail: string[] = [],
+): string[] | null {
+  for (const item of items) {
+    const raw = item.path || '';
+    const full = raw.startsWith('/')
+      ? raw
+      : `${parentPath.replace(/\/$/, '')}/${raw}`.replace(/\/+/g, '/');
+    if (full === targetPath) {
+      return trail;
+    }
+    if (item.children && item.children.length > 0) {
+      const found = findParentPaths(item.children, targetPath, full, [...trail, full]);
+      if (found) return found;
+    }
   }
-  if (route.meta?.title) {
-    list.push(String(route.meta.title));
+  return null;
+}
+
+const defaultOpeneds = computed(() => {
+  const parents = findParentPaths(userStore.menus, route.path);
+  return parents && parents.length > 0 ? parents : ['/system'];
+});
+
+interface BreadcrumbNode {
+  title: string;
+  icon?: string;
+}
+
+function findBreadcrumbTrail(
+  items: MenuRouteItem[],
+  targetPath: string,
+  parentPath = '',
+  trail: BreadcrumbNode[] = [],
+): BreadcrumbNode[] | null {
+  for (const item of items) {
+    const raw = item.path || '';
+    const full = raw.startsWith('/')
+      ? raw
+      : `${parentPath.replace(/\/$/, '')}/${raw}`.replace(/\/+/g, '/');
+    const nextTrail = [...trail, { title: item.name, icon: item.icon }];
+    if (full === targetPath) {
+      return nextTrail;
+    }
+    if (item.children && item.children.length > 0) {
+      const found = findBreadcrumbTrail(item.children, targetPath, full, nextTrail);
+      if (found) return found;
+    }
   }
-  return list;
+  return null;
+}
+
+const breadcrumbs = computed<BreadcrumbNode[]>(() => {
+  if (route.path === '/dashboard') {
+    return [{ title: '概览', icon: 'ep:odometer' }];
+  }
+  const matched = findBreadcrumbTrail(userStore.menus, route.path);
+  if (matched && matched.length > 0) {
+    return matched;
+  }
+  return [
+    { title: '概览', icon: 'ep:odometer' },
+    ...(route.meta?.title ? [{ title: String(route.meta.title) }] : []),
+  ];
 });
 
 watch(
@@ -63,6 +128,34 @@ function handleCloseTab(path: string) {
   }
 }
 
+function handleCloseLeft(path: string) {
+  tabsStore.closeLeftTabs(path);
+  if (!tabsStore.tabs.some((t) => t.path === route.path)) {
+    void router.push(path);
+  }
+}
+
+function handleCloseRight(path: string) {
+  tabsStore.closeRightTabs(path);
+  if (!tabsStore.tabs.some((t) => t.path === route.path)) {
+    void router.push(path);
+  }
+}
+
+function handleCloseOther(path: string) {
+  tabsStore.closeOtherTabs(path);
+  if (route.path !== path) {
+    void router.push(path);
+  }
+}
+
+function handleCloseAll() {
+  tabsStore.closeAllTabs();
+  if (route.path !== '/dashboard') {
+    void router.push('/dashboard');
+  }
+}
+
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     void document.documentElement.requestFullscreen?.();
@@ -77,10 +170,10 @@ async function handleUserCommand(cmd: string) {
     return;
   }
   if (cmd === 'logout') {
-    await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-      type: 'warning',
-      confirmButtonText: '退出',
-      cancelButtonText: '取消',
+    await confirmAction('确定要退出当前登录账号吗？', {
+      title: '退出登录',
+      confirmText: '退出登录',
+      cancelText: '取消',
     });
     await userStore.logout();
     clearDynamicRoutes();
@@ -95,6 +188,7 @@ async function handleUserCommand(cmd: string) {
   <div class="flex h-full w-full overflow-hidden">
     <!-- 左侧白底侧边栏 -->
     <aside
+      v-show="!contentMaximized"
       class="flex h-full shrink-0 flex-col border-r border-[#e4e4e7] bg-white transition-[width] duration-200"
       :style="{
         width: appStore.sidebarCollapsed
@@ -103,13 +197,14 @@ async function handleUserCommand(cmd: string) {
       }"
     >
       <div
-        class="flex h-[50px] shrink-0 cursor-pointer items-center gap-2.5 px-4"
+        class="flex h-[50px] shrink-0 cursor-pointer items-center gap-2.5 border-b border-transparent px-3.5"
+        :class="{ 'justify-center px-0': appStore.sidebarCollapsed }"
         @click="router.push('/dashboard')"
       >
-        <img :src="logoUrl" :alt="appTitle" class="h-8 w-8 shrink-0" />
+        <img :src="logoUrl" :alt="appTitle" class="h-8 w-8 shrink-0 rounded-lg" />
         <span
           v-show="!appStore.sidebarCollapsed"
-          class="truncate text-[16px] font-semibold text-[#1f2937]"
+          class="truncate text-[16px] font-semibold tracking-tight text-[#18181b]"
         >
           {{ appTitle }}
         </span>
@@ -117,9 +212,12 @@ async function handleUserCommand(cmd: string) {
 
       <el-scrollbar class="flex-1">
         <el-menu
+          :key="appStore.sidebarCollapsed ? 'collapsed' : 'expanded'"
           :default-active="activeMenu"
+          :default-openeds="appStore.sidebarCollapsed ? [] : defaultOpeneds"
           :collapse="appStore.sidebarCollapsed"
           :collapse-transition="false"
+          unique-opened
           router
           class="bf-sidebar-menu"
         >
@@ -134,71 +232,85 @@ async function handleUserCommand(cmd: string) {
           />
         </el-menu>
       </el-scrollbar>
+
+      <!-- 侧边栏底部折叠按钮（对齐 Vben 5 sidebar.collapsedButton） -->
+      <div class="flex h-10 shrink-0 items-center justify-center border-t border-[#f1f2f5] px-2">
+        <button
+          type="button"
+          class="flex h-7 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md text-[#64748b] transition hover:bg-[#f4f4f5] hover:text-[#18181b]"
+          :title="appStore.sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+          @click="appStore.toggleSidebar()"
+        >
+          <el-icon :size="15">
+            <Expand v-if="appStore.sidebarCollapsed" />
+            <Fold v-else />
+          </el-icon>
+          <span v-show="!appStore.sidebarCollapsed" class="text-xs">收起菜单</span>
+        </button>
+      </div>
     </aside>
 
     <!-- 右侧主区 -->
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
       <!-- 顶部导航栏 (50px) -->
       <header
-        class="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e4e4e7] bg-white px-4"
+        v-show="!contentMaximized"
+        class="flex h-[50px] shrink-0 items-center justify-between border-b border-[#e4e4e7] bg-white px-3"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5">
           <button
             type="button"
-            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] hover:bg-[#f4f4f5]"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] transition hover:bg-[#f4f4f5] hover:text-[#18181b]"
             :title="appStore.sidebarCollapsed ? '展开菜单' : '折叠菜单'"
             @click="appStore.toggleSidebar()"
           >
-            <el-icon :size="18">
+            <el-icon :size="17">
               <Expand v-if="appStore.sidebarCollapsed" />
               <Fold v-else />
             </el-icon>
           </button>
 
-          <el-breadcrumb separator="/">
-            <el-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb">
-              {{ crumb }}
+          <button
+            type="button"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] transition hover:bg-[#f4f4f5] hover:text-[#18181b]"
+            title="刷新当前页"
+            @click="tabsStore.triggerRefresh()"
+          >
+            <el-icon :size="16"><Refresh /></el-icon>
+          </button>
+
+          <el-breadcrumb separator="/" class="ml-1.5">
+            <el-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.title">
+              <span class="inline-flex items-center gap-1 text-[13px]">
+                <MenuIcon v-if="crumb.icon" :name="crumb.icon" class="!text-[14px] text-[#64748b]" />
+                <span>{{ crumb.title }}</span>
+              </span>
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
 
-        <div class="flex items-center gap-2">
-          <el-tooltip content="刷新当前页" placement="bottom">
-            <button
-              type="button"
-              class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] hover:bg-[#f4f4f5]"
-              @click="tabsStore.triggerRefresh()"
-            >
-              <el-icon :size="16"><Refresh /></el-icon>
-            </button>
-          </el-tooltip>
-
-          <el-tooltip content="全屏切换" placement="bottom">
-            <button
-              type="button"
-              class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] hover:bg-[#f4f4f5]"
-              @click="toggleFullscreen"
-            >
-              <el-icon :size="16"><FullScreen /></el-icon>
-            </button>
-          </el-tooltip>
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-[#475569] transition hover:bg-[#f4f4f5] hover:text-[#18181b]"
+            title="全屏切换"
+            @click="toggleFullscreen"
+          >
+            <el-icon :size="16"><FullScreen /></el-icon>
+          </button>
 
           <el-dropdown trigger="click" @command="handleUserCommand">
             <div
-              class="flex cursor-pointer items-center gap-2 rounded-full py-1 pr-2.5 pl-1 hover:bg-[#f4f4f5]"
+              class="flex cursor-pointer items-center gap-2 rounded-full py-1 pl-1.5 pr-2.5 transition hover:bg-[#f4f4f5]"
             >
               <el-avatar
-                :size="30"
+                :size="28"
                 :src="userStore.userInfo?.avatar || undefined"
-                class="bg-[#006be6] text-xs text-white"
+                class="!bg-[#006be6] text-xs font-semibold text-white"
               >
-                {{
-                  (userStore.userInfo?.nickname || userStore.userInfo?.username || 'A')
-                    .slice(0, 1)
-                    .toUpperCase()
-                }}
+                {{ (userStore.userInfo?.nickname || userStore.userInfo?.username || 'A').slice(0, 1).toUpperCase() }}
               </el-avatar>
-              <span class="max-w-[120px] truncate text-sm font-medium text-[#1f2937]">
+              <span class="max-w-[120px] truncate text-[13px] font-medium text-[#1f2937]">
                 {{ userStore.userInfo?.nickname || userStore.userInfo?.username || '管理员' }}
               </span>
             </div>
@@ -208,7 +320,7 @@ async function handleUserCommand(cmd: string) {
                   <el-icon><UserIcon /></el-icon>
                   个人中心
                 </el-dropdown-item>
-                <el-dropdown-item divided command="logout">
+                <el-dropdown-item command="logout" divided>
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
                 </el-dropdown-item>
@@ -218,61 +330,29 @@ async function handleUserCommand(cmd: string) {
         </div>
       </header>
 
-      <!-- 多标签页栏 (38px) -->
-      <div
-        class="flex h-[38px] shrink-0 items-center justify-between border-b border-[#e4e4e7] bg-white px-3"
-      >
-        <div class="flex flex-1 items-center gap-1 overflow-x-auto">
-          <div
-            v-for="tab in tabsStore.tabs"
-            :key="tab.path"
-            class="group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs transition"
-            :class="
-              tab.path === route.path
-                ? 'bg-[#e6f0fc] font-medium text-[#006be6]'
-                : 'text-[#64748b] hover:bg-[#f4f4f5] hover:text-[#1f2937]'
-            "
-            @click="router.push(tab.path)"
-          >
-            <span>{{ tab.title }}</span>
-            <el-icon
-              v-if="!tab.affix"
-              :size="12"
-              class="rounded-full p-0.5 hover:bg-black/10"
-              @click.stop="handleCloseTab(tab.path)"
-            >
-              <Close />
-            </el-icon>
-          </div>
-        </div>
+      <!-- Chrome 曲线风格多标签页栏 (38px) -->
+      <TabsChrome
+        :tabs="tabsStore.tabs"
+        :active-path="route.path"
+        :content-maximized="contentMaximized"
+        @select="(p) => router.push(p)"
+        @close="handleCloseTab"
+        @close-left="handleCloseLeft"
+        @close-right="handleCloseRight"
+        @close-other="handleCloseOther"
+        @close-all="handleCloseAll"
+        @refresh="tabsStore.triggerRefresh()"
+        @toggle-maximize="contentMaximized = !contentMaximized"
+      />
 
-        <el-dropdown
-          trigger="click"
-          @command="
-            (cmd: string) =>
-              cmd === 'others'
-                ? tabsStore.closeOtherTabs(route.path)
-                : (tabsStore.closeAllTabs(), router.push('/dashboard'))
-          "
-        >
-          <el-button link size="small" class="ml-2 text-xs text-[#64748b]">
-            标签操作
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="others">关闭其他标签</el-dropdown-item>
-              <el-dropdown-item command="all">关闭全部标签</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-
-      <!-- 主内容画布 -->
-      <main class="flex-1 overflow-auto bg-[#f1f3f6] p-4">
+      <!-- 浅灰底主内容区 -->
+      <main class="min-h-0 flex-1 overflow-auto bg-[var(--bf-bg-deep)] p-4">
         <router-view v-slot="{ Component }">
-          <keep-alive :include="tabsStore.cachedNames">
-            <component :is="Component" :key="`${route.fullPath}-${tabsStore.refreshKey}`" />
-          </keep-alive>
+          <transition name="bf-fade-slide" mode="out-in">
+            <keep-alive :include="tabsStore.cachedNames">
+              <component :is="Component" :key="`${route.path}-${tabsStore.refreshKey}`" />
+            </keep-alive>
+          </transition>
         </router-view>
       </main>
     </div>

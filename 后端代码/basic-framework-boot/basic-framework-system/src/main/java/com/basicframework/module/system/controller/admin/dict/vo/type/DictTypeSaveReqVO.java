@@ -1,5 +1,7 @@
 package com.basicframework.module.system.controller.admin.dict.vo.type;
 
+import com.basicframework.framework.common.enums.CommonStatusEnum;
+import com.basicframework.framework.common.validation.InEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -27,15 +29,15 @@ public class DictTypeSaveReqVO {
      */
     @Schema(description = "字典名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "性别")
     @NotBlank(message = "字典名称不能为空")
-    @Size(max = 100, message = "字典类型名称长度不能超过100个字符")
+    @Size(max = 100, message = "字典名称长度不能超过 100 个字符")
     private String name;
 
     /**
      * 字典类型。
      */
     @Schema(description = "字典类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "sys_common_sex")
-    @NotNull(message = "字典类型不能为空")
-    @Size(max = 100, message = "字典类型类型长度不能超过 100 个字符")
+    @NotBlank(message = "字典类型不能为空")
+    @Size(max = 100, message = "字典类型长度不能超过 100 个字符")
     private String type;
 
     /**
@@ -43,6 +45,7 @@ public class DictTypeSaveReqVO {
      */
     @Schema(description = "状态，参见 CommonStatusEnum 枚举类", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "状态不能为空")
+    @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
     /**

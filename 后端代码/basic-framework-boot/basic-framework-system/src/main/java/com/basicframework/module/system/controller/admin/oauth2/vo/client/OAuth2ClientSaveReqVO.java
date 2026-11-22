@@ -4,6 +4,8 @@ import com.basicframework.framework.common.util.json.JsonUtils;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -26,7 +28,7 @@ public class OAuth2ClientSaveReqVO {
     private Long id;
 
     @Schema(description = "客户端编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "portal-web")
-    @NotNull(message = "客户端编号不能为空")
+    @NotBlank(message = "客户端编号不能为空")
     @Size(max = 255, message = "客户端编号长度不能超过 255 个字符")
     private String clientId;
 
@@ -35,7 +37,7 @@ public class OAuth2ClientSaveReqVO {
     private String secret;
 
     @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "门户客户端")
-    @NotNull(message = "应用名不能为空")
+    @NotBlank(message = "应用名不能为空")
     @Size(max = 255, message = "应用名长度不能超过 255 个字符")
     private String name;
 
@@ -49,10 +51,12 @@ public class OAuth2ClientSaveReqVO {
 
     @Schema(description = "访问令牌的有效期（秒）", requiredMode = Schema.RequiredMode.REQUIRED, example = "8640")
     @NotNull(message = "访问令牌的有效期不能为空")
+    @Min(value = 1, message = "访问令牌有效期必须大于 0 秒")
     private Integer accessTokenValiditySeconds;
 
     @Schema(description = "刷新令牌的有效期（秒）", requiredMode = Schema.RequiredMode.REQUIRED, example = "8640000")
     @NotNull(message = "刷新令牌的有效期不能为空")
+    @Min(value = 1, message = "刷新令牌有效期必须大于 0 秒")
     private Integer refreshTokenValiditySeconds;
 
     @Schema(description = "授权类型，参见 OAuth2GrantTypeEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "client_credentials")

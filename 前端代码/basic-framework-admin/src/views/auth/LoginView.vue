@@ -12,6 +12,11 @@ import { sendSmsCodeApi } from '@/api/auth';
 import CaptchaVerify from '@/components/CaptchaVerify.vue';
 import { getAppConfig } from '@/config/app';
 import { SmsSceneEnum } from '@/constants/enums';
+import {
+  FIELD_LIMITS,
+  mobileRule,
+  requiredRule,
+} from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
 import { encryptPassword } from '@/utils/sm2';
 
@@ -34,8 +39,8 @@ const pwdForm = reactive({
   password: '',
 });
 const pwdRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  username: [requiredRule('用户名')],
+  password: [requiredRule('密码')],
 };
 
 const smsFormRef = ref<FormInstance>();
@@ -44,11 +49,8 @@ const smsForm = reactive({
   code: '',
 });
 const smsRules: FormRules = {
-  mobile: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1\d{10}$/, message: '手机号格式不正确', trigger: 'blur' },
-  ],
-  code: [{ required: true, message: '请输入短信验证码', trigger: 'blur' }],
+  mobile: [requiredRule('手机号'), mobileRule()],
+  code: [requiredRule('短信验证码')],
 };
 
 const countdown = ref(0);
@@ -175,10 +177,10 @@ async function handleCaptchaSuccess({
         <img
           :src="sloganUrl"
           :alt="appTitle"
-          class="bf-animate-float h-64 w-auto max-w-[420px]"
+          class="bf-animate-float h-72 w-auto max-w-[440px]"
         />
         <h2 class="mt-6 text-2xl font-medium text-[#1f2937]">
-          开箱即用的企业级中后台管理框架
+          {{ appTitle }} · 开箱即用的管理基座
         </h2>
         <p class="mt-2 text-sm text-[#64748b]">
           安全合规 · 权限隔离 · 极简高效
@@ -210,6 +212,7 @@ async function handleCaptchaSuccess({
                 <el-input
                   v-model="pwdForm.username"
                   placeholder="请输入用户名"
+                  :maxlength="FIELD_LIMITS.USERNAME"
                   :prefix-icon="User"
                   autocomplete="username"
                   clearable
@@ -221,6 +224,7 @@ async function handleCaptchaSuccess({
                   type="password"
                   show-password
                   placeholder="请输入密码"
+                  :maxlength="FIELD_LIMITS.PASSWORD_MAX"
                   :prefix-icon="Lock"
                   autocomplete="current-password"
                 />
@@ -259,7 +263,8 @@ async function handleCaptchaSuccess({
               <el-form-item prop="mobile">
                 <el-input
                   v-model="smsForm.mobile"
-                  placeholder="请输入手机号"
+                  placeholder="请输入 11 位手机号"
+                  :maxlength="FIELD_LIMITS.MOBILE"
                   :prefix-icon="Phone"
                   clearable
                 />
@@ -269,7 +274,7 @@ async function handleCaptchaSuccess({
                   <el-input
                     v-model="smsForm.code"
                     placeholder="请输入 6 位验证码"
-                    maxlength="6"
+                    :maxlength="FIELD_LIMITS.SMS_CODE"
                     class="flex-1"
                   />
                   <el-button

@@ -9,12 +9,22 @@ import {
   type UserProfileResp,
 } from '@/api/system/profile';
 import UploadField from '@/components/UploadField.vue';
+import {
+  emailRule,
+  FIELD_LIMITS,
+  maxLenRule,
+  mobileRule,
+  passwordComplexityRule,
+  requiredRule,
+} from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
 import { formatDateTime } from '@/utils/format';
 import { encryptPassword } from '@/utils/sm2';
 
 const userStore = useUserStore();
 const loading = ref(false);
+const savingBasic = ref(false);
+const savingPwd = ref(false);
 const profile = ref<UserProfileResp | null>(null);
 const activeTab = ref<'basic' | 'password'>('basic');
 
@@ -26,6 +36,14 @@ const basicForm = reactive({
   sex: 1,
   avatar: '',
 });
+const basicRules: FormRules = {
+  nickname: [
+    requiredRule('用户昵称'),
+    maxLenRule('用户昵称', FIELD_LIMITS.NICKNAME),
+  ],
+  mobile: [mobileRule()],
+  email: [emailRule(), maxLenRule('邮箱', FIELD_LIMITS.EMAIL)],
+};
 
 const pwdFormRef = ref<FormInstance>();
 const pwdForm = reactive({
@@ -33,18 +51,14 @@ const pwdForm = reactive({
   newPassword: '',
   confirmPassword: '',
 });
-
 const pwdRules: FormRules = {
-  oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
-  newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 8, max: 32, message: '密码长度需在 8~32 位之间', trigger: 'blur' },
-  ],
+  oldPassword: [requiredRule('旧密码')],
+  newPassword: [requiredRule('新密码'), passwordComplexityRule()],
   confirmPassword: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    requiredRule('确认密码'),
     {
       validator: (_r, v, cb) => {
-        if (v !== pwdForm.newPassword) cb(new Error('两次输入密码不一致'));
+        if (v !== pwdForm.newPassword) cb(new Error('两次输入的密码不一致'));
         else cb();
       },
       trigger: 'blur',
@@ -68,24 +82,32 @@ async function loadProfile() {
 }
 
 async function handleSaveBasic() {
-  await updateUserProfileApi({
-    nickname: basicForm.nickname,
-    mobile: basicForm.mobile || undefined,
-    email: basicForm.email || undefined,
-    sex: basicForm.sex,
-    avatar: basicForm.avatar || undefined,
-  });
-  ElMessage.success('个人资料已更新');
-  await loadProfile();
-  await userStore.fetchPermissionInfo();
+  const valid = await basicFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  savingBasic.value = true;
+  try {
+    await updateUserProfileApi({
+      nickname: basicForm.nickname.trim(),
+      mobile: basicForm.mobile.trim() || undefined,
+      email: basicForm.email.trim() || undefined,
+      sex: basicForm.sex,
+      avatar: basicForm.avatar || undefined,
+    });
+    ElMessage.success('个人资料已更新');
+    await loadProfile();
+    await userStore.fetchPermissionInfo();
+  } finally {
+    savingBasic.value = false;
+  }
 }
 
 async function handleAvatarUploaded(url: string) {
   basicForm.avatar = url;
   await updateUserProfileApi({
-    nickname: basicForm.nickname || profile.value?.nickname || '',
+    nickname: basicForm.nickname.trim() || profile.value?.nickname || '',
     avatar: url,
   });
+  ElMessage.success('头像已更新');
   await loadProfile();
   await userStore.fetchPermissionInfo();
 }
@@ -93,13 +115,18 @@ async function handleAvatarUploaded(url: string) {
 async function handleSavePassword() {
   const valid = await pwdFormRef.value?.validate().catch(() => false);
   if (!valid) return;
-  const oldPassword = await encryptPassword(pwdForm.oldPassword);
-  const newPassword = await encryptPassword(pwdForm.newPassword);
-  await updateUserPasswordApi({ oldPassword, newPassword });
-  ElMessage.success('密码修改成功');
-  pwdForm.oldPassword = '';
-  pwdForm.newPassword = '';
-  pwdForm.confirmPassword = '';
+  savingPwd.value = true;
+  try {
+    const oldPassword = await encryptPassword(pwdForm.oldPassword);
+    const newPassword = await encryptPassword(pwdForm.newPassword);
+    await updateUserPasswordApi({ oldPassword, newPassword });
+    ElMessage.success('密码修改成功');
+    pwdForm.oldPassword = '';
+    pwdForm.newPassword = '';
+    pwdForm.confirmPassword = '';
+  } finally {
+    savingPwd.value = false;
+  }
 }
 
 onMounted(() => {
@@ -112,7 +139,7 @@ onMounted(() => {
     <el-col :xs="24" :md="9" class="mb-4 md:mb-0">
       <el-card shadow="never">
         <template #header>
-          <span class="font-semibold">个人信息</span>
+          <span class="font-semibold text-[#18181b]">个人信息</span>
         </template>
         <div class="mb-5 flex flex-col items-center">
           <UploadField
@@ -126,7 +153,7 @@ onMounted(() => {
           />
         </div>
         <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="用户名称">
+          <el-descriptions-item label="用户账号">
             {{ profile?.username || '-' }}
           </el-descriptions-item>
           <el-descriptions-item label="用户昵称">
@@ -161,17 +188,30 @@ onMounted(() => {
             <el-form
               ref="basicFormRef"
               :model="basicForm"
+              :rules="basicRules"
               label-width="90px"
               class="mt-3 max-w-[480px]"
             >
-              <el-form-item label="用户昵称" required>
-                <el-input v-model="basicForm.nickname" />
+              <el-form-item label="用户昵称" prop="nickname">
+                <el-input
+                  v-model="basicForm.nickname"
+                  :maxlength="FIELD_LIMITS.NICKNAME"
+                  placeholder="请输入用户昵称"
+                />
               </el-form-item>
-              <el-form-item label="手机号码">
-                <el-input v-model="basicForm.mobile" />
+              <el-form-item label="手机号码" prop="mobile">
+                <el-input
+                  v-model="basicForm.mobile"
+                  :maxlength="FIELD_LIMITS.MOBILE"
+                  placeholder="请输入 11 位手机号码"
+                />
               </el-form-item>
-              <el-form-item label="用户邮箱">
-                <el-input v-model="basicForm.email" />
+              <el-form-item label="用户邮箱" prop="email">
+                <el-input
+                  v-model="basicForm.email"
+                  :maxlength="FIELD_LIMITS.EMAIL"
+                  placeholder="请输入常用邮箱地址"
+                />
               </el-form-item>
               <el-form-item label="性别">
                 <el-radio-group v-model="basicForm.sex">
@@ -180,7 +220,9 @@ onMounted(() => {
                 </el-radio-group>
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" @click="handleSaveBasic">保存修改</el-button>
+                <el-button type="primary" :loading="savingBasic" @click="handleSaveBasic">
+                  保存修改
+                </el-button>
               </el-form-item>
             </el-form>
           </el-tab-pane>
@@ -194,16 +236,36 @@ onMounted(() => {
               class="mt-3 max-w-[480px]"
             >
               <el-form-item label="旧密码" prop="oldPassword">
-                <el-input v-model="pwdForm.oldPassword" type="password" show-password />
+                <el-input
+                  v-model="pwdForm.oldPassword"
+                  type="password"
+                  show-password
+                  :maxlength="FIELD_LIMITS.PASSWORD_MAX"
+                  placeholder="请输入当前密码"
+                />
               </el-form-item>
               <el-form-item label="新密码" prop="newPassword">
-                <el-input v-model="pwdForm.newPassword" type="password" show-password />
+                <el-input
+                  v-model="pwdForm.newPassword"
+                  type="password"
+                  show-password
+                  :maxlength="FIELD_LIMITS.PASSWORD_MAX"
+                  placeholder="请输入 8~32 位含大小写字母及数字的新密码"
+                />
               </el-form-item>
               <el-form-item label="确认密码" prop="confirmPassword">
-                <el-input v-model="pwdForm.confirmPassword" type="password" show-password />
+                <el-input
+                  v-model="pwdForm.confirmPassword"
+                  type="password"
+                  show-password
+                  :maxlength="FIELD_LIMITS.PASSWORD_MAX"
+                  placeholder="请再次输入新密码"
+                />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" @click="handleSavePassword">修改密码</el-button>
+                <el-button type="primary" :loading="savingPwd" @click="handleSavePassword">
+                  修改密码
+                </el-button>
               </el-form-item>
             </el-form>
           </el-tab-pane>

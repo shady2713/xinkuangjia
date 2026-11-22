@@ -3,9 +3,9 @@ package com.basicframework.module.system.controller.admin.user.vo.profile;
 import com.basicframework.framework.common.validation.EmailEx;
 import com.basicframework.framework.common.validation.Mobile;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-import org.hibernate.validator.constraints.URL;
 
 /**
  * 管理后台用户个人资料更新请求。
@@ -47,8 +47,8 @@ public class UserProfileUpdateReqVO {
     /**
      * 角色头像。
      */
-    @Schema(description = "角色头像", example = "https://www.example.com/1.png")
-    @URL(message = "头像地址格式不正确")
+    @Schema(description = "用户头像", example = "/admin-api/infra/file/content/20261122/avatar.png")
+    @Pattern(regexp = "^$|^(https?://|/).*", message = "头像地址格式不正确")
     @Size(max = 512, message = "头像地址长度不能超过 512 个字符")
     private String avatar;
 

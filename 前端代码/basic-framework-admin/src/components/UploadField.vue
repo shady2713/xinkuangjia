@@ -214,8 +214,11 @@ onBeforeUnmount(() => {
       v-model="cropVisible"
       title="裁剪图片"
       width="520px"
+      align-center
       append-to-body
+      destroy-on-close
       :close-on-click-modal="false"
+      class="bf-dialog"
       @closed="destroyCropper"
     >
       <div class="h-[340px] w-full overflow-hidden rounded bg-[#f4f4f5]">

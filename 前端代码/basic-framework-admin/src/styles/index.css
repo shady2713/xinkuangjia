@@ -1,28 +1,30 @@
 @import "tailwindcss";
 
 /*
- * 1:1 复刻原管理平台视觉设计 Token（浅色默认蓝主题）：
+ * 1:1 复刻原 Vben Admin 5 经典浅色蓝主题 Design Tokens：
  * - 主色：hsl(212 100% 45%) (#006be6)
  * - 主体画布灰底：hsl(216 20.11% 95.47%) (#f1f3f6)
- * - 侧边栏/顶栏/卡片白底：#ffffff
+ * - 侧边栏/顶栏/标签栏/卡片白底：#ffffff
  * - 细边框：hsl(240 5.9% 90%) (#e4e4e7)
  * - 圆角：0.5rem (8px)
  */
 :root {
   --bf-primary: hsl(212 100% 45%);
-  --bf-primary-soft: hsl(212 100% 45% / 10%);
+  --bf-primary-soft: hsl(212 100% 45% / 12%);
+  --bf-primary-tab: hsl(212 100% 45% / 14%);
   --bf-bg-deep: hsl(216 20.11% 95.47%);
   --bf-surface: #ffffff;
   --bf-foreground: hsl(210 6% 21%);
+  --bf-muted: hsl(240 4.8% 95.9%);
   --bf-muted-foreground: hsl(240 3.8% 46.1%);
   --bf-border: hsl(240 5.9% 90%);
   --bf-radius: 0.5rem;
   --bf-sidebar-width: 224px;
-  --bf-sidebar-collapsed-width: 64px;
+  --bf-sidebar-collapsed-width: 60px;
   --bf-header-height: 50px;
   --bf-tabs-height: 38px;
 
-  /* Element Plus 主色与中性色 Token 对齐 */
+  /* Element Plus 主色与中性色 Token 深度对齐 Vben 5 */
   --el-color-primary: #006be6;
   --el-color-primary-light-3: #4d97ee;
   --el-color-primary-light-5: #80b5f3;
@@ -34,6 +36,10 @@
   --el-border-color-light: #ebebee;
   --el-border-color-lighter: #f1f2f5;
   --el-border-radius-base: 6px;
+  --el-fill-color-light: #f8fafc;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-text-color: #334155;
+  --el-table-row-hover-bg-color: #f5f8ff;
   --el-font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, 'Noto Sans', sans-serif;
@@ -52,14 +58,79 @@ body,
   -webkit-font-smoothing: antialiased;
 }
 
-/* 卡片与表单视觉统一 */
+/* 卡片视觉统一（对齐 Vben 5 细边框白卡） */
 .el-card {
   border-color: var(--bf-border);
   border-radius: var(--bf-radius);
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 3%);
 }
 
-.el-dialog {
+/* 表格表头与单元格精细化对齐 Vben 5 */
+.el-table {
+  --el-table-border-color: #eef0f4;
+  border-radius: 6px;
+}
+
+.el-table th.el-table__cell {
+  background-color: #f8fafc !important;
+  color: #334155;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.el-table .el-table__cell {
+  padding: 10px 0;
+}
+
+.el-table--small .el-table__cell {
+  padding: 6px 0;
+}
+
+.el-table--large .el-table__cell {
+  padding: 14px 0;
+}
+
+/* 统一 Vben 5 弹窗视觉（头部/底部细分隔线 + 10px 圆角） */
+.el-dialog.bf-dialog {
   border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 20px 50px -12px rgb(15 23 42 / 22%);
+}
+
+.el-dialog.bf-dialog .el-dialog__header {
+  margin-right: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--bf-border);
+}
+
+.el-dialog.bf-dialog .el-dialog__body {
+  padding: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.el-dialog.bf-dialog.is-fullscreen .el-dialog__body {
+  max-height: calc(100vh - 116px);
+}
+
+.el-dialog.bf-dialog .el-dialog__footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--bf-border);
+  background-color: #fafafa;
+}
+
+/* 描述列表与长文本统一折行 */
+.bf-break-text,
+.el-descriptions__content {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.bf-pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* 顶部进度条颜色与主色对齐 */
@@ -68,20 +139,21 @@ body,
   height: 2px !important;
 }
 
-/* 侧边栏菜单视觉精修（对齐原默认浅色侧边栏风格） */
+/* 侧边栏菜单视觉精修（1:1 对齐 Vben 5 navigation.styleType = rounded） */
 .bf-sidebar-menu {
   border-right: none !important;
-  padding: 6px 8px;
+  padding: 8px;
 }
 
 .bf-sidebar-menu .el-menu-item,
 .bf-sidebar-menu .el-sub-menu__title {
   height: 40px;
   line-height: 40px;
-  border-radius: 6px;
-  margin-bottom: 2px;
+  border-radius: 8px;
+  margin-bottom: 4px;
   color: var(--bf-foreground);
   font-size: 14px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .bf-sidebar-menu .el-menu-item:hover,
@@ -95,8 +167,34 @@ body,
   font-weight: 500;
 }
 
+.bf-sidebar-menu .el-sub-menu.is-active > .el-sub-menu__title {
+  color: var(--bf-primary);
+}
+
 .bf-sidebar-menu.el-menu--collapse {
-  padding: 6px 6px;
+  padding: 8px 6px;
+}
+
+.bf-sidebar-menu.el-menu--collapse .el-menu-item,
+.bf-sidebar-menu.el-menu--collapse .el-sub-menu__title {
+  justify-content: center;
+  padding: 0 !important;
+}
+
+/* Vben 5 经典路由切换动画 fade-slide */
+.bf-fade-slide-enter-active,
+.bf-fade-slide-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.bf-fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.bf-fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(8px);
 }
 
 /* 登录页柔和渐变光晕背景（1:1 复刻原认证页左侧视觉） */

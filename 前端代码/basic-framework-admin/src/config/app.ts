@@ -11,11 +11,22 @@ export interface AppConfig {
 export function getAppConfig(): AppConfig {
   const runtime =
     typeof window !== 'undefined' ? window._BASIC_FRAMEWORK_APP_CONF_ : undefined;
+  const captchaFlag =
+    runtime?.VITE_APP_CAPTCHA_ENABLE ??
+    import.meta.env.VITE_APP_CAPTCHA_ENABLE ??
+    'true';
+  const uploadMode =
+    runtime?.VITE_UPLOAD_TYPE ??
+    import.meta.env.VITE_UPLOAD_TYPE ??
+    'server';
   return {
-    appTitle: runtime?.VITE_APP_TITLE || import.meta.env.VITE_APP_TITLE || '管理平台',
+    appTitle:
+      runtime?.VITE_APP_TITLE || import.meta.env.VITE_APP_TITLE || '企业级中后台',
     apiBaseUrl:
-      runtime?.VITE_GLOB_API_URL || import.meta.env.VITE_GLOB_API_URL || '/admin-api',
-    captchaEnabled: (runtime?.VITE_APP_CAPTCHA_ENABLE ?? 'true') === 'true',
-    uploadType: runtime?.VITE_UPLOAD_TYPE === 'client' ? 'client' : 'server',
+      runtime?.VITE_GLOB_API_URL ||
+      import.meta.env.VITE_GLOB_API_URL ||
+      '/admin-api',
+    captchaEnabled: String(captchaFlag) === 'true',
+    uploadType: uploadMode === 'client' ? 'client' : 'server',
   };
 }

@@ -2,10 +2,9 @@
 /**
  * 部门管理：树形表格 CRUD。
  */
-import { Plus, Search } from '@element-plus/icons-vue';
+import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue';
 import {
   ElMessage,
-  ElMessageBox,
   type FormInstance,
   type FormRules,
 } from 'element-plus';
@@ -21,8 +20,18 @@ import {
 } from '@/api/system/dept';
 import { getSimpleUserListApi, type UserSimple } from '@/api/system/user';
 import DictTag from '@/components/DictTag.vue';
+import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
+import TableAction from '@/components/TableAction.vue';
 import { CommonStatusEnum, DICT_TYPE } from '@/constants/enums';
+import {
+  deleteConfirmMessage,
+  emailRule,
+  FIELD_LIMITS,
+  maxLenRule,
+  mobileRule,
+  requiredRule,
+} from '@/constants/validation';
 import { formatDateTime } from '@/utils/format';
 import { handleTree } from '@/utils/tree';
 
@@ -34,7 +43,9 @@ const users = ref<UserSimple[]>([]);
 const userMap = computed(() =>
   new Map(users.value.map((u) => [String(u.id), u.nickname])),
 );
-const treeList = computed(() => handleTree(rawList.value as any[]));
+const treeList = computed(() =>
+  handleTree(rawList.value as { id: number | string; parentId?: number | string }[]),
+);
 const parentOptions = computed(() => [
   { id: 0, name: '顶级部门', children: treeList.value },
 ]);
@@ -60,15 +71,17 @@ const form = reactive({
 });
 
 const formRules: FormRules = {
-  name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
-  sort: [{ required: true, message: '请输入排序', trigger: 'blur' }],
+  name: [requiredRule('部门名称'), maxLenRule('部门名称', FIELD_LIMITS.DEPT_NAME)],
+  sort: [requiredRule('显示排序', 'change')],
+  phone: [mobileRule()],
+  email: [emailRule(), maxLenRule('邮箱', FIELD_LIMITS.EMAIL)],
 };
 
 async function loadList() {
   loading.value = true;
   try {
     rawList.value = await getDeptListApi({
-      name: query.name || undefined,
+      name: query.name.trim() || undefined,
       status: query.status,
     });
   } finally {
@@ -115,10 +128,11 @@ async function submitForm() {
   if (!valid) return;
   formSubmitting.value = true;
   try {
-    const payload: any = {
+    const payload = {
       ...form,
-      phone: form.phone || undefined,
-      email: form.email || undefined,
+      name: form.name.trim(),
+      phone: form.phone.trim() || undefined,
+      email: form.email.trim() || undefined,
     };
     if (form.id) {
       await updateDeptApi(payload);
@@ -135,9 +149,6 @@ async function submitForm() {
 
 async function handleDelete(row: DeptItem) {
   if (row.id === undefined) return;
-  await ElMessageBox.confirm(`确认删除部门「${row.name}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteDeptApi(row.id);
   ElMessage.success('删除成功');
   await loadList();
@@ -157,10 +168,16 @@ onMounted(async () => {
       <template #search>
         <el-form :inline="true" :model="query" @submit.prevent="loadList">
           <el-form-item label="部门名称">
-            <el-input v-model="query.name" placeholder="请输入部门名称" clearable />
+            <el-input
+              v-model="query.name"
+              placeholder="请输入部门名称"
+              :maxlength="FIELD_LIMITS.DEPT_NAME"
+              clearable
+              style="width: 180px"
+            />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px">
+            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
@@ -184,57 +201,65 @@ onMounted(async () => {
         </el-button>
       </template>
 
-      <el-table :data="treeList" row-key="id" border default-expand-all>
-        <el-table-column prop="name" label="部门名称" min-width="200" />
-        <el-table-column label="负责人" width="130">
-          <template #default="{ row }">
-            {{ row.leaderUserId ? userMap.get(String(row.leaderUserId)) || '-' : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="sort" label="排序" width="80" align="center" />
-        <el-table-column label="状态" width="90" align="center">
-          <template #default="{ row }">
-            <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
-          </template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="170">
-          <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-has-permi="'system:dept:create'"
-              link
-              type="primary"
-              size="small"
-              @click="openForm(undefined, row.id)"
-            >
-              新增下级
-            </el-button>
-            <el-button
-              v-has-permi="'system:dept:update'"
-              link
-              type="primary"
-              size="small"
-              @click="openForm(row)"
-            >
-              编辑
-            </el-button>
-            <el-button
-              v-has-permi="'system:dept:delete'"
-              link
-              type="danger"
-              size="small"
-              @click="handleDelete(row)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #default="{ size }">
+        <el-table :data="treeList" :size="size" row-key="id" border default-expand-all>
+          <el-table-column prop="name" label="部门名称" min-width="200" show-overflow-tooltip />
+          <el-table-column label="负责人" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.leaderUserId ? userMap.get(String(row.leaderUserId)) || '-' : '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="phone" label="联系电话" width="130" show-overflow-tooltip />
+          <el-table-column prop="sort" label="排序" width="76" align="center" />
+          <el-table-column label="状态" width="84" align="center">
+            <template #default="{ row }">
+              <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
+            </template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="232" align="center" fixed="right">
+            <template #default="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '新增下级',
+                    icon: Plus,
+                    auth: 'system:dept:create',
+                    onClick: () => openForm(undefined, row.id),
+                  },
+                  {
+                    label: '编辑',
+                    icon: Edit,
+                    auth: 'system:dept:update',
+                    onClick: () => openForm(row),
+                  },
+                  {
+                    label: '删除',
+                    type: 'danger',
+                    icon: Delete,
+                    auth: 'system:dept:delete',
+                    popConfirm: {
+                      title: deleteConfirmMessage(row.name),
+                      confirm: () => handleDelete(row),
+                    },
+                  },
+                ]"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </ProTable>
 
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑部门' : '新增部门'" width="520px" destroy-on-close>
+    <FormDialog
+      v-model="formVisible"
+      :title="form.id ? '编辑部门' : '新增部门'"
+      width="540px"
+      :confirm-loading="formSubmitting"
+      @confirm="submitForm"
+    >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="上级部门">
           <el-tree-select
@@ -242,25 +267,44 @@ onMounted(async () => {
             :data="parentOptions"
             :props="{ label: 'name', value: 'id', children: 'children' }"
             check-strictly
+            placeholder="请选择上级部门"
             class="w-full"
           />
         </el-form-item>
         <el-form-item label="部门名称" prop="name">
-          <el-input v-model="form.name" />
+          <el-input
+            v-model="form.name"
+            :maxlength="FIELD_LIMITS.DEPT_NAME"
+            placeholder="请输入部门名称（最多 30 字符）"
+          />
         </el-form-item>
         <el-form-item label="显示排序" prop="sort">
-          <el-input-number v-model="form.sort" :min="0" />
+          <el-input-number v-model="form.sort" :min="0" :max="99999" />
         </el-form-item>
         <el-form-item label="负责人">
-          <el-select v-model="form.leaderUserId" clearable filterable class="w-full" placeholder="请选择负责人">
+          <el-select
+            v-model="form.leaderUserId"
+            clearable
+            filterable
+            class="w-full"
+            placeholder="请选择负责人"
+          >
             <el-option v-for="u in users" :key="u.id" :label="u.nickname" :value="u.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="联系电话">
-          <el-input v-model="form.phone" />
+        <el-form-item label="联系电话" prop="phone">
+          <el-input
+            v-model="form.phone"
+            :maxlength="FIELD_LIMITS.MOBILE"
+            placeholder="请输入 11 位联系电话"
+          />
         </el-form-item>
-        <el-form-item label="邮箱">
-          <el-input v-model="form.email" />
+        <el-form-item label="邮箱" prop="email">
+          <el-input
+            v-model="form.email"
+            :maxlength="FIELD_LIMITS.EMAIL"
+            placeholder="请输入部门联系邮箱"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -269,10 +313,6 @@ onMounted(async () => {
           </el-radio-group>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formSubmitting" @click="submitForm">确定</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>

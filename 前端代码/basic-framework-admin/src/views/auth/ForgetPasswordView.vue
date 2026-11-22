@@ -8,6 +8,13 @@ import { resetPasswordBySmsApi, sendSmsCodeApi } from '@/api/auth';
 import CaptchaVerify from '@/components/CaptchaVerify.vue';
 import { getAppConfig } from '@/config/app';
 import { SmsSceneEnum } from '@/constants/enums';
+import {
+  FIELD_LIMITS,
+  mobileRule,
+  passwordComplexityRule,
+  REGEX_PATTERNS,
+  requiredRule,
+} from '@/constants/validation';
 import { encryptPassword } from '@/utils/sm2';
 
 const router = useRouter();
@@ -29,17 +36,11 @@ const form = reactive({
 });
 
 const rules: FormRules = {
-  mobile: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1\d{10}$/, message: '手机号格式不正确', trigger: 'blur' },
-  ],
-  code: [{ required: true, message: '请输入短信验证码', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 8, max: 32, message: '密码长度需在 8~32 位之间', trigger: 'blur' },
-  ],
+  mobile: [requiredRule('手机号'), mobileRule()],
+  code: [requiredRule('短信验证码')],
+  password: [requiredRule('新密码'), passwordComplexityRule()],
   confirmPassword: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    requiredRule('确认新密码'),
     {
       validator: (_rule, val, cb) => {
         if (val !== form.password) cb(new Error('两次输入的密码不一致'));
@@ -76,7 +77,7 @@ async function doSendCode(captchaVerification?: string) {
 }
 
 async function handleSendCode() {
-  if (!/^1\d{10}$/.test(form.mobile.trim())) {
+  if (!REGEX_PATTERNS.MOBILE.test(form.mobile.trim())) {
     ElMessage.warning('请先输入正确的 11 位手机号');
     return;
   }
@@ -109,15 +110,20 @@ async function handleSubmit() {
 <template>
   <div class="relative flex min-h-screen w-full overflow-x-hidden bg-white select-none">
     <div class="absolute top-5 left-6 z-10 flex items-center gap-2.5">
-      <img :src="logoUrl" :alt="appTitle" class="h-10 w-10" />
+      <img :src="logoUrl" :alt="appTitle" class="h-10 w-10 rounded-lg" />
       <span class="text-xl font-medium text-[#1f2937]">{{ appTitle }}</span>
     </div>
 
     <div class="relative hidden flex-1 bg-[#f1f3f6] lg:block">
       <div class="bf-login-bg absolute inset-0 h-full w-full" />
       <div class="relative flex h-full flex-col items-center justify-center px-12">
-        <img :src="sloganUrl" :alt="appTitle" class="bf-animate-float h-64 w-auto max-w-[420px]" />
+        <img
+          :src="sloganUrl"
+          :alt="appTitle"
+          class="bf-animate-float h-72 w-auto max-w-[440px]"
+        />
         <h2 class="mt-6 text-2xl font-medium text-[#1f2937]">重置账号密码</h2>
+        <p class="mt-2 text-sm text-[#64748b]">验证绑定手机号后立即重置安全密码</p>
       </div>
     </div>
 
@@ -128,11 +134,21 @@ async function handleSubmit() {
 
         <el-form ref="formRef" :model="form" :rules="rules" size="large">
           <el-form-item prop="mobile">
-            <el-input v-model="form.mobile" placeholder="请输入手机号" :prefix-icon="Phone" />
+            <el-input
+              v-model="form.mobile"
+              placeholder="请输入 11 位手机号"
+              :maxlength="FIELD_LIMITS.MOBILE"
+              :prefix-icon="Phone"
+            />
           </el-form-item>
           <el-form-item prop="code">
             <div class="flex w-full gap-2">
-              <el-input v-model="form.code" placeholder="请输入 6 位验证码" maxlength="6" class="flex-1" />
+              <el-input
+                v-model="form.code"
+                placeholder="请输入 6 位验证码"
+                :maxlength="FIELD_LIMITS.SMS_CODE"
+                class="flex-1"
+              />
               <el-button :disabled="countdown > 0" @click="handleSendCode">
                 {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
               </el-button>
@@ -143,7 +159,8 @@ async function handleSubmit() {
               v-model="form.password"
               type="password"
               show-password
-              placeholder="请输入新密码（8~32位含大小写及数字）"
+              :maxlength="FIELD_LIMITS.PASSWORD_MAX"
+              placeholder="请输入 8~32 位含大小写字母及数字的新密码"
               :prefix-icon="Lock"
             />
           </el-form-item>
@@ -152,6 +169,7 @@ async function handleSubmit() {
               v-model="form.confirmPassword"
               type="password"
               show-password
+              :maxlength="FIELD_LIMITS.PASSWORD_MAX"
               placeholder="请再次确认新密码"
               :prefix-icon="Lock"
             />

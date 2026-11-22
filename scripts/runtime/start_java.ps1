@@ -1,4 +1,4 @@
-# 在 Java 工程根目录启动应用，使 application.yaml 能读取被忽略的 .env。
+﻿# 在 Java 工程根目录启动应用，使 application.yaml 能读取被忽略的 .env。
 param([switch]$Build)
 
 $ErrorActionPreference = 'Stop'
@@ -6,7 +6,7 @@ $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).
 $javaRoot = Join-Path $repositoryRoot '后端代码/basic-framework-boot'
 Set-Location -LiteralPath $javaRoot
 if (-not (Test-Path -LiteralPath '.env')) {
-    throw '缺少 Java .env，请按 .env.example 配置数据库、Redis 和 MinIO。'
+    throw '缺少 Java .env，请先运行 init_local_dev.py --apply 或按 .env.example 配置数据库与 Redis。'
 }
 if ($Build) {
     & mvn.cmd -q '-DskipTests' package

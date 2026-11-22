@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 文件管理：列表查询、统一上传（含图片裁剪开关演示）、私有短时签名预览与删除。
+ * 文件管理：列表查询、统一上传（含图片裁剪开关）、私有短时签名预览与删除。
  */
-import { Delete, Plus, Search } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox } from 'element-plus';
+import { CopyDocument, Delete, Plus, Search, View } from '@element-plus/icons-vue';
+import { ElMessage } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
 import {
@@ -13,9 +13,13 @@ import {
   getFilePageApi,
   getPrivateFileSignedUrlApi,
 } from '@/api/file';
+import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
-import UploadField from '@/components/UploadField.vue';
+import TableAction from '@/components/TableAction.vue';
+import { deleteConfirmMessage, FIELD_LIMITS } from '@/constants/validation';
+import { confirmAction } from '@/utils/confirm';
 import { formatDateTime, formatFileSize } from '@/utils/format';
+import UploadField from '@/components/UploadField.vue';
 
 defineOptions({ name: 'InfraFile' });
 
@@ -42,8 +46,8 @@ async function loadList() {
     const res = await getFilePageApi({
       pageNo: query.pageNo,
       pageSize: query.pageSize,
-      path: query.path || undefined,
-      type: query.type || undefined,
+      path: query.path.trim() || undefined,
+      type: query.type.trim() || undefined,
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
@@ -76,9 +80,6 @@ async function handleCopyUrl(url?: string) {
 }
 
 async function handleDelete(row: FileRecord) {
-  await ElMessageBox.confirm(`确认删除文件「${row.name || row.path}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteFileApi(row.id);
   ElMessage.success('删除成功');
   await loadList();
@@ -86,10 +87,9 @@ async function handleDelete(row: FileRecord) {
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) return;
-  await ElMessageBox.confirm(
-    `确认删除已勾选的 ${selectedIds.value.length} 个文件吗？`,
-    '批量删除',
-    { type: 'warning' },
+  await confirmAction(
+    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个文件？删除后无法恢复。`,
+    { title: '批量删除确认', confirmText: '确认删除' },
   );
   await deleteFileListApi(selectedIds.value);
   ElMessage.success('批量删除成功');
@@ -119,12 +119,24 @@ onMounted(() => {
       @refresh="loadList"
     >
       <template #search>
-        <el-form :inline="true" :model="query" @submit.prevent="loadList">
+        <el-form :inline="true" :model="query" @submit.prevent="() => ((query.pageNo = 1), loadList())">
           <el-form-item label="文件路径">
-            <el-input v-model="query.path" placeholder="请输入文件路径" clearable />
+            <el-input
+              v-model="query.path"
+              placeholder="请输入文件路径"
+              :maxlength="FIELD_LIMITS.FILE_PATH"
+              clearable
+              style="width: 190px"
+            />
           </el-form-item>
           <el-form-item label="文件类型">
-            <el-input v-model="query.type" placeholder="例如 image/png" clearable />
+            <el-input
+              v-model="query.type"
+              placeholder="例如 image/png"
+              :maxlength="FIELD_LIMITS.SEARCH_KEYWORD"
+              clearable
+              style="width: 160px"
+            />
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
@@ -136,7 +148,12 @@ onMounted(() => {
       </template>
 
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" size="small" @click="uploadDialogVisible = true">
+        <el-button
+          type="primary"
+          :icon="Plus"
+          size="small"
+          @click="uploadDialogVisible = true"
+        >
           上传文件
         </el-button>
         <el-button
@@ -152,36 +169,64 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <el-table
-        :data="list"
-        border
-        stripe
-        @selection-change="(rows: FileRecord[]) => (selectedIds = rows.map((r) => r.id))"
-      >
-        <el-table-column type="selection" width="44" />
-        <el-table-column prop="name" label="文件名" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="path" label="存储路径" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="type" label="MIME 类型" width="150" show-overflow-tooltip />
-        <el-table-column label="大小" width="100">
-          <template #default="{ row }">{{ formatFileSize(row.size) }}</template>
-        </el-table-column>
-        <el-table-column label="上传时间" width="170">
-          <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handlePreview(row)">查看</el-button>
-            <el-button link type="primary" size="small" @click="handleCopyUrl(row.url)">复制链接</el-button>
-            <el-button v-has-permi="'infra:file:delete'" link type="danger" size="small" @click="handleDelete(row)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #default="{ size }">
+        <el-table
+          :data="list"
+          :size="size"
+          border
+          stripe
+          @selection-change="(rows: FileRecord[]) => (selectedIds = rows.map((r) => r.id))"
+        >
+          <el-table-column type="selection" width="44" align="center" />
+          <el-table-column prop="name" label="文件名" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="path" label="存储路径" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="type" label="MIME 类型" width="145" show-overflow-tooltip />
+          <el-table-column label="大小" width="96" align="right">
+            <template #default="{ row }">{{ formatFileSize(row.size) }}</template>
+          </el-table-column>
+          <el-table-column label="上传时间" width="164" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="236" align="center" fixed="right">
+            <template #default="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '查看',
+                    icon: View,
+                    onClick: () => handlePreview(row),
+                  },
+                  {
+                    label: '复制链接',
+                    icon: CopyDocument,
+                    onClick: () => handleCopyUrl(row.url),
+                  },
+                  {
+                    label: '删除',
+                    type: 'danger',
+                    icon: Delete,
+                    auth: 'infra:file:delete',
+                    popConfirm: {
+                      title: deleteConfirmMessage(row.name || row.path),
+                      confirm: () => handleDelete(row),
+                    },
+                  },
+                ]"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </ProTable>
 
-    <el-dialog v-model="uploadDialogVisible" title="上传文件" width="480px" destroy-on-close>
-      <el-form label-width="95px">
+    <FormDialog
+      v-model="uploadDialogVisible"
+      title="上传文件"
+      width="500px"
+      :show-footer="false"
+      :show-fullscreen="false"
+    >
+      <el-form label-width="90px">
         <el-form-item label="上传模式">
           <el-radio-group v-model="uploadMode">
             <el-radio value="file">通用文件</el-radio>
@@ -201,6 +246,6 @@ onMounted(() => {
           />
         </el-form-item>
       </el-form>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>
