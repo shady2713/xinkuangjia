@@ -64,18 +64,18 @@ function handleReset() {
 }
 
 async function handlePreview(row: FileRecord) {
-  if (row.url && !row.path?.startsWith('private/')) {
-    window.open(row.url, '_blank', 'noopener,noreferrer');
+  if (!row.privateFile) {
+    if (row.url) window.open(row.url, '_blank', 'noopener,noreferrer');
     return;
   }
   if (!row.id) return;
   const blob = await getPrivateFileContentApi(row.id);
-  downloadBlob(blob, row.path?.split('/').pop() || `file-${row.id}`);
+  downloadBlob(blob, row.name || row.path?.split('/').pop() || `file-${row.id}`);
 }
 
-async function handleCopyUrl(url?: string) {
-  if (!url) return;
-  await navigator.clipboard?.writeText(url);
+async function handleCopyUrl(row: FileRecord) {
+  if (row.privateFile || !row.url) return;
+  await navigator.clipboard?.writeText(row.url);
   ElMessage.success('地址已复制到剪贴板');
 }
 
@@ -199,7 +199,8 @@ onMounted(() => {
                   {
                     label: '复制链接',
                     icon: CopyDocument,
-                    onClick: () => handleCopyUrl(row.url),
+                    disabled: row.privateFile || !row.url,
+                    onClick: () => handleCopyUrl(row),
                   },
                   {
                     label: '删除',

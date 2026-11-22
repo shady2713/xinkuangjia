@@ -1627,6 +1627,10 @@
             "description" : "文件路径",
             "type" : "string"
           },
+          "privateFile" : {
+            "description" : "Whether the file is private (server-derived)",
+            "type" : "boolean"
+          },
           "size" : {
             "description" : "文件大小",
             "format" : "int64",
@@ -1641,7 +1645,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "createTime", "id", "name", "path", "size", "url" ],
+        "required" : [ "createTime", "id", "name", "path", "privateFile", "size", "url" ],
         "type" : "object"
       },
       "FileUploadReqVO" : {

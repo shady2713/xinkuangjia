@@ -178,7 +178,7 @@ public class FileController {
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('infra:file:query')")
     public CommonResult<FileRespVO> getFile(@RequestParam("id") Long id) {
-        return success(BeanUtils.toBean(fileService.getFile(id), FileRespVO.class));
+        return success(BeanUtils.toBean(fileService.getFile(id), FileRespVO.class, this::applyFileVisibility));
     }
 
     /**
@@ -320,7 +320,18 @@ public class FileController {
     @PreAuthorize("@ss.hasPermission('infra:file:query')")
     public CommonResult<PageResult<FileRespVO>> getFilePage(@Valid FilePageReqVO pageVO) {
         PageResult<FileDO> pageResult = fileService.getFilePage(pageVO);
-        return success(BeanUtils.toBean(pageResult, FileRespVO.class));
+        return success(BeanUtils.toBean(pageResult, FileRespVO.class, this::applyFileVisibility));
+    }
+
+    /**
+     * Derives visibility on the server (provider and legacy keys) and blanks the url of private files on the VO only.
+     */
+    private void applyFileVisibility(FileRespVO file) {
+        boolean privateFile = fileService.isPrivateObject(file.getPath());
+        file.setPrivateFile(privateFile);
+        if (privateFile) {
+            file.setUrl(StrUtil.EMPTY);
+        }
     }
 
 }

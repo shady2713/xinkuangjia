@@ -687,6 +687,8 @@ export namespace OpenApiSchemas {
     name: string;
     /** 文件路径 */
     path: string;
+    /** Whether the file is private (server-derived) */
+    privateFile: boolean;
     /** 文件大小 */
     size: number | string;
     /** 文件MIME类型 */
