@@ -21,6 +21,8 @@ python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
 
 新增一个业务功能（以 `Notice` 为例）遵循以下最小闭环：
 
+Role CRUD change example: [role change task card](需求卡/role-platform.md).
+
 1. **数据库表**：在 `数据库文件/basic_framework.sql` 增加建表 DDL（逻辑删除唯一索引须包含 `deleted_tag` 列）以及 `system_menu` / `system_role_menu` 菜单权限行。
 2. **后端代码（位于 `basic-framework-system`）**：
    - `dal/dataobject/`：继承 `BaseDO`（含业务唯一键时继承 `UniqueBaseDO`）。

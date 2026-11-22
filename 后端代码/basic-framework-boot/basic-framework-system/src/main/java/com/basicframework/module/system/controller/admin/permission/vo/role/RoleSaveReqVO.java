@@ -13,7 +13,7 @@ import lombok.Data;
  *
  * @author 李杰
  */
-@Schema(description = "管理后台 - 角色创建/更新 Request VO")
+@Schema(description = "管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation.")
 @Data
 public class RoleSaveReqVO {
 

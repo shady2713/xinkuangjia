@@ -2721,7 +2721,7 @@
         "type" : "object"
       },
       "RoleSaveReqVO" : {
-        "description" : "管理后台 - 角色创建/更新 Request VO",
+        "description" : "管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation.",
         "properties" : {
           "code" : {
             "description" : "角色标志",

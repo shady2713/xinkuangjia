@@ -32,6 +32,7 @@ import {
   getRoleApi,
   getRolePageApi,
   type RoleItem,
+  type RoleSaveReq,
   updateRoleApi,
 } from '@/api/system/role';
 import DictTag from '@/components/DictTag.vue';
@@ -75,7 +76,6 @@ const form = reactive({
   id: undefined as number | string | undefined,
   name: '',
   code: '',
-  roleType: 'business_admin',
   sort: 0,
   status: CommonStatusEnum.ENABLE as number,
   remark: '',
@@ -84,7 +84,6 @@ const form = reactive({
 const formRules: FormRules = {
   name: [requiredRule('角色名称'), maxLenRule('角色名称', FIELD_LIMITS.ROLE_NAME)],
   code: [requiredRule('角色标识'), maxLenRule('角色标识', FIELD_LIMITS.ROLE_CODE)],
-  roleType: [requiredRule('所属平台', 'change')],
   remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
 };
 
@@ -142,7 +141,6 @@ async function openForm(row?: RoleItem) {
     id: undefined,
     name: '',
     code: '',
-    roleType: 'business_admin',
     sort: 0,
     status: CommonStatusEnum.ENABLE,
     remark: '',
@@ -154,7 +152,6 @@ async function openForm(row?: RoleItem) {
       id: detail.id,
       name: detail.name,
       code: detail.code,
-      roleType: detail.roleType || 'business_admin',
       sort: detail.sort ?? 0,
       status: detail.status ?? CommonStatusEnum.ENABLE,
       remark: detail.remark || '',
@@ -167,11 +164,10 @@ async function submitForm() {
   if (!valid) return;
   formSubmitting.value = true;
   try {
-    const payload = {
+    const payload: RoleSaveReq = {
       id: form.id,
       name: form.name.trim(),
       code: form.code.trim(),
-      roleType: form.roleType,
       sort: form.sort,
       status: form.status,
       remark: form.remark.trim() || undefined,
@@ -439,12 +435,6 @@ onMounted(() => {
             :maxlength="FIELD_LIMITS.ROLE_CODE"
             placeholder="请输入角色标识，如 business_operator"
           />
-        </el-form-item>
-        <el-form-item label="所属平台" prop="roleType">
-          <el-select v-model="form.roleType" class="w-full" placeholder="请选择所属平台">
-            <el-option label="业务平台 (business_admin)" value="business_admin" />
-            <el-option label="超管平台 (super_admin)" value="super_admin" />
-          </el-select>
         </el-form-item>
         <el-form-item label="显示顺序">
           <el-input-number v-model="form.sort" :min="0" :max="99999" />

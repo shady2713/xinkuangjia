@@ -1158,7 +1158,7 @@ export namespace OpenApiSchemas {
     type: number;
   }
 
-  /** 管理后台 - 角色创建/更新 Request VO */
+  /** 管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation. */
   export interface RoleSaveReqVO {
     /** 角色标志 */
     code: string;
