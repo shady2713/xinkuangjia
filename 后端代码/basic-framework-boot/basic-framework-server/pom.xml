@@ -2,36 +2,29 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.basicframework</groupId>
         <artifactId>basic-framework</artifactId>
         <version>${revision}</version>
     </parent>
-    <modelVersion>4.0.0</modelVersion>
 
     <artifactId>basic-framework-server</artifactId>
     <packaging>jar</packaging>
 
     <name>${project.artifactId}</name>
     <description>
-        后端应用聚合启动模块，装配业务模块与公共 Starter，向 basic-framework-admin 提供管理端 REST API。
+        后端应用聚合启动模块，装配 basic-framework-core 与 basic-framework-system，向管理前端提供 REST API。
     </description>
 
     <properties>
-        <!-- 启动类当前仅 3 行可执行代码，现有测试只验证配置绑定，未覆盖启动入口；补启动装配测试后再提高。 -->
         <quality.coverage.minimum>0.00</quality.coverage.minimum>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>com.basicframework</groupId>
-            <artifactId>basic-framework-module-system</artifactId>
-            <version>${revision}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.basicframework</groupId>
-            <artifactId>basic-framework-module-infra</artifactId>
-            <version>${revision}</version>
+            <artifactId>basic-framework-system</artifactId>
         </dependency>
 
         <!-- 测试基础能力 -->
@@ -40,15 +33,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <!-- ArchUnit 架构约束门禁，仅测试范围。 -->
         <dependency>
             <groupId>com.tngtech.archunit</groupId>
             <artifactId>archunit-junit5</artifactId>
             <version>1.4.1</version>
             <scope>test</scope>
         </dependency>
-
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -57,10 +47,8 @@
     </dependencies>
 
     <build>
-        <!-- 设置构建的 jar 包名 -->
         <finalName>${project.artifactId}</finalName>
         <plugins>
-            <!-- 打包 -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
@@ -68,7 +56,7 @@
                 <executions>
                     <execution>
                         <goals>
-                            <goal>repackage</goal> <!-- 将引入的 jar 打入其中 -->
+                            <goal>repackage</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -1,3 +1,0 @@
-com.basicframework.framework.security.config.BasicFrameworkSecurityAutoConfiguration
-com.basicframework.framework.security.config.BasicFrameworkWebSecurityConfigurerAdapter
-com.basicframework.framework.operatelog.config.BasicFrameworkOperateLogConfiguration
