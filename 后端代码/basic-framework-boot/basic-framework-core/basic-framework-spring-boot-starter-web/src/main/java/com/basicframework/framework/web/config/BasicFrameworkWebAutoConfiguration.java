@@ -31,7 +31,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
-import com.basicframework.framework.common.biz.infra.logger.ApiErrorLogCommonApi;
 import com.basicframework.framework.common.enums.WebFilterOrderEnum;
 import com.basicframework.framework.web.core.filter.CacheRequestBodyFilter;
 import com.basicframework.framework.web.core.handler.GlobalExceptionHandler;
@@ -107,15 +106,13 @@ public class BasicFrameworkWebAutoConfiguration {
     }
 
     /**
-     * 完成 globalExceptionHandler 对应的业务处理。
+     * 创建全局异常处理器 Bean。
      *
-     * @param apiErrorLogApi apiError日志Api参数
-     * @return 方法处理结果
+     * @return 全局异常处理器实例
      */
     @Bean
-    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
-    public GlobalExceptionHandler globalExceptionHandler(ApiErrorLogCommonApi apiErrorLogApi) {
-        return new GlobalExceptionHandler(applicationName, apiErrorLogApi);
+    public GlobalExceptionHandler globalExceptionHandler() {
+        return new GlobalExceptionHandler(applicationName);
     }
 
     /**

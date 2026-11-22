@@ -4,15 +4,12 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.mybatis.core.dataobject.UniqueBaseDO;
 import com.basicframework.module.system.enums.common.SexEnum;
 import com.baomidou.mybatisplus.annotation.KeySequence;
-import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.*;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 
 /**
  * 管理后台的用户 DO
@@ -66,11 +63,6 @@ public class AdminUserDO extends UniqueBaseDO {
      * 部门 ID。
      */
     private Long deptId;
-    /**
-     * 岗位编号数组。
-     */
-    @TableField(typeHandler = JacksonTypeHandler.class)
-    private Set<Long> postIds;
     /**
      * 用户邮箱。
      */

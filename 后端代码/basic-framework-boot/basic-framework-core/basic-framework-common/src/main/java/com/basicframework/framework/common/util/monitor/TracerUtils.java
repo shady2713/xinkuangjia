@@ -1,30 +1,27 @@
 package com.basicframework.framework.common.util.monitor;
 
-import org.apache.skywalking.apm.toolkit.trace.TraceContext;
+import org.slf4j.MDC;
 
 /**
- * 链路追踪工具类
+ * 链路追踪工具类。
  *
- * 考虑到每个 starter 都需要用到该工具类，所以放到 common 模块下的 util 包下
+ * <p>基于 SLF4J {@link MDC} 读取当前线程的 {@code traceId}，未设置时返回空串。</p>
  *
  * @author 李杰
  */
-public class TracerUtils {
+public final class TracerUtils {
 
-    /**
-     * 私有化构造方法
-     */
     private TracerUtils() {
     }
 
     /**
-     * 获得链路追踪编号，直接返回 SkyWalking 的 TraceId。
-     * 如果不存在的话为空字符串！！！
+     * 获得当前线程的链路追踪编号。
      *
-     * @return 链路追踪编号
+     * @return 链路追踪编号，不存在时返回空串
      */
     public static String getTraceId() {
-        return TraceContext.traceId();
+        String traceId = MDC.get("traceId");
+        return traceId != null ? traceId : "";
     }
 
 }

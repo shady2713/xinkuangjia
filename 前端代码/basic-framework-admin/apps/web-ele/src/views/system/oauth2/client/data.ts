@@ -70,12 +70,6 @@ export function useFormSchema(): VbenFormSchema[] {
       rules: 'required',
     },
     {
-      fieldName: 'logo',
-      label: '应用图标',
-      component: 'ImageUpload',
-      rules: 'required',
-    },
-    {
       fieldName: 'description',
       label: '应用描述',
       component: 'Textarea',
@@ -135,60 +129,6 @@ export function useFormSchema(): VbenFormSchema[] {
         placeholder: '请输入授权范围',
       },
     },
-    {
-      fieldName: 'autoApproveScopes',
-      label: '自动授权范围',
-      component: 'Select',
-      componentProps: {
-        placeholder: '请输入自动授权范围',
-        multiple: true,
-        options: [],
-      },
-      dependencies: {
-        triggerFields: ['scopes'],
-        componentProps: (values) => ({
-          options: values.scopes
-            ? values.scopes.map((scope: string) => ({
-                label: scope,
-                value: scope,
-              }))
-            : [],
-        }),
-      },
-    },
-    {
-      fieldName: 'redirectUris',
-      label: '可重定向的 URI 地址',
-      component: 'InputTag',
-      componentProps: {
-        placeholder: '请输入可重定向的 URI 地址',
-      },
-      rules: 'required',
-    },
-    {
-      fieldName: 'authorities',
-      label: '权限',
-      component: 'InputTag',
-      componentProps: {
-        placeholder: '请输入权限',
-      },
-    },
-    {
-      fieldName: 'resourceIds',
-      label: '资源',
-      component: 'InputTag',
-      componentProps: {
-        placeholder: '请输入资源',
-      },
-    },
-    {
-      fieldName: 'additionalInformation',
-      label: '附加信息',
-      component: 'Textarea',
-      componentProps: {
-        placeholder: '请输入附加信息，JSON 格式数据',
-      },
-    },
   ];
 }
 
@@ -234,14 +174,6 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       field: 'name',
       title: '应用名',
       minWidth: 120,
-    },
-    {
-      field: 'logo',
-      title: '应用图标',
-      minWidth: 100,
-      cellRender: {
-        name: 'CellImage',
-      },
     },
     {
       field: 'status',

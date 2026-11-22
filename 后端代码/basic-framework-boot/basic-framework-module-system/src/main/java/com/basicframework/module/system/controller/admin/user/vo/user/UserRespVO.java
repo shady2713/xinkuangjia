@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.util.Set;
 import java.util.List;
 
 /**
@@ -70,12 +69,6 @@ public class UserRespVO{
     @Schema(description = "部门名称", example = "IT 部")
     @ExcelProperty("部门")
     private String deptName;
-
-    /**
-     * 岗位编号数组。
-     */
-    @Schema(description = "岗位编号数组", example = "1")
-    private Set<Long> postIds;
 
     /**
      * 用户邮箱。

@@ -5,15 +5,10 @@ import type { SystemRoleApi } from '#/api/system/role';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import { buildSortingField } from '@vben/request';
-import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
+import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import {
-  deleteRole,
-  deleteRoleList,
-  exportRole,
-  getRolePage,
-} from '#/api/system/role';
+import { deleteRole, deleteRoleList, getRolePage } from '#/api/system/role';
 import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 
@@ -42,12 +37,6 @@ const [AssignMenuFormModel, assignMenuFormApi] = useVbenModal({
 function handleRefresh() {
   clearCheckedIds();
   gridApi.query();
-}
-
-/** 导出表格 */
-async function handleExport() {
-  const data = await exportRole(await gridApi.formApi.getValues());
-  downloadFileFromBlobPart({ fileName: '角色.xlsx', source: data });
 }
 
 const {
@@ -125,13 +114,6 @@ const [Grid, gridApi] = useVbenVxeGrid({
               icon: ACTION_ICON.ADD,
               auth: ['system:role:create'],
               onClick: handleCreate,
-            },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['system:role:export'],
-              onClick: handleExport,
             },
             {
               label: $t('ui.actionTitle.deleteBatch'),

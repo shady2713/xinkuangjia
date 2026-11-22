@@ -1,20 +1,6 @@
 // 自动由 scripts/openapi/generate-api-types.mjs 根据 openapi.json 生成，禁止手改。
 
 export namespace OpenApiSchemas {
-  export interface AliyunSmsCallbackRespVO {
-    code?: number;
-    msg?: string;
-  }
-
-  /** 管理后台 - 地区节点 Response VO */
-  export interface AreaNodeRespVO {
-    children?: OpenApiSchemas.AreaNodeRespVO[];
-    /** 编号 */
-    id: number;
-    /** 名字 */
-    name: string;
-  }
-
   /** 管理后台 - 账号密码登录 Request VO */
   export interface AuthLoginReqVO {
     /** 验证码，验证码开启时，需要传递 */
@@ -169,12 +155,6 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_ConfigRespVO {
-    code?: number;
-    data?: OpenApiSchemas.ConfigRespVO;
-    msg?: string;
-  }
-
   export interface CommonResult_DeptRespVO {
     code?: number;
     data?: OpenApiSchemas.DeptRespVO;
@@ -205,24 +185,6 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_JobLogRespVO {
-    code?: number;
-    data?: OpenApiSchemas.JobLogRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_JobRespVO {
-    code?: number;
-    data?: OpenApiSchemas.JobRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_List_AreaNodeRespVO {
-    code?: number;
-    data?: OpenApiSchemas.AreaNodeRespVO[];
-    msg?: string;
-  }
-
   export interface CommonResult_List_DeptRespVO {
     code?: number;
     data?: OpenApiSchemas.DeptRespVO[];
@@ -247,12 +209,6 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_List_LocalDateTime {
-    code?: number;
-    data?: number[];
-    msg?: string;
-  }
-
   export interface CommonResult_List_MenuRespVO {
     code?: number;
     data?: OpenApiSchemas.MenuRespVO[];
@@ -265,21 +221,9 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_List_PostSimpleRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PostSimpleRespVO[];
-    msg?: string;
-  }
-
   export interface CommonResult_List_RoleSimpleRespVO {
     code?: number;
     data?: OpenApiSchemas.RoleSimpleRespVO[];
-    msg?: string;
-  }
-
-  export interface CommonResult_List_SmsChannelSimpleRespVO {
-    code?: number;
-    data?: OpenApiSchemas.SmsChannelSimpleRespVO[];
     msg?: string;
   }
 
@@ -325,12 +269,6 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_PageResult_ConfigRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_ConfigRespVO;
-    msg?: string;
-  }
-
   export interface CommonResult_PageResult_DictDataRespVO {
     code?: number;
     data?: OpenApiSchemas.PageResult_DictDataRespVO;
@@ -346,18 +284,6 @@ export namespace OpenApiSchemas {
   export interface CommonResult_PageResult_FileRespVO {
     code?: number;
     data?: OpenApiSchemas.PageResult_FileRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_PageResult_JobLogRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_JobLogRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_PageResult_JobRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_JobRespVO;
     msg?: string;
   }
 
@@ -385,39 +311,15 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
-  export interface CommonResult_PageResult_PostRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_PostRespVO;
-    msg?: string;
-  }
-
   export interface CommonResult_PageResult_RoleRespVO {
     code?: number;
     data?: OpenApiSchemas.PageResult_RoleRespVO;
     msg?: string;
   }
 
-  export interface CommonResult_PageResult_SmsChannelRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_SmsChannelRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_PageResult_SmsTemplateRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PageResult_SmsTemplateRespVO;
-    msg?: string;
-  }
-
   export interface CommonResult_PageResult_UserRespVO {
     code?: number;
     data?: OpenApiSchemas.PageResult_UserRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_PostRespVO {
-    code?: number;
-    data?: OpenApiSchemas.PostRespVO;
     msg?: string;
   }
 
@@ -436,18 +338,6 @@ export namespace OpenApiSchemas {
   export interface CommonResult_Sm2PublicKeyRespVO {
     code?: number;
     data?: OpenApiSchemas.Sm2PublicKeyRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_SmsChannelRespVO {
-    code?: number;
-    data?: OpenApiSchemas.SmsChannelRespVO;
-    msg?: string;
-  }
-
-  export interface CommonResult_SmsTemplateRespVO {
-    code?: number;
-    data?: OpenApiSchemas.SmsTemplateRespVO;
     msg?: string;
   }
 
@@ -473,64 +363,6 @@ export namespace OpenApiSchemas {
     code?: number;
     data?: OpenApiSchemas.UserRespVO;
     msg?: string;
-  }
-
-  /** 管理后台 - 参数配置分页 Request VO */
-  export interface ConfigPageReqVO {
-    /** 创建时间 */
-    createTime?: number[];
-    /** 参数键名，模糊匹配 */
-    key?: string;
-    /** 数据源名称，模糊匹配 */
-    name?: string;
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 参数类型，参见 ConfigTypeEnum 枚举 */
-    type?: number;
-  }
-
-  /** 管理后台 - 参数配置信息 Response VO */
-  export interface ConfigRespVO {
-    /** 参数分类 */
-    category: string;
-    /** 创建时间 */
-    createTime: number;
-    /** 参数配置序号 */
-    id: number | string;
-    /** 参数键名 */
-    key: string;
-    /** 参数名称 */
-    name: string;
-    /** 备注 */
-    remark?: string;
-    /** 参数类型，参见 ConfigTypeEnum 枚举 */
-    type: number;
-    /** 参数键值 */
-    value: string;
-    /** 是否可见 */
-    visible: boolean;
-  }
-
-  /** 管理后台 - 参数配置创建/修改 Request VO */
-  export interface ConfigSaveReqVO {
-    /** 参数分组 */
-    category: string;
-    /** 参数配置序号 */
-    id?: number | string;
-    /** 参数键名 */
-    key: string;
-    /** 参数名称 */
-    name: string;
-    /** 备注 */
-    remark?: string;
-    /** 参数键值 */
-    value: string;
-    /** 是否可见 */
-    visible: boolean;
   }
 
   /** 管理后台 - 部门列表 Request VO */
@@ -795,112 +627,6 @@ export namespace OpenApiSchemas {
     file: Blob | File;
   }
 
-  /** 管理后台 - 定时任务日志分页 Request VO */
-  export interface JobLogPageReqVO {
-    /** 开始执行时间 */
-    beginTime?: number;
-    /** 结束执行时间 */
-    endTime?: number;
-    /** 处理器的名字，模糊匹配 */
-    handlerName?: string;
-    /** 任务编号 */
-    jobId?: number | string;
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 任务状态，参见 JobLogStatusEnum 枚举 */
-    status?: number;
-  }
-
-  /** 管理后台 - 定时任务日志 Response VO */
-  export interface JobLogRespVO {
-    /** 开始执行时间 */
-    beginTime: number;
-    /** 创建时间 */
-    createTime: number;
-    /** 执行时长 */
-    duration?: number;
-    /** 结束执行时间 */
-    endTime?: number;
-    /** 第几次执行 */
-    executeIndex: number;
-    /** 处理器的名字 */
-    handlerName: string;
-    /** 处理器的参数 */
-    handlerParam?: string;
-    /** 日志编号 */
-    id: number | string;
-    /** 任务编号 */
-    jobId: number | string;
-    /** 结果数据 */
-    result?: string;
-    /** 任务状态，参见 JobLogStatusEnum 枚举 */
-    status: number;
-  }
-
-  /** 管理后台 - 定时任务分页 Request VO */
-  export interface JobPageReqVO {
-    /** 处理器的名字，模糊匹配 */
-    handlerName?: string;
-    /** 任务名称，模糊匹配 */
-    name?: string;
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 任务状态，参见 JobStatusEnum 枚举 */
-    status?: number;
-  }
-
-  /** 管理后台 - 定时任务 Response VO */
-  export interface JobRespVO {
-    /** 创建时间 */
-    createTime: number;
-    /** CRON 表达式 */
-    cronExpression: string;
-    /** 处理器的名字 */
-    handlerName: string;
-    /** 处理器的参数 */
-    handlerParam?: string;
-    /** 任务编号 */
-    id: number | string;
-    /** 监控超时时间 */
-    monitorTimeout?: number;
-    /** 任务名称 */
-    name: string;
-    /** 重试次数 */
-    retryCount: number;
-    /** 重试间隔 */
-    retryInterval: number;
-    /** 任务状态 */
-    status: number;
-  }
-
-  /** 管理后台 - 定时任务创建/修改 Request VO */
-  export interface JobSaveReqVO {
-    /** CRON 表达式 */
-    cronExpression: string;
-    /** 处理器的名字 */
-    handlerName: string;
-    /** 处理器的参数 */
-    handlerParam?: string;
-    /** 任务编号 */
-    id?: number | string;
-    /** 监控超时时间 */
-    monitorTimeout?: number;
-    /** 任务名称 */
-    name: string;
-    /** 重试次数 */
-    retryCount: number;
-    /** 重试间隔 */
-    retryInterval: number;
-  }
-
   /** 管理后台 - 登录日志分页列表 Request VO */
   export interface LoginLogPageReqVO {
     /** 登录时间 */
@@ -1081,16 +807,10 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - OAuth2 客户端 Response VO */
   export interface OAuth2ClientRespVO {
-    /** 访问令牌的有效期 */
+    /** 访问令牌的有效期（秒） */
     accessTokenValiditySeconds: number;
-    /** 附加信息 */
-    additionalInformation?: string;
-    /** 权限 */
-    authorities?: string[];
     /** 授权类型，参见 OAuth2GrantTypeEnum 枚举 */
     authorizedGrantTypes: string[];
-    /** 自动通过的授权范围 */
-    autoApproveScopes?: string[];
     /** 客户端编号 */
     clientId: string;
     /** 创建时间 */
@@ -1099,16 +819,10 @@ export namespace OpenApiSchemas {
     description?: string;
     /** 编号 */
     id: number | string;
-    /** 应用图标 */
-    logo: string;
     /** 应用名 */
     name: string;
-    /** 可重定向的 URI 地址 */
-    redirectUris: string[];
-    /** 刷新令牌的有效期 */
+    /** 刷新令牌的有效期（秒） */
     refreshTokenValiditySeconds: number;
-    /** 资源 */
-    resourceIds?: string[];
     /** 授权范围 */
     scopes?: string[];
     /** 状态，参见 CommonStatusEnum 枚举 */
@@ -1117,32 +831,20 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - OAuth2 客户端创建/修改 Request VO */
   export interface OAuth2ClientSaveReqVO {
-    /** 访问令牌的有效期 */
+    /** 访问令牌的有效期（秒） */
     accessTokenValiditySeconds: number;
-    /** 附加信息 */
-    additionalInformation?: string;
-    /** 权限 */
-    authorities?: string[];
     /** 授权类型，参见 OAuth2GrantTypeEnum 枚举 */
     authorizedGrantTypes: string[];
-    /** 自动通过的授权范围 */
-    autoApproveScopes?: string[];
     /** 客户端编号 */
     clientId: string;
     /** 应用描述 */
     description?: string;
     /** 编号 */
     id?: number | string;
-    /** 应用图标 */
-    logo: string;
     /** 应用名 */
     name: string;
-    /** 可重定向的 URI 地址 */
-    redirectUris: string[];
-    /** 刷新令牌的有效期 */
+    /** 刷新令牌的有效期（秒） */
     refreshTokenValiditySeconds: number;
-    /** 资源 */
-    resourceIds?: string[];
     /** 授权范围 */
     scopes?: string[];
     /** 客户端密钥；创建时必填，更新时留空表示不变 */
@@ -1222,14 +924,6 @@ export namespace OpenApiSchemas {
   }
 
   /** 分页结果 */
-  export interface PageResult_ConfigRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.ConfigRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
   export interface PageResult_DictDataRespVO {
     /** 数据 */
     list: OpenApiSchemas.DictDataRespVO[];
@@ -1249,22 +943,6 @@ export namespace OpenApiSchemas {
   export interface PageResult_FileRespVO {
     /** 数据 */
     list: OpenApiSchemas.FileRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
-  export interface PageResult_JobLogRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.JobLogRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
-  export interface PageResult_JobRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.JobRespVO[];
     /** 总量 */
     total: number | string;
   }
@@ -1302,33 +980,9 @@ export namespace OpenApiSchemas {
   }
 
   /** 分页结果 */
-  export interface PageResult_PostRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.PostRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
   export interface PageResult_RoleRespVO {
     /** 数据 */
     list: OpenApiSchemas.RoleRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
-  export interface PageResult_SmsChannelRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.SmsChannelRespVO[];
-    /** 总量 */
-    total: number | string;
-  }
-
-  /** 分页结果 */
-  export interface PageResult_SmsTemplateRespVO {
-    /** 数据 */
-    list: OpenApiSchemas.SmsTemplateRespVO[];
     /** 总量 */
     total: number | string;
   }
@@ -1376,64 +1030,6 @@ export namespace OpenApiSchemas {
     secretKey?: string;
     x: number;
     y: number;
-  }
-
-  /** 管理后台 - 岗位分页 Request VO */
-  export interface PostPageReqVO {
-    /** 岗位编码，模糊匹配 */
-    code?: string;
-    /** 岗位名称，模糊匹配 */
-    name?: string;
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 展示状态，参见 CommonStatusEnum 枚举类 */
-    status?: number;
-  }
-
-  /** 管理后台 - 岗位信息 Response VO */
-  export interface PostRespVO {
-    /** 岗位编码 */
-    code: string;
-    /** 创建时间 */
-    createTime: number;
-    /** 岗位序号 */
-    id: number | string;
-    /** 岗位名称 */
-    name: string;
-    /** 备注 */
-    remark?: string;
-    /** 显示顺序 */
-    sort: number;
-    /** 状态，参见 CommonStatusEnum 枚举类 */
-    status: number;
-  }
-
-  /** 管理后台 - 岗位创建/修改 Request VO */
-  export interface PostSaveReqVO {
-    /** 岗位编码 */
-    code: string;
-    /** 岗位编号 */
-    id?: number | string;
-    /** 岗位名称 */
-    name: string;
-    /** 备注 */
-    remark?: string;
-    /** 显示顺序 */
-    sort: number;
-    /** 状态 */
-    status: number;
-  }
-
-  /** 管理后台 - 岗位信息的精简 Response VO */
-  export interface PostSimpleRespVO {
-    /** 岗位序号 */
-    id: number | string;
-    /** 岗位名称 */
-    name: string;
   }
 
   export interface ResponseModel {
@@ -1520,168 +1116,9 @@ export namespace OpenApiSchemas {
     publicKey: string;
   }
 
-  /** 管理后台 - 短信渠道分页 Request VO */
-  export interface SmsChannelPageReqVO {
-    /** 短信渠道编码 */
-    code?: string;
-    /** 创建时间 */
-    createTime?: number[];
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 短信签名，模糊匹配 */
-    signature?: string;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 任务状态 */
-    status?: number;
-  }
-
-  /** 管理后台 - 短信渠道 Response VO */
-  export interface SmsChannelRespVO {
-    /** 短信 API 的账号 */
-    apiKey: string;
-    /** 是否已配置短信 API 密钥 */
-    apiSecretConfigured: boolean;
-    /** 短信发送回调 URL */
-    callbackUrl?: string;
-    /** 渠道编码，参见 SmsChannelEnum 枚举类 */
-    code: string;
-    /** 创建时间 */
-    createTime: number;
-    /** 编号 */
-    id: number | string;
-    /** 备注 */
-    remark?: string;
-    /** 短信签名 */
-    signature: string;
-    /** 启用状态 */
-    status: number;
-  }
-
-  /** 管理后台 - 短信渠道创建/修改 Request VO */
-  export interface SmsChannelSaveReqVO {
-    /** 短信 API 的账号 */
-    apiKey: string;
-    /** 短信 API 的密钥；更新时留空表示保持原密钥不变 */
-    apiSecret?: string;
-    /** 短信发送回调 URL */
-    callbackUrl?: string;
-    /** 渠道编码，参见 SmsChannelEnum 枚举类 */
-    code: string;
-    /** 编号 */
-    id?: number | string;
-    /** 备注 */
-    remark?: string;
-    /** 短信签名 */
-    signature: string;
-    /** 启用状态 */
-    status: number;
-  }
-
-  /** 管理后台 - 短信渠道精简 Response VO */
-  export interface SmsChannelSimpleRespVO {
-    /** 渠道编码，参见 SmsChannelEnum 枚举类 */
-    code: string;
-    /** 编号 */
-    id: number | string;
-    /** 短信签名 */
-    signature: string;
-  }
-
-  /** 管理后台 - 短信模板分页 Request VO */
-  export interface SmsTemplatePageReqVO {
-    /** 短信 API 的模板编号，模糊匹配 */
-    apiTemplateId?: string;
-    /** 短信渠道编号 */
-    channelId?: number | string;
-    /** 模板编码，模糊匹配 */
-    code?: string;
-    /** 模板内容，模糊匹配 */
-    content?: string;
-    /** 创建时间 */
-    createTime?: number[];
-    /** 页码，从 1 开始 */
-    pageNo: number;
-    /** 每页条数，最大值为 200 */
-    pageSize: number;
-    /** 排序字段 */
-    sortingFields?: OpenApiSchemas.SortingField[];
-    /** 开启状态 */
-    status?: number;
-    /** 短信签名 */
-    type?: number;
-  }
-
-  /** 管理后台 - 短信模板 Response VO */
-  export interface SmsTemplateRespVO {
-    /** 短信 API 的模板编号 */
-    apiTemplateId: string;
-    /** 短信渠道编码 */
-    channelCode: string;
-    /** 短信渠道编号 */
-    channelId: number | string;
-    /** 模板编码 */
-    code: string;
-    /** 模板内容 */
-    content: string;
-    /** 创建时间 */
-    createTime: number;
-    /** 编号 */
-    id: number | string;
-    /** 模板名称 */
-    name: string;
-    /** 参数数组 */
-    params?: string[];
-    /** 备注 */
-    remark?: string;
-    /** 开启状态，参见 CommonStatusEnum 枚举类 */
-    status: number;
-    /** 短信类型，参见 SmsTemplateTypeEnum 枚举类 */
-    type: number;
-  }
-
-  /** 管理后台 - 短信模板创建/修改 Request VO */
-  export interface SmsTemplateSaveReqVO {
-    /** 短信 API 的模板编号 */
-    apiTemplateId: string;
-    /** 短信渠道编号 */
-    channelId: number | string;
-    /** 模板编码 */
-    code: string;
-    /** 模板内容 */
-    content: string;
-    /** 编号 */
-    id?: number | string;
-    /** 模板名称 */
-    name: string;
-    /** 备注 */
-    remark?: string;
-    /** 开启状态，参见 CommonStatusEnum 枚举类 */
-    status: number;
-    /** 短信类型，参见 SmsTemplateTypeEnum 枚举类 */
-    type: number;
-  }
-
-  /** 管理后台 - 短信模板发送 Request VO */
-  export interface SmsTemplateSendReqVO {
-    /** 手机号 */
-    mobile: string;
-    /** 模板编码 */
-    templateCode: string;
-    /** 模板参数 */
-    templateParams?: Record<string, Record<string, unknown>>;
-  }
-
   export interface SortingField {
     field?: string;
     order?: string;
-  }
-
-  export interface TencentSmsCallbackRespVO {
-    errmsg?: string;
-    result?: number;
   }
 
   /** 管理后台 - 用户导入 Response VO */
@@ -1735,7 +1172,6 @@ export namespace OpenApiSchemas {
     mobile?: string;
     /** 用户昵称 */
     nickname: string;
-    posts?: OpenApiSchemas.PostSimpleRespVO[];
     roles?: OpenApiSchemas.RoleSimpleRespVO[];
     /** 用户性别，参见 SexEnum 枚举类 */
     sex?: number;
@@ -1787,8 +1223,6 @@ export namespace OpenApiSchemas {
     mobile?: string;
     /** 用户昵称 */
     nickname: string;
-    /** 岗位编号数组 */
-    postIds?: (number | string)[];
     /** 备注 */
     remark?: string;
     /** 当前平台已分配角色名称 */
@@ -1819,8 +1253,6 @@ export namespace OpenApiSchemas {
     nickname: string;
     /** SM2 密码密文（C1C3C2） */
     password: string;
-    /** 岗位编号数组 */
-    postIds?: (number | string)[];
     /** 备注 */
     remark?: string;
     /** 用户性别，参见 SexEnum 枚举类 */
@@ -1862,38 +1294,6 @@ export namespace OpenApiSchemas {
 }
 
 export interface OpenApiPaths {
-  "/admin-api/infra/config/create": {
-    /** 创建参数配置 */
-    post: { body: OpenApiSchemas.ConfigSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/infra/config/delete": {
-    /** 删除参数配置 */
-    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/config/delete-list": {
-    /** 批量删除参数配置 */
-    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/config/export-excel": {
-    /** 导出参数配置 */
-    get: { body: never; query: { createTime?: number[]; key?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; type?: number }; response: void };
-  };
-  "/admin-api/infra/config/get": {
-    /** 获得参数配置 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_ConfigRespVO };
-  };
-  "/admin-api/infra/config/get-value-by-key": {
-    /** 根据参数键名查询参数值 */
-    get: { body: never; query: { key: string }; response: OpenApiSchemas.CommonResult_String };
-  };
-  "/admin-api/infra/config/page": {
-    /** 获取参数配置分页 */
-    get: { body: never; query: { createTime?: number[]; key?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; type?: number }; response: OpenApiSchemas.CommonResult_PageResult_ConfigRespVO };
-  };
-  "/admin-api/infra/config/update": {
-    /** 修改参数配置 */
-    put: { body: OpenApiSchemas.ConfigSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
   "/admin-api/infra/file/content/**": {
     /** 下载公开文件 */
     get: { body: never; query: never; response: void };
@@ -1933,70 +1333,6 @@ export interface OpenApiPaths {
   "/admin-api/infra/file/upload": {
     /** 上传文件 */
     post: { body: OpenApiSchemas.FileUploadReqVO; query: never; response: OpenApiSchemas.CommonResult_String };
-  };
-  "/admin-api/infra/job-log/export-excel": {
-    /** 导出定时任务日志 Excel */
-    get: { body: never; query: { beginTime?: number; endTime?: number; handlerName?: string; jobId?: number | string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
-  };
-  "/admin-api/infra/job-log/get": {
-    /** 获得定时任务日志 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_JobLogRespVO };
-  };
-  "/admin-api/infra/job-log/page": {
-    /** 获得定时任务日志分页 */
-    get: { body: never; query: { beginTime?: number; endTime?: number; handlerName?: string; jobId?: number | string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_JobLogRespVO };
-  };
-  "/admin-api/infra/job/create": {
-    /** 创建定时任务 */
-    post: { body: OpenApiSchemas.JobSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/infra/job/delete": {
-    /** 删除定时任务 */
-    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/job/delete-list": {
-    /** 批量删除定时任务 */
-    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/job/export-excel": {
-    /** 导出定时任务 Excel */
-    get: { body: never; query: { handlerName?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
-  };
-  "/admin-api/infra/job/get": {
-    /** 获得定时任务 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_JobRespVO };
-  };
-  "/admin-api/infra/job/get_next_times": {
-    /** 获得定时任务的下 n 次执行时间 */
-    get: { body: never; query: { id: number | string; count?: number }; response: OpenApiSchemas.CommonResult_List_LocalDateTime };
-  };
-  "/admin-api/infra/job/page": {
-    /** 获得定时任务分页 */
-    get: { body: never; query: { handlerName?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_JobRespVO };
-  };
-  "/admin-api/infra/job/sync": {
-    /** 同步定时任务 */
-    post: { body: never; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/job/trigger": {
-    /** 触发定时任务 */
-    put: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/job/update": {
-    /** 更新定时任务 */
-    put: { body: OpenApiSchemas.JobSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/infra/job/update-status": {
-    /** 更新定时任务的状态 */
-    put: { body: never; query: { id: number | string; status: number }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/area/get-by-ip": {
-    /** 获得 IP 对应的地区名 */
-    get: { body: never; query: { ip: string }; response: OpenApiSchemas.CommonResult_String };
-  };
-  "/admin-api/system/area/tree": {
-    /** 获得地区树 */
-    get: { body: never; query: never; response: OpenApiSchemas.CommonResult_List_AreaNodeRespVO };
   };
   "/admin-api/system/auth/get-permission-info": {
     /** 获取登录用户的权限信息 */
@@ -2082,10 +1418,6 @@ export interface OpenApiPaths {
     /** 批量删除字典数据 */
     delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
   };
-  "/admin-api/system/dict-data/export-excel": {
-    /** 导出字典数据 */
-    get: { body: never; query: { dictType?: string; label?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
-  };
   "/admin-api/system/dict-data/get": {
     /** /查询字典数据详细 */
     get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_DictDataRespVO };
@@ -2113,10 +1445,6 @@ export interface OpenApiPaths {
   "/admin-api/system/dict-type/delete-list": {
     /** 批量删除字典类型 */
     delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/dict-type/export-excel": {
-    /** 导出数据类型 */
-    get: { body: never; query: { createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: string }; response: void };
   };
   "/admin-api/system/dict-type/get": {
     /** /查询字典类型详细 */
@@ -2242,38 +1570,6 @@ export interface OpenApiPaths {
     /** 获得管理员拥有的角色编号列表 */
     get: { body: never; query: { userId: number | string }; response: OpenApiSchemas.CommonResult_Set_Long };
   };
-  "/admin-api/system/post/create": {
-    /** 创建岗位 */
-    post: { body: OpenApiSchemas.PostSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/system/post/delete": {
-    /** 删除岗位 */
-    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/post/delete-list": {
-    /** 批量删除岗位 */
-    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/post/export-excel": {
-    /** 岗位管理 */
-    get: { body: never; query: { code?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
-  };
-  "/admin-api/system/post/get": {
-    /** 获得岗位信息 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_PostRespVO };
-  };
-  "/admin-api/system/post/page": {
-    /** 获得岗位分页列表 */
-    get: { body: never; query: { code?: string; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_PostRespVO };
-  };
-  "/admin-api/system/post/simple-list": {
-    /** 获取岗位全列表 */
-    get: { body: never; query: never; response: OpenApiSchemas.CommonResult_List_PostSimpleRespVO };
-  };
-  "/admin-api/system/post/update": {
-    /** 修改岗位 */
-    put: { body: OpenApiSchemas.PostSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
   "/admin-api/system/role/create": {
     /** 创建角色 */
     post: { body: OpenApiSchemas.RoleSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
@@ -2285,10 +1581,6 @@ export interface OpenApiPaths {
   "/admin-api/system/role/delete-list": {
     /** 批量删除角色 */
     delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/role/export-excel": {
-    /** 导出角色 Excel */
-    get: { body: never; query: { code?: string; createTime?: number[]; name?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: void };
   };
   "/admin-api/system/role/get": {
     /** 获得角色信息 */
@@ -2305,74 +1597,6 @@ export interface OpenApiPaths {
   "/admin-api/system/role/update": {
     /** 修改角色 */
     put: { body: OpenApiSchemas.RoleSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-channel/create": {
-    /** 创建短信渠道 */
-    post: { body: OpenApiSchemas.SmsChannelSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/system/sms-channel/delete": {
-    /** 删除短信渠道 */
-    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-channel/delete-list": {
-    /** 批量删除短信渠道 */
-    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-channel/get": {
-    /** 获得短信渠道 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_SmsChannelRespVO };
-  };
-  "/admin-api/system/sms-channel/page": {
-    /** 获得短信渠道分页 */
-    get: { body: never; query: { code?: string; createTime?: number[]; pageNo: number; pageSize: number; signature?: string; sortingFields?: OpenApiSchemas.SortingField[]; status?: number }; response: OpenApiSchemas.CommonResult_PageResult_SmsChannelRespVO };
-  };
-  "/admin-api/system/sms-channel/simple-list": {
-    /** 获得短信渠道精简列表 */
-    get: { body: never; query: never; response: OpenApiSchemas.CommonResult_List_SmsChannelSimpleRespVO };
-  };
-  "/admin-api/system/sms-channel/update": {
-    /** 更新短信渠道 */
-    put: { body: OpenApiSchemas.SmsChannelSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-template/create": {
-    /** 创建短信模板 */
-    post: { body: OpenApiSchemas.SmsTemplateSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/system/sms-template/delete": {
-    /** 删除短信模板 */
-    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-template/delete-list": {
-    /** 批量删除短信模板 */
-    delete: { body: never; query: { ids: (number | string)[] }; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms-template/export-excel": {
-    /** 导出短信模板 Excel */
-    get: { body: never; query: { apiTemplateId?: string; channelId?: number | string; code?: string; content?: string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: number }; response: void };
-  };
-  "/admin-api/system/sms-template/get": {
-    /** 获得短信模板 */
-    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_SmsTemplateRespVO };
-  };
-  "/admin-api/system/sms-template/page": {
-    /** 获得短信模板分页 */
-    get: { body: never; query: { apiTemplateId?: string; channelId?: number | string; code?: string; content?: string; createTime?: number[]; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; status?: number; type?: number }; response: OpenApiSchemas.CommonResult_PageResult_SmsTemplateRespVO };
-  };
-  "/admin-api/system/sms-template/send-sms": {
-    /** 发送短信 */
-    post: { body: OpenApiSchemas.SmsTemplateSendReqVO; query: never; response: OpenApiSchemas.CommonResult_Long };
-  };
-  "/admin-api/system/sms-template/update": {
-    /** 更新短信模板 */
-    put: { body: OpenApiSchemas.SmsTemplateSaveReqVO; query: never; response: OpenApiSchemas.CommonResult_Boolean };
-  };
-  "/admin-api/system/sms/callback/aliyun": {
-    /** 阿里云短信的回调 */
-    post: { body: never; query: never; response: OpenApiSchemas.AliyunSmsCallbackRespVO };
-  };
-  "/admin-api/system/sms/callback/tencent": {
-    /** 腾讯云短信的回调 */
-    post: { body: never; query: never; response: OpenApiSchemas.TencentSmsCallbackRespVO };
   };
   "/admin-api/system/user/create": {
     /** 新增用户 */

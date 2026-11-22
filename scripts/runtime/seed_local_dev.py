@@ -97,13 +97,6 @@ VALUES
     (900, '本地研发演示部', 100, 90, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin'),
     (901, '本地质量保障组', 900, 1, 1, '', '', 0, 'admin', NOW(), 'admin', NOW(), b'0', 'super_admin');
 
-INSERT IGNORE INTO `system_post`
-    (`id`, `code`, `name`, `sort`, `status`, `remark`,
-     `creator`, `create_time`, `updater`, `update_time`, `deleted`, `deleted_tag`)
-VALUES
-    (900, 'demo_arch', '演示架构师', 90, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0),
-    (901, 'demo_dev', '演示研发工程师', 91, 0, '本地研发演示岗位', 'admin', NOW(), 'admin', NOW(), b'0', 0);
-
 INSERT IGNORE INTO `system_role`
     (`id`, `name`, `code`, `role_type`, `sort`, `data_scope`, `data_scope_dept_ids`, `status`,
      `type`, `remark`, `creator`, `create_time`, `updater`, `update_time`, `deleted`, `deleted_tag`)

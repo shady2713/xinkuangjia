@@ -84,13 +84,3 @@ export function deleteDictTypeList(ids: (number | string)[]) {
     `/system/dict-type/delete-list?ids=${ids.join(',')}`,
   );
 }
-
-/**
- * 导出字典类型 Excel。
- *
- * @param params 导出筛选参数
- * @returns Excel 文件流
- */
-export function exportDictType(params: PageParam) {
-  return requestClient.download('/system/dict-type/export-excel', { params });
-}

@@ -90,15 +90,3 @@ export function deleteRole(id: number | string) {
 export function deleteRoleList(ids: (number | string)[]) {
   return requestClient.delete(`/system/role/delete-list?ids=${ids.join(',')}`);
 }
-
-/**
- * 导出角色 Excel。
- *
- * @param params 导出筛选参数
- * @returns Excel 文件流
- */
-export function exportRole(params: PageParam) {
-  return requestClient.download('/system/role/export-excel', {
-    params,
-  });
-}

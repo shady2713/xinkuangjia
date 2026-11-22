@@ -47,18 +47,6 @@ const routes: RouteRecordRaw[] = [
       title: '修改密码',
     },
   },
-  {
-    name: 'InfraJobLog',
-    path: '/infra/job/job-log',
-    /** 按需加载定时任务调度日志页面组件。 */
-    component: () => import('#/views/infra/job/logger/index.vue'),
-    meta: {
-      activePath: '/infra/job',
-      hideInMenu: true,
-      requiredPermissions: ['infra:job:query'],
-      title: '调度日志',
-    },
-  },
 ];
 
 export default routes;

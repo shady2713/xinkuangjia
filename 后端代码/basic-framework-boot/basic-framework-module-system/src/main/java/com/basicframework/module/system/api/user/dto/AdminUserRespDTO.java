@@ -3,8 +3,6 @@ package com.basicframework.module.system.api.user.dto;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import lombok.Data;
 
-import java.util.Set;
-
 /**
  * Admin 用户 Response DTO
  *
@@ -32,10 +30,6 @@ public class AdminUserRespDTO {
      * 部门ID
      */
     private Long deptId;
-    /**
-     * 岗位编号数组
-     */
-    private Set<Long> postIds;
     /**
      * 手机号码
      */

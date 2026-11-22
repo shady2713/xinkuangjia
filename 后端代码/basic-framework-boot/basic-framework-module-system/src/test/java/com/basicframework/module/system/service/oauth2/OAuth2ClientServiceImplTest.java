@@ -58,7 +58,6 @@ class OAuth2ClientServiceImplTest {
         assertThat(client.getStatus()).isEqualTo(CommonStatusEnum.ENABLE.getStatus());
         assertThat(client.getSecret()).isEmpty();
         assertThat(client.getAuthorizedGrantTypes()).isEmpty();
-        assertThat(client.getRedirectUris()).isEmpty();
         assertThat(client.getAccessTokenValiditySeconds())
                 .isEqualTo((int) Duration.ofMinutes(30).toSeconds());
         assertThat(client.getRefreshTokenValiditySeconds())

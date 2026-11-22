@@ -1,11 +1,9 @@
 package com.basicframework.module.system.service.user;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
-import com.basicframework.framework.common.api.config.ConfigApi;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
@@ -13,6 +11,7 @@ import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.common.util.validation.ValidationUtils;
 import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
+import com.basicframework.framework.operatelog.core.annotation.OperateLog;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdateReqVO;
@@ -21,9 +20,7 @@ import com.basicframework.module.system.controller.admin.user.vo.user.UserImport
 import com.basicframework.module.system.controller.admin.user.vo.user.UserPageReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
-import com.basicframework.module.system.dal.dataobject.dept.UserPostDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
-import com.basicframework.module.system.dal.mysql.dept.UserPostMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
@@ -35,17 +32,14 @@ import com.basicframework.module.system.framework.security.login.LoginFailureLoc
 import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
 import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
-import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.mzt.logapi.context.LogRecordContext;
-import com.mzt.logapi.service.impl.DiffParseFunction;
-import com.mzt.logapi.starter.annotation.LogRecord;
 import jakarta.annotation.Resource;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -69,7 +63,8 @@ import static com.basicframework.module.system.enums.LogRecordConstants.*;
 @Slf4j
 public class AdminUserServiceImpl implements AdminUserService {
 
-    static final String USER_INIT_PASSWORD_KEY = "system.user.init-password";
+    @Value("${basic-framework.user.init-password:}")
+    private String userInitPassword;
 
     @Resource
     private AdminUserMapper userMapper;
@@ -77,20 +72,12 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Resource
     private DeptService deptService;
     @Resource
-    private PostService postService;
-    @Resource
     private ObjectProvider<PermissionService> permissionServiceProvider;
     @Resource
     private PasswordEncoder passwordEncoder;
 
     @Resource
     private ApplicationContext applicationContext;
-
-    @Resource
-    private UserPostMapper userPostMapper;
-
-    @Resource
-    private ConfigApi configApi;
 
     @Resource
     private SecurityAuditService securityAuditService;
@@ -107,13 +94,13 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_CREATE_SUB_TYPE, bizNo = "{{#user.id}}",
-            success = SYSTEM_USER_CREATE_SUCCESS)
+    @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_CREATE_SUB_TYPE, bizId = "#result",
+            action = SYSTEM_USER_CREATE_SUCCESS)
     public Long createUser(UserSaveReqVO createReqVO, String userType) {
         String resolvedUserType = AdminPlatformTypeEnum.defaultType(userType);
         // 1.1 校验正确性
         validateUserForCreateOrUpdate(null, createReqVO.getUsername(),
-                createReqVO.getMobile(), createReqVO.getEmail(), createReqVO.getDeptId(), createReqVO.getPostIds(),
+                createReqVO.getMobile(), createReqVO.getEmail(), createReqVO.getDeptId(),
                 resolvedUserType);
         // 2.1 插入用户
         AdminUserDO user = BeanUtils.toBean(createReqVO, AdminUserDO.class);
@@ -125,19 +112,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 管理员设置初始密码后，用户首次登录必须先修改密码。
         user.setPasswordChangeRequired(true);
         userMapper.insert(user);
-        // 2.2 插入关联岗位
-        if (CollectionUtil.isNotEmpty(user.getPostIds())) {
-            userPostMapper.insertBatch(convertList(user.getPostIds(),
-                    postId -> {
-                        UserPostDO userPost = new UserPostDO();
-                        userPost.setUserId(user.getId());
-                        userPost.setPostId(postId);
-                        return userPost;
-                    }));
-        }
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable("user", user);
         return user.getId();
     }
 
@@ -149,14 +123,14 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_SUB_TYPE, bizNo = "{{#updateReqVO.id}}",
-            success = SYSTEM_USER_UPDATE_SUCCESS)
+    @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_SUB_TYPE, bizId = "#updateReqVO.id",
+            action = SYSTEM_USER_UPDATE_SUCCESS)
     public void updateUser(UserSaveReqVO updateReqVO, String userType) {
         updateReqVO.setPassword(null); // 特殊：此处不更新密码
         String resolvedUserType = AdminPlatformTypeEnum.defaultType(userType);
         // 1. 校验正确性
         AdminUserDO oldUser = validateUserForCreateOrUpdate(updateReqVO.getId(), updateReqVO.getUsername(),
-                updateReqVO.getMobile(), updateReqVO.getEmail(), updateReqVO.getDeptId(), updateReqVO.getPostIds(),
+                updateReqVO.getMobile(), updateReqVO.getEmail(), updateReqVO.getDeptId(),
                 resolvedUserType);
 
         // 2.1 更新用户
@@ -164,45 +138,10 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 防止请求体伪造平台字段导致账号被迁移到其他管理平台。
         updateObj.setUserType(resolvedUserType);
         userMapper.updateById(updateObj);
-        // 2.2 更新岗位
-        updateUserPost(updateReqVO, updateObj);
-        // 2.3 状态变化时立即发布变更事件（停用账号将触发令牌失效监听）
+        // 2.2 状态变化时立即发布变更事件（停用账号将触发令牌失效监听）
         if (updateReqVO.getStatus() != null && !Objects.equals(oldUser.getStatus(), updateReqVO.getStatus())) {
             applicationContext.publishEvent(new UserStatusChangedEvent(
                     updateReqVO.getId(), UserTypeEnum.ADMIN.getValue(), updateReqVO.getStatus()));
-        }
-
-        // 3. 记录操作日志上下文
-        // 避免前端未传递 avatar 字段时，操作日志 diff 误报为删除头像
-        if (updateReqVO.getAvatar() == null) {
-            updateReqVO.setAvatar(oldUser.getAvatar());
-        }
-        LogRecordContext.putVariable(DiffParseFunction.OLD_OBJECT, BeanUtils.toBean(oldUser, UserSaveReqVO.class));
-        LogRecordContext.putVariable("user", oldUser);
-    }
-
-    /**
-     * 更新用户Post。
-     */
-    private void updateUserPost(UserSaveReqVO reqVO, AdminUserDO updateObj) {
-        Long userId = reqVO.getId();
-        Set<Long> dbPostIds = convertSet(userPostMapper.selectListByUserId(userId), UserPostDO::getPostId);
-        // 计算新增和删除的岗位编号
-        Set<Long> postIds = CollUtil.emptyIfNull(updateObj.getPostIds());
-        Collection<Long> createPostIds = CollUtil.subtract(postIds, dbPostIds);
-        Collection<Long> deletePostIds = CollUtil.subtract(dbPostIds, postIds);
-        // 执行新增和删除。对于已经授权的岗位，不用做任何处理
-        if (!CollectionUtil.isEmpty(createPostIds)) {
-            userPostMapper.insertBatch(convertList(createPostIds,
-                    postId -> {
-                        UserPostDO userPost = new UserPostDO();
-                        userPost.setUserId(userId);
-                        userPost.setPostId(postId);
-                        return userPost;
-                    }));
-        }
-        if (!CollectionUtil.isEmpty(deletePostIds)) {
-            userPostMapper.deleteByUserIdAndPostId(userId, deletePostIds);
         }
     }
 
@@ -300,8 +239,8 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
-            success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
+    @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizId = "#id",
+            action = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password) {
         // 1. 校验用户存在和密码复杂度
         AdminUserDO user = validateUserExists(id);
@@ -325,9 +264,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 UserTokenInvalidationReasonEnum.PASSWORD_RESET);
         securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
                 id, user.getUsername());
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable("user", user);
     }
 
     /**
@@ -339,8 +275,8 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizNo = "{{#id}}",
-            success = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
+    @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_PASSWORD_SUB_TYPE, bizId = "#id",
+            action = SYSTEM_USER_UPDATE_PASSWORD_SUCCESS)
     public void updateUserPassword(Long id, String password, String userType) {
         AdminUserDO user = validateUserForPlatform(id, userType);
         try {
@@ -363,8 +299,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 UserTokenInvalidationReasonEnum.PASSWORD_RESET);
         securityAuditService.record(LoginLogTypeEnum.PASSWORD_RESET, LoginResultEnum.SUCCESS,
                 id, user.getUsername());
-
-        LogRecordContext.putVariable("user", user);
     }
 
     /**
@@ -398,25 +332,20 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_DELETE_SUB_TYPE, bizNo = "{{#id}}",
-            success = SYSTEM_USER_DELETE_SUCCESS)
+    @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_DELETE_SUB_TYPE, bizId = "#id",
+            action = SYSTEM_USER_DELETE_SUCCESS)
     public void deleteUser(Long id, String userType) {
         // 1. 校验用户存在并属于当前管理平台
-        AdminUserDO user = validateUserForPlatform(id, userType);
+        validateUserForPlatform(id, userType);
 
         // 2.1 删除用户
         userMapper.deleteById(id);
         // 2.2 删除用户关联数据
         getPermissionService().processUserDeleted(id);
-        // 2.2 删除用户岗位
-        userPostMapper.deleteByUserId(id);
 
         // 2.3 删除后立即撤销用户全部令牌，避免已删除账号继续访问。
         publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
                 UserTokenInvalidationReasonEnum.USER_DELETED);
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable("user", user);
     }
 
     /**
@@ -438,7 +367,6 @@ public class AdminUserServiceImpl implements AdminUserService {
         // 2. 批量删除用户关联数据
         validatedIds.forEach(id -> {
             getPermissionService().processUserDeleted(id);
-            userPostMapper.deleteByUserId(id);
             // 逐个用户撤销令牌，保证批量删除与单个删除的失效语义一致。
             publishTokenInvalidated(id, UserTypeEnum.ADMIN.getValue(),
                     UserTokenInvalidationReasonEnum.USER_DELETED);
@@ -581,24 +509,6 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 获取用户ListByPostIds。
-     *
-     * @param postIds postIds 编号集合
-     * @return 查询或转换后的结果
-     */
-    @Override
-    public List<AdminUserDO> getUserListByPostIds(Collection<Long> postIds) {
-        if (CollUtil.isEmpty(postIds)) {
-            return Collections.emptyList();
-        }
-        Set<Long> userIds = convertSet(userPostMapper.selectListByPostIds(postIds), UserPostDO::getUserId);
-        if (CollUtil.isEmpty(userIds)) {
-            return Collections.emptyList();
-        }
-        return userMapper.selectByIds(userIds);
-    }
-
-    /**
      * 获取用户List。
      *
      * @param ids ids 编号集合
@@ -670,7 +580,7 @@ public class AdminUserServiceImpl implements AdminUserService {
      * 仅账号、手机号和邮箱的全库唯一性检查忽略数据权限，避免跨部门重名触发底层唯一索引异常。</p>
      */
     private AdminUserDO validateUserForCreateOrUpdate(Long id, String username, String mobile, String email,
-                                               Long deptId, Set<Long> postIds, String userType) {
+                                               Long deptId, String userType) {
         AdminUserDO user = validateUserExists(id);
         String resolvedUserType = AdminPlatformTypeEnum.defaultType(
                 user != null && StrUtil.isBlank(userType) ? user.getUserType() : userType);
@@ -678,7 +588,6 @@ public class AdminUserServiceImpl implements AdminUserService {
             validateUserPlatform(user, resolvedUserType);
         }
         deptService.validateDeptList(singleton(deptId));
-        postService.validatePostList(postIds);
         DataPermissionUtils.executeIgnore(() -> {
             validateUsernameUnique(id, username, resolvedUserType);
             validateMobileUnique(id, mobile);
@@ -886,8 +795,8 @@ public class AdminUserServiceImpl implements AdminUserService {
         if (CollUtil.isEmpty(importUsers)) {
             throw exception(USER_IMPORT_LIST_IS_EMPTY);
         }
-        // 1.2 初始化密码不能为空
-        String initPassword = configApi.getConfigValueByKey(USER_INIT_PASSWORD_KEY);
+        // 1.2 初始化密码不能为空（由环境变量 USER_INIT_PASSWORD 注入）
+        String initPassword = userInitPassword;
         if (StrUtil.isEmpty(initPassword)) {
             throw exception(USER_IMPORT_INIT_PASSWORD);
         }
@@ -929,7 +838,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             try {
                 validateUserForCreateOrUpdate(existUser != null ? existUser.getId() : null,
                         null, importUser.getMobile(), importUser.getEmail(),
-                        deptId, null, importUserType);
+                        deptId, importUserType);
             } catch (ServiceException ex) {
                 respVO.getFailureUsernames().put(importUser.getUsername(), ex.getMessage());
                 return;
@@ -942,7 +851,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 newUser.setDeptId(deptId);
                 newUser.setPassword(encodedInitPassword);
                 newUser.setPasswordChangeRequired(true);
-                newUser.setPostIds(new HashSet<>());
                 userMapper.insert(newUser);
                 respVO.getCreateUsernames().add(importUser.getUsername());
                 return;

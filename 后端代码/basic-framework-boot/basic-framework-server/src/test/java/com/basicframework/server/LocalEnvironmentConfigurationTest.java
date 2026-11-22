@@ -1,7 +1,7 @@
 package com.basicframework.server;
 
+import com.basicframework.module.infra.framework.file.config.FileStorageProperties;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.MapPropertySource;
@@ -23,20 +23,17 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 验证本地环境变量到应用配置的绑定及缺失配置失败契约。
+ * 验证本地环境变量到应用配置的绑定及配置完整性契约。
  *
  * @author 李杰
  */
 class LocalEnvironmentConfigurationTest {
 
-    /** 匹配应用配置中的占位符引用，例如 {@code ${DB_HOST:127.0.0.1}}。 */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Z][A-Z0-9_]*)(?::[^}]*)?}");
 
-    /** 验证本地开发 profile 下端口、数据源和 Redis 绑定，并保留独立的本地关闭 TLS 配置。 */
     @Test
     void bindsLocalDatasourceAndRedisVariables() throws IOException {
         Map<String, Object> values = localValues();
@@ -45,66 +42,53 @@ class LocalEnvironmentConfigurationTest {
         assertEquals("local", environment.getProperty("spring.profiles.active"));
         assertEquals("jdbc:mysql://127.0.0.1:3306/framework_test?sslMode=DISABLED&allowPublicKeyRetrieval=true"
                         + "&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true",
-                environment.getProperty("spring.datasource.dynamic.datasource.master.url"));
-        assertEquals(values.get("DB_PASSWORD"),
-                environment.getProperty("spring.datasource.dynamic.datasource.master.password"));
+                environment.getProperty("spring.datasource.url"));
+        assertEquals(values.get("DB_PASSWORD"), environment.getProperty("spring.datasource.password"));
         assertEquals(values.get("REDIS_PASSWORD"), environment.getProperty("spring.data.redis.password"));
     }
 
-    /** 验证生产/默认配置强制启用 MySQL TLS 与服务端身份校验，并关闭公钥自动拉取。 */
     @Test
     void productionDatasourceDefaultsRequireTlsAndIdentityVerification() throws IOException {
         Map<String, Object> values = localValues();
         values.put("SPRING_PROFILES_ACTIVE", "prod");
         StandardEnvironment environment = environment(values, false);
-        String masterUrl = environment.getProperty("spring.datasource.dynamic.datasource.master.url");
-        String slaveUrl = environment.getProperty("spring.datasource.dynamic.datasource.slave.url");
+        String url = environment.getProperty("spring.datasource.url");
         String expected = "jdbc:mysql://127.0.0.1:3306/framework_test?sslMode=VERIFY_IDENTITY"
                 + "&allowPublicKeyRetrieval=false&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
-        assertEquals(expected, masterUrl);
-        assertEquals(expected, slaveUrl);
-        assertFalse(masterUrl.contains("useSSL=false"));
+        assertEquals(expected, url);
+        assertFalse(url.contains("useSSL=false"));
 
         values.put("DB_SSL_MODE", "VERIFY_CA");
         StandardEnvironment custom = environment(values, false);
-        assertTrue(custom.getProperty("spring.datasource.dynamic.datasource.master.url")
-                .contains("sslMode=VERIFY_CA"));
+        assertTrue(custom.getProperty("spring.datasource.url").contains("sslMode=VERIFY_CA"));
     }
 
-    /** 未单独配置从库时复用主库参数，保持单数据库开发环境可运行。 */
-    @Test
-    void slaveDatasourceFallsBackToMaster() throws IOException {
-        StandardEnvironment environment = environment(localValues());
-        assertEquals(environment.getProperty("spring.datasource.dynamic.datasource.master.url"),
-                environment.getProperty("spring.datasource.dynamic.datasource.slave.url"));
-        assertEquals(environment.getProperty("spring.datasource.dynamic.datasource.master.password"),
-                environment.getProperty("spring.datasource.dynamic.datasource.slave.password"));
-    }
-
-    /** 管理站点地址使用当前前端端口，部署变量可覆盖本地地址。 */
     @Test
     void adminUiAddressUsesLocalPortAndDeploymentOverride() throws IOException {
         Map<String, Object> values = localValues();
-        assertEquals("http://localhost:5175",
-                environment(values).getProperty("basic-framework.web.admin-ui.url"));
+        assertEquals("http://localhost:5175", environment(values).getProperty("basic-framework.web.admin-ui.url"));
         values.put("ADMIN_UI_URL", "https://admin.example.com");
-        assertEquals("https://admin.example.com",
-                environment(values).getProperty("basic-framework.web.admin-ui.url"));
+        assertEquals("https://admin.example.com", environment(values).getProperty("basic-framework.web.admin-ui.url"));
     }
 
-    /** MinIO 的安全协议配置缺失时保持启动失败，防止以错误存储配置运行。 */
     @Test
-    void missingMinioSecureStopsBinding() throws IOException {
-        StandardEnvironment environment = environment(localValues());
-        assertThrows(BindException.class,
-                () -> Binder.get(environment).bind("basic-framework.file.minio.secure", Boolean.class));
+    void fileStorageDefaultsToLocalAndRejectsIncompleteAliyunOss() throws IOException {
+        StandardEnvironment localEnv = environment(localValues());
+        FileStorageProperties localProps = Binder.get(localEnv)
+                .bind("basic-framework.file", FileStorageProperties.class).get();
+        assertFalse(localProps.isAliyunOss());
+        assertTrue(localProps.isProviderValid());
+        assertTrue(localProps.isAliyunOssConfigComplete());
+
+        Map<String, Object> ossValues = localValues();
+        ossValues.put("FILE_STORAGE_PROVIDER", "aliyun-oss");
+        StandardEnvironment ossEnv = environment(ossValues);
+        FileStorageProperties incompleteOss = Binder.get(ossEnv)
+                .bind("basic-framework.file", FileStorageProperties.class).get();
+        assertTrue(incompleteOss.isAliyunOss());
+        assertFalse(incompleteOss.isAliyunOssConfigComplete());
     }
 
-    /**
-     * {@code .env.example} 中的所有非注释变量都必须在服务端配置文件中有真实占位绑定，防止悬空变量误导开发者。
-     *
-     * @throws IOException 读取环境样例或配置文件失败时抛出
-     */
     @Test
     void envExampleKeysAreAllConsumedByServerConfiguration() throws IOException {
         Path envExample = resolveEnvExample();
@@ -115,11 +99,6 @@ class LocalEnvironmentConfigurationTest {
         assertTrue(unmapped.isEmpty(), ".env.example 存在未被配置消费的悬空变量：" + unmapped);
     }
 
-    /**
-     * 反向证明：当 {@code .env.example} 出现未绑定的伪配置键时，校验逻辑必须检出。
-     *
-     * @throws IOException 读取配置文件失败时抛出
-     */
     @Test
     void unmappedEnvExampleKeyIsDetected() throws IOException {
         Set<String> declared = parseEnvKeys(List.of(
@@ -130,11 +109,6 @@ class LocalEnvironmentConfigurationTest {
         assertEquals(Set.of("UNMAPPED_GHOST_SWITCH"), unmapped);
     }
 
-    /**
-     * 定位后端聚合工程根目录下的 {@code .env.example}，兼容在聚合根或 server 模块工作目录执行测试。
-     *
-     * @return 真实存在的环境模板路径
-     */
     private static Path resolveEnvExample() {
         Path fromModule = Path.of("..", ".env.example").normalize();
         if (Files.isRegularFile(fromModule)) {
@@ -145,12 +119,6 @@ class LocalEnvironmentConfigurationTest {
         return fromReactor;
     }
 
-    /**
-     * 解析 {@code KEY=VALUE} 行的键名集合，忽略空行与井号注释行。
-     *
-     * @param lines 环境模板文本行
-     * @return 按出现顺序去重的键名集合
-     */
     private static Set<String> parseEnvKeys(List<String> lines) {
         Set<String> keys = new LinkedHashSet<>();
         for (String raw : lines) {
@@ -165,12 +133,6 @@ class LocalEnvironmentConfigurationTest {
         return keys;
     }
 
-    /**
-     * 提取 {@code application.yaml} 与 {@code logback-spring.xml} 中实际引用的大写环境变量占位符。
-     *
-     * @return 服务端配置实际消费的环境变量集合
-     * @throws IOException 类路径配置无法读取时抛出
-     */
     private static Set<String> loadReferencedPlaceholders() throws IOException {
         Set<String> referenced = new LinkedHashSet<>();
         for (String resourceName : List.of("application.yaml", "application-local.yaml", "logback-spring.xml")) {
@@ -183,67 +145,41 @@ class LocalEnvironmentConfigurationTest {
         return referenced;
     }
 
-    /**
-     * 计算环境模板中声明但未被服务端配置引用的悬空键。
-     *
-     * @param declaredKeys 环境模板声明的键集合
-     * @param referencedKeys 服务端配置引用的占位符集合
-     * @return 悬空键集合
-     */
     private static Set<String> findUnmappedKeys(Set<String> declaredKeys, Set<String> referencedKeys) {
         Set<String> unmapped = new LinkedHashSet<>(declaredKeys);
         unmapped.removeAll(referencedKeys);
         return unmapped;
     }
 
-    /**
-     * 构造隔离环境，避免开发者机器上的变量影响绑定结果。
-     *
-     * @param values 本例需要的环境配置
-     * @return 加载基础应用 YAML 的隔离环境
-     * @throws IOException 当前应用 YAML 无法读取时抛出
-     */
     private static StandardEnvironment environment(Map<String, Object> values) throws IOException {
         return environment(values, false);
     }
 
-    /**
-     * 按是否启用 {@code local} profile 构造隔离环境。
-     *
-     * @param values 本例需要的环境配置
-     * @param includeLocalProfile 是否加载 {@code application-local.yaml}
-     * @return 加载对应配置层级的隔离环境
-     * @throws IOException 配置文件无法读取时抛出
-     */
-    private static StandardEnvironment environment(Map<String, Object> values,
-                                                   boolean includeLocalProfile) throws IOException {
+    private static StandardEnvironment environment(Map<String, Object> values, boolean includeLocalProfile)
+            throws IOException {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
         environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
-        environment.getPropertySources().addFirst(new MapPropertySource("local-test-values", values));
+        environment.getPropertySources().addFirst(new MapPropertySource("test-env", values));
         YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
         if (includeLocalProfile) {
-            loader.load("application-local-test", new ClassPathResource("application-local.yaml"))
+            loader.load("application-local", new ClassPathResource("application-local.yaml"))
                     .forEach(environment.getPropertySources()::addLast);
         }
-        loader.load("application-test", new ClassPathResource("application.yaml"))
+        loader.load("application", new ClassPathResource("application.yaml"))
                 .forEach(environment.getPropertySources()::addLast);
         return environment;
     }
 
-    /**
-     * 提供本例的最小配置，凭据每次随机生成且不输出。
-     *
-     * @return 用于验证绑定的环境配置
-     */
     private static Map<String, Object> localValues() {
         Map<String, Object> values = new HashMap<>();
         values.put("DB_HOST", "127.0.0.1");
         values.put("DB_PORT", "3306");
         values.put("DB_NAME", "framework_test");
-        values.put("DB_USERNAME", "framework_test");
-        values.put("DB_PASSWORD", UUID.randomUUID().toString());
-        values.put("REDIS_PASSWORD", UUID.randomUUID().toString());
+        values.put("DB_USERNAME", "framework_user");
+        values.put("DB_PASSWORD", "test-" + UUID.randomUUID());
+        values.put("REDIS_PASSWORD", "test-" + UUID.randomUUID());
         return values;
     }
+
 }

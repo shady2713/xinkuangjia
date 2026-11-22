@@ -1,7 +1,5 @@
 package com.basicframework.framework.mybatis.config;
 
-import java.util.concurrent.TimeUnit;
-
 import org.apache.ibatis.annotations.Mapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -19,8 +17,6 @@ import com.baomidou.mybatisplus.extension.incrementer.H2KeyGenerator;
 import com.baomidou.mybatisplus.extension.incrementer.KingbaseKeyGenerator;
 import com.baomidou.mybatisplus.extension.incrementer.OracleKeyGenerator;
 import com.baomidou.mybatisplus.extension.incrementer.PostgreKeyGenerator;
-import com.baomidou.mybatisplus.extension.parser.JsqlParserGlobal;
-import com.baomidou.mybatisplus.extension.parser.cache.JdkSerialCaffeineJsqlParseCache;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import com.basicframework.framework.common.util.json.JsonUtils;
@@ -30,20 +26,13 @@ import com.basicframework.framework.mybatis.core.interceptor.SoftDeleteUniqueInn
 import cn.hutool.core.util.StrUtil;
 
 /**
- * MyBaits 配置类
+ * MyBatis-Plus 自动配置类。
  *
  * @author 李杰
  */
-@AutoConfiguration(before = MybatisPlusAutoConfiguration.class) // 目的：先于 MyBatis Plus 自动配置，避免 @MapperScan 可能扫描不到 Mapper 打印 warn 日志
-@MapperScan(value = "${basic-framework.info.base-package}", annotationClass = Mapper.class, lazyInitialization = "${mybatis.lazy-initialization:false}") // Mapper 懒加载，目前仅用于单元测试
+@AutoConfiguration(before = MybatisPlusAutoConfiguration.class)
+@MapperScan(value = "${basic-framework.info.base-package}", annotationClass = Mapper.class, lazyInitialization = "${mybatis.lazy-initialization:false}")
 public class BasicFrameworkMybatisAutoConfiguration {
-
-    static {
-        // 动态 SQL 智能优化支持本地缓存加速解析，更完善的租户复杂 XML 动态 SQL 支持，静态注入缓存
-        JsqlParserGlobal.setJsqlParseCache(new JdkSerialCaffeineJsqlParseCache(
-                (cache) -> cache.maximumSize(1024)
-                        .expireAfterWrite(5, TimeUnit.SECONDS)));
-    }
 
     /** 单次查询与导出分页的数据库硬上限，防止漏写参数校验或传入负页大小拉取整表。 */
     private static final long MAX_PAGINATION_LIMIT = 10_000L;

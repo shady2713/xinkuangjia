@@ -65,16 +65,6 @@ class FootgunArchitectureTest {
     static final ArchRule classLevelTransactionalMustDeclareRollbackFor =
             FootgunRules.classLevelTransactionalMustDeclareRollbackFor();
 
-    /** 禁止类级使用 @DSTransactional 绕过事务缓存同步。 */
-    @ArchTest
-    static final ArchRule noDynamicDatasourceTransactionalOnClasses =
-            FootgunRules.noDynamicDatasourceTransactionalOnClasses();
-
-    /** 禁止方法级使用 @DSTransactional 绕过事务缓存同步。 */
-    @ArchTest
-    static final ArchRule noDynamicDatasourceTransactionalOnMethods =
-            FootgunRules.noDynamicDatasourceTransactionalOnMethods();
-
     /** 控制器 HTTP 端点签名不得直接暴露持久化 DO。 */
     @ArchTest
     static final ArchRule controllerEndpointsMustNotExposeDataObjects =

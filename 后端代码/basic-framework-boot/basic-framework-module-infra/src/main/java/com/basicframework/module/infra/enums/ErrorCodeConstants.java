@@ -3,33 +3,11 @@ package com.basicframework.module.infra.enums;
 import com.basicframework.framework.common.exception.ErrorCode;
 
 /**
- * Infra 错误码枚举类
- *
- * infra 系统，使用 1-001-000-000 段
+ * Infra 错误码枚举类（1-001-000-000 段）。
  *
  * @author 李杰
  */
 public interface ErrorCodeConstants {
-
-    // ========== 参数配置 1-001-000-000 ==========
-    ErrorCode CONFIG_NOT_EXISTS = new ErrorCode(1_001_000_001, "参数配置不存在");
-    ErrorCode CONFIG_KEY_DUPLICATE = new ErrorCode(1_001_000_002, "参数配置 key 重复");
-    ErrorCode CONFIG_CAN_NOT_DELETE_SYSTEM_TYPE = new ErrorCode(1_001_000_003, "不能删除类型为系统内置的参数配置");
-    ErrorCode CONFIG_GET_VALUE_ERROR_IF_VISIBLE = new ErrorCode(1_001_000_004, "获取参数配置失败，原因：不允许获取不可见配置");
-    ErrorCode CONFIG_CAN_NOT_UPDATE_SYSTEM_KEY = new ErrorCode(1_001_000_005, "不能修改系统内置参数配置的参数键");
-
-    // ========== 定时任务 1-001-001-000 ==========
-    ErrorCode JOB_NOT_EXISTS = new ErrorCode(1_001_001_000, "定时任务不存在");
-    ErrorCode JOB_HANDLER_EXISTS = new ErrorCode(1_001_001_001, "定时任务的处理器已经存在");
-    ErrorCode JOB_CHANGE_STATUS_INVALID = new ErrorCode(1_001_001_002, "只允许修改为开启或者关闭状态");
-    ErrorCode JOB_CHANGE_STATUS_EQUALS = new ErrorCode(1_001_001_003, "定时任务已经处于该状态，无需修改");
-    ErrorCode JOB_UPDATE_ONLY_NORMAL_STATUS = new ErrorCode(1_001_001_004, "只有开启状态的任务，才可以修改");
-    ErrorCode JOB_CRON_EXPRESSION_VALID = new ErrorCode(1_001_001_005, "CRON 表达式不正确");
-    ErrorCode JOB_HANDLER_BEAN_NOT_EXISTS = new ErrorCode(1_001_001_006, "定时任务的处理器 Bean 不存在，注意 Bean 默认首字母小写");
-    ErrorCode JOB_HANDLER_BEAN_TYPE_ERROR = new ErrorCode(1_001_001_007, "定时任务的处理器 Bean 类型不正确，未实现 JobHandler 接口");
-    ErrorCode JOB_HANDLER_CAN_NOT_UPDATE = new ErrorCode(1_001_001_008, "定时任务的处理器名字不允许修改");
-
-    // ========== API 错误日志 1-001-002-000 ==========
 
     // ========= 文件相关 1-001-003-000 =================
     ErrorCode FILE_PATH_EXISTS = new ErrorCode(1_001_003_000, "文件路径已存在");
@@ -42,8 +20,5 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_PRESIGN_TICKET_INVALID = new ErrorCode(1_001_003_007, "上传凭证无效或已过期，请重新获取上传地址");
     ErrorCode FILE_ACCESS_DENIED = new ErrorCode(1_001_003_008, "无权访问该私有文件");
     ErrorCode FILE_PRESIGN_EXPIRATION_INVALID = new ErrorCode(1_001_003_009, "临时访问地址有效期必须在 60 至 3600 秒之间");
-
-    // ========= 数据导出 1-001-004-000 =================
-    ErrorCode EXPORT_SIZE_EXCEEDED = new ErrorCode(1_001_004_000, "单次最多导出 10000 条数据，请缩小查询范围");
 
 }

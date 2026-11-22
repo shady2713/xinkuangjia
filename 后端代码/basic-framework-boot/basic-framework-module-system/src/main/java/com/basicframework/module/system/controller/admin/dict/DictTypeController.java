@@ -1,10 +1,8 @@
 package com.basicframework.module.system.controller.admin.dict;
 
-import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
-import com.basicframework.framework.excel.core.util.ExcelUtils;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypePageReqVO;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypeRespVO;
 import com.basicframework.module.system.controller.admin.dict.vo.type.DictTypeSaveReqVO;
@@ -15,7 +13,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotEmpty;
@@ -23,13 +20,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.util.List;
 
-import static com.basicframework.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
-import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_EXPORT_SIZE_EXCEEDED;
 
 /**
  * DictTypeController HTTP 接口，负责请求校验和响应组装。
@@ -41,9 +34,6 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_E
 @RequestMapping("/system/dict-type")
 @Validated
 public class DictTypeController {
-
-    /** 单次 Excel 导出上限，避免无边界加载全部字典类型。 */
-    private static final int MAX_EXPORT_SIZE = 10_000;
 
     @Resource
     private DictTypeService dictTypeService;
@@ -154,32 +144,6 @@ public class DictTypeController {
     public CommonResult<List<DictTypeSimpleRespVO>> getSimpleDictTypeList() {
         List<DictTypeDO> list = dictTypeService.getDictTypeList();
         return success(BeanUtils.toBean(list, DictTypeSimpleRespVO.class));
-    }
-
-    /**
-     * 导出指定数据。
-     *
-     * <p>单次最多导出 10,000 条；超过上限时拒绝生成文件，调用方需要缩小筛选范围。</p>
-     *
-     * @param response HTTP 响应
-     * @param exportReqVO 请求参数
-     * @throws IOException 执行失败时抛出
-     */
-    @Operation(summary = "导出数据类型")
-    @GetMapping("/export-excel")
-    @PreAuthorize("@ss.hasPermission('system:dict:export')")
-    @ApiAccessLog(operateType = EXPORT)
-    public void export(HttpServletResponse response, @Valid DictTypePageReqVO exportReqVO) throws IOException {
-        exportReqVO.setPageNo(1);
-        exportReqVO.setPageSize(MAX_EXPORT_SIZE);
-        PageResult<DictTypeDO> page = dictTypeService.getDictTypePage(exportReqVO);
-        if (page.getTotal() > MAX_EXPORT_SIZE) {
-            throw exception(SYSTEM_EXPORT_SIZE_EXCEEDED);
-        }
-        List<DictTypeDO> list = page.getList();
-        // 导出
-        ExcelUtils.write(response, "字典类型.xls", "数据", DictTypeRespVO.class,
-                BeanUtils.toBean(list, DictTypeRespVO.class));
     }
 
 }

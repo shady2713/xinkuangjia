@@ -40,12 +40,6 @@
             <artifactId>basic-framework-spring-boot-starter-redis</artifactId>
         </dependency>
 
-        <!-- Job 定时任务相关 -->
-        <dependency>
-            <groupId>com.basicframework</groupId>
-            <artifactId>basic-framework-spring-boot-starter-job</artifactId>
-        </dependency>
-
         <!-- Test 测试相关 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -80,12 +74,6 @@
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId> <!-- 文件客户端：文件类型的识别 -->
-        </dependency>
-
-        <!-- ConfigConvert 直接使用 MapStruct API；处理器由根编译插件统一提供 -->
-        <dependency>
-            <groupId>org.mapstruct</groupId>
-            <artifactId>mapstruct</artifactId>
         </dependency>
 
     </dependencies>

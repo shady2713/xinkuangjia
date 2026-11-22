@@ -1,6 +1,5 @@
 package com.basicframework.module.system.controller.admin.logger;
 
-import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.object.BeanUtils;
@@ -23,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.util.List;
 
-import static com.basicframework.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.LOG_EXPORT_SIZE_EXCEEDED;
@@ -83,7 +81,6 @@ public class LoginLogController {
     @GetMapping("/export-excel")
     @Operation(summary = "导出登录日志 Excel")
     @PreAuthorize("@ss.hasPermission('system:login-log:export')")
-    @ApiAccessLog(operateType = EXPORT)
     public void exportLoginLog(HttpServletResponse response,
                                @Valid LoginLogPageReqVO exportReqVO) throws IOException {
         exportReqVO.setPageNo(1);

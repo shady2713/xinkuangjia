@@ -1,7 +1,7 @@
-/** 使用环境配置管理唯一 MinIO 客户端及资源生命周期。 */
+/** 使用环境配置管理统一文件存储客户端（阿里云 OSS / 本地磁盘）。 */
 package com.basicframework.module.infra.service.file;
 
-import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
+import com.basicframework.module.infra.framework.file.config.FileStorageProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileClientFactory;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
@@ -18,9 +18,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 环境变量驱动的唯一 MinIO 文件存储服务。
- *
- * <p>启动时根据 {@link MinioFileProperties} 创建单一客户端，运行期间不查询数据库配置。</p>
+ * 环境变量驱动的统一文件存储服务（支持阿里云 OSS 与本地磁盘一键切换）。
  *
  * @author 李杰
  */
@@ -28,13 +26,13 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class FileStorageServiceImpl implements FileStorageService {
 
-    /** 文件客户端工厂内部使用的固定标识，不写入业务表，也不通过接口暴露。 */
-    private static final Long MINIO_CLIENT_ID = 1L;
+    /** 文件客户端工厂内部使用的固定标识。 */
+    private static final Long DEFAULT_CLIENT_ID = 1L;
 
     private final FileClientFactory fileClientFactory;
-    private final MinioFileProperties minioFileProperties;
+    private final FileStorageProperties fileStorageProperties;
 
-    /** 当前进程唯一的 MinIO 客户端。 */
+    /** 当前进程唯一的文件存储客户端。 */
     private FileClient fileClient;
 
     /**
@@ -66,10 +64,15 @@ public class FileStorageServiceImpl implements FileStorageService {
      */
     @PostConstruct
     void initializeFileClient() {
-        fileClientFactory.createOrUpdateFileClient(MINIO_CLIENT_ID, FileStorageEnum.S3.getStorage(),
-                minioFileProperties.toClientConfig());
-        fileClient = Objects.requireNonNull(fileClientFactory.getFileClient(MINIO_CLIENT_ID),
-                "MinIO 文件客户端初始化失败");
+        if (fileStorageProperties.isAliyunOss()) {
+            fileClientFactory.createOrUpdateFileClient(DEFAULT_CLIENT_ID, FileStorageEnum.S3.getStorage(),
+                    fileStorageProperties.toAliyunOssClientConfig());
+        } else {
+            fileClientFactory.createOrUpdateFileClient(DEFAULT_CLIENT_ID, FileStorageEnum.LOCAL.getStorage(),
+                    fileStorageProperties.toLocalClientConfig());
+        }
+        fileClient = Objects.requireNonNull(fileClientFactory.getFileClient(DEFAULT_CLIENT_ID),
+                "文件存储客户端初始化失败");
     }
 
     /**
@@ -224,7 +227,7 @@ public class FileStorageServiceImpl implements FileStorageService {
      */
     @Override
     public boolean isPublicAccess() {
-        return minioFileProperties.isPublicAccess();
+        return fileStorageProperties.isPublicAccess();
     }
 
     /**

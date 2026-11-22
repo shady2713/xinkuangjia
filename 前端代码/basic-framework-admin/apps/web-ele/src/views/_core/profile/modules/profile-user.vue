@@ -121,22 +121,6 @@ async function handelUpload({
           <template #label>
             <div class="flex items-center">
               <IconifyIcon
-                icon="ant-design:usergroup-add-outlined"
-                class="mr-1"
-              />
-              所属岗位
-            </div>
-          </template>
-          {{
-            profile.posts && profile.posts.length > 0
-              ? profile.posts.map((post) => post.name).join(',')
-              : '-'
-          }}
-        </ElDescriptionsItem>
-        <ElDescriptionsItem>
-          <template #label>
-            <div class="flex items-center">
-              <IconifyIcon
                 icon="ant-design:clock-circle-outlined"
                 class="mr-1"
               />

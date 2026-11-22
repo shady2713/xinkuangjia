@@ -9,11 +9,14 @@ import { handleTree } from '@vben/utils';
 
 import { buildRequiredPasswordSchema, z } from '#/adapter/form';
 import { getDeptList } from '#/api/system/dept';
-import { getSimplePostList } from '#/api/system/post';
 import { getSimpleRoleList } from '#/api/system/role';
 import { getRangePickerDefaultProps } from '#/utils';
 
-/** 新增/修改的表单 */
+/**
+ * 构造用户新增与修改弹窗的表单配置。
+ *
+ * @returns 用户表单项 schema 列表
+ */
 export function useFormSchema(): VbenFormSchema[] {
   return [
     {
@@ -72,23 +75,6 @@ export function useFormSchema(): VbenFormSchema[] {
         placeholder: '请选择归属部门',
         defaultExpandAll: true,
         checkStrictly: true,
-      },
-    },
-    {
-      fieldName: 'postIds',
-      label: '岗位',
-      component: 'ApiSelect',
-      componentProps: {
-        api: getSimplePostList,
-        labelField: 'name',
-        valueField: 'id',
-        multiple: true,
-        placeholder: '请选择岗位',
-        afterFetch: async (res: any[]) =>
-          res.map((item) => ({
-            ...item,
-            disabled: item.status === CommonStatusEnum.DISABLE,
-          })),
       },
     },
     {
