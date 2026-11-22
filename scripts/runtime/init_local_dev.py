@@ -222,7 +222,7 @@ def effective_bucket(compose: dict[str, str] | None, backend: dict[str, str] | N
 
 
 def check_launcher_overrides(args: list[str]) -> None:
-    """拒绝优先于已核验环境配置的 Spring 或 JVM 启动覆盖项。"""
+    """启动前拒绝 Java 间接选项文件及能覆盖已核验配置的显式参数。"""
     if os.environ.get("SPRING_APPLICATION_JSON"):
         raise ValueError("本地启动入口要求 SPRING_APPLICATION_JSON 为空")
     guarded = {
@@ -230,12 +230,15 @@ def check_launcher_overrides(args: list[str]) -> None:
         for name in (*BUCKET_ALIASES, *ACCESS_ALIASES, *ENDPOINT_ALIASES, *SECURE_ALIASES,
                      MINIO_PORT_VAR, "SPRING_APPLICATION_JSON")
     }
-    separators = str.maketrans({ch: " " for ch in "\"'=,;"})
+    separators = str.maketrans({ch: " " for ch in "\"'=,;|&()<>\x60\\"})
+    vm_option_files = ("-XX:VMOptionsFile", "-XX:Flags")
     options = ("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "JAVA_OPTS", "MAVEN_OPTS", "MAVEN_ARGS")
     sources = {key: os.environ.get(key, "") for key in options}
     sources["启动命令"] = " ".join(args)
     for source, text in sources.items():
         tokens = text.translate(separators).split()
+        if any(token.startswith("@") or token in vm_option_files for token in tokens):
+            raise ValueError(f"{source} 含间接 Java 参数文件，请直接传入启动选项")
         for index, token in enumerate(tokens):
             if not token.startswith(("-D", "--")):
                 continue

@@ -196,6 +196,8 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     (0, "java-override"), (0, "spring-json"), (0, "argument-override"),
     (0, "endpoint-env"), (0, "endpoint-file"), (0, "port-env"), (0, "published-port"),
     (0, "endpoint-override"), (0, "remote-docker"),
+    (0, "argument-file"), (0, "shell-argument-file"), (0, "jdk-argument-file"),
+    (0, "jvm-option-file"), (0, "jvm-flags-file"),
 ])
 def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int, conflict: str | None) -> None:
     """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
@@ -247,12 +249,28 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
         env["JAVA_TOOL_OPTIONS"] = "-Xmx256m -Dbasic-framework.file.minio.public-access=false"
     if conflict == "spring-json":
         env["SPRING_APPLICATION_JSON"] = "{}"
+    if conflict is None:
+        env["JAVA_TOOL_OPTIONS"] = "-Xmx128m -Dfixture.label=qa@local"
     cmd = 'printf "%s %s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" "$MINIO_ENDPOINT" >> "$COMMANDS"'
     command = ["sh", "-c", cmd]
     if conflict == "argument-override":
         command = ["java", "-Dbasic-framework.file.minio.bucket=different-fixture", "-version"]
     if conflict == "endpoint-override":
         command = ["java", "-Dbasic-framework.file.minio.endpoint=http://127.0.0.1:19002", "-version"]
+    option_file = conflict in ("argument-file", "shell-argument-file", "jdk-argument-file",
+                               "jvm-option-file", "jvm-flags-file")
+    if option_file:
+        (tmp_path / "fixture options").write_text("-Xmx128m\n", encoding="utf-8")
+    if conflict == "argument-file":
+        command = ["java", "@fixture options", "-version"]
+    if conflict == "shell-argument-file":
+        command = ["sh", "-c", 'exec java "@fixture options" -version']
+    if conflict == "jdk-argument-file":
+        env["JDK_JAVA_OPTIONS"] = '-Dfixture.name=qa "@fixture options"'
+    if conflict == "jvm-option-file":
+        env["JAVA_TOOL_OPTIONS"] = '-XX:VMOptionsFile="fixture options"'
+    if conflict == "jvm-flags-file":
+        command = ["java", "-XX:Flags=fixture options", "-version"]
     result = subprocess.run(["sh", str(shell), "--", *command],
                             cwd=tmp_path, env=env, check=False, capture_output=True, text=True, timeout=10)
     assert not list(policy.parent.glob("validated-policy.*"))
@@ -263,6 +281,9 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
         return
     if conflict:
         assert result.returncode == 1 and not commands.exists(), result.stderr
+        if option_file:
+            assert "含间接 Java 参数文件" in result.stderr
+            assert "fixture options" not in result.stderr
         return
     expected = [*started, "run --rm --no-deps minio-init"]
     if init_exit == 0:

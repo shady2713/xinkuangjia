@@ -67,7 +67,7 @@ mvn -q -DskipTests package
 java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
 ```
 
-使用仓库的 Compose 开发栈时，从当前 Java 工程目录通过同一入口启动后端。启动入口核对 `.env.dev`、后端 `.env` 和调用环境的配置。后端的 `MINIO_ENDPOINT` 必须是本地 Compose 发布的 HTTP 环回地址，端口由 `MINIO_API_PORT` 指定，默认 19000。入口使用本地 Docker 并核对实际发布端口，桶策略应用和读回成功后才执行 Java 命令。桶名和访问模式使用无插值的字面值。更改模式后重新运行初始化生成策略。浏览器公开地址 `MINIO_PUBLIC_URL` 和签名网关 `MINIO_SIGNING_ENDPOINT` 可独立填写。
+使用仓库的 Compose 开发栈时，从当前 Java 工程目录通过同一入口启动后端。启动入口核对 `.env.dev`、后端 `.env` 和调用环境的配置。后端的 `MINIO_ENDPOINT` 必须是本地 Compose 发布的 HTTP 环回地址，端口由 `MINIO_API_PORT` 指定，默认 19000。入口使用本地 Docker 并核对实际发布端口，桶策略应用和读回成功后才执行 Java 命令。桶名和访问模式使用无插值的字面值。更改模式后重新运行初始化生成策略。浏览器公开地址 `MINIO_PUBLIC_URL` 和签名网关 `MINIO_SIGNING_ENDPOINT` 可独立填写。通过该入口启动时，在命令或 JVM 启动环境中直接填写 Java 选项。入口遇到间接参数文件引用会在启动中间件前退出。
 
 ```bash
 sh ../../scripts/runtime/start_dev_stack.sh -- java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
