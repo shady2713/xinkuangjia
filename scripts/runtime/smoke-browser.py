@@ -162,20 +162,23 @@ def run(p, browser, pwd, new_pwd):
         ok(call(page.request, "POST", "/admin-api/infra/file/upload", admin,
                 multipart={"file": {"name": name, "mimeType": "text/plain", "buffer": content}, "directory": "private/smoke"}))
     with step("owner-exact-private-download"):
-        rows = ok(call(page.request, "GET", "/admin-api/infra/file/page", admin, params={"pageNo": 1, "pageSize": 10, "path": name}))["list"]
-        ids = [r["id"] for r in rows if r.get("name") == name]
-        check(len(ids) == 1, "uploaded file not found exactly once")
-        resp = call(page.request, "GET", "/admin-api/infra/file/private/content", admin, params={"id": ids[0]})
+        rows = ok(call(page.request, "GET", "/admin-api/infra/file/page", admin, params={"pageNo": 1, "pageSize": 10, "path": name.removesuffix(".txt")}))["list"]
+        records = [row for row in rows if row.get("name") == name]
+        check(len(records) == 1, "uploaded file not found exactly once")
+        check(records[0].get("path", "").startswith("private/smoke/") and not records[0].get("url"),
+              "upload did not produce a private record")
+        file_id = records[0]["id"]
+        resp = call(page.request, "GET", "/admin-api/infra/file/private/content", admin, params={"id": file_id})
         check(resp.status == 200 and resp.body() == content, "private content mismatch")
     with step("local-private-signing-reports-unsupported"):
         denied(call(page.request, "GET", "/admin-api/infra/file/private/presigned-get-url", admin,
-                    params={"id": ids[0]}), {SIGNING_UNSUPPORTED})
+                    params={"id": file_id}), {SIGNING_UNSUPPORTED})
     with step("anonymous-download-denied"):
         anon = p.request.new_context()
-        denied(call(anon, "GET", "/admin-api/infra/file/private/content", params={"id": ids[0]}), {401})
+        denied(call(anon, "GET", "/admin-api/infra/file/private/content", params={"id": file_id}), {401})
         anon.dispose()
     with step("member-download-denied"):
-        denied(call(page.request, "GET", "/admin-api/infra/file/private/content", member, params={"id": ids[0]}), {FILE_DENIED})
+        denied(call(page.request, "GET", "/admin-api/infra/file/private/content", member, params={"id": file_id}), {FILE_DENIED})
 
 
 def main():
