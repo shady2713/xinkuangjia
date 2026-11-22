@@ -14,6 +14,9 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   backend:
     name: backend
@@ -23,6 +26,15 @@ jobs:
         working-directory: 后端代码/basic-framework-boot
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          persist-credentials: false
+      - name: Verify checkout commit
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || { echo "::error::invalid expected commit ID"; exit 1; }
+          expected=$(git rev-parse --verify "$EXPECTED_SHA^{commit}") || { echo "::error::expected commit not available"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$expected" ]] || { echo "::error::checkout is not the expected commit"; exit 1; }
+          echo "Checked out commit $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -42,6 +54,15 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          persist-credentials: false
+      - name: Verify checkout commit
+        run: |
+          [[ "$EXPECTED_SHA" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || { echo "::error::invalid expected commit ID"; exit 1; }
+          expected=$(git rev-parse --verify "$EXPECTED_SHA^{commit}") || { echo "::error::expected commit not available"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$expected" ]] || { echo "::error::checkout is not the expected commit"; exit 1; }
+          echo "Checked out commit $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
       - name: Check documentation links
         run: python3 "$GITHUB_WORKSPACE/scripts/check-doc-links.py"
       - uses: pnpm/action-setup@v6
@@ -64,16 +85,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.event.after }}
+          ref: ${{ env.EXPECTED_SHA }}
           persist-credentials: false
       - name: Scan commits with Gitleaks
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
-          PUSH_AFTER: ${{ github.event.after }}
           EVENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
@@ -92,14 +111,14 @@ jobs:
           fail() { echo "::error::$1"; exit 1; }
 
           case "$EVENT_NAME" in
-            pull_request) base_sha="$PR_BASE_SHA"; head_sha="$PR_HEAD_SHA" ;;
-            push) base_sha="$PUSH_BEFORE"; head_sha="$PUSH_AFTER" ;;
+            pull_request) base_sha="$PR_BASE_SHA" ;;
+            push) base_sha="$PUSH_BEFORE" ;;
             *) fail "unsupported event for secret scan" ;;
           esac
 
-          is_commit_id "$head_sha" || fail "invalid head commit ID"
+          is_commit_id "$EXPECTED_SHA" || fail "invalid head commit ID"
           is_commit_id "$base_sha" || fail "invalid base commit ID"
-          head_sha=$(git rev-parse --verify "$head_sha^{commit}") || fail "head commit not available"
+          head_sha=$(git rev-parse --verify "$EXPECTED_SHA^{commit}") || fail "head commit not available"
           [[ "$(git rev-parse HEAD)" == "$head_sha" ]] || fail "checkout is not the event head commit"
 
           if [[ "$EVENT_NAME" == push && "$EVENT_REF" == refs/tags/rc-* && "$base_sha" =~ ^0+$ ]] \
@@ -113,7 +132,16 @@ jobs:
             log_opts="${base_sha}..${head_sha}"
           fi
 
-          "$bin_dir/gitleaks" git --no-banner --redact=100 --log-opts="$log_opts" .
+          if [[ "$EVENT_REF" == refs/tags/rc-* && "$log_opts" != "$head_sha" ]]; then
+            commit_count=$(git rev-list --count "$log_opts") || fail "release candidate range not available"
+            if [[ "$commit_count" == 0 ]]; then
+              echo "Empty release candidate range: scanning all commits reachable from head"
+              log_opts="$head_sha"
+            fi
+          fi
+
+          echo "Scanned commit $head_sha" >> "$GITHUB_STEP_SUMMARY"
+          "$bin_dir/gitleaks" git --no-banner --redact=100 --log-opts="--diff-merges=first-parent $log_opts" .
 
   smoke:
     name: smoke
@@ -125,11 +153,10 @@ jobs:
       FRONTEND_DIR: 前端代码/basic-framework-admin
       SMOKE_BASE_URL: http://127.0.0.1:5175
       SMOKE_API_URL: http://127.0.0.1:48080
-      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EXPECTED_SHA }}
           persist-credentials: false
       - uses: actions/setup-java@v6
         with:
