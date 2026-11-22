@@ -24,16 +24,34 @@ done
 policy=$(mktemp "$root/.e2e-env/validated-policy.XXXXXXXX") || fail "cannot create policy snapshot"
 trap 'unlink "$policy"' 0
 settings=$(python3 -B -X utf8 "$root/scripts/runtime/init_local_dev.py" --check-bucket-policy "$policy" -- "$@") \
-  || fail "MinIO bucket settings or policy do not match"
-MINIO_BUCKET=${settings% *}
-MINIO_PUBLIC_ACCESS=${settings#* }
+  || fail "MinIO settings or policy do not match"
+IFS=' ' read -r MINIO_BUCKET MINIO_PUBLIC_ACCESS MINIO_ENDPOINT MINIO_API_PORT <<EOF
+$settings
+EOF
 BASICFRAMEWORK_FILE_MINIO_BUCKET=$MINIO_BUCKET
 BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS=$MINIO_PUBLIC_ACCESS
-export MINIO_BUCKET MINIO_PUBLIC_ACCESS BASICFRAMEWORK_FILE_MINIO_BUCKET BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS
+BASICFRAMEWORK_FILE_MINIO_ENDPOINT=$MINIO_ENDPOINT
+export MINIO_BUCKET MINIO_PUBLIC_ACCESS MINIO_ENDPOINT MINIO_API_PORT
+export BASICFRAMEWORK_FILE_MINIO_BUCKET BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS BASICFRAMEWORK_FILE_MINIO_ENDPOINT
 chmod a+r "$policy"
 
-dc() { MINIO_POLICY_FILE="$policy" docker compose -f "$root/docker-compose.dev.yml" --env-file "$root/.env.dev" "$@"; }
+# 后端使用宿主机环回端口，要求 Compose 连接本地 Docker。
+docker_endpoint=${DOCKER_HOST:-}
+if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$docker_endpoint" ]; then
+  docker_endpoint=$(docker context inspect --format '{{.Endpoints.docker.Host}}') || fail "cannot resolve Docker endpoint"
+fi
+case "$docker_endpoint" in
+  unix:///*|npipe:////./pipe/*) ;;
+  *) fail "local Docker socket required" ;;
+esac
+
+dc() {
+  DOCKER_CONTEXT= DOCKER_HOST="$docker_endpoint" MINIO_POLICY_FILE="$policy" \
+    docker compose -f "$root/docker-compose.dev.yml" --env-file "$root/.env.dev" "$@"
+}
 dc up --build -d --wait mysql redis minio || fail "mysql/redis/minio did not become healthy"
+published=$(dc port minio 9000) || fail "cannot read published MinIO endpoint"
+[ "$published" = "${MINIO_ENDPOINT#http://}" ] || fail "published MinIO endpoint differs from backend configuration"
 # 旧卷也启动一次新的初始化容器并等待策略读回。
 dc run --rm --no-deps minio-init || fail "minio-init policy apply/readback failed"
 

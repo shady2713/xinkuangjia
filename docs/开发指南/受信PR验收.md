@@ -26,13 +26,16 @@ kind: package-reference
 
 ## 采集托管证据
 
-在独立受控目录中保存当前 PR 的 GitHub API 记录。使用仅具备 Contents、Pull requests 和 Actions 读取权限的认证。对两个工作流分别从仓库的工作流运行列表选取当前 PR 的正式 `pull_request` 运行，记录各自的运行 ID。PR 或运行重试发生变化时重新采集。
+在独立受控目录中保存当前 PR 的 GitHub API 记录。使用仅具备 Contents、Pull requests 和 Actions 读取权限的认证。分别采集两个工作流的 `pull_request` 运行列表。对当前仓库、PR 编号、base 和 head 各项匹配的运行，按最大的 `run_number` 选择 `RUN_ID`。列表应包含排队、运行中和失败的记录。最新运行需要成功完成，重试后需核验该运行最新的 `run_attempt`。
 
 把 CI 保存到 `$CI_SNAPSHOT/ci`，附件集成保存到 `$CI_SNAPSHOT/attachment`。在每个目录中执行下列步骤。参数 `REPO` 由受控任务提供，`WORKFLOW` 分别是 `ci.yml` 和 `attachment-integration.yml`，`ARTIFACT_PREFIX` 分别是 `acceptance-proof` 和 `attachment-integration-summary`。
 
 ```bash
 set -euo pipefail
 gh api --hostname github.com "repos/$REPO/actions/workflows/$WORKFLOW" > workflow.json
+gh api --hostname github.com --paginate "repos/$REPO/actions/workflows/$WORKFLOW/runs?event=pull_request&per_page=100" \
+  --jq '.workflow_runs[]' | jq -s . > runs.json
+# 从 runs.json 选取上文定义的 RUN_ID，再获取作业和制品。
 gh api --hostname github.com "repos/$REPO/actions/runs/$RUN_ID" > run.json
 ATTEMPT=$(jq -er '.run_attempt | select(type == "number" and . > 0)' run.json)
 gh api --hostname github.com --paginate "repos/$REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs?per_page=100" \
@@ -44,7 +47,7 @@ ARTIFACT_ID=$(jq -er --arg name "$ARTIFACT_PREFIX-$ATTEMPT" \
 gh api --hostname github.com "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > proof.zip
 ```
 
-保留 API 返回的制品摘要和 ZIP 原始字节。运行入口核对工作流来源、作业和步骤结论、运行和尝试号、ZIP 摘要及三份文件中的同版本标识。每次接受结果前重新读取 PR、当前主干、测试合并 ref 和两个运行的最新尝试号及状态。 [运行记录](https://docs.github.com/en/rest/actions/workflow-runs) · [作业记录](https://docs.github.com/en/rest/actions/workflow-jobs) · [制品记录](https://docs.github.com/en/rest/actions/artifacts)
+保留 API 返回的制品摘要和 ZIP 原始字节。运行入口核对工作流来源、作业和步骤结论、运行和尝试号、ZIP 摘要及三份文件中的同版本标识。每次接受结果前重新读取 PR、当前主干、测试合并 ref 及双方完整运行列表和最新尝试。确认最新匹配运行与制品仍对应同一版本，再报告结果。 [运行记录](https://docs.github.com/en/rest/actions/workflow-runs) · [运行序号](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts) · [作业记录](https://docs.github.com/en/rest/actions/workflow-jobs) · [制品记录](https://docs.github.com/en/rest/actions/artifacts)
 
 <a id="运行门禁"></a>
 

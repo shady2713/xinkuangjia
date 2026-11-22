@@ -29,7 +29,7 @@ else:
     from rules_scope import SCANNER_RULES_PATHS
 
 # 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
-RULESET_VERSION = "2026.15"
+RULESET_VERSION = "2026.16"
 # Empty tree object id (SHA-1 repositories); used as the parent of root commits.
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 # Known (mode, type) pairs of ls-tree entries a commit-scan type change may produce.
@@ -643,6 +643,7 @@ def _scan_added_line(
     is_python_code: bool = False,
     scan_assignment: bool = True,
     literal_text: bool = False,
+    plain_data: bool = False,
 ) -> list[Finding]:
     """扫描一条暂存区新增行，且不把命中值写入结果。
 
@@ -654,13 +655,14 @@ def _scan_added_line(
         is_python_code: 当前行是否位于 Markdown 的 Python 围栏内。
         scan_assignment: 完整 Python AST 已负责赋值时，原始行只扫描强信号。
         literal_text: 当前文本来自字符串内容，冒号表达式不能当成类型注解。
+        plain_data: 已提交的链接文本，仅应用普通数据规则。
 
     Returns:
         当前行命中的安全问题列表。
     """
 
     # 仅扫描器自身的伪造样本可跳过，普通业务文件不能借助注释绕过检查。
-    if path == SELF_TEST_PATH and SELF_TEST_ALLOW_MARKER in line:
+    if not plain_data and path == SELF_TEST_PATH and SELF_TEST_ALLOW_MARKER in line:
         return []
 
     findings: list[Finding] = []
@@ -670,20 +672,22 @@ def _scan_added_line(
         for marker in ("EXAMPLE", "DUMMY", "PLACEHOLDER", "REDACTED")
     ):
         findings.append(Finding(path, line_number, "secret-prefix", "发现常见密钥前缀"))
-    if _contains_unsafe_embedded_credential_url(line, path):
+    if _contains_unsafe_embedded_credential_url(line, "" if plain_data else path):
         findings.append(
             Finding(path, line_number, "url-userinfo", "URL 中嵌入了账号和密码")
         )
 
     # 注释仍执行密钥前缀和 URL 凭据扫描，但不把示例赋值语法当成真实配置。
-    if not scan_assignment or is_docstring or line.lstrip().startswith(("#", "//", "/*", "*", "<!--")):
+    if not plain_data and (
+        not scan_assignment or is_docstring or line.lstrip().startswith(("#", "//", "/*", "*", "<!--"))
+    ):
         return findings
 
     assignment = SENSITIVE_ASSIGNMENT_PATTERN.search(line)
     if assignment is None:
         return findings
     normalized_path = path.replace("\\", "/")
-    if normalized_path in GENERATED_SCHEMA_PATHS:
+    if not plain_data and normalized_path in GENERATED_SCHEMA_PATHS:
         return findings
     # 冒号分隔的权限码标识（如 system:oauth2-token:query）并非键值赋值。
     if assignment.start() > 0 and line[assignment.start() - 1] == ":":
@@ -693,13 +697,13 @@ def _scan_added_line(
         return findings
     # 锁文件依赖项的字段名是包名，不是凭据名；仅放行明确登记过的依赖包名。
     if (
-        PurePosixPath(path).name in LOCKFILE_PATH_NAMES
+        not plain_data and PurePosixPath(path).name in LOCKFILE_PATH_NAMES
         and assignment.group("key") in LOCKFILE_DEPENDENCY_KEYS
     ):
         return findings
     # 文档代码块只复用 Python 语法识别，报告路径与其他凭据规则保持原样。
-    syntax_path = "snippet.py" if is_python_code else path
-    if literal_text:
+    syntax_path = "snippet.py" if is_python_code and not plain_data else path
+    if literal_text and not plain_data:
         # 可解析的 Python 赋值保留表达式语义；其余嵌入内容按配置文本检查。
         try:
             with warnings.catch_warnings():
@@ -719,7 +723,7 @@ def _scan_added_line(
             isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None
             for node in tree.body
         ) else "literal.yaml"
-    if _is_python_type_annotation(
+    if not plain_data and _is_python_type_annotation(
         path=syntax_path,
         operator=assignment.group("operator"),
         raw_value=assignment.group("value"),
@@ -727,7 +731,7 @@ def _scan_added_line(
         return findings
     key = assignment.group("key")
     raw_value = assignment.group("value")
-    if syntax_path.lower().endswith(".py"):
+    if not plain_data and syntax_path.lower().endswith(".py"):
         parsed_value = _python_assignment_value(line, key)
         if parsed_value is not None:
             raw_value = parsed_value
@@ -750,11 +754,11 @@ def _scan_added_line(
     if _is_safe_placeholder(value):
         return findings
     # 仅豁免测试虚拟值的固定赋值告警；此前密钥前缀、URL 及独立私钥检查仍生效。
-    if not is_python_code and _is_unit_test_credential(path, raw_value):
+    if not is_python_code and not plain_data and _is_unit_test_credential(path, raw_value):
         return findings
     # Java/Python/TypeScript 中的变量或方法调用不是固定凭据；显式字符串仍需拦截。
     if (
-        not quoted
+        not quoted and not plain_data
         and not _is_config_path(syntax_path)
         and (re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_.]*", value) or "(" in value)
     ):
@@ -993,7 +997,7 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         for number, line in enumerate(text.split("\n"), 1):
             findings.extend(_scan_added_line(
                 path, number, line, is_docstring=number in docstrings, is_python_code=number in code_lines,
-                scan_assignment=python_candidates.get(path) is None,
+                scan_assignment=python_candidates.get(path) is None, plain_data=plain,
             ))
             added_lines_by_path.setdefault(path, []).append((number, line))
     for path, added_lines in added_lines_by_path.items():

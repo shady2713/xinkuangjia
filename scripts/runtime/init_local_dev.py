@@ -21,6 +21,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,12 @@ BACKEND_DIR = Path("后端代码") / "basic-framework-boot"
 BUCKET_VAR = "MINIO_BUCKET"
 PUBLIC_ACCESS_VAR = "MINIO_PUBLIC_ACCESS"
 DEFAULT_BUCKET = "basic-framework"
+MINIO_PORT_VAR = "MINIO_API_PORT"
+MINIO_ENDPOINT_VAR = "MINIO_ENDPOINT"
+MINIO_SECURE_VAR = "MINIO_SECURE"
+DEFAULT_MINIO_PORT = "19000"
+ENDPOINT_ALIASES = (MINIO_ENDPOINT_VAR, "BASICFRAMEWORK_FILE_MINIO_ENDPOINT", "BASIC_FRAMEWORK_FILE_MINIO_ENDPOINT")
+SECURE_ALIASES = (MINIO_SECURE_VAR, "BASICFRAMEWORK_FILE_MINIO_SECURE", "BASIC_FRAMEWORK_FILE_MINIO_SECURE")
 BUCKET_ALIASES = (BUCKET_VAR, "BASICFRAMEWORK_FILE_MINIO_BUCKET", "BASIC_FRAMEWORK_FILE_MINIO_BUCKET")
 ACCESS_ALIASES = (PUBLIC_ACCESS_VAR, "BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS", "BASICFRAMEWORK_FILE_MINIO_PUBLIC_ACCESS",
                   "BASIC_FRAMEWORK_FILE_MINIO_PUBLICACCESS", "BASIC_FRAMEWORK_FILE_MINIO_PUBLIC_ACCESS")
@@ -118,6 +125,7 @@ def render_compose_env(values: dict[str, str]) -> str:
         "MINIO_ACCESS_KEY",
         "MINIO_SECRET_KEY",
         "MINIO_BUCKET",
+        MINIO_PORT_VAR,
     )
     lines = [
         "# 由 scripts/runtime/init_local_dev.py --apply 生成；已加入 .gitignore，禁止提交。",
@@ -157,11 +165,12 @@ def current_hooks_path(root: Path) -> str:
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 
-def bucket_fields(path: Path, *, compose: bool = False) -> dict[str, str]:
-    """读取桶设置的字面量，拒绝可让 Compose 与 Spring 产生不同解释的语法。"""
+def minio_fields(path: Path, *, compose: bool = False) -> dict[str, str]:
+    """读取 MinIO 设置的字面量，避免 Compose 与 Spring 使用不同的值。"""
     fields = {}
     direct_properties = {
-        re.sub(r"[^a-z]", "", alias.lower()) for alias in (*BUCKET_ALIASES[1:], *ACCESS_ALIASES[1:])
+        re.sub(r"[^a-z]", "", alias.lower())
+        for alias in (*BUCKET_ALIASES[1:], *ACCESS_ALIASES[1:], *ENDPOINT_ALIASES[1:], *SECURE_ALIASES[1:])
     }
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.lstrip()
@@ -171,30 +180,34 @@ def bucket_fields(path: Path, *, compose: bool = False) -> dict[str, str]:
             raise ValueError(f"{path.name} 必须使用逐行的 KEY=VALUE 配置")
         key, value = match.groups()
         if re.sub(r"[^a-z]", "", key.lower()) in direct_properties:
-            raise ValueError(f"{path.name} 的桶和访问模式必须使用 MINIO_BUCKET 和 MINIO_PUBLIC_ACCESS")
-        if key not in (BUCKET_VAR, PUBLIC_ACCESS_VAR):
+            raise ValueError(f"{path.name} 的对象存储设置必须使用 MINIO_* 变量")
+        if key not in (BUCKET_VAR, PUBLIC_ACCESS_VAR, MINIO_PORT_VAR, MINIO_ENDPOINT_VAR, MINIO_SECURE_VAR):
             continue
         if key in fields or not value or value != value.strip():
             raise ValueError(f"{path.name} 的 {key} 为空、重复或含空白")
         if compose and value[:1] in ("'", '"') and value[-1:] == value[:1]:
             value = value[1:-1]
-        if not re.fullmatch(r"[A-Za-z0-9.-]+", value):
+        if key == MINIO_ENDPOINT_VAR:
+            literal = re.fullmatch(r"[A-Za-z0-9.:/\[\]-]+", value)
+        else:
+            literal = re.fullmatch(r"[A-Za-z0-9.-]+", value)
+        if not literal:
             raise ValueError(f"{path.name} 的 {key} 必须是字面量")
         fields[key] = value
     return fields
 
 
-def effective_bucket(compose_env: Path | None, backend_env: Path | None) -> tuple[str, str]:
+def effective_bucket(compose: dict[str, str] | None, backend: dict[str, str] | None) -> tuple[str, str]:
     """解析后端和 Compose 的共同桶设置，环境冲突时拒绝继续。"""
-    compose = bucket_fields(compose_env, compose=True) if compose_env else {}
-    backend = bucket_fields(backend_env) if backend_env else {}
+    compose_present, backend_present = compose is not None, backend is not None
+    compose, backend = compose or {}, backend or {}
     compose_bucket = compose.get(BUCKET_VAR, DEFAULT_BUCKET)
-    bucket = backend.get(BUCKET_VAR) if backend_env else compose_bucket
+    bucket = backend.get(BUCKET_VAR) if backend_present else compose_bucket
     if not bucket:
         raise ValueError("后端 .env 缺少 MINIO_BUCKET")
-    if compose_env and compose_bucket != bucket:
+    if compose_present and compose_bucket != bucket:
         raise ValueError(".env.dev 与后端 .env 的 MINIO_BUCKET 不一致")
-    public = (backend.get(PUBLIC_ACCESS_VAR, "true") if backend_env else compose.get(PUBLIC_ACCESS_VAR, "true")).lower()
+    public = (backend.get(PUBLIC_ACCESS_VAR, "true") if backend_present else compose.get(PUBLIC_ACCESS_VAR, "true")).lower()
     if public not in {"true", "false"}:
         raise ValueError("MINIO_PUBLIC_ACCESS 必须是 true 或 false")
     if PUBLIC_ACCESS_VAR in compose and compose[PUBLIC_ACCESS_VAR].lower() != public:
@@ -214,7 +227,8 @@ def check_launcher_overrides(args: list[str]) -> None:
         raise ValueError("本地启动入口要求 SPRING_APPLICATION_JSON 为空")
     guarded = {
         "".join(ch for ch in name if ch.isalnum()).upper()
-        for name in (*BUCKET_ALIASES, *ACCESS_ALIASES, "SPRING_APPLICATION_JSON")
+        for name in (*BUCKET_ALIASES, *ACCESS_ALIASES, *ENDPOINT_ALIASES, *SECURE_ALIASES,
+                     MINIO_PORT_VAR, "SPRING_APPLICATION_JSON")
     }
     separators = str.maketrans({ch: " " for ch in "\"'=,;"})
     options = ("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "JAVA_OPTS", "MAVEN_OPTS", "MAVEN_ARGS")
@@ -227,12 +241,45 @@ def check_launcher_overrides(args: list[str]) -> None:
                 continue
             name = token[2:] or (tokens[index + 1] if index + 1 < len(tokens) else "")
             if "".join(ch for ch in name if ch.isalnum()).upper() in guarded:
-                raise ValueError(f"{source} 覆盖了 MinIO 桶、访问模式或 Spring JSON 配置")
+                raise ValueError(f"{source} 覆盖了 MinIO 配置或 Spring JSON 配置")
 
 
-def verify_bucket_policy(root: Path, snapshot: Path) -> tuple[str, str]:
-    """验证现有桶策略与有效配置一致，为本次启动写入独立策略快照。"""
-    bucket, public = effective_bucket(root / ".env.dev", root / BACKEND_DIR / ".env")
+def compose_port(compose: Mapping[str, str], env: Mapping[str, str]) -> str:
+    """按 Compose 配置取已校验的发布端口，拒绝冲突的进程覆盖值。"""
+    file_port = compose.get(MINIO_PORT_VAR)
+    process_port = env.get(MINIO_PORT_VAR)
+    configured = (port for port in (file_port, process_port) if port is not None)
+    if any(not re.fullmatch(r"[0-9]{1,5}", port) or not 1 <= int(port) <= 65535 for port in configured):
+        raise ValueError("MINIO_API_PORT 必须为 1 到 65535 之间的十进制端口")
+    if file_port is not None and process_port is not None and int(file_port) != int(process_port):
+        raise ValueError("环境变量 MINIO_API_PORT 与 .env.dev 不一致")
+    return str(int(process_port or file_port or DEFAULT_MINIO_PORT))
+
+
+def validate_compose_endpoint(port: str, backend_endpoint: str, secure: str, env: Mapping[str, str]) -> str:
+    """确认后端文件和调用环境的直连地址指向 Compose 的 HTTP 环回端口。"""
+    values = [(MINIO_ENDPOINT_VAR, backend_endpoint)]
+    values.extend((key, env[key]) for key in ENDPOINT_ALIASES if key in env)
+    for name, value in values:
+        match = re.fullmatch(r"(http://)?(?:localhost|127\.0\.0\.1):([0-9]{1,5})/?", value, re.IGNORECASE)
+        if match is None or int(match.group(2)) != int(port) or (match.group(1) is None and secure != "false"):
+            raise ValueError(f"{name} 的直连地址须与 Compose 发布的 HTTP 环回端口一致")
+    return f"http://127.0.0.1:{port}"
+
+
+def verify_bucket_policy(root: Path, snapshot: Path) -> tuple[str, str, str, str]:
+    """核对后端直连地址、桶和策略，并写入本次启动的策略快照。"""
+    compose = minio_fields(root / ".env.dev", compose=True)
+    backend = minio_fields(root / BACKEND_DIR / ".env")
+    bucket, public = effective_bucket(compose, backend)
+    port = compose_port(compose, os.environ)
+    secure = backend.get(MINIO_SECURE_VAR, "false").lower()
+    # Spring 的直接绑定高于占位符，同值的别名可以并存。
+    secure_values = {os.environ[name].lower() for name in SECURE_ALIASES if name in os.environ}
+    if not {secure, *secure_values} <= {"true", "false"} or len(secure_values) > 1:
+        raise ValueError("MINIO_SECURE 的设置无效或不一致")
+    effective_secure = next(iter(secure_values), secure)
+    endpoint = validate_compose_endpoint(port, backend.get(MINIO_ENDPOINT_VAR, ""), effective_secure, os.environ)
     policy_text = render_policy_json(bucket, "mixed" if public == "true" else "private")
     policy_path = root / MINIO_POLICY_RELATIVE_PATH
     try:
@@ -242,7 +289,7 @@ def verify_bucket_policy(root: Path, snapshot: Path) -> tuple[str, str]:
     if not matches:
         raise ValueError("MinIO 桶策略与有效配置不一致，请重新运行初始化")
     snapshot.write_text(policy_text, encoding="utf-8", newline="\n")
-    return bucket, public
+    return bucket, public, endpoint, port
 
 
 def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> BootstrapPlan:
@@ -288,7 +335,10 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
 
     active_compose = compose_env_path if not force and compose_env_path.exists() else None
     active_backend = backend_env_path if not force and backend_env_path.exists() else None
-    bucket, public_access = effective_bucket(active_compose, active_backend)
+    compose_values = minio_fields(active_compose, compose=True) if active_compose else None
+    backend_values = minio_fields(active_backend) if active_backend else None
+    bucket, public_access = effective_bucket(compose_values, backend_values)
+    minio_port = compose_port(compose_values or {}, os.environ)
     db_password = existing_vals.get("DB_PASSWORD") or generate_local_secret(20)
     redis_password = existing_vals.get("REDIS_PASSWORD") or generate_local_secret(20)
     minio_access = existing_vals.get("MINIO_ACCESS_KEY") or generate_local_secret(16)
@@ -309,8 +359,9 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         "REDIS_PORT": existing_vals.get("REDIS_PORT") or "6379",
         "REDIS_PASSWORD": redis_password,
         "SM2_PRIVATE_KEY": existing_vals.get("SM2_PRIVATE_KEY") or generate_sm2_private_key_hex(),
-        "MINIO_ENDPOINT": existing_vals.get("MINIO_ENDPOINT") or "http://127.0.0.1:19000",
-        "MINIO_PUBLIC_URL": existing_vals.get("MINIO_PUBLIC_URL") or "http://127.0.0.1:19000",
+        MINIO_PORT_VAR: minio_port,
+        MINIO_ENDPOINT_VAR: f"http://127.0.0.1:{minio_port}",
+        "MINIO_PUBLIC_URL": existing_vals.get("MINIO_PUBLIC_URL") or f"http://127.0.0.1:{minio_port}",
         "MINIO_ACCESS_KEY": minio_access,
         "MINIO_SECRET_KEY": minio_secret,
         BUCKET_VAR: bucket,

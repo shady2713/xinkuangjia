@@ -94,6 +94,40 @@ def succeeded(record):
     return record.get("status") == "completed" and record.get("conclusion") == "success"
 
 
+def matches_pr(association, pr):
+    """核对运行关联记录的 PR 编号及两侧仓库、分支和提交。"""
+    return isinstance(association, dict) and association.get("number") == pr["number"] and all(
+        isinstance(association.get(side), dict)
+        and association[side].get("sha") == pr[side]["sha"]
+        and association[side].get("ref") == pr[side]["ref"]
+        and isinstance(association[side].get("repo"), dict)
+        and association[side]["repo"].get("id") == pr[side]["repo"]["id"]
+        for side in ("base", "head")
+    )
+
+
+def latest_run(runs, run, pr, allowed_shas):
+    """从完整工作流列表选择同版本最新一次运行，并核对最新尝试与结论。"""
+    candidates = []
+    for item in runs:
+        repository = item.get("repository")
+        links = item.get("pull_requests")
+        if (item.get("workflow_id") == run["workflow_id"]
+                and item.get("event") == "pull_request" and item.get("head_sha") in allowed_shas
+                and isinstance(repository, dict) and repository.get("id") == run["repository"]["id"]
+                and repository.get("full_name") == run["repository"]["full_name"]
+                and isinstance(links, list) and any(matches_pr(link, pr) for link in links)):
+            require(positive_int(item.get("run_number")) and positive_int(item.get("id"))
+                    and positive_int(item.get("run_attempt")), "invalid workflow run history identity")
+            candidates.append(item)
+    require(candidates, "missing workflow run history")
+    top = max(item["run_number"] for item in candidates)
+    latest = matching(candidates, "run_number", top)
+    require(succeeded(latest), "latest workflow run did not succeed")
+    require(all(latest.get(key) == run.get(key) for key in ("id", "run_number", "run_attempt")),
+            "selected run or attempt is not current")
+
+
 def check_jobs(jobs, expected, run, allowed_shas):
     """从按尝试号独立采集的作业列表核对必过作业与步骤。"""
     run_url = f"https://api.github.com/repos/{run['repository']['full_name']}/actions/runs/{run['id']}"
@@ -175,9 +209,8 @@ def check_workflow(folder, config, event, checkout):
             and run["repository"]["id"] == repo["id"] and run["repository"]["full_name"] == repo["full_name"]
             and run["head_repository"]["id"] == head["repo"]["id"], "wrong or unsuccessful workflow run")
     association = matching(run.get("pull_requests"), "number", number)
-    for side in ("base", "head"):
-        require(all(association[side].get(key) == pr[side][key] for key in ("sha", "ref"))
-                and association[side]["repo"]["id"] == pr[side]["repo"]["id"], "wrong PR base or head")
+    require(matches_pr(association, pr), "wrong PR base or head")
+    latest_run(records(folder / "runs.json", list), run, pr, allowed_shas)
     check_jobs(records(folder / "jobs.json", list), expected_jobs, run, allowed_shas)
     artifact = matching(records(folder / "artifacts.json", list), "name", f"{prefix}-{run['run_attempt']}")
     run_info = artifact["workflow_run"]
@@ -199,8 +232,8 @@ def check_workflow(folder, config, event, checkout):
         check_ci_status(proofs)
     else:
         check_attachment_status(proofs)
-    return {"workflow_id": workflow["id"], "run_id": run["id"], "run_attempt": run["run_attempt"],
-            "artifact_id": artifact["id"], "artifact_digest": artifact["digest"]}
+    return {"workflow_id": workflow["id"], "run_id": run["id"], "run_number": run["run_number"],
+            "run_attempt": run["run_attempt"], "artifact_id": artifact["id"], "artifact_digest": artifact["digest"]}
 
 
 def verify(snapshot, event, checkout):

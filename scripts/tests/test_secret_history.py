@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -153,10 +154,28 @@ class CommitRangeScanTest(unittest.TestCase):
         checked = {(call.args[0], call.args[2]) for call in scan.call_args_list}
         self.assertIn(("fixture.py", "synthetic relative target"), checked)
         self.assertIn(("ordinary.txt", "synthetic ordinary text"), checked)
+        modes = {call.args[0]: call.kwargs.get("plain_data", False) for call in scan.call_args_list}
+        self.assertTrue(modes["fixture.py"])
+        self.assertFalse(modes["ordinary.txt"])
         self.assertNotIn(("fixture.py", "different worktree content"), checked)
         self.assertFalse(any(path == "fixture-submodule" for path, _ in checked))
         self.assertEqual(len(commits), 2)
         self.assertFalse(findings)
+
+    def test_source_syntax_analysis_only_runs_on_source(self) -> None:
+        """用合成字段验证源码语法识别与普通数据检查采用各自规则。"""
+        pattern = re.compile(r"(?P<key>fixture_setting)(?P<operator>:)(?P<value>.*)")
+        line = "fixture_setting: blue-tag"
+        with (
+            mock.patch.object(scanner, "SENSITIVE_ASSIGNMENT_PATTERN", pattern),
+            mock.patch.object(scanner, "_is_python_type_annotation", return_value=True) as source_rule,
+        ):
+            self.assertFalse(scanner._scan_added_line("fixture.py", 1, line))
+            source_rule.assert_called_once()
+            source_rule.reset_mock()
+            findings = scanner._scan_added_line("fixture.py", 1, line, plain_data=True)
+            source_rule.assert_not_called()
+        self.assertEqual([(item.path, item.line) for item in findings], [("fixture.py", 1)])
 
     def test_history_aborts_for_unreadable_or_unclassified_object(self) -> None:
         """读取失败或类型证据缺失时终止，底层错误内容不进入输出。"""

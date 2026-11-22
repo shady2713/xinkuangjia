@@ -53,7 +53,9 @@ def _prepare_fake_repo(root: Path, *, init_git: bool = False) -> Path:
         "MINIO_ACCESS_KEY=\n"
         "MINIO_SECRET_KEY=\n"
         "MINIO_BUCKET=basic-framework\n"
-        "MINIO_PUBLIC_ACCESS=true\n",
+        "MINIO_PUBLIC_ACCESS=true\n"
+        "MINIO_ENDPOINT=http://127.0.0.1:19000\n"
+        "MINIO_SECURE=false\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -192,6 +194,8 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
 @pytest.mark.parametrize(("init_exit", "conflict"), [
     (0, None), (1, None), (0, "bucket-env"), (0, "access-env"), (0, "bucket-files"), (0, "stale-policy"),
     (0, "java-override"), (0, "spring-json"), (0, "argument-override"),
+    (0, "endpoint-env"), (0, "endpoint-file"), (0, "port-env"), (0, "published-port"),
+    (0, "endpoint-override"), (0, "remote-docker"),
 ])
 def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int, conflict: str | None) -> None:
     """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
@@ -203,25 +207,38 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
     (repo / ".gitignore").write_text(".env.dev\n.env\n.e2e-env/\n", encoding="utf-8")
     assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
     policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    backend = repo / init_local_dev.BACKEND_DIR / ".env"
     if conflict == "bucket-files":
-        backend = repo / init_local_dev.BACKEND_DIR / ".env"
         backend.write_text(backend.read_text(encoding="utf-8").replace(
             "MINIO_BUCKET=basic-framework", "MINIO_BUCKET=different-fixture"), encoding="utf-8")
+    if conflict == "endpoint-file":
+        backend.write_text(backend.read_text(encoding="utf-8").replace(
+            "MINIO_ENDPOINT=http://127.0.0.1:19000", "MINIO_ENDPOINT=http://127.0.0.1:19002"), encoding="utf-8")
     if conflict == "stale-policy":
         policy.write_text("{}", encoding="utf-8")
     commands = tmp_path / "compose.log"
     fake_docker = tmp_path / "docker"
     fake_docker.write_text(
-        '#!/bin/sh\n[ "$1" = compose ] || exit 2\nshift 5\n'
+        '#!/bin/sh\n[ "$1" != context ] || { echo unix:///fixture/docker.sock; exit 0; }\n'
+        '[ "$1" = compose ] || exit 2\nshift 5\n'
         'printf "%s\\n" "$*" >> "$COMMANDS"\n'
         '[ "$MINIO_BUCKET" = basic-framework ] && [ "$MINIO_PUBLIC_ACCESS" = true ] || exit 3\n'
         '[ "$MINIO_POLICY_FILE" != "$ORIGINAL_POLICY" ] && cmp "$ORIGINAL_POLICY" "$MINIO_POLICY_FILE" || exit 4\n'
-        'case "$1" in up) exit 0 ;; run) exit "$INIT_EXIT" ;; *) exit 2 ;; esac\n',
+        '[ "$MINIO_ENDPOINT" = http://127.0.0.1:19000 ] || exit 5\n'
+        'case "$1" in up) exit 0 ;; port) echo "127.0.0.1:$PUBLISHED_PORT" ;; run) exit "$INIT_EXIT" ;; *) exit 2 ;; esac\n',
         encoding="utf-8",
     )
     fake_docker.chmod(0o755)
     env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
-           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit), "ORIGINAL_POLICY": str(policy)}
+           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit), "ORIGINAL_POLICY": str(policy),
+           "PUBLISHED_PORT": "19002" if conflict == "published-port" else "19000",
+           "DOCKER_CONTEXT": "", "DOCKER_HOST": ""}
+    if conflict == "remote-docker":
+        env["DOCKER_HOST"] = "ssh://fixture.invalid"
+    if conflict == "endpoint-env":
+        env["BASICFRAMEWORK_FILE_MINIO_ENDPOINT"] = "http://127.0.0.1:19002"
+    if conflict == "port-env":
+        env["MINIO_API_PORT"] = "19002"
     if conflict == "bucket-env":
         env["MINIO_BUCKET"] = "different-fixture"
     if conflict == "access-env":
@@ -230,21 +247,45 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
         env["JAVA_TOOL_OPTIONS"] = "-Xmx256m -Dbasic-framework.file.minio.public-access=false"
     if conflict == "spring-json":
         env["SPRING_APPLICATION_JSON"] = "{}"
-    cmd = 'printf "%s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" >> "$COMMANDS"'
+    cmd = 'printf "%s %s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" "$MINIO_ENDPOINT" >> "$COMMANDS"'
     command = ["sh", "-c", cmd]
     if conflict == "argument-override":
         command = ["java", "-Dbasic-framework.file.minio.bucket=different-fixture", "-version"]
+    if conflict == "endpoint-override":
+        command = ["java", "-Dbasic-framework.file.minio.endpoint=http://127.0.0.1:19002", "-version"]
     result = subprocess.run(["sh", str(shell), "--", *command],
                             cwd=tmp_path, env=env, check=False, capture_output=True, text=True, timeout=10)
     assert not list(policy.parent.glob("validated-policy.*"))
+    started = ["up --build -d --wait mysql redis minio", "port minio 9000"]
+    if conflict == "published-port":
+        assert result.returncode == 1 and commands.read_text(encoding="utf-8").splitlines() == started
+        assert "published MinIO endpoint differs" in result.stderr
+        return
     if conflict:
         assert result.returncode == 1 and not commands.exists(), result.stderr
         return
-    expected = ["up --build -d --wait mysql redis minio", "run --rm --no-deps minio-init"]
+    expected = [*started, "run --rm --no-deps minio-init"]
     if init_exit == 0:
-        expected.append("basic-framework true")
+        expected.append("basic-framework true http://127.0.0.1:19000")
     assert result.returncode == init_exit, result.stderr
     assert commands.read_text(encoding="utf-8").splitlines() == expected
+
+
+
+def test_bootstrap_pairs_custom_minio_port_with_backend_endpoint(tmp_path: Path, monkeypatch) -> None:
+    """引导以自定义 Compose 端口生成同一个后端直连地址，保留独立签名配置。"""
+    repo = _prepare_fake_repo(tmp_path)
+    monkeypatch.setenv("MINIO_API_PORT", "19123")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    compose = _parse_env_map((repo / ".env.dev").read_text(encoding="utf-8"))
+    backend = _parse_env_map((repo / init_local_dev.BACKEND_DIR / ".env").read_text(encoding="utf-8"))
+    assert compose["MINIO_API_PORT"] == "19123"
+    assert backend["MINIO_ENDPOINT"] == "http://127.0.0.1:19123"
+    backend_env = repo / init_local_dev.BACKEND_DIR / ".env"
+    with backend_env.open("a", encoding="utf-8") as config:
+        config.write("MINIO_SIGNING_ENDPOINT=http://127.0.0.1:19124\n")
+    snapshot = tmp_path / "policy.json"
+    assert init_local_dev.verify_bucket_policy(repo, snapshot)[2:] == ("http://127.0.0.1:19123", "19123")
 
 
 def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:

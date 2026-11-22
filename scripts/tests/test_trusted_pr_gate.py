@@ -75,7 +75,7 @@ def write_snapshot(root: Path, base: str, head: str, merge: str, fault: str = ""
                        "head": {"sha": head, "ref": "fix", "repo": repo}}
         run = {
             "id": run_id, "workflow_id": workflow_id, "path": f"{workflow_path}@refs/pull/1/merge",
-            "run_attempt": attempt, "head_sha": head, "repository": repo,
+            "run_number": 9, "run_attempt": attempt, "head_sha": head, "repository": repo,
             "head_repository": repo, "event": "pull_request", "pull_requests": [association],
             "status": "completed", "conclusion": "success",
         }
@@ -147,7 +147,7 @@ def write_snapshot(root: Path, base: str, head: str, merge: str, fault: str = ""
             artifact["digest"] = f"sha256:{'a' * 64}"
         if label == "attachment" and fault == "missing artifact":
             artifact["name"] = "diagnostic-2"
-        for name, body in (("run", run), ("jobs", jobs), ("artifacts", [artifact]),
+        for name, body in (("run", run), ("runs", [run]), ("jobs", jobs), ("artifacts", [artifact]),
                            ("workflow", {"id": workflow_id, "path": workflow_path})):
             (folder / f"{name}.json").write_text(json.dumps(body), encoding="utf-8")
 
@@ -216,6 +216,34 @@ def test_trusted_gate_rejects_incomplete_or_stale_ci(gate_command, pr_objects, f
     result = subprocess.run(command, cwd=source, check=False, capture_output=True, text=True, timeout=30)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Traceback" not in result.stderr, result.stderr
+
+
+@pytest.mark.parametrize("label", ["ci", "attachment"])
+@pytest.mark.parametrize(("latest_status", "want"), [
+    ("current", 0), ("queued", 1), ("in_progress", 1), ("failure", 1), ("success", 1), ("rerun", 1),
+])
+def test_trusted_gate_requires_latest_matching_workflow_run(gate_command, pr_objects, label, latest_status, want):
+    """两个工作流均按同版本最新运行和尝试验收，即使历史运行已成功。"""
+    command, snapshot, source, *_ = gate_command
+    _, base, head, merge = pr_objects
+    write_snapshot(snapshot, base, head, merge)
+    folder = snapshot / label
+    run = json.loads((folder / "run.json").read_text())
+    older = dict(run, id=run["id"] - 10, run_number=8)
+    unrelated = dict(run, id=run["id"] + 40, run_number=30,
+                     pull_requests=[dict(run["pull_requests"][0], number=2)])
+    rows = [older, unrelated, run]
+    if latest_status == "rerun":
+        rows[-1] = dict(run, run_attempt=run["run_attempt"] + 1)
+    elif latest_status != "current":
+        status = latest_status if latest_status in ("queued", "in_progress") else "completed"
+        rows.insert(0, dict(run, id=run["id"] + 10, run_number=10, status=status,
+                            conclusion=latest_status if status == "completed" else None))
+    (folder / "runs.json").write_text(json.dumps(rows), encoding="utf-8")
+    result = subprocess.run(command, cwd=source, check=False, capture_output=True, text=True, timeout=30)
+    assert result.returncode == want, result.stdout + result.stderr
+    if want:
+        assert "latest workflow run did not succeed" in result.stderr or "selected run or attempt is not current" in result.stderr
 
 
 def test_attachment_checkout_depth_contains_merge_parents(tmp_path: Path, pr_objects) -> None:
