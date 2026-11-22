@@ -25,7 +25,9 @@ A cancelled or skipped `secrets` run is not a passing scan. Do not copy findings
 
 ## Manual full-history verification
 
-This check is read-only. Run the following as a script from the root of a clean clone. It writes only to a temporary directory.
+First fetch every ref you intend to verify into a full (non-shallow) clone, for example `git fetch --prune --tags origin '+refs/heads/*:refs/remotes/origin/*'`.
+
+The scan itself is read-only. Run the following as a script from the repository root. It writes only to a temporary directory and removes it on exit.
 
 ```bash
 set -euo pipefail
@@ -33,13 +35,14 @@ GITLEAKS_VERSION=8.24.2
 GITLEAKS_SHA256=fa0500f6b7e41d28791ebc680f5dd9899cd42b58629218a5f041efa899151a8e
 archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
 work="$(mktemp -d)"
+trap 'rm -rf -- "$work"' EXIT
 mkdir "$work/download" "$work/bin"
 curl -sSfL --proto '=https' --tlsv1.2 -o "$work/download/$archive" \
   "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
 echo "${GITLEAKS_SHA256}  $work/download/$archive" | sha256sum --check --strict --quiet -
 tar -xzf "$work/download/$archive" -C "$work/bin" --no-same-owner gitleaks
 git rev-parse HEAD
-"$work/bin/gitleaks" git --no-banner --redact=100 .
+"$work/bin/gitleaks" git --no-banner --redact=100 --log-opts=--all .
 ```
 
-Without `--log-opts`, Gitleaks scans every commit reachable from any local ref. Record the printed SHA with the result. A nonzero exit means findings or a scanner error and must not be ignored.
+`--log-opts=--all` scans every commit reachable from any local ref, so refs you did not fetch are not covered. Record the printed SHA with the result. A nonzero exit means findings or a scanner error and must not be ignored.

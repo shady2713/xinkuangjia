@@ -41,6 +41,8 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
     steps:
       - uses: actions/checkout@v7
+      - name: Check documentation links
+        run: python3 "$GITHUB_WORKSPACE/scripts/check-doc-links.py"
       - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2

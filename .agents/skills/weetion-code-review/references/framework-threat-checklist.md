@@ -22,6 +22,6 @@
 
 ## 4. 前端 XSS、外链与存储卫生
 
-- **外链安全**：打开外部 URL 必须调用 `@vben/utils` 的 `openWindow`（校验 `http:`/`https:` 协议并附加 `noopener,noreferrer`），禁止裸调 `window.open(`。
+- **外链安全**: Parse untrusted or configured URLs with `const parsed = new URL(value, window.location.origin)`. Allow only the `http:` and `https:` protocols and reject everything else. Open the result with `window.open(parsed.href, '_blank', 'noopener,noreferrer')`. Give every `target="_blank"` anchor `rel="noopener noreferrer"`.
 - **富文本与动态节点**：禁止将未净化的用户输入传入 `v-html` 或 `ElMessageBox(..., { dangerouslyUseHTMLString: true })`；高亮确认弹窗优先使用 Vue `h(...)` VNode 构造。
 - **浏览器配置边界**：`docker/app.config.js` 与 `VITE_GLOB_*` 对所有浏览器访客可见，严禁写入任何服务端密钥或测试口令。
