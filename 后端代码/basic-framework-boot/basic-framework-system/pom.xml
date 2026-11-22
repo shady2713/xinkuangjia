@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.basicframework</groupId>
+        <artifactId>basic-framework</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>basic-framework-system</artifactId>
+    <packaging>jar</packaging>
+
+    <name>${project.artifactId}</name>
+    <description>
+        系统核心业务模块，涵盖双平台认证与 SM2 加密、滑块验证码、用户/角色/菜单/部门 RBAC 与数据权限、
+        字典、OAuth2 开放应用与会话、登录/操作审计日志、阿里云短信验证码以及统一文件存储（阿里云 OSS + 本地磁盘）。
+    </description>
+
+    <properties>
+        <quality.coverage.minimum>0.25</quality.coverage.minimum>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.basicframework</groupId>
+            <artifactId>basic-framework-core</artifactId>
+        </dependency>
+
+        <!-- 国密 SM2 密码传输解密 -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+
+        <!-- 滑块验证码 -->
+        <dependency>
+            <groupId>com.anji-plus</groupId>
+            <artifactId>captcha-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- 对象映射 -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+        </dependency>
+
+        <!-- 统一文件存储（阿里云 OSS S3 兼容协议 + Tika 魔数识别） -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
