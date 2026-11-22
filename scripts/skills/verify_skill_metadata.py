@@ -8,20 +8,15 @@
 - supersedes: 可选字符串列表，记录被当前技能替代的旧技能名
 - verification: 可选非空字符串列表，声明该技能的行为验收命令或判据
 
-Lifecycle and verification rules (English text pending localization):
-- replaced-by and retirement-reason are only valid on deprecated or retired skills.
-- A replaced-by target must be retained, declare its directory name, be active and list the
-  predecessor in supersedes, so renamed, deleted or retired targets fail; replacement
-  chains that loop back are reported as cycles.
-- A supersedes entry still present in the checkout must be deprecated or retired and point
-  back with replaced-by; entries absent from the checkout are historic and accepted.
-- Terminal retirement: retirement-reason without replaced-by declares that no successor
-  exists. The skill itself is valid, but it must not appear in any supersedes list.
-- verification entries must be allowlisted in VERIFICATION_GATES and are never executed.
-  File-based entrypoints must exist in the checkout; mvn/pnpm entrypoints must be run by the
-  mapped step of .github/workflows/ci.yml (matched by stable id, else current step name).
-- With a path subset, skills declaring lifecycle links are always re-checked so renames and
-  deletions of linked skills are not missed.
+生命周期与行为验收规则：
+- replaced-by 与 retirement-reason 仅允许出现在 deprecated 或 retired 技能中。
+- replaced-by 指向的目标技能必须存在、名称与目录一致、状态为 active，并在 supersedes 中回指前驱技能；
+  替代链成环时作为错误报出。
+- supersedes 中仍存在于工作区的技能须为 deprecated/retired 并以 replaced-by 回指；已删除的历史名予以放行。
+- 终结退役：仅声明 retirement-reason 且无 replaced-by 时表示无替代技能，不得再出现在其他技能的 supersedes 中。
+- verification 条目必须命中 VERIFICATION_GATES 白名单，绝不执行 YAML 中的命令；文件入口须存在于当前检出，
+  mvn/pnpm 入口必须匹配 .github/workflows/ci.yml 中对应的稳定步骤 id。
+- 传入子集路径时，声明生命周期关联的技能始终重新校验，避免遗漏关联技能改名或删除。
 @author 李杰
 """
 

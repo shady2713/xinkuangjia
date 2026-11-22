@@ -79,8 +79,11 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("trusted gate: --repo must be a bare Git object store")
     checkout = sha(args.checkout_sha, "checkout")
     try:
-        with open(args.event, encoding="utf-8") as handle:
-            event = json.load(handle)
+        with open(args.event, "rb") as handle:
+            raw_event = handle.read(trusted_ci.MAX_BYTES + 1)
+        if len(raw_event) > trusted_ci.MAX_BYTES:
+            raise ValueError("event too large")
+        event = json.loads(raw_event)
     except (OSError, ValueError):
         raise SystemExit("trusted gate: event unreadable") from None
     base, head = pr_sha(event, "base"), pr_sha(event, "head")
@@ -98,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
     verified = run_trusted(VERIFIER, repo, review)
     scanned = run_trusted(SCANNER, repo, ["--base", base, "--head", head])
     print(json.dumps({"review": verified, "secrets": scanned, "workflows": workflows}, sort_keys=True), file=sys.stderr)
+    if verified not in (0, 1) or scanned not in (0, 1):
+        return 2
     return 0 if verified == 0 and scanned == 0 else 1
 
 

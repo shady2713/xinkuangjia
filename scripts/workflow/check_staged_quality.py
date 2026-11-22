@@ -43,6 +43,7 @@ from scripts.common.staged_content import (
 )
 
 RULE_FILE = "scripts/tools/document_rules.py"
+CI_WORKFLOW_FILE = ".github/workflows/ci.yml"
 SOURCE_SUFFIXES = {".java", ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue"}
 WEB_SUFFIXES = SOURCE_SUFFIXES - {".java", ".py"}
 DOC_MODULES = {
@@ -78,6 +79,7 @@ def needs_documents(changes: list[Change]) -> bool:
         and (
             Path(item.path).suffix in SOURCE_SUFFIXES | {".md"}
             or item.status == "D"
+            or item.path == CI_WORKFLOW_FILE
             or item.path.endswith("/agents/openai.yaml")
             or Path(item.path).name in {"package.json", "pom.xml", "pyproject.toml"}
         )
@@ -163,8 +165,8 @@ def document_scopes(
         and item.path.endswith("/SKILL.md")
         for item in changes
     )
-    if deleted_skills:
-        # 删除技能可能使其他技能的 replaced-by 或跨技能引用悬空，须补查全部剩余技能。
+    if deleted_skills or CI_WORKFLOW_FILE in touched:
+        # 删除技能或修改主工作流步骤 ID 可能使其他技能的引用/门禁映射悬空，须补查全部剩余技能。
         skill_paths = sorted(
             name
             for name in available
@@ -272,6 +274,7 @@ def check_documents(
         if name.endswith(".md")
         or name.endswith("/agents/openai.yaml")
         or name == RULE_FILE
+        or name == CI_WORKFLOW_FILE
         or (
             not excluded(Path(name))
             and Path(name).suffix in SOURCE_SUFFIXES

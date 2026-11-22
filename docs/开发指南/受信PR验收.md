@@ -33,7 +33,7 @@ kind: package-reference
 ```bash
 set -euo pipefail
 gh api --hostname github.com "repos/$REPO/actions/workflows/$WORKFLOW" > workflow.json
-gh api --hostname github.com --paginate "repos/$REPO/actions/workflows/$WORKFLOW/runs?event=pull_request&per_page=100" \
+gh api --hostname github.com --paginate "repos/$REPO/actions/workflows/$WORKFLOW/runs?event=pull_request&head_sha=$HEAD_SHA&per_page=100" \
   --jq '.workflow_runs[]' | jq -s . > runs.json
 # 从 runs.json 选取上文定义的 RUN_ID，再获取作业和制品。
 gh api --hostname github.com "repos/$REPO/actions/runs/$RUN_ID" > run.json

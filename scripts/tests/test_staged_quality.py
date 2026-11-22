@@ -686,3 +686,29 @@ def test_deleted_skill_expands_scope_to_catch_broken_replaced_by(
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert "replaced-by 指向不存在的技能：weetion-doc-trim-cot-leakage" in result.stdout
+
+
+def test_editing_skill_with_verification_materializes_ci_workflow(
+    private_index: dict[str, str],
+) -> None:
+    """修改含 verification 元数据的技能时，临时视图必须物化 ci.yml 而不是空占位文件。"""
+    target = ".agents/skills/weetion-development-java-standards/SKILL.md"
+    original = (DEFAULT_ROOT / target).read_text(encoding="utf-8")
+    stage_blob(private_index, target, original + "\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            "-B",
+            str(DEFAULT_ROOT / "scripts/workflow/check_staged_quality.py"),
+        ],
+        cwd=DEFAULT_ROOT,
+        env=private_index,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "skills：检查 1 个对象，发现 0 个问题" in result.stdout

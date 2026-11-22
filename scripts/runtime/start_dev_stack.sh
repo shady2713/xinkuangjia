@@ -21,9 +21,18 @@ for f in .env.dev "$backend_env" .e2e-env/minio-bucket-policy.json; do
 done
 
 # 每次启动读取一次有效配置。独立快照使初始化过程不受后来生成的策略文件影响。
+python_bin=
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import sys" >/dev/null 2>&1; then
+    python_bin=$candidate
+    break
+  fi
+done
+[ -n "$python_bin" ] || fail "python3 or python is required"
+
 policy=$(mktemp "$root/.e2e-env/validated-policy.XXXXXXXX") || fail "cannot create policy snapshot"
-trap 'unlink "$policy"' 0
-settings=$(python3 -B -X utf8 "$root/scripts/runtime/init_local_dev.py" --check-bucket-policy "$policy" -- "$@") \
+trap 'rm -f "$policy"' EXIT INT TERM HUP
+settings=$("$python_bin" -B -X utf8 "$root/scripts/runtime/init_local_dev.py" --check-bucket-policy "$policy" -- "$@") \
   || fail "MinIO settings or policy do not match"
 IFS=' ' read -r MINIO_BUCKET MINIO_PUBLIC_ACCESS MINIO_ENDPOINT MINIO_API_PORT <<EOF
 $settings
@@ -34,6 +43,10 @@ BASICFRAMEWORK_FILE_MINIO_ENDPOINT=$MINIO_ENDPOINT
 export MINIO_BUCKET MINIO_PUBLIC_ACCESS MINIO_ENDPOINT MINIO_API_PORT
 export BASICFRAMEWORK_FILE_MINIO_BUCKET BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS BASICFRAMEWORK_FILE_MINIO_ENDPOINT
 chmod a+r "$policy"
+policy_for_docker=$policy
+if command -v cygpath >/dev/null 2>&1; then
+  policy_for_docker=$(cygpath -m "$policy")
+fi
 
 # 后端使用宿主机环回端口，要求 Compose 连接本地 Docker。
 docker_endpoint=${DOCKER_HOST:-}
@@ -46,7 +59,7 @@ case "$docker_endpoint" in
 esac
 
 dc() {
-  DOCKER_CONTEXT= DOCKER_HOST="$docker_endpoint" MINIO_POLICY_FILE="$policy" \
+  DOCKER_CONTEXT= DOCKER_HOST="$docker_endpoint" MINIO_POLICY_FILE="$policy_for_docker" \
     docker compose -f "$root/docker-compose.dev.yml" --env-file "$root/.env.dev" "$@"
 }
 dc up --build -d --wait mysql redis minio || fail "mysql/redis/minio did not become healthy"
@@ -55,8 +68,8 @@ published=$(dc port minio 9000) || fail "cannot read published MinIO endpoint"
 # 旧卷也启动一次新的初始化容器并等待策略读回。
 dc run --rm --no-deps minio-init || fail "minio-init policy apply/readback failed"
 
-unlink "$policy"
-trap - 0
+rm -f "$policy"
+trap - EXIT INT TERM HUP
 if [ "$#" -gt 0 ]; then
   exec "$@"
 fi

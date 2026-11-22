@@ -77,7 +77,7 @@ flowchart LR
 
 ### 7. CI 全绿与人工确认合并（Gate & Merge）
 
-- GitHub Actions [CI](../../.github/workflows/ci.yml) 的五个必过任务（`backend`、`frontend`、`docs-comments`、`pytest`、`secrets-scan`）全部通过后，由维护者人工确认再合入 `main` 分支，AI 不自行合并受保护主干。
+- GitHub Actions [CI](../../.github/workflows/ci.yml) 的五个必过任务（`backend`、`frontend`、`docs-comments`、`pytest`、`secrets-scan`）及 `acceptance` 验收汇总、[attachment-integration.yml](../../.github/workflows/attachment-integration.yml) 真实附件集成全部通过后，按[受信 PR 验收](受信PR验收.md)核对同版本证据并由维护者确认合入 `main` 分支，AI 不未经授权自行合并受保护主干。
 
 -----
 
@@ -110,7 +110,8 @@ git worktree remove ../06kuangjiaxin-wt-feature
 | Vue、TypeScript、OpenAPI 契约、工作区包清单或 ESLint | `pnpm run quality:gates`、`pnpm run test:e2e:ci` | `frontend (unit + typecheck + lint + build)` |
 | Markdown 文档、README、Skill 或代码注释 | `python -B -X utf8 scripts/workflow/run_checks.py --group docs`、`check_staged_quality.py` | `docs + comments` |
 | Python 质量脚本、脚手架工具或跨栈约束 | `python -B -X utf8 -m pytest scripts/tests` | `pytest (scripts/tests)` |
-| 配置文件、测试夹具与任意新增变更 | `python -B -X utf8 scripts/security/scan_staged_secrets.py` | `secrets scan (staged-equivalent)` |
+| 配置文件、测试夹具与任意新增变更 | `python -B -X utf8 scripts/security/scan_staged_secrets.py`（分支范围加 `--base <SHA> --head HEAD`） | `secrets scan (staged-equivalent)` |
+| PR 汇总证据、技能验证与真实附件集成 | `python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan`、`sh scripts/runtime/start_dev_stack.sh` | `acceptance`、[attachment-integration.yml](../../.github/workflows/attachment-integration.yml) |
 
 -----
 

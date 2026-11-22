@@ -294,26 +294,28 @@ def build_slice_plan(
         p for p in changed_files if p.startswith("后端代码/basic-framework-boot/") and p.endswith(".java")
     ]
     java_modules = resolve_java_modules(resolved, changed_files)
-    web_files = [
+    web_touched = [
         p
         for p in changed_files
         if p.startswith("前端代码/basic-framework-admin/")
         and Path(p).suffix.lower() in WEB_SOURCE_SUFFIXES
         and not p.endswith(".d.ts")
-        and (resolved / p).is_file()
     ]
+    web_files = [p for p in web_touched if (resolved / p).is_file()]
     web_openapi_changed = any(
         p.startswith("前端代码/basic-framework-admin/apps/web-ele/src/api/generated/")
         for p in changed_files
     )
-    python_files = [p for p in changed_files if p.endswith(".py") and (resolved / p).is_file()]
+    python_touched = [p for p in changed_files if p.endswith(".py")]
+    python_files = [p for p in python_touched if (resolved / p).is_file()]
     web_quality_py_changed = any(
-        p.startswith("前端代码/basic-framework-admin/scripts/quality/") for p in python_files
+        p.startswith("前端代码/basic-framework-admin/scripts/quality/") for p in python_touched
     )
     doc_files = [
         p
         for p in changed_files
         if p.endswith(".md")
+        or p.endswith("/agents/openai.yaml")
         or Path(p).name in {"package.json", "pom.xml", "pyproject.toml", "document_rules.py"}
     ]
 
@@ -338,7 +340,16 @@ def build_slice_plan(
     wt_python_files = [p for p in worktree_changed if p.endswith(".py") and (resolved / p).is_file()]
 
     has_staged = _has_staged_changes(resolved)
-    ci_workflow_changed = any(p == ".github/workflows/ci.yml" for p in changed_files)
+    has_committed = _has_committed_diff(resolved, effective_base)
+    ci_workflow_changed = any(
+        p in {".github/workflows/ci.yml", ".github/workflows/attachment-integration.yml"}
+        for p in changed_files
+    )
+    dev_stack_changed = any(
+        p in {"docker-compose.dev.yml", "scripts/runtime/start_dev_stack.sh"}
+        or p.startswith("tools/minio/")
+        for p in changed_files
+    )
 
     steps: list[SliceStep] = []
     if has_staged:
@@ -349,10 +360,28 @@ def build_slice_plan(
                 command=(py_exe, "-B", "-X", "utf8", "scripts/security/scan_staged_secrets.py"),
             )
         )
+    elif effective_base != "HEAD" and has_committed:
+        steps.append(
+            SliceStep(
+                name="branch-secrets",
+                cwd=str(resolved),
+                command=(
+                    py_exe,
+                    "-B",
+                    "-X",
+                    "utf8",
+                    "scripts/security/scan_staged_secrets.py",
+                    "--base",
+                    effective_base,
+                    "--head",
+                    "HEAD",
+                ),
+            )
+        )
 
     if (
         effective_base != "HEAD"
-        and _has_committed_diff(resolved, effective_base)
+        and has_committed
         and (java_files or python_files or web_files)
     ):
         # 对比分支基线时覆蓋 base..HEAD 已提交的增量声明；未提交的工作区改动仍在下方补齐。
@@ -437,13 +466,17 @@ def build_slice_plan(
     sql_changed = any(p == "数据库文件/basic_framework.sql" for p in changed_files)
     py_slice_runs_all = False
     if not skip_runtime:
-        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files):
+        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_touched):
             py_tests = [p for p in python_files if p.startswith("scripts/tests/test_")]
             has_non_test_py = any(
                 p.startswith(("scripts/", ".agents/skills/")) and not p.startswith("scripts/tests/")
-                for p in python_files
+                for p in python_touched
             )
-            py_slice_runs_all = has_non_test_py or not py_tests
+            has_deleted_py_test = any(
+                p.startswith("scripts/tests/test_") and p not in python_files
+                for p in python_touched
+            )
+            py_slice_runs_all = has_non_test_py or has_deleted_py_test or not py_tests
             pytest_targets = ["scripts/tests"] if py_slice_runs_all else py_tests
             steps.append(
                 SliceStep(
@@ -466,6 +499,23 @@ def build_slice_plan(
                         "pytest",
                         "-q",
                         "scripts/tests/test_ci_baselines.py",
+                    ),
+                )
+            )
+        if dev_stack_changed and not py_slice_runs_all:
+            steps.append(
+                SliceStep(
+                    name="dev-stack-pytest",
+                    cwd=str(resolved),
+                    command=(
+                        py_exe,
+                        "-B",
+                        "-X",
+                        "utf8",
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "scripts/tests/test_init_local_dev.py",
                     ),
                 )
             )
@@ -534,12 +584,12 @@ def build_slice_plan(
                             ),
                         )
                     )
-        if web_files or web_openapi_changed:
+        if web_touched or web_openapi_changed:
             pnpm_bin = shutil.which("pnpm") or shutil.which("pnpm.cmd")
             if pnpm_bin is None:
                 steps.append(
                     SliceStep(
-                        name="web-slice-eslint" if web_files else "web-slice-api-check",
+                        name="web-slice-eslint" if web_files else "web-slice-typecheck" if web_touched else "web-slice-api-check",
                         cwd=str(web_dir),
                         command=(
                             py_exe,
@@ -561,6 +611,7 @@ def build_slice_plan(
                             command=(pnpm_bin, "exec", "eslint", "--cache", *rel_web),
                         )
                     )
+                if web_touched:
                     steps.append(
                         SliceStep(
                             name="web-slice-typecheck",
@@ -568,6 +619,7 @@ def build_slice_plan(
                             command=(pnpm_bin, "check:type"),
                         )
                     )
+                if web_files:
                     web_tests = _find_related_web_tests(web_dir, web_files)
                     if web_tests:
                         steps.append(
@@ -586,21 +638,23 @@ def build_slice_plan(
                 )
 
     skipped_steps: list[SkippedStep] = []
-    if effective_base != "HEAD" and changed_files and not has_staged:
+    if effective_base != "HEAD" and changed_files and not has_staged and not has_committed:
         skipped_steps.append(
             SkippedStep(
                 "base-secrets-scan",
-                "工作区无暂存变更，scan_staged_secrets 仅扫描索引；分支增量密钥由 CI secrets-scan 兜底",
+                "工作区存在未暂存改动且无已提交差异，请暂存后运行 scan_staged_secrets 覆盖本地密钥检查",
             )
         )
     if skip_runtime:
-        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_files) or web_quality_py_changed:
+        if any(p.startswith(("scripts/", ".agents/skills/")) for p in python_touched) or web_quality_py_changed:
             skipped_steps.append(SkippedStep("python-runtime-tests", "指定了 --skip-runtime"))
         if ci_workflow_changed:
             skipped_steps.append(SkippedStep("ci-workflow-pytest", "指定了 --skip-runtime"))
+        if dev_stack_changed:
+            skipped_steps.append(SkippedStep("dev-stack-pytest", "指定了 --skip-runtime"))
         if java_modules or sql_changed:
             skipped_steps.append(SkippedStep("maven-runtime-tests", "指定了 --skip-runtime"))
-        if web_files or web_openapi_changed:
+        if web_touched or web_openapi_changed:
             skipped_steps.append(SkippedStep("web-runtime-checks", "指定了 --skip-runtime"))
     if changed_files and not steps:
         skipped_steps.append(
@@ -612,13 +666,15 @@ def build_slice_plan(
 
     # Record every changed path that no existing exact category claims, even when
     # other paths in the same change set already produced verification steps.
-    matched_paths = set(java_files) | set(web_files) | set(python_files) | set(doc_files)
+    matched_paths = set(java_files) | set(web_touched) | set(python_touched) | set(doc_files)
     unmatched_files = [
         p
         for p in changed_files
         if p not in matched_paths
         and not p.startswith("前端代码/basic-framework-admin/apps/web-ele/src/api/generated/")
-        and p != ".github/workflows/ci.yml"
+        and p not in {".github/workflows/ci.yml", ".github/workflows/attachment-integration.yml"}
+        and p not in {"docker-compose.dev.yml", "scripts/runtime/start_dev_stack.sh"}
+        and not p.startswith("tools/minio/")
         and p != "数据库文件/basic_framework.sql"
         and not resolve_java_modules(resolved, [p])
     ]
