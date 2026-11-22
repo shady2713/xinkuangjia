@@ -140,7 +140,7 @@ jobs:
             fi
           fi
 
-          echo "Scanned commit $head_sha" >> "$GITHUB_STEP_SUMMARY"
+          echo "Scan target commit $head_sha" >> "$GITHUB_STEP_SUMMARY"
           "$bin_dir/gitleaks" git --no-banner --redact=100 --log-opts="--diff-merges=first-parent $log_opts" .
 
   smoke:

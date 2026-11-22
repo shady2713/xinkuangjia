@@ -17,7 +17,7 @@ Empty approvals and skipped or bypassed reviews do not count.
 The `secrets` job in `.github/workflows/ci.yml` does the following:
 
 - Downloads Gitleaks 8.24.2 (Linux x64). It extracts the archive only after the archive matches the pinned SHA256 from the upstream release checksums.
-- Checks out the exact event head commit. It validates event commit IDs before passing them to git.
+- Checks out the exact event head commit. It validates event commit IDs before passing them to git. Backend, frontend and smoke record the same source revision. Any merge-compatibility result has its own tested revision.
 - Scans `base..head` for pull requests and `before..after` for pushes. A new release candidate tag scans commits absent from the fetched main ref. An empty release candidate range scans all commits reachable from the checked-out head. For another new ref, an unavailable main comparison, or a missing push predecessor, it also scans all commits reachable from head. Gitleaks supplies `-p`, and `--diff-merges=first-parent` in `--log-opts` adds each merge commit's diff against its first parent, so the scan covers both merge commits and ordinary commits.
 - Runs `gitleaks git --redact=100` without verbose output or reports, which keeps source and finding details out of logs. A nonzero exit fails the job.
 
@@ -42,7 +42,7 @@ curl -sSfL --proto '=https' --tlsv1.2 -o "$work/download/$archive" \
 echo "${GITLEAKS_SHA256}  $work/download/$archive" | sha256sum --check --strict --quiet -
 tar -xzf "$work/download/$archive" -C "$work/bin" --no-same-owner gitleaks
 git rev-parse HEAD
-"$work/bin/gitleaks" git --no-banner --redact=100 --log-opts=--all .
+"$work/bin/gitleaks" git --no-banner --redact=100 --log-opts='--diff-merges=first-parent --all' .
 ```
 
-`--log-opts=--all` scans every commit reachable from any local ref, so refs you did not fetch are not covered. Record the printed SHA with the result. A nonzero exit means findings or a scanner error and must not be ignored.
+This scans every commit reachable from a fetched ref, including merge diffs against the first parent. Record the printed SHA with the result. A nonzero exit means findings or a scanner error and must not be ignored.
