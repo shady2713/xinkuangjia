@@ -20,7 +20,11 @@ import {
   sendSmsCode,
   smsResetPassword,
 } from '#/api/core/auth';
-import { showSuccessMessage } from '#/utils/feedback';
+import {
+  isErrorMessageHandled,
+  showError,
+  showSuccessMessage,
+} from '#/utils/feedback';
 import { encryptPassword } from '#/utils/sm2';
 
 defineOptions({ name: 'ForgetPassword' });
@@ -222,6 +226,9 @@ async function handleSubmit(values: Recordable<any>) {
     await router.push('/');
   } catch (error) {
     logError('auth:forget-password:submit', error);
+    if (!isErrorMessageHandled(error)) {
+      showError(error, '重置密码失败，请稍后重试');
+    }
   } finally {
     loading.value = false;
   }

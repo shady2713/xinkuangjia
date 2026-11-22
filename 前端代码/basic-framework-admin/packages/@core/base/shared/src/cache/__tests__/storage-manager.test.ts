@@ -296,5 +296,30 @@ describe('storageManager', () => {
       rawStorage.clear();
       expect(localStorage.getItem('shared')).toBeNull();
     });
+
+    it('should end raw key ownership when prefixed clear removes the entry and handle non-envelope JSON & ttl=0', () => {
+      rawStorage.setItem('app-k', 1);
+      const prefixed = new StorageManager({ prefix: 'app' });
+      prefixed.clear();
+      expect(localStorage.getItem('app-k')).toBeNull();
+      // 外部重新写入相同字节后，空前缀实例不再拥有该键，clear() 不得误删
+      localStorage.setItem('app-k', JSON.stringify({ value: 1 }));
+      rawStorage.clear();
+      expect(localStorage.getItem('app-k')).toBe(JSON.stringify({ value: 1 }));
+
+      localStorage.setItem('bad-envelope', '{}');
+      expect(rawStorage.getItem('bad-envelope', 'fallback')).toBe('fallback');
+      expect(localStorage.getItem('bad-envelope')).toBeNull();
+
+      vi.useFakeTimers();
+      try {
+        vi.setSystemTime(new Date('2026-11-22T00:00:00Z'));
+        rawStorage.setItem('zero-ttl', 'v', 0);
+        vi.advanceTimersByTime(1);
+        expect(rawStorage.getItem('zero-ttl')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

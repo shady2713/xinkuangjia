@@ -58,13 +58,22 @@ export async function initStores(app: App, options: InitStoreOptions) {
       storage: ls
         ? {
             /**
-             * 通过 SecureLS 读取混淆持久化条目。
+             * 通过 SecureLS 读取混淆持久化条目；密钥轮换或旧明文损坏时清理失效键并返回 null，防止阻断启动。
              *
              * @param key 持久化键名
-             * @returns 解码后的字符串内容，不存在或校验失败时为空
+             * @returns 解码后的字符串内容，不存在或解密失败时返回 null
              */
             getItem(key) {
-              return ls.get(key);
+              try {
+                return ls.get(key) ?? null;
+              } catch {
+                try {
+                  localStorage.removeItem(key);
+                } catch {
+                  // 忽略受限存储清理失败
+                }
+                return null;
+              }
             },
             /**
              * 通过 SecureLS 写入混淆持久化条目。

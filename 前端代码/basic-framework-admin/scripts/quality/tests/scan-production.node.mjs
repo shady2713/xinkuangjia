@@ -101,3 +101,27 @@ test('本机接口地址与非空默认凭据被阻断', /** 验证非空开发�
   assert.ok(findings.some((item) => item.includes('不应预填登录用户名')));
   assert.ok(findings.some((item) => item.includes('不应预填登录密码')));
 });
+
+test('拦截配置对象后置属性篡改及非空存储密钥', /** 验证后置属性赋值绕过与存储密钥预填均被阻断。 */ () => {
+  const mutatedConfig = `
+  window._VBEN_ADMIN_PRO_APP_CONF_ = {
+    VITE_GLOB_API_URL: '/admin-api',
+    VITE_APP_DEFAULT_USERNAME: '',
+    VITE_APP_DEFAULT_PASSWORD: '',
+    VITE_APP_STORE_SECURE_KEY: 'CHANGE_ME_LEAK',
+  };
+  window._VBEN_ADMIN_PRO_APP_CONF_.VITE_APP_DEFAULT_PASSWORD = 'CHANGE_ME_MUTATED';
+  `;
+  const findings = [];
+  validateRuntimeConfigContent(mutatedConfig, 'app.config.js', findings);
+  assert.ok(
+    findings.some((item) =>
+      item.includes('额外修改 window._VBEN_ADMIN_PRO_APP_CONF_ 属性'),
+    ),
+    `应拦截后置属性改写，实际：${findings.join('; ')}`,
+  );
+  assert.ok(
+    findings.some((item) => item.includes('不应预填本地存储加密密钥')),
+    `应拦截非空存储密钥，实际：${findings.join('; ')}`,
+  );
+});

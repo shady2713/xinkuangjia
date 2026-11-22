@@ -65,11 +65,25 @@ async function main() {
         );
       }
       if (
-        relPath.startsWith('apps/') &&
-        /\bimport\.meta\.env\.VITE_APP_(?:API_ENCRYPT_|DEFAULT_)/u.test(content)
+        !relPath.includes('/__tests__/') &&
+        !relPath.endsWith('.test.ts') &&
+        !relPath.endsWith('.spec.ts') &&
+        /\.(?:innerHTML|outerHTML)\s*=|\.insertAdjacentHTML\s*\(|\bdocument\.write\s*\(/u.test(
+          content,
+        )
       ) {
         findings.push(
-          `${relPath}：禁止在应用源码直接读取构建期加密或默认凭据环境变量，请通过 @vben/hooks 运行时配置读取`,
+          `${relPath}：禁止直接操作 innerHTML/outerHTML/insertAdjacentHTML/document.write，请改用安全模板或 VNode`,
+        );
+      }
+      if (
+        relPath.startsWith('apps/') &&
+        /\bimport\.meta\.env\.VITE_APP_(?:API_ENCRYPT_|DEFAULT_|STORE_SECURE_KEY)/u.test(
+          content,
+        )
+      ) {
+        findings.push(
+          `${relPath}：禁止在应用源码直接读取构建期加密、存储密钥或默认凭据环境变量，请通过 @vben/hooks 运行时配置读取`,
         );
       }
     }
@@ -180,6 +194,21 @@ function validateRuntimeConfigContent(content, displayFile, findings) {
     displayFile,
     findings,
   );
+  for (const [fieldName, reason] of [
+    ['VITE_APP_STORE_SECURE_KEY', '不应预填本地存储加密密钥'],
+    ['VITE_APP_API_ENCRYPT_REQUEST_KEY', '不应预填接口请求加密密钥'],
+    ['VITE_APP_API_ENCRYPT_RESPONSE_KEY', '不应预填接口响应解密密钥'],
+  ]) {
+    if (parsed.fields.has(fieldName)) {
+      validateRequiredEmptyField(
+        parsed,
+        fieldName,
+        reason,
+        displayFile,
+        findings,
+      );
+    }
+  }
 }
 
 /**
@@ -324,6 +353,7 @@ function inspectRuntimeConfigSource(content) {
   }
 
   const assignments = [];
+  const mutationErrors = [];
   for (const statement of sourceFile.statements) {
     if (
       !ts.isExpressionStatement(statement) ||
@@ -334,6 +364,10 @@ function inspectRuntimeConfigSource(content) {
     }
     if (isAppConfigTarget(statement.expression.left)) {
       assignments.push(statement.expression.right);
+    } else if (isAppConfigMemberTarget(statement.expression.left)) {
+      mutationErrors.push(
+        '禁止在顶层对象字面量赋值后额外修改 window._VBEN_ADMIN_PRO_APP_CONF_ 属性',
+      );
     }
   }
 
@@ -368,7 +402,7 @@ function inspectRuntimeConfigSource(content) {
   }
 
   const fields = new Map();
-  const structuralErrors = [];
+  const structuralErrors = [...mutationErrors];
   for (const prop of rhs.properties) {
     if (!ts.isPropertyAssignment(prop)) {
       structuralErrors.push('对象字面量仅允许静态键值属性，禁止展开或简写属性');
@@ -450,6 +484,23 @@ function isAppConfigTarget(node) {
     target.argumentExpression.text === '_VBEN_ADMIN_PRO_APP_CONF_'
   ) {
     return true;
+  }
+  return false;
+}
+
+/**
+ * 判断赋值左值是否为 `window._VBEN_ADMIN_PRO_APP_CONF_` 的属性或下标改写。
+ *
+ * @param node 赋值表达式左值 AST 节点
+ * @returns 命中运行时配置成员改写时返回 true
+ */
+function isAppConfigMemberTarget(node) {
+  const target = unwrapParenthesized(node);
+  if (
+    ts.isPropertyAccessExpression(target) ||
+    ts.isElementAccessExpression(target)
+  ) {
+    return isAppConfigTarget(target.expression);
   }
   return false;
 }

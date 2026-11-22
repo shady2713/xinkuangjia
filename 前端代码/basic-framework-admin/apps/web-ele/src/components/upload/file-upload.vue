@@ -87,8 +87,6 @@ const isUsingModelValue = computed(() => {
 });
 
 const fileList = ref<UploadFile[]>([]);
-const isLtMsg = ref<boolean>(true); // 文件大小错误提示
-const isActMsg = ref<boolean>(true); // 文件类型错误提示
 const isFirstRender = ref<boolean>(true); // 是否第一次渲染
 const uploadNumber = ref<number>(0); // 上传文件计数器
 const uploadList = ref<any[]>([]); // 临时上传列表
@@ -216,17 +214,11 @@ function beforeUpload(file: File) {
   const isAct = checkFileType(file, accept);
   if (!isAct) {
     showErrorMessage($t('ui.upload.acceptUpload', [accept]));
-    isActMsg.value = false;
-    // 防止弹出多个错误提示
-    setTimeout(() => (isActMsg.value = true), 1000);
     return false;
   }
   const isLt = file.size / 1024 / 1024 > maxSize;
   if (isLt) {
     showErrorMessage($t('ui.upload.maxSizeMultiple', [maxSize]));
-    isLtMsg.value = false;
-    // 防止弹出多个错误提示
-    setTimeout(() => (isLtMsg.value = true), 1000);
     return false;
   }
 

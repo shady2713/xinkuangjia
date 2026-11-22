@@ -160,10 +160,17 @@ function getBase64<T extends ArrayBuffer | null | string>(file: File) {
   });
 }
 
-/** 处理图片预览 */
+/**
+ * 处理图片预览；无远端地址时从本地原始文件生成预览图。
+ *
+ * @param file 待预览的上传文件项
+ */
 async function handlePreview(file: UploadFile) {
   if (!file.url) {
-    file.url = await getBase64<string>(file.raw!);
+    if (!file.raw) {
+      return;
+    }
+    file.url = await getBase64<string>(file.raw);
   }
   previewImage.value = file.url || '';
   previewOpen.value = true;
@@ -279,10 +286,11 @@ function handleUploadSuccess(res: UploadApiResult, file: File) {
     fileList.value?.splice(index, 1);
   }
 
-  // 保留 response 字段以支持 resolveUploadValue 按 props.resultField 解析自定义结果
+  // 保留 response 与 raw 字段以支持 resultField 解析及私有图片本地预览
   const fileUrl = resolveUploadUrl(res);
   uploadList.value.push({
     name: file.name,
+    raw: file as UploadRawFile,
     response: res,
     status: UploadResultStatus.SUCCESS,
     uid: rawUid ?? Date.now() + uploadList.value.length,

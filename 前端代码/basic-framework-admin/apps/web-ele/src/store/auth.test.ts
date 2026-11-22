@@ -28,7 +28,7 @@ const mockAccessState = {
    *
    * @param _menus 菜单数组
    */
-  setAccessMenus(_menus: unknown[]) {},
+  setAccessMenus: vi.fn((_menus: unknown[]) => {}),
   /**
    * 更新访问令牌。
    *
@@ -284,6 +284,44 @@ async function clearsTokensWhenFetchUserInfoFailsDuringNormalLogin() {
   expect(mockAccessState.refreshToken).toBeNull();
 }
 
+/** 验证弹窗重登录拉取权限失败时回滚新令牌，且成功时不以原始菜单覆盖已转换菜单。 */
+async function preservesMenusAndRollsBackTokensDuringModalRelogin() {
+  mockAccessState.loginExpired = true;
+  mockAccessState.accessToken = 'CHANGE_ME_PREV_ACCESS';
+  mockAccessState.refreshToken = 'CHANGE_ME_PREV_REFRESH';
+  vi.mocked(loginApi).mockResolvedValue({
+    accessToken: 'CHANGE_ME_MODAL_ACCESS',
+    passwordChangeRequired: true,
+    refreshToken: 'CHANGE_ME_MODAL_REFRESH',
+  } as any);
+  vi.mocked(getAuthPermissionInfoApi).mockRejectedValueOnce(
+    new Error('modal fetch failed'),
+  );
+
+  const authStore = useAuthStore();
+  await expect(
+    authStore.authLogin('username', {
+      password: 'CHANGE_ME_PASSWORD',
+      username: 'admin',
+    }),
+  ).rejects.toThrow('modal fetch failed');
+  expect(mockAccessState.accessToken).toBe('CHANGE_ME_PREV_ACCESS');
+  expect(mockAccessState.refreshToken).toBe('CHANGE_ME_PREV_REFRESH');
+  expect(authStore.passwordChangeRequired).toBe(false);
+
+  vi.mocked(getAuthPermissionInfoApi).mockResolvedValueOnce({
+    menus: [{ id: 1, name: 'raw' }],
+    permissions: ['system:user:query'],
+    roles: ['super_admin'],
+    user: { id: 1, nickname: '管理员', username: 'admin' },
+  } as any);
+  await authStore.authLogin('username', {
+    password: 'CHANGE_ME_PASSWORD',
+    username: 'admin',
+  });
+  expect(mockAccessState.setAccessMenus).not.toHaveBeenCalled();
+}
+
 /** 认证 store 行为测试套件。 */
 function authStoreSuite() {
   beforeEach(setupAuthStoreTest);
@@ -299,6 +337,10 @@ function authStoreSuite() {
   it(
     '普通登录拉取权限信息失败时回滚已写入令牌',
     clearsTokensWhenFetchUserInfoFailsDuringNormalLogin,
+  );
+  it(
+    '弹窗重登录失败回滚令牌且成功不覆盖已转换菜单',
+    preservesMenusAndRollsBackTokensDuringModalRelogin,
   );
 }
 

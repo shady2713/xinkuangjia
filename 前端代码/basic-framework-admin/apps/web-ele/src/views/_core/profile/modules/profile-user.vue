@@ -12,6 +12,7 @@ import { ElDescriptions, ElDescriptionsItem, ElTooltip } from 'element-plus';
 import { updateUserProfile } from '#/api/system/user/profile';
 import { CropperAvatar } from '#/components/cropper';
 import { useUpload } from '#/components/upload/use-upload';
+import { showErrorMessage } from '#/utils/feedback';
 
 const props = defineProps<{
   profile?: SystemUserProfileApi.UserProfileRespVO;
@@ -25,6 +26,13 @@ const avatar = computed(
   () => props.profile?.avatar || preferences.app.defaultAvatar,
 );
 
+/**
+ * 上传裁剪后的用户头像并保存公开地址；存储处于私有模式返回空地址时阻止清空原头像。
+ *
+ * @param payload 上传文件载荷
+ * @param payload.file 裁剪后的图片二进制对象
+ * @param payload.filename 目标文件名
+ */
 async function handelUpload({
   file,
   filename,
@@ -32,13 +40,17 @@ async function handelUpload({
   file: Blob;
   filename: string;
 }) {
-  // 1. 上传头像，获取 URL
+  // 1. 上传头像，获取公开可持久化的 URL
   const { httpRequest } = useUpload();
   // 将 Blob 转换为 File
   const fileObj = new File([file], filename, { type: file.type });
-  const avatar = await httpRequest(fileObj);
+  const uploadedAvatar = await httpRequest(fileObj);
+  if (!uploadedAvatar) {
+    showErrorMessage('当前存储处于私有模式，无法保存公开头像地址');
+    throw new Error('empty avatar url');
+  }
   // 2. 更新用户头像
-  await updateUserProfile({ avatar });
+  await updateUserProfile({ avatar: uploadedAvatar });
 }
 </script>
 

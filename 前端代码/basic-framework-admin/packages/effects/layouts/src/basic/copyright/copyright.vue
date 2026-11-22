@@ -24,13 +24,17 @@ withDefaults(defineProps<Props>(), {
   <div class="text-md flex-center">
     <!-- ICP Link -->
     <a
-      v-if="icp"
-      :href="icpLink || 'javascript:void(0)'"
+      v-if="icp && icpLink"
+      :href="icpLink"
       class="hover:text-primary-hover mx-1"
+      rel="noopener noreferrer"
       target="_blank"
     >
       {{ icp }}
     </a>
+    <span v-else-if="icp" class="mx-1">
+      {{ icp }}
+    </span>
 
     <!-- Copyright Text -->
     Copyright © {{ date }}
@@ -40,6 +44,7 @@ withDefaults(defineProps<Props>(), {
       v-if="companyName && companySiteLink"
       :href="companySiteLink"
       class="hover:text-primary-hover mx-1"
+      rel="noopener noreferrer"
       target="_blank"
     >
       {{ companyName }}

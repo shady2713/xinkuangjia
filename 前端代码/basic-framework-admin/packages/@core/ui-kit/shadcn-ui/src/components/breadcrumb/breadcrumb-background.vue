@@ -25,10 +25,7 @@ function handleClick(index: number, path?: string) {
         :key="`${item.path}-${item.title}-${index}`"
       >
         <li>
-          <a
-            href="javascript:void 0"
-            @click.stop="handleClick(index, item.path)"
-          >
+          <a href="#" @click.stop.prevent="handleClick(index, item.path)">
             <span class="flex-center z-10 h-full">
               <VbenIcon
                 v-if="showIcon"
