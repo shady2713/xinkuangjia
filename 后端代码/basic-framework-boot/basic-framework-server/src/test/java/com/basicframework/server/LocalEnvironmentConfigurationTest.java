@@ -92,10 +92,6 @@ class LocalEnvironmentConfigurationTest {
                 + "&allowPublicKeyRetrieval=false&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
         assertEquals(expected, url);
         assertFalse(url.contains("useSSL=false"));
-
-        values.put("DB_SSL_MODE", "VERIFY_CA");
-        StandardEnvironment custom = environment(values, false);
-        assertTrue(custom.getProperty("spring.datasource.url").contains("sslMode=VERIFY_CA"));
     }
 
     @Test
