@@ -1,0 +1,3 @@
+# 仅豁免已核实的纯单测合成夹具（非真实密钥）
+前端代码/basic-framework-admin/apps/web-ele/src/utils/sm2.test.ts:generic-api-key:25
+前端代码/basic-framework-admin/packages/@core/base/shared/src/utils/__tests__/encrypt.test.ts:generic-api-key:5
