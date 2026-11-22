@@ -101,8 +101,11 @@ function removeLegacyKeys(): void {
 /** Single in-memory session state; every getter reads from here. */
 const session = shallowRef<SessionSnapshot>(readStoredSession());
 
+/** Whether the last installed snapshot came from a storage read rather than a same-tab write. */
+let sessionFromStorage = false;
+
 /** Replaces the reactive snapshot only when a field differs, avoiding redundant notifications. */
-function applySession(next: SessionSnapshot): void {
+function applySession(next: SessionSnapshot, fromStorage = false): void {
   const current = session.value;
   if (
     current.accessToken !== next.accessToken ||
@@ -110,6 +113,7 @@ function applySession(next: SessionSnapshot): void {
     current.passwordChangeRequired !== next.passwordChangeRequired ||
     current.sessionId !== next.sessionId
   ) {
+    sessionFromStorage = fromStorage;
     session.value = next;
   }
 }
@@ -120,7 +124,7 @@ function syncSession(): void {
   if (!next.sessionId) {
     legacyId = null;
   }
-  applySession(next);
+  applySession(next, true);
 }
 
 /** Writes the whole snapshot at once, then drops legacy keys it supersedes. */
@@ -152,6 +156,11 @@ export const sessionId = computed(() => session.value.sessionId);
 export function getSessionId(): string | null {
   syncSession();
   return session.value.sessionId;
+}
+
+/** True when the last session change was read from localStorage (another tab or an early sync). */
+export function isSessionFromStorage(): boolean {
+  return sessionFromStorage;
 }
 
 export function getAccessToken(): string {
