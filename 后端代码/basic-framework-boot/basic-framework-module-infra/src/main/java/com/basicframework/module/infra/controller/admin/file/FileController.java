@@ -234,7 +234,8 @@ public class FileController {
         // 获取请求的路径
         String path = StrUtil.subAfter(request.getRequestURI(), "/content/", false);
         if (StrUtil.isEmpty(path)) {
-            throw new IllegalArgumentException("结尾的 path 路径必须传递");
+            response.setStatus(HttpStatus.NOT_FOUND.value());
+            return;
         }
         // URL 解码以支持包含中文字符的相对对象路径。
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);

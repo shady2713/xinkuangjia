@@ -4,6 +4,7 @@ import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -80,6 +81,15 @@ public interface OAuth2TokenService {
      * @return 被移除的访问令牌信息；不存在时返回 null
      */
     OAuth2AccessTokenDO removeAccessTokenById(Long id, String operatorPlatformType);
+
+    /**
+     * 按令牌记录主键集合在单一事务内原子校验并批量吊销访问令牌。
+     *
+     * @param ids 令牌记录编号集合
+     * @param operatorPlatformType 操作者所属管理平台类型
+     * @return 实际被移除的访问令牌列表
+     */
+    List<OAuth2AccessTokenDO> removeAccessTokenByIds(Collection<Long> ids, String operatorPlatformType);
 
     /**
      * 移除指定用户的访问令牌和关联刷新令牌。

@@ -118,6 +118,16 @@ class GlobalExceptionHandlerTest {
                 handler.methodArgumentTypeInvalidFormatExceptionHandler(
                         new org.springframework.http.converter.HttpMessageNotReadableException("bad body", invalidFormat, null));
         assertThat(formatResult.getMsg()).contains("status").doesNotContain("raw-input-payload");
+
+        ApiErrorLogCommonApi errorLogApi = mock(ApiErrorLogCommonApi.class);
+        GlobalExceptionHandler malformedHandler = new GlobalExceptionHandler("basic-framework-server", errorLogApi);
+        com.basicframework.framework.common.pojo.CommonResult<?> malformedResult =
+                malformedHandler.methodArgumentTypeInvalidFormatExceptionHandler(
+                        new org.springframework.http.converter.HttpMessageNotReadableException(
+                                "JSON parse error", new RuntimeException("unexpected token"), null));
+        assertThat(malformedResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(malformedResult.getMsg()).isEqualTo("请求参数格式错误");
+        org.mockito.Mockito.verifyNoInteractions(errorLogApi);
     }
 
     /** 用于提供 {@link ApiAccessLog#sanitizeKeys()} 元数据的测试控制器桩。 */

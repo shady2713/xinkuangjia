@@ -114,7 +114,6 @@ class FileServiceImplTest {
 
         setLoginUser(10L);
         when(fileStorageService.presignPutUrl(any(), eq("image/png"))).thenReturn("https://minio.local/put");
-        when(fileStorageService.presignGetUrl(any(), eq(null))).thenReturn("https://minio.local/files/a.png");
         FilePresignedUrlRespVO presigned = fileService.presignPutUrl("demo.png", null);
 
         setLoginUser(20L);
@@ -130,7 +129,6 @@ class FileServiceImplTest {
     void createFileValidatesObjectExistenceDuplicatePathAndOversizeCleanup() throws Exception {
         setLoginUser(10L);
         when(fileStorageService.presignPutUrl(any(), eq("image/png"))).thenReturn("https://minio.local/put");
-        when(fileStorageService.presignGetUrl(any(), eq(null))).thenReturn("https://minio.local/files/a.png");
 
         FilePresignedUrlRespVO missingPresign = fileService.presignPutUrl("missing.png", null);
         when(fileStorageService.statObject(missingPresign.getPath())).thenReturn(null);
@@ -168,7 +166,6 @@ class FileServiceImplTest {
         ReflectionTestUtils.setField(fileService, "stringRedisTemplate", redisTemplate);
         setLoginUser(10L);
         when(fileStorageService.presignPutUrl(any(), eq("image/png"))).thenReturn("https://minio.local/put");
-        when(fileStorageService.presignGetUrl(any(), eq(null))).thenReturn("https://minio.local/files/r.png");
 
         FilePresignedUrlRespVO presigned = fileService.presignPutUrl("redis.png", null);
         String ticketKey = "infra:file:presign:ticket:" + DigestUtil.sha256Hex(presigned.getPath());
@@ -365,6 +362,30 @@ class FileServiceImplTest {
                     cfg.getDomain() + "/private/a%20b+c.pdf?v=1", 300));
             assertThat(viaLegacyPrivateUrl.getRawPath()).isEqualTo(viaLegacyUrl.getRawPath());
         }
+    }
+
+    /** 验证私有预签名直传不提前返回临时 GET URL，且公开 URL 对特殊字符分段编码并可还原原始键。 */
+    @Test
+    void privatePresignPutReturnsEmptyVisitUrlAndPublicUrlEncodesSegments() {
+        setLoginUser(10L);
+        when(fileStorageService.presignPutUrl(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn("https://upload.local/put");
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+
+        var resp = fileService.presignPutUrl("report.pdf", "private/hr");
+        assertThat(resp.getUrl()).isEmpty();
+        verify(fileStorageService, never()).presignGetUrl(org.mockito.ArgumentMatchers.anyString(), any());
+
+        MinioFileProperties props = buildMinioProperties();
+        props.setPublicAccess(true);
+        S3FileClientConfig cfg = props.toClientConfig();
+        S3FileClient publicClient = new S3FileClient(5L, cfg);
+        String publicUrl = publicClient.presignGetUrl("public/100%report#1?v=2 a+b.pdf", null);
+        assertThat(publicUrl).isEqualTo(
+                cfg.getDomain() + "/public/100%25report%231%3Fv=2%20a+b.pdf");
+        String extracted = ReflectionTestUtils.invokeMethod(publicClient, "extractObjectPath", publicUrl);
+        assertThat(extracted).isEqualTo("public/100%report#1?v=2 a+b.pdf");
     }
 
     /** Builds synthetic MinIO properties for presigner tests. */

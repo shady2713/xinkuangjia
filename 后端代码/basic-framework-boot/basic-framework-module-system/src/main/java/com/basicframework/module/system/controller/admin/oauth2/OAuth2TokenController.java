@@ -97,8 +97,9 @@ public class OAuth2TokenController {
             @RequestParam("ids") @NotEmpty(message = "令牌编号列表不能为空")
             @Size(max = MAX_BATCH_DELETE_SIZE, message = "单次最多下线 100 个会话") List<Long> ids) {
         String platformType = adminUserService.getLoginUserTypeOrDefault();
-        for (Long id : ids) {
-            revokeAndAudit(id, platformType);
+        List<OAuth2AccessTokenDO> removedList = oauth2TokenService.removeAccessTokenByIds(ids, platformType);
+        for (OAuth2AccessTokenDO removed : removedList) {
+            recordRevokeAudit(removed);
         }
         return success(true);
     }
@@ -109,10 +110,17 @@ public class OAuth2TokenController {
     private void revokeAndAudit(Long id, String platformType) {
         OAuth2AccessTokenDO removed = oauth2TokenService.removeAccessTokenById(id, platformType);
         if (removed != null) {
-            var targetUser = adminUserService.getUser(removed.getUserId());
-            securityAuditService.record(LoginLogTypeEnum.LOGOUT_DELETE, LoginResultEnum.SUCCESS,
-                    removed.getUserId(), targetUser != null ? targetUser.getUsername() : null);
+            recordRevokeAudit(removed);
         }
+    }
+
+    /**
+     * 为已成功吊销的令牌写入强制登出审计日志。
+     */
+    private void recordRevokeAudit(OAuth2AccessTokenDO removed) {
+        var targetUser = adminUserService.getUser(removed.getUserId());
+        securityAuditService.record(LoginLogTypeEnum.LOGOUT_DELETE, LoginResultEnum.SUCCESS,
+                removed.getUserId(), targetUser != null ? targetUser.getUsername() : null);
     }
 
 }

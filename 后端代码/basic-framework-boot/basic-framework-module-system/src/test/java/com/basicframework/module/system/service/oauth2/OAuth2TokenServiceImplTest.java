@@ -348,6 +348,31 @@ class OAuth2TokenServiceImplTest {
         verify(adminUserService, never()).getUserListByStatusAndType(any(), anyString());
     }
 
+    /** 验证批量吊销在任一目标令牌校验失败时前置中断，不会先删除前面的合法令牌。 */
+    @Test
+    void removeAccessTokenByIdsValidatesAllBeforeDeletingAny() {
+        OAuth2AccessTokenDO allowed = buildAccessToken("token-ok");
+        allowed.setId(1L);
+        allowed.setUserId(100L);
+        OAuth2AccessTokenDO forbidden = buildAccessToken("token-denied");
+        forbidden.setId(2L);
+        forbidden.setUserId(200L);
+        when(oauth2AccessTokenMapper.selectById(1L)).thenReturn(allowed);
+        when(oauth2AccessTokenMapper.selectById(2L)).thenReturn(forbidden);
+        when(adminUserService.validateUserManageable(100L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenReturn(buildAdminUser());
+        when(adminUserService.validateUserManageable(200L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenThrow(com.basicframework.framework.common.exception.util.ServiceExceptionUtil
+                        .exception(SYSTEM_PLATFORM_ACCESS_DENIED));
+
+        assertThatThrownBy(() -> tokenService.removeAccessTokenByIds(
+                List.of(1L, 2L), AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(oauth2AccessTokenMapper, never()).deleteById(anyLong());
+        verify(oauth2AccessTokenRedisDAO, never()).delete(anyString());
+    }
+
     /**
      * 构造内部会话客户端。
      *

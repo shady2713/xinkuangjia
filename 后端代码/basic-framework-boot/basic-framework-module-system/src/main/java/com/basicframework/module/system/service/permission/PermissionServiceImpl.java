@@ -524,7 +524,8 @@ public class PermissionServiceImpl implements PermissionService {
             List<AdminUserDO> affectedUsers, boolean includeOperatorDept) {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null) {
-            return;
+            // 缺少已认证操作者上下文时 fail-closed 拒绝，防止绕过数据权限反提权防线。
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         String loginUserType = userService.getLoginUserTypeOrDefault();
         List<RoleDO> operatorRoles = getSamePlatformEnableRoles(operatorId, loginUserType);
@@ -692,7 +693,10 @@ public class PermissionServiceImpl implements PermissionService {
             }
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        if (operatorId != null && CollUtil.isNotEmpty(menuIds)) {
+        if (operatorId == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (CollUtil.isNotEmpty(menuIds)) {
             Set<Long> operatorRoleIds = getSamePlatformEnableRoleIds(operatorId, loginUserType);
             if (!roleService.hasAnySuperAdmin(operatorRoleIds)) {
                 Set<Long> operatorMenuIds = getRoleMenuListByRoleId(operatorRoleIds);
@@ -716,10 +720,11 @@ public class PermissionServiceImpl implements PermissionService {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        Set<Long> operatorRoleIds = operatorId != null
-                ? getSamePlatformEnableRoleIds(operatorId, loginUserType)
-                : Collections.emptySet();
-        boolean operatorIsSuperAdmin = operatorId == null || roleService.hasAnySuperAdmin(operatorRoleIds);
+        if (operatorId == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        Set<Long> operatorRoleIds = getSamePlatformEnableRoleIds(operatorId, loginUserType);
+        boolean operatorIsSuperAdmin = roleService.hasAnySuperAdmin(operatorRoleIds);
         // 非超管操作员禁止修改超级管理员的角色集合（包括传入空集合摘除超管角色）。
         if (!operatorIsSuperAdmin) {
             Set<Long> dbRoleIds = convertSet(userRoleMapper.selectListByUserId(userId), UserRoleDO::getRoleId);

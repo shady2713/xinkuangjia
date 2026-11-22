@@ -349,6 +349,34 @@ class PermissionServiceImplSecurityTest {
         assertThat(permissionService.hasAnyPermissions(20L, "system:demo:create")).isFalse();
     }
 
+    /** 验证缺少认证操作者上下文（operatorId == null）时，数据权限/菜单/用户角色分配均 fail-closed 拒绝。 */
+    @Test
+    void permissionWriteOperationsFailClosedWithoutAuthenticatedOperator() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        RoleDO customRole = new RoleDO();
+        customRole.setId(5L);
+        customRole.setType(com.basicframework.module.system.enums.permission.RoleTypeEnum.CUSTOM.getType());
+        customRole.setRoleType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        when(roleService.getRole(5L)).thenReturn(customRole);
+        when(userService.getLoginUserTypeOrDefault()).thenReturn(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+
+        assertThatThrownBy(() -> permissionService.assignRoleDataScope(5L, DataScopeEnum.ALL.getScope(), null))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+
+        assertThatThrownBy(() -> permissionService.assignRoleMenu(5L, Collections.emptySet()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+
+        AdminUserDO targetUser = new AdminUserDO();
+        targetUser.setId(30L);
+        targetUser.setUserType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        when(userService.getUser(30L)).thenReturn(targetUser);
+        assertThatThrownBy(() -> permissionService.assignUserRole(30L, Collections.emptySet()))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+    }
+
     /** 验证自身与祖先链路全部启用的同平台已授权菜单允许后端鉴权通过。 */
     @Test
     void hasAnyPermissionsAllowsEnabledMenuWithEnabledAncestors() {

@@ -259,10 +259,10 @@ public class FileServiceImpl implements FileService {
         }
         String path = generateUploadPath(normalizedName, directory);
 
-        // 同时返回上传地址和访问地址；预签名绑定预期 Content-Type 并签发一次性登记凭证防止未签发路径绕过直传登记。
+        // 同时返回上传地址和公开访问地址；私有对象不预签发未上传对象的限时 GET 链接，避免前端误将短期签名落库。
         String expectedContentType = FileTypeUtils.getMineType(normalizedName);
         String uploadUrl = fileStorageService.presignPutUrl(path, expectedContentType);
-        String visitUrl = fileStorageService.presignGetUrl(path, null);
+        String visitUrl = isPrivateObject(path) ? "" : fileStorageService.presignGetUrl(path, null);
         issuePresignTicket(path, expectedContentType);
         FilePresignedUrlRespVO response = new FilePresignedUrlRespVO();
         response.setPath(path);
