@@ -13,7 +13,7 @@
 #     therefore make CREATE TABLE fail instead of being dropped.
 #   - mysql runs without --force and stops at the first SQL error.
 #
-# Connection (option files ignored via --no-defaults; no other mysql flags):
+# Connection (option files and login paths ignored via --no-defaults --no-login-paths; no other mysql flags):
 #   TCP:    MYSQL_HOST, optional MYSQL_TCP_PORT (default 3306)
 #   Socket: MYSQL_UNIX_PORT
 #   Always: MYSQL_USER. Password only via inherited MYSQL_PWD.
@@ -30,7 +30,7 @@ sql=$script_dir/../../数据库文件/basic_framework.sql
 [[ -f $sql && -r $sql ]] || die 2 "baseline SQL not readable: $sql"
 command -v mysql >/dev/null || die 2 "mysql client not found"
 
-conn=(--no-defaults --batch --local-infile=0 --default-character-set=utf8mb4)
+conn=(--no-defaults --no-login-paths --batch --local-infile=0 --default-character-set=utf8mb4)
 if [[ -n ${MYSQL_UNIX_PORT:-} ]]; then
   [[ -z ${MYSQL_HOST:-} || $MYSQL_HOST == localhost ]] || die 2 "set MYSQL_UNIX_PORT or MYSQL_HOST, not both"
   conn+=(--protocol=SOCKET "--socket=$MYSQL_UNIX_PORT")

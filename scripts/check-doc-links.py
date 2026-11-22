@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Check relative link destinations and local anchors in tracked Markdown.
 
-Skips fenced code, inline code, and remote links. Anchors are explicit HTML
-ids and GitHub-style heading anchors. Prints file:line for each broken link
-and exits 1 if any are found.
+Skips fenced code, inline code, and remote links. Targets must be files tracked
+by git or ancestor directories of tracked files (including the repo root).
+Anchors are explicit HTML ids and GitHub-style heading anchors. Prints
+file:line for each broken link and exits 1 if any are found.
 """
 import os
 import re
@@ -59,7 +60,7 @@ def anchors(path):
     return ANCHORS[path]
 
 
-def check(root, rel):
+def check(root, rel, files, dirs):
     path = os.path.join(root, rel)
     errors = []
     for number, _, line in scan(path):
@@ -76,7 +77,8 @@ def check(root, rel):
             if target:
                 base = root if target.startswith("/") else os.path.dirname(path)
                 resolved = os.path.normpath(os.path.join(base, target.lstrip("/")))
-                if os.path.commonpath([root, resolved]) != root or not os.path.exists(resolved):
+                tracked = os.path.relpath(resolved, root).replace(os.sep, "/")
+                if os.path.commonpath([root, resolved]) != root or (tracked not in files and tracked not in dirs):
                     errors.append(f"{rel}:{number}: missing link target {dest}")
                     continue
             fragment = unquote(fragment)
@@ -91,11 +93,23 @@ def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def inventory(root):
+    """Return tracked files and their ancestor directories, relative to root."""
+    files = set(filter(None, git("-C", root, "ls-files", "-z").split("\0")))
+    dirs = {"."}
+    for rel in files:
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            dirs.add("/".join(parts[:i]))
+    return files, dirs
+
+
 def main():
     root = os.path.normpath(git("rev-parse", "--show-toplevel").strip())
     errors = []
-    for rel in sorted(filter(None, git("-C", root, "ls-files", "-z", "--", "*.md").split("\0"))):
-        errors.extend(check(root, rel))
+    files, dirs = inventory(root)
+    for rel in sorted(path for path in files if path.endswith(".md")):
+        errors.extend(check(root, rel, files, dirs))
     for error in errors:
         print(error, file=sys.stderr)
     if errors:
