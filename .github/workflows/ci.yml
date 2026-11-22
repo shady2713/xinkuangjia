@@ -6,6 +6,7 @@ permissions:
 on:
   push:
     branches: [main]
+    tags: ["rc-*"]
   pull_request:
     branches: [main]
 
@@ -64,6 +65,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.event.after }}
+          persist-credentials: false
       - name: Scan commits with Gitleaks
         shell: bash
         env:
@@ -72,6 +74,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.event.after }}
+          EVENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           GITLEAKS_VERSION="8.24.2"
@@ -96,9 +99,13 @@ jobs:
 
           is_commit_id "$head_sha" || fail "invalid head commit ID"
           is_commit_id "$base_sha" || fail "invalid base commit ID"
+          head_sha=$(git rev-parse --verify "$head_sha^{commit}") || fail "head commit not available"
           [[ "$(git rev-parse HEAD)" == "$head_sha" ]] || fail "checkout is not the event head commit"
 
-          if [[ "$EVENT_NAME" == push ]] && { [[ "$base_sha" =~ ^0+$ ]] || ! has_commit "$base_sha"; }; then
+          if [[ "$EVENT_NAME" == push && "$EVENT_REF" == refs/tags/rc-* && "$base_sha" =~ ^0+$ ]] \
+              && has_commit refs/remotes/origin/main; then
+            log_opts="refs/remotes/origin/main..${head_sha}"
+          elif [[ "$EVENT_NAME" == push ]] && { [[ "$base_sha" =~ ^0+$ ]] || ! has_commit "$base_sha"; }; then
             echo "New ref or missing push predecessor: scanning all commits reachable from head"
             log_opts="$head_sha"
           else
@@ -107,3 +114,124 @@ jobs:
           fi
 
           "$bin_dir/gitleaks" git --no-banner --redact=100 --log-opts="$log_opts" .
+
+  smoke:
+    name: smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TZ: Asia/Shanghai
+      BACKEND_DIR: 后端代码/basic-framework-boot
+      FRONTEND_DIR: 前端代码/basic-framework-admin
+      SMOKE_BASE_URL: http://127.0.0.1:5175
+      SMOKE_API_URL: http://127.0.0.1:48080
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: 后端代码/basic-framework-boot/**/pom.xml
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: 前端代码/basic-framework-admin/pnpm-lock.yaml
+      - name: Install frontend dependencies
+        working-directory: 前端代码/basic-framework-admin
+        run: pnpm install --frozen-lockfile
+      - name: Install smoke Python tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/smoke-venv"
+          "$RUNNER_TEMP/smoke-venv/bin/python" -m pip install --disable-pip-version-check -q playwright==1.59.0 bcrypt==5.0.0
+          "$RUNNER_TEMP/smoke-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Run smoke test
+        run: |
+          set -euo pipefail
+          umask 077
+          export SMOKE_SUMMARY="$RUNNER_TEMP/smoke-summary.json"
+          py="$RUNNER_TEMP/smoke-venv/bin/python"
+          compose=(docker compose -f docker-compose.dev.yml --env-file .env.dev)
+          pids=()
+          finish() {
+            rc=$?
+            trap - EXIT
+            for pid in "${pids[@]}"; do
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+            done
+            if [[ -f .env.dev ]]; then
+              if ! "${compose[@]}" down -v --remove-orphans; then
+                echo "::error::isolated smoke services could not be removed"
+                rc=1
+              fi
+            fi
+            exit "$rc"
+          }
+          trap finish EXIT
+
+          wait_http() {
+            local url=$1 pid=$2
+            for _ in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || return 1
+              curl --fail --silent -o /dev/null --max-time 2 "$url" && return 0
+              sleep 2
+            done
+            echo "::error::readiness timeout for $url"
+            return 1
+          }
+
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse --verify "$EXPECTED_SHA^{commit}")" ]]
+          SMOKE_PASSWORD=$("$py" -I -c 'import secrets; print("Aa8#" + secrets.token_hex(12))')
+          SMOKE_NEW_PASSWORD=$("$py" -I -c 'import secrets; print("Bb7#" + secrets.token_hex(12))')
+          echo "::add-mask::$SMOKE_PASSWORD"
+          echo "::add-mask::$SMOKE_NEW_PASSWORD"
+          export SMOKE_PASSWORD SMOKE_NEW_PASSWORD
+
+          mvn -B -ntp -f "$BACKEND_DIR/pom.xml" -DskipTests package
+          python3 -B scripts/runtime/init_local_dev.py --apply
+          sh scripts/runtime/start_dev_stack.sh
+          if ! "$py" scripts/runtime/smoke-seed.py | "${compose[@]}" exec -T mysql sh -c \
+              'export MYSQL_PWD="$MYSQL_PASSWORD"; exec mysql -u"$MYSQL_USER" "$MYSQL_DATABASE"' \
+              >"$RUNNER_TEMP/smoke-seed.log" 2>&1; then
+            echo "::error::synthetic fixture import failed"
+            exit 1
+          fi
+
+          (cd "$BACKEND_DIR" && exec java -jar basic-framework-server/target/basic-framework-server.jar \
+            --server.address=127.0.0.1 --basic-framework.captcha.enable=false) >"$RUNNER_TEMP/smoke-backend.log" 2>&1 &
+          pids+=("$!")
+          wait_http "$SMOKE_API_URL/admin-api/system/auth/sm2-public-key" "$!"
+          (cd "$FRONTEND_DIR" && exec pnpm exec vite --host 127.0.0.1 --port 5175 --strictPort) >"$RUNNER_TEMP/smoke-vite.log" 2>&1 &
+          pids+=("$!")
+          wait_http "$SMOKE_BASE_URL/login" "$!"
+          "$py" scripts/runtime/smoke-browser.py
+
+      - name: Smoke summary
+        if: always()
+        run: |
+          SMOKE_SUMMARY="$RUNNER_TEMP/smoke-summary.json"
+          if [[ -s "$SMOKE_SUMMARY" ]]; then
+            printf '### Browser smoke\n\n```json\n' >> "$GITHUB_STEP_SUMMARY"
+            cat "$SMOKE_SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+            printf '```\n' >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf 'Browser checks did not start for %s. See the failing setup step.\n' "$EXPECTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sanitized smoke trace
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-trace
+          path: ${{ runner.temp }}/smoke-trace.json
+          if-no-files-found: ignore
+          retention-days: 7

@@ -18,7 +18,7 @@ The `secrets` job in `.github/workflows/ci.yml` does the following:
 
 - Downloads Gitleaks 8.24.2 (Linux x64). It extracts the archive only after the archive matches the pinned SHA256 from the upstream release checksums.
 - Checks out the exact event head commit. It validates event commit IDs before passing them to git.
-- Scans `base..head` for pull requests and `before..after` for pushes. For a new ref or a missing push predecessor, it scans all commits reachable from head.
+- Scans `base..head` for pull requests and `before..after` for pushes. A new release candidate tag scans commits absent from the fetched main ref. For another new ref, an unavailable main comparison, or a missing push predecessor, it scans all commits reachable from head.
 - Runs `gitleaks git --redact=100` without verbose output or reports, which keeps source and finding details out of logs. A nonzero exit fails the job.
 
 A cancelled or skipped `secrets` run is not a passing scan. Do not copy findings into issues, PRs, or logs. Triage them locally.
