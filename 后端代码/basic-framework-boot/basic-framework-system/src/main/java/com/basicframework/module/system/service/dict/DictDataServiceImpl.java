@@ -106,6 +106,9 @@ public class DictDataServiceImpl implements DictDataService {
      */
     @Override
     public void updateDictData(DictDataSaveReqVO updateReqVO) {
+        if (updateReqVO.getId() == null) {
+            throw exception(DICT_DATA_NOT_EXISTS);
+        }
         validateDictDataExists(updateReqVO.getId());
         validateDictTypeExists(updateReqVO.getDictType());
         validateDictDataValueUnique(updateReqVO.getId(), updateReqVO.getDictType(), updateReqVO.getValue());
@@ -121,6 +124,9 @@ public class DictDataServiceImpl implements DictDataService {
      */
     @Override
     public void deleteDictData(Long id) {
+        if (id == null) {
+            throw exception(DICT_DATA_NOT_EXISTS);
+        }
         validateDictDataExists(id);
         dictDataMapper.deleteById(id);
     }

@@ -110,6 +110,9 @@ public class DeptServiceImpl implements DeptService {
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void updateDept(DeptSaveReqVO updateReqVO) {
+        if (updateReqVO.getId() == null) {
+            throw exception(DEPT_NOT_FOUND);
+        }
         if (updateReqVO.getParentId() == null) {
             updateReqVO.setParentId(DeptDO.PARENT_ID_ROOT);
         }
@@ -141,6 +144,9 @@ public class DeptServiceImpl implements DeptService {
     @CacheEvict(cacheNames = RedisKeyConstants.DEPT_CHILDREN_ID_LIST,
             allEntries = true) // allEntries 清空所有缓存，因为操作一个部门，涉及到多个缓存
     public void deleteDept(Long id) {
+        if (id == null) {
+            throw exception(DEPT_NOT_FOUND);
+        }
         // 校验是否存在并归属当前平台
         DeptDO existing = validateDeptExists(id);
         validateDeptPlatform(existing);
@@ -213,12 +219,12 @@ public class DeptServiceImpl implements DeptService {
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null) {
-            return;
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         PermissionService permissionService = permissionServiceProvider != null
                 ? permissionServiceProvider.getIfAvailable() : null;
         if (permissionService == null) {
-            return;
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         var dataPerm = permissionService.getDeptDataPermission(operatorId);
         if (dataPerm != null && !Boolean.TRUE.equals(dataPerm.getAll())) {
@@ -237,11 +243,11 @@ public class DeptServiceImpl implements DeptService {
         }
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null) {
-            return;
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         AdminUserService userService = adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
         if (userService == null) {
-            return;
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
         }
         String loginType = userService.getLoginUserTypeOrDefault();
         if (!AdminPlatformTypeEnum.isSame(dept.getRoleType(), loginType)) {

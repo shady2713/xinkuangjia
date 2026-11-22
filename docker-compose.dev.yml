@@ -1,8 +1,6 @@
 # 本地开发基础设施栈（仅绑定 127.0.0.1 环回地址，禁止直接用于生产环境）。
-# 先运行：python -B -X utf8 scripts/runtime/init_local_dev.py --apply
-# 再运行 sh scripts/runtime/start_dev_stack.sh，同步验证新桶或复用桶的策略。
-# MinIO bucket policy: init_local_dev.py --apply writes .e2e-env/minio-bucket-policy.json
-# 读取后端 MINIO_PUBLIC_ACCESS 生成策略，minio-init 在 MinIO 就绪后应用。
+# 初始化凭据：python -B -X utf8 scripts/runtime/init_local_dev.py --apply
+# 启动中间件：sh scripts/runtime/start_dev_stack.sh
 
 name: basic-framework-dev
 
@@ -50,66 +48,6 @@ services:
       timeout: 3s
       retries: 15
 
-  minio:
-    # Local image from pinned official GitHub release binaries (tools/minio/Dockerfile);
-    # Docker Hub/Quay MinIO images are unavailable. Shared with minio-init.
-    build:
-      context: ./tools/minio
-    image: localhost/basic-framework-minio:test
-    pull_policy: build
-    restart: unless-stopped
-    command: ["minio", "server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
-    ports:
-      - "127.0.0.1:${MINIO_API_PORT:-19000}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001"
-    volumes:
-      - minio_dev_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 15
-
-  minio-init:
-    image: localhost/basic-framework-minio:test
-    pull_policy: never
-    depends_on:
-      minio:
-        condition: service_healthy
-    # Applies the generated anonymous bucket policy (mixed or private) and verifies it by readback.
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -eu
-        target="local/$${MINIO_BUCKET:-basic-framework}"
-        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
-        mc mb --ignore-existing "$$target"
-        sh /opt/minio-tools/apply-bucket-policy.sh /policy/bucket-policy.json "$$target"
-    environment:
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      MINIO_BUCKET: ${MINIO_BUCKET:-basic-framework}
-    volumes:
-      # Written by: python -B -X utf8 scripts/runtime/init_local_dev.py --apply
-      - type: bind
-        source: ${MINIO_POLICY_FILE:-./.e2e-env/minio-bucket-policy.json}
-        target: /policy/bucket-policy.json
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ./tools/minio/apply-bucket-policy.sh
-        target: /opt/minio-tools/apply-bucket-policy.sh
-        read_only: true
-        bind:
-          create_host_path: false
-    restart: "no"
-
 volumes:
   mysql_dev_data:
   redis_dev_data:
-  minio_dev_data:

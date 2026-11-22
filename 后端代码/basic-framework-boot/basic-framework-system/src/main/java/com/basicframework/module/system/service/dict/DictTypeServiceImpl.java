@@ -226,7 +226,7 @@ public class DictTypeServiceImpl implements DictTypeService {
     @VisibleForTesting
     DictTypeDO validateDictTypeExists(Long id) {
         if (id == null) {
-            return null;
+            throw exception(DICT_TYPE_NOT_EXISTS);
         }
         DictTypeDO dictType = dictTypeMapper.selectById(id);
         if (dictType == null) {

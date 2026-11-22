@@ -126,6 +126,9 @@ public class AdminUserServiceImpl implements AdminUserService {
     @OperateLog(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_UPDATE_SUB_TYPE, bizId = "#updateReqVO.id",
             action = SYSTEM_USER_UPDATE_SUCCESS)
     public void updateUser(UserSaveReqVO updateReqVO, String userType) {
+        if (updateReqVO.getId() == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
         updateReqVO.setPassword(null); // 特殊：此处不更新密码
         String resolvedUserType = AdminPlatformTypeEnum.defaultType(userType);
         // 1. 校验正确性
@@ -620,6 +623,9 @@ public class AdminUserServiceImpl implements AdminUserService {
      */
     @VisibleForTesting
     AdminUserDO validateUserForPlatform(Long id, String userType) {
+        if (id == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
         AdminUserDO user = validateUserExists(id);
         validateUserPlatform(user, userType);
         return user;

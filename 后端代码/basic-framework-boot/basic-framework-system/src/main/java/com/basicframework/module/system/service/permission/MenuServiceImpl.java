@@ -87,16 +87,15 @@ public class MenuServiceImpl implements MenuService {
             allEntries = true) // allEntries 清空所有缓存，因为 permission 如果变更，涉及到新老两个 permission。直接清理，简单有效
     public void updateMenu(MenuSaveVO updateReqVO) {
         // 校验更新的菜单是否存在
+        if (updateReqVO.getId() == null) {
+            throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
+        }
         MenuDO oldMenu = menuMapper.selectById(updateReqVO.getId());
         if (oldMenu == null) {
             throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
         }
-        // 非超管操作员不得篡改菜单权限标识或跨平台变更菜单归属，防止通过已有角色绑定实现自我提权。
-        validateOperatorMenuPermissionChange(oldMenu, updateReqVO.getPermission());
-        if (!Objects.equals(oldMenu.getMenuType(), updateReqVO.getMenuType())
-                && !isOperatorSuperAdmin()) {
-            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
-        }
+        // 非超管操作员不得篡改菜单权限、启停状态、父级挂载或平台归属，也不得修改自身未持有的菜单，防止提权或反锁超管。
+        validateOperatorMenuUpdateAuthority(oldMenu, updateReqVO);
         // 校验父菜单存在
         validateParentMenu(updateReqVO.getParentId(), updateReqVO.getId());
         validateParentMenuType(updateReqVO.getParentId(), updateReqVO.getMenuType());
@@ -111,6 +110,38 @@ public class MenuServiceImpl implements MenuService {
     }
 
     /**
+     * 校验非超管操作员更新菜单时的越权边界（含权限持有、启停状态、父级位置与平台归属）。
+     *
+     * @param oldMenu     更新前的菜单对象
+     * @param updateReqVO 目标更新请求
+     */
+    private void validateOperatorMenuUpdateAuthority(MenuDO oldMenu, MenuSaveVO updateReqVO) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (isOperatorSuperAdmin()) {
+            return;
+        }
+        if (!AdminPlatformTypeEnum.isSame(oldMenu.getMenuType(), updateReqVO.getMenuType())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        String normalizedOld = StrUtil.nullToEmpty(oldMenu.getPermission()).trim();
+        String normalizedNew = StrUtil.nullToEmpty(updateReqVO.getPermission()).trim();
+        if (!Objects.equals(normalizedOld, normalizedNew)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (StrUtil.isNotBlank(normalizedOld)
+                && !getPermissionService().hasAnyPermissions(operatorId, normalizedOld)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (!Objects.equals(oldMenu.getStatus(), updateReqVO.getStatus())
+                || !Objects.equals(oldMenu.getParentId(), updateReqVO.getParentId())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+    }
+
+    /**
      * 校验非超管操作员不得新增或修改自身不具备的权限标识，防止菜单改权导致的权限提升。
      *
      * @param oldMenu       更新前的菜单对象，新建时为空
@@ -118,7 +149,10 @@ public class MenuServiceImpl implements MenuService {
      */
     private void validateOperatorMenuPermissionChange(MenuDO oldMenu, String newPermission) {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        if (operatorId == null || isOperatorSuperAdmin()) {
+        if (operatorId == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (isOperatorSuperAdmin()) {
             return;
         }
         String normalizedNew = StrUtil.nullToEmpty(newPermission).trim();
@@ -136,19 +170,19 @@ public class MenuServiceImpl implements MenuService {
     }
 
     /**
-     * 判断当前登录操作员是否具备超级管理员角色。
+     * 判断当前登录操作员是否具备超级管理员角色（无登录上下文或权限服务不可用时默认 fail-closed 返回 false）。
      *
-     * @return 无登录上下文或当前用户为超级管理员时返回 true
+     * @return 当前用户为超级管理员时返回 true
      */
     private boolean isOperatorSuperAdmin() {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
         if (operatorId == null) {
-            return true;
+            return false;
         }
         PermissionService permissionService = permissionServiceProvider != null
                 ? permissionServiceProvider.getIfAvailable() : null;
-        return permissionService == null
-                || permissionService.hasAnyRoles(operatorId, RoleCodeEnum.SUPER_ADMIN.getCode());
+        return permissionService != null
+                && permissionService.hasAnyRoles(operatorId, RoleCodeEnum.SUPER_ADMIN.getCode());
     }
 
     /**

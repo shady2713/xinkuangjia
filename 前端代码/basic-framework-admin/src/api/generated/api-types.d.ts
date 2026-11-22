@@ -1440,7 +1440,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/dict-type/delete": {
     /** 删除字典类型 */
-    delete: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
+    delete: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_Boolean };
   };
   "/admin-api/system/dict-type/delete-list": {
     /** 批量删除字典类型 */
