@@ -74,13 +74,10 @@ async function performRefreshToken(): Promise<string | null> {
     return null;
   }
   try {
-    const resp = await rawHttp.post<
-      CommonResult<{
-        accessToken: string;
-        refreshToken: string;
-        passwordChangeRequired?: boolean;
-      }>
-    >('/system/auth/refresh-token', { refreshToken });
+    const resp = await rawHttp.post<CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>>>(
+      '/system/auth/refresh-token',
+      { refreshToken },
+    );
     const body = resp.data;
     if (body?.code === 0 && body.data?.accessToken) {
       setTokens(
