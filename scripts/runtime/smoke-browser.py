@@ -22,10 +22,15 @@ PLATFORM_DENIED = 1_002_000_015
 FILE_DENIED = 1_001_003_008
 SIGNING_UNSUPPORTED = 1_001_003_010
 EXPECTED_STEPS = 16
-STORE_JS = """k => { const v = localStorage.getItem(k) ?? sessionStorage.getItem(k);
-  if (v === null) return null; try { const j = JSON.parse(v); return String(j?.value ?? j); } catch { return v; } }"""
 SM2_JS = "async ([m, ...ps]) => { const s = await import(m); return Promise.all(ps.map((x) => s.encryptPassword(x))); }"
 REFRESH_JS = "async () => { const m = await import('/src/api/request.ts'); await m.request.get('/system/auth/get-permission-info'); }"
+SESSION_JS = """f => { const v = localStorage.getItem('bf_session'); if (v === null) return null;
+  const x = JSON.parse(v)?.[f]; return x === undefined || x === null || x === '' ? null : String(x); }"""
+TOKENS_JS = """async () => { const t = await import('/src/utils/token.ts');
+  return [t.getAccessToken() || null, t.getRefreshToken() || null, t.isPasswordChangeRequired()]; }"""
+SUBMIT = ".el-form button.el-button--primary"
+CHANGE_FIELDS = ("请输入当前密码", "请输入 8~32 位含大小写字母及数字的新密码",
+                 "请再次输入新密码")
 
 
 class SmokeError(Exception):
@@ -45,7 +50,22 @@ def step(name):
 
 
 def store(page, key):
-    return page.evaluate(STORE_JS, key)
+    return page.evaluate(SESSION_JS, key)
+
+
+def peer_synced(page, peer):
+    """Asserts the sibling tab's in-memory token state matches this tab, with no reload."""
+    want = page.evaluate(TOKENS_JS)
+    persisted = [store(page, "accessToken"), store(page, "refreshToken"),
+                 store(page, "passwordChangeRequired") == "true"]
+    check(want == persisted, "memory session differs from storage")
+    for _ in range(50):
+        if peer.evaluate(TOKENS_JS) == want:
+            break
+        peer.wait_for_timeout(100)
+    check(peer.evaluate(TOKENS_JS) == want, "peer tab session not synced")
+    check(peer.evaluate("() => window.__smokePeer === 1"), "peer tab reloaded")
+    return want
 
 
 def call(req, method, path, token=None, **kw):
@@ -72,7 +92,7 @@ def ui_login(page, username, password):
     page.goto("/login")
     page.fill("input[autocomplete=username]", username)
     page.fill("input[autocomplete=current-password]", password)
-    page.locator(".el-form button.el-button--primary").first.click()
+    page.locator(SUBMIT).first.click()
 
 
 def role_crud(req, token, prefix, *, remove=True):
@@ -110,38 +130,49 @@ def run(p, browser, pwd, new_pwd):
 
     ctx, page = new_page()
     with step("admin-ui-login-forced-change"):
+        peer = ctx.new_page()
+        peer.goto("/login")
+        peer.evaluate("() => { window.__smokePeer = 1; }")
+        check(peer.evaluate(TOKENS_JS) == [None, None, False], "initial peer session is not empty")
         with page.expect_response("**/admin-api/system/auth/super-admin-login") as login:
             ui_login(page, "admin", pwd)
         check(ok(login.value)["passwordChangeRequired"] is True, "server did not require password change")
         page.wait_for_url(CHANGE)
         check(cfg["n"] >= 1, "captcha config not overridden")
-        old = store(page, "bf_access_token")
+        old = store(page, "accessToken")
+        check(peer_synced(page, peer)[2] is True, "peer tab missed forced-change flag")
     with step("forced-change-denies-role-page"):
         denied(call(page.request, "GET", "/admin-api/system/role/page", old, params={"pageNo": 1, "pageSize": 10}), {403})
     with step("manual-refresh-revokes-old-access"):
-        data = ok(call(page.request, "POST", "/admin-api/system/auth/refresh-token", data={"refreshToken": store(page, "bf_refresh_token")}))
+        data = ok(call(page.request, "POST", "/admin-api/system/auth/refresh-token", data={"refreshToken": store(page, "refreshToken")}))
         check(data["accessToken"] != old, "access token not rotated")
         denied(call(page.request, "GET", "/admin-api/system/auth/get-permission-info", old), {401})
     with step("frontend-interceptor-refresh"):
         page.evaluate(REFRESH_JS)
-        check(store(page, "bf_access_token") not in (None, old), "stored access token not rotated")
-        check(store(page, "bf_password_change_required") == "true", "change flag not persisted")
+        check(store(page, "accessToken") not in (None, old), "stored access token not rotated")
+        check(store(page, "passwordChangeRequired") == "true", "change flag not persisted")
+        check(peer_synced(page, peer)[0] != old, "peer tab kept old access token")
     with step("reload-keeps-forced-change"):
         page.reload()
         page.wait_for_url(CHANGE)
-        check(store(page, "bf_password_change_required") == "true", "change flag lost on reload")
+        check(store(page, "passwordChangeRequired") == "true", "change flag lost on reload")
     with step("change-password"):
-        enc = page.evaluate(SM2_JS, [SM2_MODULE, pwd, new_pwd])
-        ok(call(page.request, "PUT", "/admin-api/system/user/profile/update-password", store(page, "bf_access_token"),
-                data={"oldPassword": enc[0], "newPassword": enc[1]}))
-        ctx.close()
-    ctx, page = new_page()
+        for placeholder, value in zip(CHANGE_FIELDS, (pwd, new_pwd, new_pwd)):
+            page.get_by_placeholder(placeholder, exact=True).fill(value)
+        with page.expect_response(lambda r: r.request.method == "PUT"
+                                  and urlparse(r.url).path.endswith("/admin-api/system/user/profile/update-password")) as put:
+            page.locator(SUBMIT).first.click()
+        ok(put.value)
+        page.wait_for_url(lambda u: urlparse(u).path.endswith("/login"))
+        check(store(page, "accessToken") is None and store(page, "refreshToken") is None, "session not cleared")
+        check(peer_synced(page, peer) == [None, None, False], "peer tab kept cleared session")
+        peer.close()
     with step("admin-fresh-login-new-password"):
         with page.expect_response("**/admin-api/system/auth/super-admin-login") as login:
             ui_login(page, "admin", new_pwd)
         check(ok(login.value)["passwordChangeRequired"] is False, "server did not clear password-change requirement")
         page.wait_for_url(lambda u: "/login" not in u and "/profile/change-password" not in u)
-        admin = store(page, "bf_access_token")
+        admin = store(page, "accessToken")
     with step("admin-role-crud"):
         other_role, other_body = role_crud(page.request, admin, "smoke_admin", remove=False)
     with step("member-api-login"):
@@ -165,7 +196,8 @@ def run(p, browser, pwd, new_pwd):
         rows = ok(call(page.request, "GET", "/admin-api/infra/file/page", admin, params={"pageNo": 1, "pageSize": 10, "path": name.removesuffix(".txt")}))["list"]
         records = [row for row in rows if row.get("name") == name]
         check(len(records) == 1, "uploaded file not found exactly once")
-        check(records[0].get("path", "").startswith("private/smoke/") and not records[0].get("url"),
+        check(records[0].get("path", "").startswith("private/smoke/")
+              and records[0].get("privateFile") is True and not records[0].get("url"),
               "upload did not produce a private record")
         file_id = records[0]["id"]
         resp = call(page.request, "GET", "/admin-api/infra/file/private/content", admin, params={"id": file_id})

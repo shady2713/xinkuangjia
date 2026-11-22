@@ -9,11 +9,16 @@ import {
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
+import { clearDynamicRoutes } from '@/router';
+import { useDictStore } from '@/stores/dict';
+import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
 import { encryptPassword } from '@/utils/sm2';
 
 const router = useRouter();
 const userStore = useUserStore();
+const tabsStore = useTabsStore();
+const dictStore = useDictStore();
 const formRef = ref<FormInstance>();
 const loading = ref(false);
 
@@ -46,9 +51,12 @@ async function handleSubmit() {
     const oldPassword = await encryptPassword(form.oldPassword);
     const newPassword = await encryptPassword(form.newPassword);
     await updateUserPasswordApi({ oldPassword, newPassword });
-    userStore.markPasswordChanged();
-    ElMessage.success('密码修改成功，正在进入系统');
-    await router.replace('/dashboard');
+    userStore.resetState();
+    clearDynamicRoutes();
+    tabsStore.reset();
+    dictStore.reset();
+    ElMessage.success('密码修改成功，请重新登录');
+    await router.replace('/login');
   } finally {
     loading.value = false;
   }

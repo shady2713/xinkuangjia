@@ -86,11 +86,6 @@ window.addEventListener('storage', (event: StorageEvent) => {
 /** Single in-memory source of the flag, exposed read-only. */
 export const passwordChangeRequiredFlag = computed(() => session.value.passwordChangeRequired);
 
-/** Updates the in-memory flag and its persisted copy together. */
-export function setPasswordChangeRequired(value: boolean): void {
-  persistSession({ ...session.value, passwordChangeRequired: value });
-}
-
 export function getAccessToken(): string {
   return session.value.accessToken;
 }
@@ -117,10 +112,6 @@ export function setTokens(
 
 export function isPasswordChangeRequired(): boolean {
   return session.value.passwordChangeRequired;
-}
-
-export function clearPasswordChangeRequired(): void {
-  setPasswordChangeRequired(false);
 }
 
 /** Logout: legacy keys go first so other tabs never re-read stale values. */

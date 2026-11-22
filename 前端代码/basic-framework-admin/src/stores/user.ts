@@ -15,7 +15,6 @@ import {
   type SmsLoginReq,
 } from '@/api/auth';
 import {
-  clearPasswordChangeRequired,
   clearTokens,
   getAccessToken,
   passwordChangeRequiredFlag,
@@ -57,10 +56,6 @@ export const useUserStore = defineStore('user', () => {
     routesLoaded.value = loaded;
   }
 
-  function markPasswordChanged() {
-    clearPasswordChangeRequired();
-  }
-
   function resetState() {
     userInfo.value = null;
     roles.value = [];
@@ -94,7 +89,6 @@ export const useUserStore = defineStore('user', () => {
     loginBySms,
     fetchPermissionInfo,
     markRoutesLoaded,
-    markPasswordChanged,
     resetState,
     logout,
   };
