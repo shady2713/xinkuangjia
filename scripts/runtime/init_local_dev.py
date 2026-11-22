@@ -236,7 +236,13 @@ def check_launcher_overrides(args: list[str]) -> None:
     sources = {key: os.environ.get(key, "") for key in options}
     sources["启动命令"] = " ".join(args)
     for source, text in sources.items():
-        tokens = text.translate(separators).split()
+        if source == "JDK_JAVA_OPTIONS":
+            # Java 17 会去掉引号并保留其中的内容；本地入口只核验不带引号的直接参数。
+            if '"' in text or "'" in text:
+                raise ValueError(f"{source} 仅支持不带引号、以 ASCII 空白分隔的直接参数")
+            tokens = [arg.partition("=")[0] for arg in re.findall(r"\S+", text, flags=re.ASCII)]
+        else:
+            tokens = text.translate(separators).split()
         if any(token.startswith("@") or token in vm_option_files for token in tokens):
             raise ValueError(f"{source} 含间接 Java 参数文件，请直接传入启动选项")
         for index, token in enumerate(tokens):

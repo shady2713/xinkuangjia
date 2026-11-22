@@ -198,6 +198,7 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     (0, "endpoint-override"), (0, "remote-docker"),
     (0, "argument-file"), (0, "shell-argument-file"), (0, "jdk-argument-file"),
     (0, "jvm-option-file"), (0, "jvm-flags-file"),
+    (0, "jdk-single-quoted-option"), (0, "jdk-double-quoted-option"), (0, "jdk-override"),
 ])
 def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int, conflict: str | None) -> None:
     """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
@@ -251,6 +252,7 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
         env["SPRING_APPLICATION_JSON"] = "{}"
     if conflict is None:
         env["JAVA_TOOL_OPTIONS"] = "-Xmx128m -Dfixture.label=qa@local"
+        env["JDK_JAVA_OPTIONS"] = "-Xmx128m\t-Dfixture.label=qa@local"
     cmd = 'printf "%s %s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" "$MINIO_ENDPOINT" >> "$COMMANDS"'
     command = ["sh", "-c", cmd]
     if conflict == "argument-override":
@@ -260,13 +262,20 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
     option_file = conflict in ("argument-file", "shell-argument-file", "jdk-argument-file",
                                "jvm-option-file", "jvm-flags-file")
     if option_file:
-        (tmp_path / "fixture options").write_text("-Xmx128m\n", encoding="utf-8")
+        fixture_file = "fixture-options" if conflict == "jdk-argument-file" else "fixture options"
+        (tmp_path / fixture_file).write_text("-Xmx128m\n", encoding="utf-8")
     if conflict == "argument-file":
         command = ["java", "@fixture options", "-version"]
     if conflict == "shell-argument-file":
         command = ["sh", "-c", 'exec java "@fixture options" -version']
     if conflict == "jdk-argument-file":
-        env["JDK_JAVA_OPTIONS"] = '-Dfixture.name=qa "@fixture options"'
+        env["JDK_JAVA_OPTIONS"] = "@fixture-options"
+    if conflict == "jdk-single-quoted-option":
+        env["JDK_JAVA_OPTIONS"] = "-Dfixture.label='fixture label'"
+    if conflict == "jdk-double-quoted-option":
+        env["JDK_JAVA_OPTIONS"] = '-Dfixture.label="fixture label"'
+    if conflict == "jdk-override":
+        env["JDK_JAVA_OPTIONS"] = "-Xmx128m\t-Dbasic-framework.file.minio.public-access=true"
     if conflict == "jvm-option-file":
         env["JAVA_TOOL_OPTIONS"] = '-XX:VMOptionsFile="fixture options"'
     if conflict == "jvm-flags-file":
@@ -283,7 +292,12 @@ def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_ex
         assert result.returncode == 1 and not commands.exists(), result.stderr
         if option_file:
             assert "含间接 Java 参数文件" in result.stderr
-            assert "fixture options" not in result.stderr
+            assert fixture_file not in result.stderr
+        if conflict in ("jdk-single-quoted-option", "jdk-double-quoted-option"):
+            assert "JDK_JAVA_OPTIONS 仅支持不带引号" in result.stderr
+            assert "fixture label" not in result.stderr
+        if conflict == "jdk-override":
+            assert "JDK_JAVA_OPTIONS 覆盖了 MinIO 配置" in result.stderr
         return
     expected = [*started, "run --rm --no-deps minio-init"]
     if init_exit == 0:
