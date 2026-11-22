@@ -84,13 +84,3 @@ export function deleteDictDataList(ids: (number | string)[]) {
     `/system/dict-data/delete-list?ids=${ids.join(',')}`,
   );
 }
-
-/**
- * 导出字典数据 Excel。
- *
- * @param params 导出筛选参数
- * @returns Excel 文件流
- */
-export function exportDictData(params: PageParam) {
-  return requestClient.download('/system/dict-data/export-excel', { params });
-}

@@ -8,7 +8,6 @@ import com.basicframework.framework.security.core.LoginUser;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
-import com.basicframework.module.system.dal.mysql.dept.UserPostMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginLogTypeEnum;
@@ -18,7 +17,6 @@ import com.basicframework.module.system.framework.security.audit.SecurityAuditSe
 import com.basicframework.module.system.mq.message.user.UserStatusChangedEvent;
 import com.basicframework.module.system.mq.message.user.UserTokenInvalidatedEvent;
 import com.basicframework.module.system.service.dept.DeptService;
-import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -68,15 +66,9 @@ class AdminUserServiceImplTest {
     @Mock
     private DeptService deptService;
     @Mock
-    private PostService postService;
-    @Mock
     private ObjectProvider<PermissionService> permissionServiceProvider;
     @Mock
     private ApplicationContext applicationContext;
-    @Mock
-    private UserPostMapper userPostMapper;
-    @Mock
-    private com.basicframework.framework.common.api.config.ConfigApi configApi;
     @Mock
     private SecurityAuditService securityAuditService;
 
@@ -240,7 +232,6 @@ class AdminUserServiceImplTest {
         reqVO.setUsername("created-user");
         reqVO.setNickname("Created User");
         reqVO.setPassword("Init#Pass1");
-        reqVO.setPostIds(Set.of());
 
         userService.createUser(reqVO, AdminPlatformTypeEnum.SUPER_ADMIN.getType());
 

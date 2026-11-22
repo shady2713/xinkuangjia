@@ -29,11 +29,6 @@
             <artifactId>basic-framework-spring-boot-starter-biz-data-permission</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.basicframework</groupId>
-            <artifactId>basic-framework-spring-boot-starter-biz-ip</artifactId>
-        </dependency>
-
         <!-- Web 相关 -->
         <dependency>
             <groupId>com.basicframework</groupId>
@@ -85,14 +80,10 @@
             <artifactId>hutool-all</artifactId>
         </dependency>
 
-        <!-- 代码映射与 VO 数据翻译：由本模块源码直接使用 -->
+        <!-- 对象映射：由本模块源码直接使用 -->
         <dependency>
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.fhs-opensource</groupId>
-            <artifactId>easy-trans-anno</artifactId>
         </dependency>
         <dependency>
             <groupId>com.h2database</groupId>

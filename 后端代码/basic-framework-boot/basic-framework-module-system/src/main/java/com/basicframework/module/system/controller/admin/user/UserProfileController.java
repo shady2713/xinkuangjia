@@ -1,6 +1,5 @@
 package com.basicframework.module.system.controller.admin.user;
 
-import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.datapermission.core.annotation.DataPermission;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileRespVO;
@@ -8,12 +7,10 @@ import com.basicframework.module.system.controller.admin.user.vo.profile.UserPro
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdateReqVO;
 import com.basicframework.module.system.convert.user.UserConvert;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
-import com.basicframework.module.system.dal.dataobject.dept.PostDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.service.dept.DeptService;
-import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.permission.PermissionService;
 import com.basicframework.module.system.service.permission.RoleService;
 import com.basicframework.module.system.service.user.AdminUserService;
@@ -48,8 +45,6 @@ public class UserProfileController {
     @Resource
     private DeptService deptService;
     @Resource
-    private PostService postService;
-    @Resource
     private PermissionService permissionService;
     @Resource
     private RoleService roleService;
@@ -72,9 +67,7 @@ public class UserProfileController {
         List<RoleDO> userRoles = roleService.getRoleListFromCache(permissionService.getUserRoleIdListByUserId(user.getId()));
         // 获得部门信息
         DeptDO dept = user.getDeptId() != null ? deptService.getDept(user.getDeptId()) : null;
-        // 获得岗位信息
-        List<PostDO> posts = CollUtil.isNotEmpty(user.getPostIds()) ? postService.getPostList(user.getPostIds()) : null;
-        return success(UserConvert.INSTANCE.convert(user, userRoles, dept, posts));
+        return success(UserConvert.INSTANCE.convert(user, userRoles, dept));
     }
 
     /**

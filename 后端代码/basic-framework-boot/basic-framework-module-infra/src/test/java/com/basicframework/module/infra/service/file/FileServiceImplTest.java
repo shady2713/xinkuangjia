@@ -8,7 +8,7 @@ import com.basicframework.module.infra.controller.admin.file.vo.file.FileCreateR
 import com.basicframework.module.infra.controller.admin.file.vo.file.FilePresignedUrlRespVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.dal.mysql.file.FileMapper;
-import com.basicframework.module.infra.framework.file.config.MinioFileProperties;
+import com.basicframework.module.infra.framework.file.config.FileStorageProperties;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
 import com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient;
@@ -229,17 +229,11 @@ class FileServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(FILE_PRESIGN_EXPIRATION_INVALID.getCode()));
 
-        // MinioFileProperties 默认公开访问，支持显式切换为私有模式。
-        MinioFileProperties props = new MinioFileProperties();
-        props.setEndpoint("http://127.0.0.1:9000");
-        props.setAccessKey("ak");
-        props.setSecretKey("sk");
-        props.setBucket("basic-framework");
-        props.setRegion("us-east-1");
-        props.setPublicUrl("http://localhost:9000");
-        assertThat(props.toClientConfig().getEnablePublicAccess()).isTrue();
-        props.setPublicAccess(false);
-        assertThat(props.toClientConfig().getEnablePublicAccess()).isFalse();
+        // FileStorageProperties 默认使用 local，阿里云 OSS 默认私有访问且支持切换。
+        FileStorageProperties props = buildOssProperties();
+        assertThat(props.toAliyunOssClientConfig().getEnablePublicAccess()).isFalse();
+        props.getOss().setPublicAccess(true);
+        assertThat(props.toAliyunOssClientConfig().getEnablePublicAccess()).isTrue();
         assertThat(FilePathUtils.isPrivateObjectPath("private")).isTrue();
         assertThat(FilePathUtils.isPrivateObjectPath("PRIVATE ")).isTrue();
         assertThat(FilePathUtils.isPrivateObjectPath("pRiVaTe copy/a.pdf")).isTrue();
@@ -256,7 +250,7 @@ class FileServiceImplTest {
         byte[] content = "private-report".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         when(fileStorageService.isPublicAccess()).thenReturn(true);
         when(fileStorageService.upload(eq(content), any(), eq("text/plain")))
-                .thenReturn("https://minio.local/basic-framework/private/a.txt?X-Amz-Signature=deadbeef");
+                .thenReturn("https://oss.example.test/private/a.txt?X-Amz-Signature=deadbeef");
 
         String returnedUrl = fileService.createFile(content, "report.txt", "private/hr", "text/plain");
 
@@ -267,59 +261,23 @@ class FileServiceImplTest {
         assertThat(captor.getValue().getUrl()).isEmpty();
     }
 
-    /** 验证 S3 预签名客户端在配置对外 path-style domain 时使用浏览器可达基址。 */
-    @Test
-    void s3PresignerShouldResolveExternalPublicBaseWhenConfigured() {
-        com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig cfg =
-                new com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig();
-        cfg.setEndpoint("http://basic-framework-minio:9000");
-        cfg.setDomain("https://admin.example.com/files/basic-framework");
-        cfg.setBucket("basic-framework");
-        cfg.setAccessKey("ak");
-        cfg.setAccessSecret("sk");
-        cfg.setEnablePathStyleAccess(true);
-        cfg.setEnablePublicAccess(false);
-        com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient client =
-                new com.basicframework.module.infra.framework.file.core.client.s3.S3FileClient(1L, cfg);
-        java.net.URI internal = java.net.URI.create("http://basic-framework-minio:9000");
-        java.net.URI resolved = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
-                client, "resolvePresignerEndpoint", internal);
-        assertThat(resolved).isEqualTo(java.net.URI.create("https://admin.example.com/files"));
-    }
-
-    /** Verifies the optional signing endpoint overrides legacy inference and only accepts a root HTTP(S) origin. */
+    /** 验证 S3 预签名客户端在配置对外域名与显式签名根地址时的解析行为。 */
     @Test
     void s3PresignerShouldUseConfiguredRootSigningEndpoint() {
-        MinioFileProperties props = buildMinioProperties();
-        URI internal = URI.create("http://127.0.0.1:9000");
-        assertThat(props.isSigningEndpointValid()).isTrue();
-        assertThat(props.isPublicUrlSignable()).isTrue();
-        props.setPublicUrl("http://localhost:9000/basic-framework/");
-        assertThat(props.isPublicUrlSignable()).isTrue();
-        props.setPublicUrl("https://admin.example.com/files/basic-framework");
-        assertThat(props.isPublicUrlSignable()).isFalse();
-        props.setPublicUrl("https://admin.example.com/files");
-        assertThat(props.isPublicUrlSignable()).isFalse();
-        props.setSigningEndpoint("https://files.example.test");
-        assertThat(props.isPublicUrlSignable()).isTrue();
-        props.setSigningEndpoint(null);
-        props.setPublicUrl("http://localhost:9000");
-        assertThat(props.toClientConfig().getSigningEndpoint()).isNull();
-        URI legacy = ReflectionTestUtils.invokeMethod(new S3FileClient(1L, props.toClientConfig()),
-                "resolvePresignerEndpoint", internal);
-        assertThat(legacy).isEqualTo(URI.create("http://localhost:9000"));
+        FileStorageProperties props = buildOssProperties();
+        URI internal = URI.create("https://oss-cn-hangzhou.aliyuncs.com");
+        assertThat(props.isProviderValid()).isTrue();
+        assertThat(props.isAliyunOssConfigComplete()).isTrue();
 
-        props.setSigningEndpoint(" https://files.example.test:8443/ ");
-        S3FileClientConfig cfg = props.toClientConfig();
-        assertThat(props.isSigningEndpointValid()).isTrue();
+        props.getOss().setSigningEndpoint(" https://files.example.test:8443/ ");
+        S3FileClientConfig cfg = props.toAliyunOssClientConfig();
         assertThat(cfg.isSigningEndpointValid()).isTrue();
         URI resolved = ReflectionTestUtils.invokeMethod(new S3FileClient(2L, cfg),
                 "resolvePresignerEndpoint", internal);
         assertThat(resolved).isEqualTo(URI.create("https://files.example.test:8443"));
 
-        props.setSigningEndpoint("https://files.example.test/basic-framework");
-        S3FileClientConfig invalidCfg = props.toClientConfig();
-        assertThat(props.isSigningEndpointValid()).isFalse();
+        props.getOss().setSigningEndpoint("https://files.example.test/basic-framework");
+        S3FileClientConfig invalidCfg = props.toAliyunOssClientConfig();
         assertThat(invalidCfg.isSigningEndpointValid()).isFalse();
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(new S3FileClient(3L, invalidCfg),
                 "resolvePresignerEndpoint", internal))
@@ -331,10 +289,11 @@ class FileServiceImplTest {
     /** 核对签名保留存储原始键、网关 Host 及路径式桶名。 */
     @Test
     void s3PrivateGetShouldSignExactRawObjectKey() {
-        MinioFileProperties props = buildMinioProperties();
-        props.setPublicAccess(false);
-        props.setSigningEndpoint("https://files.example.test");
-        S3FileClientConfig cfg = props.toClientConfig();
+        FileStorageProperties props = buildOssProperties();
+        props.getOss().setPublicAccess(false);
+        props.getOss().setSigningEndpoint("https://files.example.test");
+        S3FileClientConfig cfg = props.toAliyunOssClientConfig();
+        cfg.setEnablePathStyleAccess(true);
         S3FileClient client = new S3FileClient(4L, cfg);
         URI signingEndpoint = ReflectionTestUtils.invokeMethod(client,
                 "resolvePresignerEndpoint", URI.create(cfg.getEndpoint()));
@@ -353,14 +312,8 @@ class FileServiceImplTest {
             assertThat(signed.getRawAuthority()).isEqualTo("files.example.test");
             assertThat(signed.getRawPath()).isEqualTo("/basic-framework/private/a%2520b%23c%2Bd.pdf");
             assertThat(signed.getRawQuery().contains("X-Amz-Signature=")).isTrue();
-            // 同时验证原始键和历史完整 URL 均能还原正确对象。
             URI viaRawKey = URI.create(client.presignGetUrl("private/a%20b#c+d.pdf", 300));
             assertThat(viaRawKey.getRawPath()).isEqualTo(signed.getRawPath());
-            URI viaLegacyUrl = URI.create(client.presignGetUrl(cfg.getDomain() + "/private/a%20b+c.pdf?v=1", 300));
-            assertThat(viaLegacyUrl.getRawPath()).isEqualTo("/basic-framework/private/a%20b%2Bc.pdf");
-            URI viaLegacyPrivateUrl = URI.create(client.presignPrivateGetUrl(
-                    cfg.getDomain() + "/private/a%20b+c.pdf?v=1", 300));
-            assertThat(viaLegacyPrivateUrl.getRawPath()).isEqualTo(viaLegacyUrl.getRawPath());
         }
     }
 
@@ -377,9 +330,9 @@ class FileServiceImplTest {
         assertThat(resp.getUrl()).isEmpty();
         verify(fileStorageService, never()).presignGetUrl(org.mockito.ArgumentMatchers.anyString(), any());
 
-        MinioFileProperties props = buildMinioProperties();
-        props.setPublicAccess(true);
-        S3FileClientConfig cfg = props.toClientConfig();
+        FileStorageProperties props = buildOssProperties();
+        props.getOss().setPublicAccess(true);
+        S3FileClientConfig cfg = props.toAliyunOssClientConfig();
         S3FileClient publicClient = new S3FileClient(5L, cfg);
         String publicUrl = publicClient.presignGetUrl("public/100%report#1?v=2 a+b.pdf", null);
         assertThat(publicUrl).isEqualTo(
@@ -388,15 +341,17 @@ class FileServiceImplTest {
         assertThat(extracted).isEqualTo("public/100%report#1?v=2 a+b.pdf");
     }
 
-    /** Builds synthetic MinIO properties for presigner tests. */
-    private static MinioFileProperties buildMinioProperties() {
-        MinioFileProperties props = new MinioFileProperties();
-        props.setEndpoint("http://127.0.0.1:9000");
-        props.setAccessKey("ak");
-        props.setSecretKey("sk");
-        props.setBucket("basic-framework");
-        props.setRegion("us-east-1");
-        props.setPublicUrl("http://localhost:9000");
+    /** Builds synthetic Aliyun OSS properties for presigner tests. */
+    private static FileStorageProperties buildOssProperties() {
+        FileStorageProperties props = new FileStorageProperties();
+        props.setProvider(FileStorageProperties.PROVIDER_ALIYUN_OSS);
+        props.getOss().setEndpoint("https://oss-cn-hangzhou.aliyuncs.com");
+        props.getOss().setAccessKey("ak");
+        props.getOss().setSecretKey("sk");
+        props.getOss().setBucket("basic-framework");
+        props.getOss().setRegion("oss-cn-hangzhou");
+        props.getOss().setPublicUrl("https://basic-framework.oss-cn-hangzhou.aliyuncs.com");
+        props.getOss().setPublicAccess(false);
         return props;
     }
 

@@ -99,18 +99,6 @@ public class AdminUserApiImpl implements AdminUserApi {
     }
 
     /**
-     * 获取用户ListByPostIds。
-     *
-     * @param postIds postIds 编号集合
-     * @return 查询或转换后的结果
-     */
-    @Override
-    public List<AdminUserRespDTO> getUserListByPostIds(Collection<Long> postIds) {
-        List<AdminUserDO> users = userService.getUserListByPostIds(postIds);
-        return BeanUtils.toBean(users, AdminUserRespDTO.class);
-    }
-
-    /**
      * 校验用户List。
      *
      * @param ids ids 编号集合

@@ -22,15 +22,9 @@
         <springdoc.version>2.8.17</springdoc.version>
         <knife4j.version>4.5.0</knife4j.version>
         <!-- DB 相关 -->
-        <druid.version>1.2.28</druid.version>
-        <!-- 保持 3.5.19：MyBatis 3.6.x 调整了 ReflectorFactory#findForClass 二进制签名，会导致 MyBatis-Plus 3.5.18.x 初始化 TableInfo 抛出 NoSuchMethodError（由 ConfigMapperTest 守护） -->
+        <!-- 保持 3.5.19：MyBatis 3.6.x 调整了 ReflectorFactory#findForClass 二进制签名，会导致 MyBatis-Plus 3.5.18.x 初始化 TableInfo 抛出 NoSuchMethodError -->
         <mybatis.version>3.5.19</mybatis.version>
         <mybatis-plus.version>3.5.18.1</mybatis-plus.version>
-        <mybatis-plus-join.version>1.5.9</mybatis-plus-join.version>
-        <dynamic-datasource.version>4.6.0</dynamic-datasource.version>
-        <easy-trans.version>3.0.6</easy-trans.version>
-        <!-- 监控相关 -->
-        <skywalking.version>9.8.0</skywalking.version>
         <!-- 工具类相关 -->
         <anji-plus-captcha.version>1.4.0</anji-plus-captcha.version>
         <jsoup.version>1.24.1</jsoup.version>
@@ -42,10 +36,8 @@
         <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
         <commons-lang3.version>3.22.0</commons-lang3.version>
         <tika-core.version>3.3.2</tika-core.version>
-        <ip2region.version>2.7.0</ip2region.version>
         <bcprov.version>1.86</bcprov.version>
-        <bizlog-sdk.version>3.0.6</bizlog-sdk.version>
-        <!-- 三方云服务相关 -->
+        <!-- 三方云服务相关（阿里云 OSS 走 S3 协议客户端） -->
         <awssdk.version>2.57.12</awssdk.version>
     </properties>
 
@@ -67,33 +59,14 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- 业务组件 -->
-            <dependency>
-                <groupId>io.github.mouzt</groupId>
-                <artifactId>bizlog-sdk</artifactId>
-                <version>${bizlog-sdk.version}</version>
-                <exclusions>
-                    <exclusion> <!-- 排除掉springboot依赖使用项目的 -->
-                        <groupId>org.springframework.boot</groupId>
-                        <artifactId>spring-boot-starter</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-spring-boot-starter-biz-data-permission</artifactId>
                 <version>${revision}</version>
             </dependency>
-            <dependency>
-                <groupId>com.basicframework</groupId>
-                <artifactId>basic-framework-spring-boot-starter-biz-ip</artifactId>
-                <version>${revision}</version>
-            </dependency>
 
             <!-- Spring 核心 -->
             <dependency>
-                <!-- 用于生成自定义的 Spring @ConfigurationProperties 配置类的说明文件 -->
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-configuration-processor</artifactId>
                 <version>${spring.boot.version}</version>
@@ -105,7 +78,6 @@
                 <artifactId>basic-framework-spring-boot-starter-web</artifactId>
                 <version>${revision}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-spring-boot-starter-security</artifactId>
@@ -135,14 +107,7 @@
                 <artifactId>basic-framework-spring-boot-starter-mybatis</artifactId>
                 <version>${revision}</version>
             </dependency>
-
             <dependency>
-                <groupId>com.alibaba</groupId>
-                <artifactId>druid-spring-boot-3-starter</artifactId>
-                <version>${druid.version}</version>
-            </dependency>
-            <dependency>
-                <!-- 统一约束 MyBatis 核心版本，与 MyBatis-Plus 保持一致。 -->
                 <groupId>org.mybatis</groupId>
                 <artifactId>mybatis</artifactId>
                 <version>${mybatis.version}</version>
@@ -157,42 +122,6 @@
                 <artifactId>mybatis-plus-jsqlparser</artifactId>
                 <version>${mybatis-plus.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.baomidou</groupId>
-                <artifactId>dynamic-datasource-spring-boot3-starter</artifactId> <!-- 多数据源 -->
-                <version>${dynamic-datasource.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.github.yulichang</groupId>
-                <artifactId>mybatis-plus-join-boot-starter</artifactId> <!-- MyBatis 联表查询 -->
-                <version>${mybatis-plus-join.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.fhs-opensource</groupId> <!-- VO 数据翻译 -->
-                <artifactId>easy-trans-spring-boot-starter</artifactId>
-                <version>${easy-trans.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.springframework</groupId>
-                        <artifactId>spring-context</artifactId>
-                    </exclusion>
-                    <exclusion>
-                        <groupId>org.springframework.cloud</groupId>
-                        <artifactId>spring-cloud-commons</artifactId>
-                    </exclusion>
-                </exclusions>
-            </dependency>
-            <dependency>
-                <groupId>com.fhs-opensource</groupId>
-                <artifactId>easy-trans-mybatis-plus-extend</artifactId>
-                <version>${easy-trans.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fhs-opensource</groupId>
-                <artifactId>easy-trans-anno</artifactId>
-                <version>${easy-trans.version}</version>
-            </dependency>
 
             <dependency>
                 <groupId>com.basicframework</groupId>
@@ -200,19 +129,6 @@
                 <version>${revision}</version>
             </dependency>
 
-            <!-- Job 定时任务相关 -->
-            <dependency>
-                <groupId>com.basicframework</groupId>
-                <artifactId>basic-framework-spring-boot-starter-job</artifactId>
-                <version>${revision}</version>
-            </dependency>
-
-            <!-- 监控相关 -->
-            <dependency>
-                <groupId>org.apache.skywalking</groupId>
-                <artifactId>apm-toolkit-trace</artifactId>
-                <version>${skywalking.version}</version>
-            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-test</artifactId>
@@ -227,33 +143,29 @@
 
             <!-- 工具类相关 -->
             <dependency>
-                <!-- SM2 国密算法实现，仅由 system 模块的密码传输组件使用 -->
+                <!-- SM2 国密算法实现 -->
                 <groupId>org.bouncycastle</groupId>
                 <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bcprov.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-common</artifactId>
                 <version>${revision}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.basicframework</groupId>
                 <artifactId>basic-framework-spring-boot-starter-excel</artifactId>
                 <version>${revision}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok</artifactId>
                 <version>${lombok.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.mapstruct</groupId>
-                <artifactId>mapstruct</artifactId> <!-- use mapstruct-jdk8 for Java 8 or higher -->
+                <artifactId>mapstruct</artifactId>
                 <version>${mapstruct.version}</version>
             </dependency>
             <dependency>
@@ -261,67 +173,51 @@
                 <artifactId>mapstruct-processor</artifactId>
                 <version>${mapstruct.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>cn.hutool</groupId>
                 <artifactId>hutool-all</artifactId>
                 <version>${hutool-5.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>cn.idev.excel</groupId>
                 <artifactId>fastexcel</artifactId>
                 <version>${fastexcel.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.apache.tika</groupId>
-                <artifactId>tika-core</artifactId> <!-- 文件类型的识别 -->
+                <artifactId>tika-core</artifactId>
                 <version>${tika-core.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
                 <version>${guava.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.alibaba</groupId>
-                <artifactId>transmittable-thread-local</artifactId> <!-- 解决 ThreadLocal 父子线程的传值问题 -->
+                <artifactId>transmittable-thread-local</artifactId>
                 <version>${transmittable-thread-local.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-lang3</artifactId>
-                <version>${commons-lang3.version}</version> <!-- 解决 CVE-2025-48924 漏洞 -->
+                <version>${commons-lang3.version}</version>
             </dependency>
-
             <dependency>
                 <groupId>com.anji-plus</groupId>
-                <artifactId>captcha-spring-boot-starter</artifactId> <!-- 验证码，一般用于登录使用 -->
+                <artifactId>captcha-spring-boot-starter</artifactId>
                 <version>${anji-plus-captcha.version}</version>
             </dependency>
-
-            <dependency>
-                <groupId>org.lionsoul</groupId>
-                <artifactId>ip2region</artifactId>
-                <version>${ip2region.version}</version>
-            </dependency>
-
             <dependency>
                 <groupId>org.jsoup</groupId>
                 <artifactId>jsoup</artifactId>
                 <version>${jsoup.version}</version>
             </dependency>
-
         </dependencies>
     </dependencyManagement>
 
     <build>
         <plugins>
-            <!-- 统一 revision 版本 -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>

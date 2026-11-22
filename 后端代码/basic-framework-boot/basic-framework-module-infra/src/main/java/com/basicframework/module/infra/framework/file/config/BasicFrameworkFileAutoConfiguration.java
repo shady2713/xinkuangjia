@@ -12,14 +12,9 @@ import org.springframework.context.annotation.Configuration;
  * @author 李杰
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(MinioFileProperties.class)
+@EnableConfigurationProperties(FileStorageProperties.class)
 public class BasicFrameworkFileAutoConfiguration {
 
-    /**
-     * 创建进程内统一的文件客户端工厂。
-     *
-     * @return 文件客户端工厂
-     */
     @Bean
     public FileClientFactory fileClientFactory() {
         return new FileClientFactoryImpl();

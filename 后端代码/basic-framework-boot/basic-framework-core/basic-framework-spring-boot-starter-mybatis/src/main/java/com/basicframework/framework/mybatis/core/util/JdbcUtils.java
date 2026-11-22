@@ -3,9 +3,7 @@ package com.basicframework.framework.mybatis.core.util;
 import cn.hutool.core.util.ObjectUtil;
 import com.basicframework.framework.common.util.spring.SpringUtils;
 import com.basicframework.framework.mybatis.core.enums.DbTypeEnum;
-import com.baomidou.dynamic.datasource.DynamicRoutingDataSource;
 import com.baomidou.mybatisplus.annotation.DbType;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -13,19 +11,19 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /**
- * JDBC 工具类
+ * JDBC 工具类。
  *
  * @author 李杰
  */
 public class JdbcUtils {
 
     /**
-     * 判断连接是否正确
+     * 判断数据库连接参数是否可正常建立连接。
      *
-     * @param url      数据源连接
+     * @param url 数据源连接地址
      * @param username 账号
      * @param password 密码
-     * @return 是否正确
+     * @return 连接成功返回 true
      */
     public static boolean isConnectionOK(String url, String username, String password) {
         try (Connection ignored = DriverManager.getConnection(url, username, password)) {
@@ -36,29 +34,23 @@ public class JdbcUtils {
     }
 
     /**
-     * 获得 URL 对应的 DB 类型
+     * 获得 JDBC URL 对应的数据库类型。
      *
-     * @param url URL
-     * @return DB 类型
+     * @param url JDBC 连接地址
+     * @return 数据库类型
      */
     public static DbType getDbType(String url) {
         return com.baomidou.mybatisplus.extension.toolkit.JdbcUtils.getDbType(url);
     }
 
     /**
-     * 通过当前数据库连接获得对应的 DB 类型
+     * 通过当前应用数据源元数据获得数据库类型。
      *
-     * @return DB 类型
-     * @throws IllegalStateException 获取连接或读取数据库元数据失败时抛出
+     * @return 数据库类型
+     * @throws IllegalStateException 获取连接或读取元数据失败时抛出
      */
     public static DbType getDbType() {
-        DataSource dataSource;
-        try {
-            DynamicRoutingDataSource dynamicRoutingDataSource = SpringUtils.getBean(DynamicRoutingDataSource.class);
-            dataSource = dynamicRoutingDataSource.determineDataSource();
-        } catch (NoSuchBeanDefinitionException e) {
-            dataSource = SpringUtils.getBean(DataSource.class);
-        }
+        DataSource dataSource = SpringUtils.getBean(DataSource.class);
         try (Connection conn = dataSource.getConnection()) {
             return DbTypeEnum.find(conn.getMetaData().getDatabaseProductName());
         } catch (SQLException e) {
@@ -67,21 +59,20 @@ public class JdbcUtils {
     }
 
     /**
-     * 判断 JDBC 连接是否为 SQLServer 数据库
+     * 判断 JDBC 连接是否为 SQLServer 数据库。
      *
-     * @param url JDBC 连接
-     * @return 是否为 SQLServer 数据库
+     * @param url JDBC 连接地址
+     * @return 是否为 SQLServer
      */
     public static boolean isSQLServer(String url) {
-        DbType dbType = getDbType(url);
-        return isSQLServer(dbType);
+        return isSQLServer(getDbType(url));
     }
 
     /**
-     * 判断 JDBC 连接是否为 SQLServer 数据库
+     * 判断数据库类型是否为 SQLServer。
      *
-     * @param dbType DB 类型
-     * @return 是否为 SQLServer 数据库
+     * @param dbType 数据库类型
+     * @return 是否为 SQLServer
      */
     public static boolean isSQLServer(DbType dbType) {
         return ObjectUtil.equal(dbType, DbType.SQL_SERVER) || ObjectUtil.equal(dbType, DbType.SQL_SERVER2005);

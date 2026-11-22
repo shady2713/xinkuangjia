@@ -1,13 +1,9 @@
 package com.basicframework.module.system.controller.admin.logger.vo.operatelog;
 
 import com.basicframework.framework.excel.core.annotations.DictFormat;
-import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import cn.idev.excel.annotation.ExcelProperty;
 import com.basicframework.module.system.enums.DictTypeConstants;
-import com.fhs.core.trans.anno.Trans;
-import com.fhs.core.trans.constant.TransType;
-import com.fhs.core.trans.vo.VO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
@@ -22,7 +18,7 @@ import java.time.LocalDateTime;
 @Schema(description = "管理后台 - 操作日志 Response VO")
 @Data
 @ExcelIgnoreUnannotated
-public class OperateLogRespVO implements VO {
+public class OperateLogRespVO {
 
     /**
      * 日志编号。
@@ -41,7 +37,6 @@ public class OperateLogRespVO implements VO {
      * 用户编号。
      */
     @Schema(description = "用户编号", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
-    @Trans(type = TransType.SIMPLE, target = AdminUserDO.class, fields = "nickname", ref = "userName")
     private Long userId;
     /**
      * 用户昵称。

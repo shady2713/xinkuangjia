@@ -1,16 +1,17 @@
 package com.basicframework.module.system.controller.admin.logger;
 
-import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
+import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
+import com.basicframework.framework.common.util.collection.CollectionUtils;
 import com.basicframework.framework.common.util.object.BeanUtils;
 import com.basicframework.framework.excel.core.util.ExcelUtils;
-import com.basicframework.framework.translate.core.TranslateUtils;
 import com.basicframework.module.system.controller.admin.logger.vo.operatelog.OperateLogPageReqVO;
 import com.basicframework.module.system.controller.admin.logger.vo.operatelog.OperateLogRespVO;
 import com.basicframework.module.system.dal.dataobject.logger.OperateLogDO;
+import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.service.logger.OperateLogService;
-import com.fhs.core.trans.anno.TransMethodResult;
+import com.basicframework.module.system.service.user.AdminUserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,14 +27,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import static com.basicframework.framework.apilog.core.enums.OperateTypeEnum.EXPORT;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.LOG_EXPORT_SIZE_EXCEEDED;
 
 /**
- * 操作日志 Controller，提供操作日志的分页查询能力
+ * 操作日志 Controller，提供操作日志的分页查询与导出能力。
  *
  * @author 李杰
  */
@@ -43,54 +45,40 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.LOG_EXPO
 @Validated
 public class OperateLogController {
 
-    /** 单次 Excel 导出上限，避免无边界加载持续增长的日志数据。 */
     private static final int MAX_EXPORT_SIZE = 10_000;
 
     @Resource
     private OperateLogService operateLogService;
 
-    /**
-     * 获取Operate日志。
-     *
-     * @param id 主键编号
-     * @return 查询结果
-     */
+    @Resource
+    private AdminUserService adminUserService;
+
     @GetMapping("/get")
     @Operation(summary = "查看操作日志")
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('system:operate-log:query')")
     public CommonResult<OperateLogRespVO> getOperateLog(@RequestParam("id") Long id) {
         OperateLogDO operateLog = operateLogService.getOperateLog(id);
-        return success(BeanUtils.toBean(operateLog, OperateLogRespVO.class));
+        OperateLogRespVO respVO = BeanUtils.toBean(operateLog, OperateLogRespVO.class);
+        if (respVO != null) {
+            fillUserNames(List.of(respVO));
+        }
+        return success(respVO);
     }
 
-    /**
-     * 完成 pageOperateLog 对应的业务处理。
-     *
-     * @param pageReqVO 请求参数
-     * @return 方法处理结果
-     */
     @GetMapping("/page")
     @Operation(summary = "查看操作日志分页列表")
     @PreAuthorize("@ss.hasPermission('system:operate-log:query')")
-    @TransMethodResult
     public CommonResult<PageResult<OperateLogRespVO>> pageOperateLog(@Valid OperateLogPageReqVO pageReqVO) {
         PageResult<OperateLogDO> pageResult = operateLogService.getOperateLogPage(pageReqVO);
-        return success(BeanUtils.toBean(pageResult, OperateLogRespVO.class));
+        PageResult<OperateLogRespVO> voPage = BeanUtils.toBean(pageResult, OperateLogRespVO.class);
+        fillUserNames(voPage.getList());
+        return success(voPage);
     }
 
-    /**
-     * 导出Operate日志。
-     *
-     * @param response HTTP 响应
-     * @param exportReqVO 请求参数
-     * @throws IOException 执行失败时抛出
-     */
     @Operation(summary = "导出操作日志")
     @GetMapping("/export-excel")
     @PreAuthorize("@ss.hasPermission('system:operate-log:export')")
-    @TransMethodResult
-    @ApiAccessLog(operateType = EXPORT)
     public void exportOperateLog(HttpServletResponse response,
                                  @Valid OperateLogPageReqVO exportReqVO) throws IOException {
         exportReqVO.setPageNo(1);
@@ -99,9 +87,26 @@ public class OperateLogController {
         if (page.getTotal() > MAX_EXPORT_SIZE) {
             throw exception(LOG_EXPORT_SIZE_EXCEEDED);
         }
-        List<OperateLogDO> list = page.getList();
-        ExcelUtils.write(response, "操作日志.xls", "数据列表", OperateLogRespVO.class,
-                TranslateUtils.translate(BeanUtils.toBean(list, OperateLogRespVO.class)));
+        List<OperateLogRespVO> list = BeanUtils.toBean(page.getList(), OperateLogRespVO.class);
+        fillUserNames(list);
+        ExcelUtils.write(response, "操作日志.xls", "数据列表", OperateLogRespVO.class, list);
+    }
+
+    private void fillUserNames(List<OperateLogRespVO> list) {
+        if (CollUtil.isEmpty(list)) {
+            return;
+        }
+        Set<Long> userIds = CollectionUtils.convertSet(list, OperateLogRespVO::getUserId);
+        if (CollUtil.isEmpty(userIds)) {
+            return;
+        }
+        Map<Long, AdminUserDO> userMap = adminUserService.getUserMap(userIds);
+        for (OperateLogRespVO vo : list) {
+            AdminUserDO user = userMap.get(vo.getUserId());
+            if (user != null) {
+                vo.setUserName(user.getNickname());
+            }
+        }
     }
 
 }

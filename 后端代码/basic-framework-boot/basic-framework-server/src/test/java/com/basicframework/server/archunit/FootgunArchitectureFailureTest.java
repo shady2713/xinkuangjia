@@ -160,16 +160,4 @@ class FootgunArchitectureFailureTest {
                 FootgunRules.classLevelTransactionalMustDeclareRollbackFor().evaluate(classes),
                 "ForbiddenClassLevelTxService");
     }
-
-    /** 类级与方法级使用 @DSTransactional 必须失败。 */
-    @Test
-    void dynamicDatasourceTransactionalFails() {
-        JavaClasses classes = importFixtures(ForbiddenClassLevelTxService.class);
-        assertViolated(
-                FootgunRules.noDynamicDatasourceTransactionalOnClasses().evaluate(classes),
-                "ForbiddenClassLevelTxService");
-        assertViolated(
-                FootgunRules.noDynamicDatasourceTransactionalOnMethods().evaluate(classes),
-                "ForbiddenClassLevelTxService");
-    }
 }

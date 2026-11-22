@@ -183,19 +183,13 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
         OAuth2ClientDO client = new OAuth2ClientDO();
         client.setClientId(OAuth2ClientConstants.CLIENT_ID_SYSTEM);
         client.setName("管理后台内部会话");
-        client.setLogo("");
         client.setDescription("管理后台登录与刷新令牌使用的内部客户端，不参与开放接口授权");
         client.setSecret("");
         client.setStatus(CommonStatusEnum.ENABLE.getStatus());
         client.setAccessTokenValiditySeconds(toValiditySeconds(session.getAccessTokenValidity()));
         client.setRefreshTokenValiditySeconds(toValiditySeconds(session.getRefreshTokenValidity()));
-        client.setRedirectUris(List.of());
         client.setAuthorizedGrantTypes(List.of());
         client.setScopes(List.of());
-        client.setAutoApproveScopes(List.of());
-        client.setAuthorities(List.of());
-        client.setResourceIds(List.of());
-        client.setAdditionalInformation("{}");
         return client;
     }
 
@@ -261,10 +255,6 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
         // 校验授权范围
         if (CollUtil.isNotEmpty(scopes) && !CollUtil.containsAll(client.getScopes(), scopes)) {
             throw exception(OAUTH2_CLIENT_SCOPE_OVER);
-        }
-        // 校验回调地址
-        if (StrUtil.isNotEmpty(redirectUri) && !CollUtil.contains(client.getRedirectUris(), redirectUri)) {
-            throw exception(OAUTH2_CLIENT_REDIRECT_URI_NOT_MATCH, redirectUri);
         }
         return client;
     }

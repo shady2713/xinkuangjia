@@ -1,12 +1,10 @@
 package com.basicframework.module.system.controller.admin.user;
 
 import cn.hutool.core.collection.CollUtil;
-import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.excel.core.util.ExcelUtils;
-import com.basicframework.framework.apilog.core.enums.OperateTypeEnum;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserImportExcelVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserImportRespVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserPageReqVO;
@@ -17,13 +15,11 @@ import com.basicframework.module.system.controller.admin.user.vo.user.UserUpdate
 import com.basicframework.module.system.controller.admin.user.vo.user.UserUpdateStatusReqVO;
 import com.basicframework.module.system.convert.user.UserConvert;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
-import com.basicframework.module.system.dal.dataobject.dept.PostDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.enums.ErrorCodeConstants;
 import com.basicframework.module.system.enums.common.SexEnum;
 import com.basicframework.module.system.framework.security.sm2.Sm2PasswordTransportService;
 import com.basicframework.module.system.service.dept.DeptService;
-import com.basicframework.module.system.service.dept.PostService;
 import com.basicframework.module.system.service.user.AdminUserService;
 import com.basicframework.module.system.service.permission.PermissionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,7 +44,6 @@ import java.util.Map;
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 import static com.basicframework.framework.common.util.collection.CollectionUtils.convertList;
-import static com.basicframework.framework.common.util.collection.CollectionUtils.convertSet;
 
 /**
  * 管理后台用户接口，负责用户维护、导入导出及 HTTP 协议适配。
@@ -70,8 +65,6 @@ public class UserController {
     private PermissionService permissionService;
     @Resource
     private DeptService deptService;
-    @Resource
-    private PostService postService;
     @Resource
     private Sm2PasswordTransportService sm2PasswordTransportService;
 
@@ -237,13 +230,7 @@ public class UserController {
         }
         // 拼接数据
         DeptDO dept = deptService.getDept(user.getDeptId());
-        UserRespVO userVO = UserConvert.INSTANCE.convert(user, dept);
-        // 校验岗位是否有效，过滤已删除的岗位
-        if (CollUtil.isNotEmpty(user.getPostIds())) {
-            List<PostDO> postList = postService.getPostList(user.getPostIds());
-            userVO.setPostIds(convertSet(postList, PostDO::getId));
-        }
-        return success(userVO);
+        return success(UserConvert.INSTANCE.convert(user, dept));
     }
 
     /**
@@ -258,7 +245,6 @@ public class UserController {
     @GetMapping("/export-excel")
     @Operation(summary = "导出用户")
     @PreAuthorize("@ss.hasPermission('system:user:export')")
-    @ApiAccessLog(operateType = OperateTypeEnum.EXPORT)
     public void exportUserList(@Validated UserPageReqVO exportReqVO,
                                HttpServletResponse response) throws IOException {
         exportReqVO.setPageNo(1);

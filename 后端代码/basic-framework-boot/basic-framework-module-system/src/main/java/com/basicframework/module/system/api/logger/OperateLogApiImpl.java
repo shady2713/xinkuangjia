@@ -7,7 +7,6 @@ import com.basicframework.module.system.api.logger.dto.OperateLogPageReqDTO;
 import com.basicframework.module.system.api.logger.dto.OperateLogRespDTO;
 import com.basicframework.module.system.dal.dataobject.logger.OperateLogDO;
 import com.basicframework.module.system.service.logger.OperateLogService;
-import com.fhs.core.trans.anno.TransMethodResult;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -41,7 +40,6 @@ public class OperateLogApiImpl implements OperateLogApi {
      * @return 查询或转换后的结果
      */
     @Override
-    @TransMethodResult
     public PageResult<OperateLogRespDTO> getOperateLogPage(OperateLogPageReqDTO pageReqDTO) {
         PageResult<OperateLogDO> operateLogPage = operateLogService.getOperateLogPage(pageReqDTO);
         return BeanUtils.toBean(operateLogPage, OperateLogRespDTO.class);

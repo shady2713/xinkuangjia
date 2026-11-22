@@ -37,10 +37,6 @@ vi.mock('#/api/system/dept', () => ({
   getDeptList: vi.fn(async () => []),
 }));
 
-vi.mock('#/api/system/post', () => ({
-  getSimplePostList: vi.fn(async () => []),
-}));
-
 vi.mock('#/api/system/role', () => ({
   getSimpleRoleList: vi.fn(async () => []),
 }));

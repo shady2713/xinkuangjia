@@ -1,7 +1,6 @@
 package com.basicframework.module.system.controller.admin.user.vo.profile;
 
 import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptSimpleRespVO;
-import com.basicframework.module.system.controller.admin.dept.vo.post.PostSimpleRespVO;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RoleSimpleRespVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -87,9 +86,5 @@ public class UserProfileRespVO {
      * 所在部门。
      */
     private DeptSimpleRespVO dept;
-    /**
-     * 所属岗位数组。
-     */
-    private List<PostSimpleRespVO> posts;
 
 }

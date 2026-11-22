@@ -7,13 +7,12 @@ import { watch } from 'vue';
 
 import { useVbenModal } from '@vben/common-ui';
 import { buildSortingField } from '@vben/request';
-import { downloadFileFromBlobPart, isEmpty } from '@vben/utils';
+import { isEmpty } from '@vben/utils';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   deleteDictData,
   deleteDictDataList,
-  exportDictData,
   getDictDataPage,
 } from '#/api/system/dict/data';
 import { useCrudActions } from '#/composables/use-crud-actions';
@@ -38,15 +37,6 @@ const [DataFormModal, dataFormModalApi] = useVbenModal({
 function handleRefresh() {
   clearCheckedIds();
   gridApi.query();
-}
-
-/** 导出表格 */
-async function handleExport() {
-  const data = await exportDictData({
-    ...(await gridApi.formApi.getValues()),
-    dictType: props.dictType,
-  });
-  downloadFileFromBlobPart({ fileName: '字典数据.xlsx', source: data });
 }
 
 const {
@@ -126,13 +116,6 @@ watch(
               icon: ACTION_ICON.ADD,
               auth: ['system:dict:create'],
               onClick: handleCreate,
-            },
-            {
-              label: $t('ui.actionTitle.export'),
-              type: 'primary',
-              icon: ACTION_ICON.DOWNLOAD,
-              auth: ['system:dict:export'],
-              onClick: handleExport,
             },
             {
               label: $t('ui.actionTitle.deleteBatch'),

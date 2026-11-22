@@ -1,18 +1,11 @@
 package com.basicframework.framework.web.core.handler;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.exceptions.ExceptionUtil;
-import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
-import com.basicframework.framework.apilog.core.annotation.ApiAccessLog;
-import com.basicframework.framework.apilog.core.interceptor.ApiAccessLogInterceptor;
-import com.basicframework.framework.common.biz.infra.logger.ApiErrorLogCommonApi;
-import com.basicframework.framework.common.biz.infra.logger.dto.ApiErrorLogCreateReqDTO;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.exception.util.ServiceExceptionUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
-import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.framework.common.util.monitor.TracerUtils;
 import com.basicframework.framework.common.util.servlet.ServletUtils;
 import com.basicframework.framework.web.core.util.SensitiveDataUtils;
@@ -27,7 +20,6 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.util.Assert;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -37,15 +29,12 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.*;
@@ -67,8 +56,6 @@ public class GlobalExceptionHandler {
 
     @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection")
     private final String applicationName;
-
-    private final ApiErrorLogCommonApi apiErrorLogApi;
 
     /**
      * 处理所有异常，主要是提供给 Filter 使用
@@ -346,9 +333,8 @@ public class GlobalExceptionHandler {
         if (sqlResult != null) {
             return sqlResult;
         }
-        log.error("[defaultExceptionHandler]", ex);
-        // 插入异常日志
-        createExceptionLog(req, ex);
+        // 结构化记录脱敏后的异常上下文到应用日志，不再写入无 UI 消费的数据库异常表
+        logSanitizedException(req, ex);
         // 返回 ERROR CommonResult
         return CommonResult.error(INTERNAL_SERVER_ERROR.getCode(), INTERNAL_SERVER_ERROR.getMsg());
     }
@@ -375,76 +361,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 构建并异步写入 API 异常日志；普通日志异常不覆盖原业务异常响应。
+     * 将脱敏后的请求上下文与异常堆栈输出到应用日志。
      *
-     * @param req 请求
-     * @param e 原业务异常
+     * @param req HTTP 请求
+     * @param ex 未捕获异常
      */
-    private void createExceptionLog(HttpServletRequest req, Throwable e) {
-        // 插入错误日志
-        ApiErrorLogCreateReqDTO errorLog = new ApiErrorLogCreateReqDTO();
-        try {
-            // 初始化 errorLog
-            buildExceptionLog(errorLog, req, e);
-            // 执行插入 errorLog
-            apiErrorLogApi.createApiErrorLogAsync(errorLog);
-        } catch (Exception exception) {
-            log.error("[createExceptionLog][url({}) traceId({}) exceptionName({}) 发生异常]",
-                    req.getRequestURI(), errorLog.getTraceId(), errorLog.getExceptionName(), exception);
-        }
-    }
-
-    /**
-     * 补全异常、调用方和请求上下文字段，并对请求参数执行脱敏。
-     *
-     * @param errorLog 异常日志请求
-     * @param request 请求
-     * @param e 原业务异常
-     */
-    private void buildExceptionLog(ApiErrorLogCreateReqDTO errorLog, HttpServletRequest request, Throwable e) {
-        // 处理用户信息
-        errorLog.setUserId(WebFrameworkUtils.getLoginUserId(request));
-        errorLog.setUserType(WebFrameworkUtils.getLoginUserType(request));
-        // 设置异常字段
-        errorLog.setExceptionName(e.getClass().getName());
-        errorLog.setExceptionMessage(ExceptionUtil.getMessage(e));
-        errorLog.setExceptionRootCauseMessage(ExceptionUtil.getRootCauseMessage(e));
-        errorLog.setExceptionStackTrace(ExceptionUtil.stacktraceToString(e));
-        StackTraceElement[] stackTraceElements = e.getStackTrace();
-        Assert.notEmpty(stackTraceElements, "异常 stackTraceElements 不能为空");
-        StackTraceElement stackTraceElement = stackTraceElements[0];
-        errorLog.setExceptionClassName(stackTraceElement.getClassName());
-        errorLog.setExceptionFileName(StrUtil.blankToDefault(stackTraceElement.getFileName(), "UnknownSource"));
-        errorLog.setExceptionMethodName(stackTraceElement.getMethodName());
-        errorLog.setExceptionLineNumber(stackTraceElement.getLineNumber());
-        // 设置其它字段
-        errorLog.setTraceId(TracerUtils.getTraceId());
-        errorLog.setApplicationName(applicationName);
-        errorLog.setRequestUrl(request.getRequestURI());
-        String[] sanitizeKeys = resolveSanitizeKeys(request);
-        Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", SensitiveDataUtils.sanitizeMap(ServletUtils.getParamMap(request), sanitizeKeys))
-                .put("body", SensitiveDataUtils.sanitizeJson(ServletUtils.getBody(request), sanitizeKeys)).build();
-        errorLog.setRequestParams(JsonUtils.toJsonString(requestParams));
-        errorLog.setRequestMethod(request.getMethod());
-        errorLog.setUserAgent(ServletUtils.getUserAgent(request));
-        errorLog.setUserIp(ServletUtils.getClientIP(request));
-        errorLog.setExceptionTime(LocalDateTime.now());
-    }
-
-    /**
-     * 读取当前请求关联处理器方法上的 {@link ApiAccessLog#sanitizeKeys()} 配置。
-     *
-     * @param request 当前 HTTP 请求
-     * @return 自定义敏感字段数组；未关联处理方法或未声明注解时返回 null
-     */
-    private static String[] resolveSanitizeKeys(HttpServletRequest request) {
-        Object handlerAttribute = request.getAttribute(ApiAccessLogInterceptor.ATTRIBUTE_HANDLER_METHOD);
-        if (!(handlerAttribute instanceof HandlerMethod handlerMethod)) {
-            return null;
-        }
-        ApiAccessLog accessLogAnnotation = handlerMethod.getMethodAnnotation(ApiAccessLog.class);
-        return accessLogAnnotation != null ? accessLogAnnotation.sanitizeKeys() : null;
+    private void logSanitizedException(HttpServletRequest req, Throwable ex) {
+        String sanitizedQuery = SensitiveDataUtils.sanitizeMap(ServletUtils.getParamMap(req));
+        String sanitizedBody = SensitiveDataUtils.sanitizeJson(ServletUtils.getBody(req));
+        log.error("[defaultExceptionHandler][app({}) traceId({}) userId({}) method({}) url({}) query({}) body({})]",
+                applicationName, TracerUtils.getTraceId(), WebFrameworkUtils.getLoginUserId(req),
+                req.getMethod(), req.getRequestURI(), sanitizedQuery, sanitizedBody, ex);
     }
 
 }

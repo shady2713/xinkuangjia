@@ -6,113 +6,6 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------
--- Table structure for infra_api_access_log
--- ----------------------------
-DROP TABLE IF EXISTS `infra_api_access_log`;
-CREATE TABLE `infra_api_access_log`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志主键',
-  `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '链路追踪编号',
-  `user_id` bigint NOT NULL DEFAULT 0 COMMENT '用户编号',
-  `user_type` tinyint NOT NULL DEFAULT 0 COMMENT '用户类型',
-  `application_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用名',
-  `request_method` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '请求方法名',
-  `request_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '请求地址',
-  `request_params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '请求参数',
-  `response_body` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '响应结果',
-  `user_ip` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户 IP',
-  `user_agent` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '浏览器 UA',
-  `operate_module` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '操作模块',
-  `operate_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '操作名',
-  `operate_type` tinyint NULL DEFAULT 0 COMMENT '操作分类',
-  `begin_time` datetime NOT NULL COMMENT '开始请求时间',
-  `end_time` datetime NOT NULL COMMENT '结束请求时间',
-  `duration` int NOT NULL COMMENT '执行时长',
-  `result_code` int NOT NULL DEFAULT 0 COMMENT '结果码',
-  `result_msg` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '结果提示',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_create_time`(`create_time` ASC) USING BTREE,
-  INDEX `idx_user_id`(`user_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 264 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'API 访问日志表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of infra_api_access_log
--- ----------------------------
-
--- ----------------------------
--- Table structure for infra_api_error_log
--- ----------------------------
-DROP TABLE IF EXISTS `infra_api_error_log`;
-CREATE TABLE `infra_api_error_log`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '链路追踪编号',
-  `user_id` bigint NOT NULL DEFAULT 0 COMMENT '用户编号',
-  `user_type` tinyint NOT NULL DEFAULT 0 COMMENT '用户类型',
-  `application_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用名',
-  `request_method` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '请求方法名',
-  `request_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '请求地址',
-  `request_params` varchar(8000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '请求参数',
-  `user_ip` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户 IP',
-  `user_agent` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '浏览器 UA',
-  `exception_time` datetime NOT NULL COMMENT '异常发生时间',
-  `exception_name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '异常名',
-  `exception_message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常导致的消息',
-  `exception_root_cause_message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常导致的根消息',
-  `exception_stack_trace` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常的栈轨迹',
-  `exception_class_name` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常发生的类全名',
-  `exception_file_name` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常发生的类文件',
-  `exception_method_name` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '异常发生的方法名',
-  `exception_line_number` int NOT NULL COMMENT '异常发生的方法所在行',
-  `process_status` tinyint NOT NULL COMMENT '处理状态',
-  `process_time` datetime NULL DEFAULT NULL COMMENT '处理时间',
-  `process_user_id` bigint NULL DEFAULT 0 COMMENT '处理用户编号',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_process_status`(`process_status` ASC) USING BTREE,
-  INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 21 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '系统异常日志' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of infra_api_error_log
--- ----------------------------
-
--- ----------------------------
--- Table structure for infra_config
--- ----------------------------
-DROP TABLE IF EXISTS `infra_config`;
-CREATE TABLE `infra_config`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '参数主键',
-  `category` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '参数分组',
-  `type` tinyint NOT NULL COMMENT '参数类型',
-  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '参数名称',
-  `config_key` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '参数键名',
-  `value` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '参数键值',
-  `visible` bit(1) NOT NULL COMMENT '是否可见',
-  `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_config_key`(`config_key` ASC, `deleted_tag` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '参数配置表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of infra_config
--- ----------------------------
-INSERT INTO `infra_config` VALUES (2, 'biz', 1, '用户管理-账号初始密码', 'system.user.init-password', '', b'0', '首次部署后由管理员设置并通过受控流程下发', 'admin', '2021-01-05 17:03:48', '1', '2026-04-11 12:40:17', b'0', 0);
-
--- ----------------------------
 -- Table structure for infra_file
 -- ----------------------------
 DROP TABLE IF EXISTS `infra_file`;
@@ -138,70 +31,6 @@ CREATE TABLE `infra_file`  (
 -- Records of infra_file
 -- ----------------------------
 
--- ----------------------------
--- Table structure for infra_job
--- ----------------------------
-DROP TABLE IF EXISTS `infra_job`;
-CREATE TABLE `infra_job`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '任务编号',
-  `name` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务名称',
-  `status` tinyint NOT NULL COMMENT '任务状态',
-  `handler_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '处理器的名字',
-  `handler_param` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '处理器的参数',
-  `cron_expression` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'CRON 表达式',
-  `retry_count` int NOT NULL DEFAULT 0 COMMENT '重试次数',
-  `retry_interval` int NOT NULL DEFAULT 0 COMMENT '重试间隔',
-  `monitor_timeout` int NOT NULL DEFAULT 0 COMMENT '监控超时时间',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一键消歧标识（活跃为0，软删为id）',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_handler_name_deleted_tag`(`handler_name` ASC, `deleted_tag` ASC) USING BTREE,
-  INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 42 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of infra_job
--- ----------------------------
-INSERT INTO `infra_job` VALUES (25, '访问日志清理 Job', 2, 'accessLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 10:59:41', '1', '2023-10-03 11:01:10', b'0', 0);
-INSERT INTO `infra_job` VALUES (26, '错误日志清理 Job', 2, 'errorLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:00:43', '1', '2023-10-03 11:01:12', b'0', 0);
-INSERT INTO `infra_job` VALUES (27, '任务日志清理 Job', 2, 'jobLogCleanJob', '', '0 0 0 * * ?', 3, 0, 0, '1', '2023-10-03 11:01:33', '1', '2024-09-12 13:40:34', b'0', 0);
-
--- ----------------------------
--- Table structure for infra_job_log
--- ----------------------------
-DROP TABLE IF EXISTS `infra_job_log`;
-CREATE TABLE `infra_job_log`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志编号',
-  `job_id` bigint NOT NULL COMMENT '任务编号',
-  `handler_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '处理器的名字',
-  `handler_param` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '处理器的参数',
-  `execute_index` tinyint NOT NULL DEFAULT 1 COMMENT '第几次执行',
-  `begin_time` datetime NOT NULL COMMENT '开始执行时间',
-  `end_time` datetime NULL DEFAULT NULL COMMENT '结束执行时间',
-  `duration` int NULL DEFAULT NULL COMMENT '执行时长',
-  `status` tinyint NOT NULL COMMENT '任务状态',
-  `result` varchar(4000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '结果数据',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_job_id`(`job_id` ASC) USING BTREE,
-  INDEX `idx_status`(`status` ASC) USING BTREE,
-  INDEX `idx_create_time`(`create_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '定时任务日志表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of infra_job_log
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_dept
 -- ----------------------------
 DROP TABLE IF EXISTS `system_dept`;
 CREATE TABLE `system_dept`  (
@@ -462,12 +291,9 @@ INSERT INTO `system_menu` VALUES (100, '用户管理', 'system:user:list', 2, 's
 INSERT INTO `system_menu` VALUES (101, '角色管理', '', 2, 'super_admin', 2, 1, 'role', 'ep:user', 'system/role/index', 'SystemRole', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (102, '菜单管理', '', 2, 'super_admin', 3, 1, 'menu', 'ep:menu', 'system/menu/index', 'SystemMenu', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (103, '部门管理', '', 2, 'super_admin', 4, 1, 'dept', 'fa:address-card', 'system/dept/index', 'SystemDept', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (104, '岗位管理', '', 2, 'super_admin', 5, 1, 'post', 'fa:address-book-o', 'system/post/index', 'SystemPost', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (105, '字典管理', '', 2, 'super_admin', 6, 1, 'dict', 'ep:collection', 'system/dict/index', 'SystemDictType', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (106, '配置管理', '', 2, 'super_admin', 8, 2, 'config', 'fa:connectdevelop', 'infra/config/index', 'InfraConfig', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (107, '文件管理', 'infra:file:query', 2, 'super_admin', 3, 2, 'file', 'ep:document', 'infra/file/index', 'InfraFile', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (108, '审计日志', '', 1, 'super_admin', 9, 1, 'log', 'ep:document-copy', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (110, '定时任务', '', 2, 'super_admin', 7, 2, 'job', 'fa-solid:tasks', 'infra/job/index', 'InfraJob', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (500, '操作日志', '', 2, 'super_admin', 1, 108, 'operate-log', 'ep:position', 'system/operatelog/index', 'SystemOperateLog', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (501, '登录日志', '', 2, 'super_admin', 2, 108, 'login-log', 'ep:promotion', 'system/loginlog/index', 'SystemLoginLog', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1001, '用户查询', 'system:user:query', 3, 'super_admin', 1, 100, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
@@ -481,7 +307,6 @@ INSERT INTO `system_menu` VALUES (1008, '角色查询', 'system:role:query', 3, 
 INSERT INTO `system_menu` VALUES (1009, '角色新增', 'system:role:create', 3, 'super_admin', 2, 101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1010, '角色修改', 'system:role:update', 3, 'super_admin', 3, 101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1011, '角色删除', 'system:role:delete', 3, 'super_admin', 4, 101, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1012, '角色导出', 'system:role:export', 3, 'super_admin', 5, 101, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1013, '菜单查询', 'system:menu:query', 3, 'super_admin', 1, 102, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1014, '菜单新增', 'system:menu:create', 3, 'super_admin', 2, 102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1015, '菜单修改', 'system:menu:update', 3, 'super_admin', 3, 102, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
@@ -490,48 +315,17 @@ INSERT INTO `system_menu` VALUES (1017, '部门查询', 'system:dept:query', 3, 
 INSERT INTO `system_menu` VALUES (1018, '部门新增', 'system:dept:create', 3, 'super_admin', 2, 103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1019, '部门修改', 'system:dept:update', 3, 'super_admin', 3, 103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1020, '部门删除', 'system:dept:delete', 3, 'super_admin', 4, 103, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1021, '岗位查询', 'system:post:query', 3, 'super_admin', 1, 104, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1022, '岗位新增', 'system:post:create', 3, 'super_admin', 2, 104, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1023, '岗位修改', 'system:post:update', 3, 'super_admin', 3, 104, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1024, '岗位删除', 'system:post:delete', 3, 'super_admin', 4, 104, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1025, '岗位导出', 'system:post:export', 3, 'super_admin', 5, 104, '', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1026, '字典查询', 'system:dict:query', 3, 'super_admin', 1, 105, '#', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1027, '字典新增', 'system:dict:create', 3, 'super_admin', 2, 105, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1028, '字典修改', 'system:dict:update', 3, 'super_admin', 3, 105, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1029, '字典删除', 'system:dict:delete', 3, 'super_admin', 4, 105, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1030, '字典导出', 'system:dict:export', 3, 'super_admin', 5, 105, '#', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1031, '配置查询', 'infra:config:query', 3, 'super_admin', 1, 106, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1032, '配置新增', 'infra:config:create', 3, 'super_admin', 2, 106, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1033, '配置修改', 'infra:config:update', 3, 'super_admin', 3, 106, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1034, '配置删除', 'infra:config:delete', 3, 'super_admin', 4, 106, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1035, '配置导出', 'infra:config:export', 3, 'super_admin', 5, 106, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1040, '操作查询', 'system:operate-log:query', 3, 'super_admin', 1, 500, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1042, '日志导出', 'system:operate-log:export', 3, 'super_admin', 2, 500, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1043, '登录查询', 'system:login-log:query', 3, 'super_admin', 1, 501, '#', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1045, '日志导出', 'system:login-log:export', 3, 'super_admin', 3, 501, '#', '#', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1050, '任务新增', 'infra:job:create', 3, 'super_admin', 2, 110, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1051, '任务修改', 'infra:job:update', 3, 'super_admin', 3, 110, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1052, '任务删除', 'infra:job:delete', 3, 'super_admin', 4, 110, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1053, '状态修改', 'infra:job:update', 3, 'super_admin', 5, 110, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1054, '任务导出', 'infra:job:export', 3, 'super_admin', 7, 110, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1063, '设置角色菜单权限', 'system:permission:assign-role-menu', 3, 'super_admin', 6, 101, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-01-06 17:53:44', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1064, '设置角色数据权限', 'system:permission:assign-role-data-scope', 3, 'super_admin', 7, 101, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-01-06 17:56:31', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1065, '设置用户角色', 'system:permission:assign-user-role', 3, 'super_admin', 8, 101, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-01-07 10:23:28', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1075, '任务触发', 'infra:job:trigger', 3, 'super_admin', 8, 110, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-02-07 13:03:10', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1087, '任务查询', 'infra:job:query', 3, 'super_admin', 1, 110, '', '', '', NULL, 0, b'1', b'1', b'1', '1', '2021-03-10 01:26:19', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1093, '短信管理', '', 1, 'super_admin', 1, 1, 'sms', 'ep:message', NULL, NULL, 0, b'1', b'1', b'1', '1', '2021-04-05 01:10:16', '1', '2026-10-01 20:22:50', b'0');
-INSERT INTO `system_menu` VALUES (1094, '短信渠道', '', 2, 'super_admin', 0, 1093, 'sms-channel', 'fa:stack-exchange', 'system/sms/channel/index', 'SystemSmsChannel', 0, b'1', b'1', b'1', '', '2021-04-01 11:07:15', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1095, '短信渠道查询', 'system:sms-channel:query', 3, 'super_admin', 1, 1094, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 11:07:15', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1096, '短信渠道创建', 'system:sms-channel:create', 3, 'super_admin', 2, 1094, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 11:07:15', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1097, '短信渠道更新', 'system:sms-channel:update', 3, 'super_admin', 3, 1094, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 11:07:15', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1098, '短信渠道删除', 'system:sms-channel:delete', 3, 'super_admin', 4, 1094, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 11:07:15', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1100, '短信模板', '', 2, 'super_admin', 1, 1093, 'sms-template', 'ep:connection', 'system/sms/template/index', 'SystemSmsTemplate', 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1101, '短信模板查询', 'system:sms-template:query', 3, 'super_admin', 1, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1102, '短信模板创建', 'system:sms-template:create', 3, 'super_admin', 2, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1103, '短信模板更新', 'system:sms-template:update', 3, 'super_admin', 3, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1104, '短信模板删除', 'system:sms-template:delete', 3, 'super_admin', 4, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1105, '短信模板导出', 'system:sms-template:export', 3, 'super_admin', 5, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-04-01 17:35:17', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1106, '发送测试短信', 'system:sms-template:send-sms', 3, 'super_admin', 6, 1100, '', '', '', NULL, 0, b'1', b'1', b'1', '1', '2021-04-11 00:26:40', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1070, '文件删除', 'infra:file:delete', 3, 'super_admin', 1, 107, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1090, '令牌管理', '', 2, 'super_admin', 0, 1261, 'oauth2/token', 'ep:key', 'system/oauth2/token/index', 'SystemOAuth2Token', 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1091, '令牌列表', 'system:oauth2-token:page', 3, 'super_admin', 1, 1090, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
@@ -581,18 +375,12 @@ CREATE TABLE `system_oauth2_client`  (
   `client_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '客户端编号',
   `secret` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '客户端密钥',
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用名',
-  `logo` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '应用图标',
   `description` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '应用描述',
   `status` tinyint NOT NULL COMMENT '状态',
   `access_token_validity_seconds` int NOT NULL COMMENT '访问令牌的有效期',
   `refresh_token_validity_seconds` int NOT NULL COMMENT '刷新令牌的有效期',
-  `redirect_uris` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '可重定向的 URI 地址',
   `authorized_grant_types` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '授权类型',
   `scopes` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '授权范围',
-  `auto_approve_scopes` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '自动通过的授权范围',
-  `authorities` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '权限',
-  `resource_ids` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '资源',
-  `additional_information` varchar(4096) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '附加信息',
   `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
@@ -606,7 +394,7 @@ CREATE TABLE `system_oauth2_client`  (
 -- ----------------------------
 -- Records of system_oauth2_client
 -- ----------------------------
-INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '', '外部开放客户端示例模板（默认停用）', 1, 1800, 2592000, '[]', '[]', '[]', '[]', '[]', '[]', '{}', '1', '2022-05-11 21:47:12', '1', '2026-11-05 00:00:00', b'0', 0);
+INSERT INTO `system_oauth2_client` VALUES (1, 'default', '', 'default client', '外部开放客户端示例模板（默认停用）', 1, 1800, 2592000, '[]', '[]', '1', '2022-05-11 21:47:12', '1', '2026-11-05 00:00:00', b'0', 0);
 
 -- ----------------------------
 -- Table structure for system_oauth2_refresh_token
@@ -667,34 +455,6 @@ CREATE TABLE `system_operate_log`  (
 -- ----------------------------
 
 -- ----------------------------
--- Table structure for system_post
--- ----------------------------
-DROP TABLE IF EXISTS `system_post`;
-CREATE TABLE `system_post`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '岗位ID',
-  `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '岗位编码',
-  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '岗位名称',
-  `sort` int NOT NULL COMMENT '显示顺序',
-  `status` tinyint NOT NULL COMMENT '状态（0正常 1停用）',
-  `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE,
-  INDEX `idx_status`(`status` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '岗位信息表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_post
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_role
--- ----------------------------
 DROP TABLE IF EXISTS `system_role`;
 CREATE TABLE `system_role`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '角色ID',
@@ -749,16 +509,10 @@ INSERT INTO `system_role_menu` VALUES (6294, 1, 2, '1', '2026-04-07 08:29:41', '
 INSERT INTO `system_role_menu` VALUES (6295, 1, 100, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6296, 1, 101, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6297, 1, 103, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6298, 1, 104, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6299, 1, 105, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6300, 1, 106, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6302, 1, 108, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6303, 1, 110, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6305, 1, 500, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6306, 1, 501, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6308, 1, 1093, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6309, 1, 1094, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6310, 1, 1100, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6317, 1, 1001, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6318, 1, 1002, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6319, 1, 1003, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
@@ -770,50 +524,21 @@ INSERT INTO `system_role_menu` VALUES (6324, 1, 1008, '1', '2026-04-07 08:30:13'
 INSERT INTO `system_role_menu` VALUES (6325, 1, 1009, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6326, 1, 1010, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6327, 1, 1011, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6328, 1, 1012, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6329, 1, 1017, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6330, 1, 1018, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6331, 1, 1019, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6332, 1, 1020, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6333, 1, 1021, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6334, 1, 1022, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6335, 1, 1023, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6336, 1, 1024, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6337, 1, 1025, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6338, 1, 1026, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6339, 1, 1027, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6340, 1, 1028, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6341, 1, 1029, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6342, 1, 1030, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6343, 1, 1031, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6344, 1, 1032, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6345, 1, 1033, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6346, 1, 1034, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6347, 1, 1035, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6352, 1, 1040, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6353, 1, 1042, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6354, 1, 1043, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6355, 1, 1045, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6356, 1, 1050, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6357, 1, 1051, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6358, 1, 1052, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6359, 1, 1053, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6360, 1, 1054, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6366, 1, 1063, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6367, 1, 1064, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6368, 1, 1065, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6369, 1, 1075, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6370, 1, 1087, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6373, 1, 1095, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6374, 1, 1096, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6375, 1, 1097, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6376, 1, 1098, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6377, 1, 1101, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6378, 1, 1102, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6379, 1, 1103, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6380, 1, 1104, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6381, 1, 1105, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
-INSERT INTO `system_role_menu` VALUES (6382, 1, 1106, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6383, 1, 102, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6384, 1, 1013, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6385, 1, 1014, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
@@ -831,156 +556,6 @@ INSERT INTO `system_role_menu` VALUES (6396, 1, 1265, '1', '2026-04-07 08:30:13'
 INSERT INTO `system_role_menu` VALUES (6397, 1, 1266, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 INSERT INTO `system_role_menu` VALUES (6398, 1, 1267, '1', '2026-04-07 08:30:13', '1', '2026-04-07 08:30:13', b'0');
 
--- ----------------------------
--- Table structure for system_sms_channel
--- ----------------------------
-DROP TABLE IF EXISTS `system_sms_channel`;
-CREATE TABLE `system_sms_channel`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `signature` varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信签名',
-  `code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '渠道编码',
-  `status` tinyint NOT NULL COMMENT '开启状态',
-  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
-  `api_key` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信 API 的账号',
-  `api_secret` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信 API 的秘钥',
-  `callback_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信发送回调 URL',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信渠道' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_sms_channel
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_sms_code
--- ----------------------------
-DROP TABLE IF EXISTS `system_sms_code`;
-CREATE TABLE `system_sms_code`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `mobile` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '手机号',
-  `code` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '验证码',
-  `create_ip` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '创建 IP',
-  `scene` tinyint NOT NULL COMMENT '发送场景',
-  `today_index` tinyint NOT NULL COMMENT '今日发送的第几条',
-  `used` tinyint NOT NULL COMMENT '是否使用',
-  `used_time` datetime NULL DEFAULT NULL COMMENT '使用时间',
-  `used_ip` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '使用 IP',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_mobile`(`mobile` ASC) USING BTREE COMMENT '手机号',
-  INDEX `idx_mobile_scene`(`mobile` ASC, `scene` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '手机验证码' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_sms_code
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_sms_log
--- ----------------------------
-DROP TABLE IF EXISTS `system_sms_log`;
-CREATE TABLE `system_sms_log`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `channel_id` bigint NOT NULL COMMENT '短信渠道编号',
-  `channel_code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信渠道编码',
-  `template_id` bigint NOT NULL COMMENT '模板编号',
-  `template_code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模板编码',
-  `template_type` tinyint NOT NULL COMMENT '短信类型',
-  `template_content` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信内容',
-  `template_params` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信参数',
-  `api_template_id` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信 API 的模板编号',
-  `mobile` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '手机号',
-  `user_id` bigint NULL DEFAULT NULL COMMENT '用户编号',
-  `user_type` tinyint NULL DEFAULT NULL COMMENT '用户类型',
-  `send_status` tinyint NOT NULL DEFAULT 0 COMMENT '发送状态',
-  `send_time` datetime NULL DEFAULT NULL COMMENT '发送时间',
-  `api_send_code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信 API 发送结果的编码',
-  `api_send_msg` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信 API 发送失败的提示',
-  `api_request_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信 API 发送返回的唯一请求 ID',
-  `api_serial_no` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '短信 API 发送返回的序号',
-  `receive_status` tinyint NOT NULL DEFAULT 0 COMMENT '接收状态',
-  `receive_time` datetime NULL DEFAULT NULL COMMENT '接收时间',
-  `api_receive_code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'API 接收结果的编码',
-  `api_receive_msg` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'API 接收结果的说明',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_mobile`(`mobile` ASC) USING BTREE,
-  INDEX `idx_send_time`(`send_time` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信日志' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_sms_log
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_sms_template
--- ----------------------------
-DROP TABLE IF EXISTS `system_sms_template`;
-CREATE TABLE `system_sms_template`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '编号',
-  `type` tinyint NOT NULL COMMENT '模板类型',
-  `status` tinyint NOT NULL COMMENT '开启状态',
-  `code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模板编码',
-  `name` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模板名称',
-  `content` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '模板内容',
-  `params` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '参数数组',
-  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
-  `api_template_id` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信 API 的模板编号',
-  `channel_id` bigint NOT NULL COMMENT '短信渠道编号',
-  `channel_code` varchar(63) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '短信渠道编码',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  `deleted_tag` bigint NOT NULL DEFAULT 0 COMMENT '逻辑删除唯一性标识',
-  PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_code`(`code` ASC, `deleted_tag` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '短信模板' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_sms_template
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_user_post
--- ----------------------------
-DROP TABLE IF EXISTS `system_user_post`;
-CREATE TABLE `system_user_post`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
-  `user_id` bigint NOT NULL DEFAULT 0 COMMENT '用户ID',
-  `post_id` bigint NOT NULL DEFAULT 0 COMMENT '岗位ID',
-  `creator` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '创建者',
-  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updater` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '更新者',
-  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否删除',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
-  INDEX `idx_post_id`(`post_id` ASC) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户岗位表' ROW_FORMAT = DYNAMIC;
-
--- ----------------------------
--- Records of system_user_post
--- ----------------------------
-
--- ----------------------------
--- Table structure for system_user_role
 -- ----------------------------
 DROP TABLE IF EXISTS `system_user_role`;
 CREATE TABLE `system_user_role`  (
@@ -1015,7 +590,6 @@ CREATE TABLE `system_users`  (
   `nickname` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户昵称',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '备注',
   `dept_id` bigint NULL DEFAULT NULL COMMENT '部门ID',
-  `post_ids` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '岗位编号数组',
   `email` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '用户邮箱',
   `mobile` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '手机号码',
   `sex` tinyint NULL DEFAULT 0 COMMENT '用户性别',
@@ -1040,6 +614,6 @@ CREATE TABLE `system_users`  (
 -- ----------------------------
 -- Records of system_users
 -- ----------------------------
-INSERT INTO `system_users` VALUES (1, 'admin', '', 1, 'super_admin', '管理员', '管理员', 103, '[]', 'admin@example.com', '', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0', 0);
+INSERT INTO `system_users` VALUES (1, 'admin', '', 1, 'super_admin', '管理员', '管理员', 103, 'admin@example.com', '', 2, '', 0, '127.0.0.1', '2026-10-01 20:19:58', 'admin', '2021-01-05 17:03:47', NULL, '2026-10-01 20:19:58', b'0', 0);
 
 SET FOREIGN_KEY_CHECKS = 1;

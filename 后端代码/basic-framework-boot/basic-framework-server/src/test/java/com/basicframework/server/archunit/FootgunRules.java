@@ -23,7 +23,6 @@ import java.util.regex.Pattern;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
 /**
  * 后端确定性架构门禁规则，供质量门禁测试与反向失败夹具复用。
@@ -47,14 +46,8 @@ final class FootgunRules {
             "com.basicframework.module.system.controller.admin.captcha.CaptchaController#get",
             "com.basicframework.module.system.controller.admin.captcha.CaptchaController#check",
             "com.basicframework.module.system.controller.open.oauth2.OAuth2OpenController#token",
-            "com.basicframework.module.infra.controller.admin.file.FileController#getFileContent",
-            "com.basicframework.module.system.controller.admin.sms.SmsCallbackController#receiveAliyunSmsStatus",
-            "com.basicframework.module.system.controller.admin.sms.SmsCallbackController#receiveTencentSmsStatus"
+            "com.basicframework.module.infra.controller.admin.file.FileController#getFileContent"
     );
-
-    /** {@code @DSTransactional} 全限定注解名（会绕过 Spring 事务感知缓存同步）。 */
-    private static final String DS_TRANSACTIONAL_ANNOTATION =
-            "com.baomidou.dynamic.datasource.annotation.DSTransactional";
 
     /** 匹配试图通过 {@code @PreAuthorize} 放行全部请求的绕过表达式。 */
     private static final Pattern PRE_AUTHORIZE_BYPASS_PATTERN = Pattern.compile(
@@ -351,30 +344,6 @@ final class FootgunRules {
                 })
                 .allowEmptyShould(true)
                 .because("所有类级 @Transactional 必须显式声明 rollbackFor，避免受检异常提交半成品数据");
-    }
-
-    /**
-     * 禁止在类上声明 {@code @DSTransactional}，防止绕过 Spring 事务同步与事务感知缓存管理。
-     *
-     * @return 禁止类级 DSTransactional 规则
-     */
-    static ArchRule noDynamicDatasourceTransactionalOnClasses() {
-        return noClasses()
-                .that().resideInAPackage("com.basicframework..")
-                .should().beAnnotatedWith(DS_TRANSACTIONAL_ANNOTATION)
-                .because("禁止使用 @DSTransactional，否则会绕过 Spring 事务同步器与 TimeoutRedisCacheManager 事务感知缓存");
-    }
-
-    /**
-     * 禁止在方法上声明 {@code @DSTransactional}，防止绕过 Spring 事务同步与事务感知缓存管理。
-     *
-     * @return 禁止方法级 DSTransactional 规则
-     */
-    static ArchRule noDynamicDatasourceTransactionalOnMethods() {
-        return noMethods()
-                .that().areDeclaredInClassesThat().resideInAPackage("com.basicframework..")
-                .should().beAnnotatedWith(DS_TRANSACTIONAL_ANNOTATION)
-                .because("禁止使用 @DSTransactional，否则会绕过 Spring 事务同步器与 TimeoutRedisCacheManager 事务感知缓存");
     }
 
     /**

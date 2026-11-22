@@ -19,10 +19,8 @@ import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.permission.DataScopeEnum;
 import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 import com.basicframework.module.system.enums.permission.RoleTypeEnum;
+import com.basicframework.framework.operatelog.core.annotation.OperateLog;
 import com.google.common.annotations.VisibleForTesting;
-import com.mzt.logapi.context.LogRecordContext;
-import com.mzt.logapi.service.impl.DiffParseFunction;
-import com.mzt.logapi.starter.annotation.LogRecord;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -66,8 +64,8 @@ public class RoleServiceImpl implements RoleService {
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_CREATE_SUB_TYPE, bizNo = "{{#role.id}}",
-            success = SYSTEM_ROLE_CREATE_SUCCESS)
+    @OperateLog(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_CREATE_SUB_TYPE, bizId = "#result",
+            action = SYSTEM_ROLE_CREATE_SUCCESS)
     public Long createRole(RoleSaveReqVO createReqVO, Integer type) {
         // 1. 校验角色
         validateRoleDuplicate(createReqVO.getName(), createReqVO.getCode(), null);
@@ -81,9 +79,6 @@ public class RoleServiceImpl implements RoleService {
         // 默认最小权限原则，新建角色仅可查看本人数据，需更大范围时由管理员显式授权。
         role.setDataScope(DataScopeEnum.SELF.getScope());
         roleMapper.insert(role);
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable("role", role);
         return role.getId();
     }
 
@@ -94,8 +89,8 @@ public class RoleServiceImpl implements RoleService {
      */
     @Override
     @CacheEvict(value = RedisKeyConstants.ROLE, key = "#updateReqVO.id")
-    @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_UPDATE_SUB_TYPE, bizNo = "{{#updateReqVO.id}}",
-            success = SYSTEM_ROLE_UPDATE_SUCCESS)
+    @OperateLog(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_UPDATE_SUB_TYPE, bizId = "#updateReqVO.id",
+            action = SYSTEM_ROLE_UPDATE_SUCCESS)
     public void updateRole(RoleSaveReqVO updateReqVO) {
         // 1.1 校验是否可以更新
         RoleDO role = validateRoleForUpdate(updateReqVO.getId());
@@ -111,10 +106,6 @@ public class RoleServiceImpl implements RoleService {
         // 2. 更新到数据库
         RoleDO updateObj = BeanUtils.toBean(updateReqVO, RoleDO.class);
         roleMapper.updateById(updateObj);
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable(DiffParseFunction.OLD_OBJECT, BeanUtils.toBean(role, RoleSaveReqVO.class));
-        LogRecordContext.putVariable("role", role);
     }
 
     /**
@@ -146,8 +137,8 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     @CacheEvict(value = RedisKeyConstants.ROLE, key = "#id")
-    @LogRecord(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_DELETE_SUB_TYPE, bizNo = "{{#id}}",
-            success = SYSTEM_ROLE_DELETE_SUCCESS)
+    @OperateLog(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_DELETE_SUB_TYPE, bizId = "#id",
+            action = SYSTEM_ROLE_DELETE_SUCCESS)
     public void deleteRole(Long id) {
         // 1. 校验是否可以删除及是否存在用户关联
         RoleDO role = validateRoleForUpdate(id);
@@ -157,9 +148,6 @@ public class RoleServiceImpl implements RoleService {
         roleMapper.deleteById(id);
         // 2.2 删除相关数据
         getPermissionService().processRoleDeleted(id);
-
-        // 3. 记录操作日志上下文
-        LogRecordContext.putVariable("role", role);
     }
 
     /**

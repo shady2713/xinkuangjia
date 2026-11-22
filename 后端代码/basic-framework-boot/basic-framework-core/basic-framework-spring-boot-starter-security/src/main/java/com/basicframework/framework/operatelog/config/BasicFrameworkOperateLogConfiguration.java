@@ -1,34 +1,28 @@
 package com.basicframework.framework.operatelog.config;
 
-import com.basicframework.framework.operatelog.core.service.LogRecordServiceImpl;
-import com.mzt.logapi.service.ILogRecordService;
-import com.mzt.logapi.starter.annotation.EnableLogRecord;
-import lombok.extern.slf4j.Slf4j;
+import com.basicframework.framework.common.biz.system.logger.OperateLogCommonApi;
+import com.basicframework.framework.operatelog.core.aop.OperateLogAspect;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 
 /**
- * 操作日志配置类
- * <p>统一暴露第三方日志组件所需的日志服务 Bean。</p>
+ * 原生 Spring AOP 操作审计日志自动配置类。
  *
  * @author 李杰
- *
  */
-@EnableLogRecord(tenant = "") // 第三方库必填参数，框架未使用多租户
 @AutoConfiguration
-@Slf4j
 public class BasicFrameworkOperateLogConfiguration {
 
     /**
-     * 业务侧统一的日志记录服务实现
+     * 注册操作审计日志 AOP 切面。
      *
-     * @return ILogRecordService 实现
+     * @param operateLogApiProvider 操作日志写入接口提供器
+     * @return 操作日志切面 Bean
      */
     @Bean
-    @Primary
-    public ILogRecordService iLogRecordServiceImpl() {
-        return new LogRecordServiceImpl();
+    public OperateLogAspect operateLogAspect(ObjectProvider<OperateLogCommonApi> operateLogApiProvider) {
+        return new OperateLogAspect(operateLogApiProvider);
     }
 
 }

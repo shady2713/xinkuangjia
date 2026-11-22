@@ -17,8 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
  * 在 onemall 中，是 Controller 在返回时，主动自己包上 {@link CommonResult}。
  * 原因是，GlobalResponseBodyHandler 本质上是 AOP，它不应该改变 Controller 返回的数据结构
  *
- * 目前，GlobalResponseBodyHandler 的主要作用是，记录 Controller 的返回结果，
- * 方便 {@link com.basicframework.framework.apilog.core.filter.ApiAccessLogFilter} 记录访问日志
+ * 目前，GlobalResponseBodyHandler 的主要作用是记录 Controller 的返回结果到请求属性中。
  * @author 李杰
  */
 @ControllerAdvice
