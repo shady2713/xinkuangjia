@@ -1,6 +1,7 @@
 package com.basicframework.module.infra.framework.file.core.client.local;
 
 import cn.hutool.core.util.StrUtil;
+import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.module.infra.framework.file.core.client.AbstractFileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
@@ -9,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIVATE_SIGNING_UNSUPPORTED;
 
 /**
  * 极简本地磁盘文件客户端，供本地开发、CI 及断网政务内网兜底使用。
@@ -94,7 +97,8 @@ public class LocalFileClient extends AbstractFileClient<LocalFileClientConfig> {
 
     @Override
     public String presignPrivateGetUrl(String path, Integer expirationSeconds) {
-        return formatFileUrl(StrUtil.removeSuffix(config.getDomain(), "/"), path);
+        // Local storage has no signer; private reads use the authorized /infra/file/private/content route.
+        throw new ServiceException(FILE_PRIVATE_SIGNING_UNSUPPORTED);
     }
 
     private Path resolveSafePath(String path) {

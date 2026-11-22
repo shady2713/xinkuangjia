@@ -11,14 +11,14 @@ import {
   deleteFileListApi,
   type FileRecord,
   getFilePageApi,
-  getPrivateFileSignedUrlApi,
+  getPrivateFileContentApi,
 } from '@/api/file';
 import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
 import TableAction from '@/components/TableAction.vue';
 import { deleteConfirmMessage, FIELD_LIMITS } from '@/constants/validation';
 import { confirmAction } from '@/utils/confirm';
-import { formatDateTime, formatFileSize } from '@/utils/format';
+import { downloadBlob, formatDateTime, formatFileSize } from '@/utils/format';
 import UploadField from '@/components/UploadField.vue';
 
 defineOptions({ name: 'InfraFile' });
@@ -64,13 +64,13 @@ function handleReset() {
 }
 
 async function handlePreview(row: FileRecord) {
-  let targetUrl = row.url;
-  if (row.path?.startsWith('private/') && row.id) {
-    targetUrl = await getPrivateFileSignedUrlApi(row.id, 300);
+  if (row.url && !row.path?.startsWith('private/')) {
+    window.open(row.url, '_blank', 'noopener,noreferrer');
+    return;
   }
-  if (targetUrl) {
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
-  }
+  if (!row.id) return;
+  const blob = await getPrivateFileContentApi(row.id);
+  downloadBlob(blob, row.path?.split('/').pop() || `file-${row.id}`);
 }
 
 async function handleCopyUrl(url?: string) {

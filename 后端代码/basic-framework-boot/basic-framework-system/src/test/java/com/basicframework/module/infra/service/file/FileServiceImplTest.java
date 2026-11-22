@@ -36,6 +36,7 @@ import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.function.Consumer;
 
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_ACCESS_DENIED;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_NOT_EXISTS;
@@ -289,6 +290,33 @@ class FileServiceImplTest {
     /** 核对签名保留存储原始键、网关 Host 及路径式桶名。 */
     @Test
     void s3PrivateGetShouldSignExactRawObjectKey() {
+        withOfflineOssPrivateSigner(client -> {
+            URI signed = URI.create(client.presignPrivateGetUrl("private/a%20b#c+d.pdf", 300));
+
+            assertThat(signed.getScheme()).isEqualTo("https");
+            assertThat(signed.getRawAuthority()).isEqualTo("files.example.test");
+            assertThat(signed.getRawPath()).isEqualTo("/basic-framework/private/a%2520b%23c%2Bd.pdf");
+            assertThat(signed.getRawQuery().contains("X-Amz-Signature=")).isTrue();
+            URI viaRawKey = URI.create(client.presignGetUrl("private/a%20b#c+d.pdf", 300));
+            assertThat(viaRawKey.getRawPath()).isEqualTo(signed.getRawPath());
+        });
+    }
+
+    /** Offline OSS private GET contract: X-Amz-Expires default 900, min 60, max 3600. */
+    @Test
+    void s3PrivateGetShouldEmitBoundedExpires() {
+        withOfflineOssPrivateSigner(client -> {
+            assertThat(signedExpires(client, null)).isEqualTo("900");
+            assertThat(signedExpires(client, 60)).isEqualTo("60");
+            assertThat(signedExpires(client, 3600)).isEqualTo("3600");
+            assertThatThrownBy(() -> client.presignPrivateGetUrl("private/a.pdf", 59))
+                    .isInstanceOf(IllegalArgumentException.class);
+            assertThatThrownBy(() -> client.presignPrivateGetUrl("private/a.pdf", 3601))
+                    .isInstanceOf(IllegalArgumentException.class);
+        });
+    }
+
+    private void withOfflineOssPrivateSigner(Consumer<S3FileClient> contract) {
         FileStorageProperties props = buildOssProperties();
         props.getOss().setPublicAccess(false);
         props.getOss().setSigningEndpoint("https://files.example.test");
@@ -305,16 +333,18 @@ class FileServiceImplTest {
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
                 .build()) {
             ReflectionTestUtils.setField(client, "presigner", presigner);
-
-            URI signed = URI.create(client.presignPrivateGetUrl("private/a%20b#c+d.pdf", 300));
-
-            assertThat(signed.getScheme()).isEqualTo("https");
-            assertThat(signed.getRawAuthority()).isEqualTo("files.example.test");
-            assertThat(signed.getRawPath()).isEqualTo("/basic-framework/private/a%2520b%23c%2Bd.pdf");
-            assertThat(signed.getRawQuery().contains("X-Amz-Signature=")).isTrue();
-            URI viaRawKey = URI.create(client.presignGetUrl("private/a%20b#c+d.pdf", 300));
-            assertThat(viaRawKey.getRawPath()).isEqualTo(signed.getRawPath());
+            contract.accept(client);
         }
+    }
+
+    private static String signedExpires(S3FileClient client, Integer expirationSeconds) {
+        String query = URI.create(client.presignPrivateGetUrl("private/a.pdf", expirationSeconds)).getRawQuery();
+        for (String pair : query.split("&")) {
+            if (pair.startsWith("X-Amz-Expires=")) {
+                return pair.substring("X-Amz-Expires=".length());
+            }
+        }
+        return null;
     }
 
     /** 验证私有预签名直传不提前返回临时 GET URL，且公开 URL 对特殊字符分段编码并可还原原始键。 */

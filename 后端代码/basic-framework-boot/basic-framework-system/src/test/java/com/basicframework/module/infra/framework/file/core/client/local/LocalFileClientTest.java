@@ -1,11 +1,13 @@
 package com.basicframework.module.infra.framework.file.core.client.local;
 
+import com.basicframework.framework.common.exception.ServiceException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIVATE_SIGNING_UNSUPPORTED;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -33,7 +35,6 @@ class LocalFileClientTest {
         String url = client.upload(data, "20261122/sample.txt", "text/plain");
 
         assertEquals("/admin-api/infra/file/content/20261122/sample.txt", url);
-        assertEquals(url, client.presignPrivateGetUrl("20261122/sample.txt", 300));
         assertArrayEquals(data, client.getContent("20261122/sample.txt"));
 
         client.delete("20261122/sample.txt");
@@ -41,17 +42,30 @@ class LocalFileClientTest {
     }
 
     @Test
-    void presignPrivateGetUrl_withOriginDomain_appendsContentPathOnce() {
+    void upload_withOriginDomain_appendsContentPathOnce() throws Exception {
         LocalFileClientConfig config = new LocalFileClientConfig();
         config.setBasePath(tempDir.toString());
-        config.setDomain("https://files.example.com/");
+        config.setDomain("https://files.example.com");
         LocalFileClient client = new LocalFileClient(1L, config);
         client.init();
 
         assertEquals(
                 "https://files.example.com/admin-api/infra/file/content/20261122/a.png",
-                client.presignPrivateGetUrl("/20261122/a.png", 300)
+                client.upload(new byte[]{1}, "20261122/a.png", "image/png")
         );
+    }
+
+    @Test
+    void presignPrivateGetUrl_rejectsWithStableBusinessError() {
+        LocalFileClientConfig config = new LocalFileClientConfig();
+        config.setBasePath(tempDir.toString());
+        config.setDomain("/admin-api/infra/file/content");
+        LocalFileClient client = new LocalFileClient(1L, config);
+        client.init();
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> client.presignPrivateGetUrl("20261122/sample.txt", 300));
+        assertEquals(FILE_PRIVATE_SIGNING_UNSUPPORTED.getCode(), ex.getCode());
     }
 
     @Test
