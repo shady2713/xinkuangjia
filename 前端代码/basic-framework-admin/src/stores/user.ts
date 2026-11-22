@@ -18,7 +18,7 @@ import {
   clearPasswordChangeRequired,
   clearTokens,
   getAccessToken,
-  isPasswordChangeRequired,
+  passwordChangeRequiredFlag,
   setTokens,
 } from '@/utils/token';
 
@@ -28,13 +28,12 @@ export const useUserStore = defineStore('user', () => {
   const permissions = ref<string[]>([]);
   const menus = ref<MenuRouteItem[]>([]);
   const routesLoaded = ref(false);
-  const passwordChangeRequired = ref(isPasswordChangeRequired());
+  const passwordChangeRequired = passwordChangeRequiredFlag;
 
   async function loginByPassword(params: LoginReq) {
     const res = await loginApi(params);
     const mustChange = Boolean(res.passwordChangeRequired);
     setTokens(res.accessToken, res.refreshToken, mustChange);
-    passwordChangeRequired.value = mustChange;
     return res;
   }
 
@@ -42,7 +41,6 @@ export const useUserStore = defineStore('user', () => {
     const res = await smsLoginApi(params);
     const mustChange = Boolean(res.passwordChangeRequired);
     setTokens(res.accessToken, res.refreshToken, mustChange);
-    passwordChangeRequired.value = mustChange;
     return res;
   }
 
@@ -60,7 +58,6 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function markPasswordChanged() {
-    passwordChangeRequired.value = false;
     clearPasswordChangeRequired();
   }
 
@@ -70,7 +67,6 @@ export const useUserStore = defineStore('user', () => {
     permissions.value = [];
     menus.value = [];
     routesLoaded.value = false;
-    passwordChangeRequired.value = false;
     clearTokens();
   }
 

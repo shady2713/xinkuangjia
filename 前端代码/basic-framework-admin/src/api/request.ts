@@ -11,6 +11,8 @@ import axios, {
 } from 'axios';
 import { ElMessage } from 'element-plus';
 
+import type { OpenApiSchemas } from '@/api/generated/api-types';
+
 import { getAppConfig } from '@/config/app';
 import {
   clearTokens,
@@ -73,11 +75,19 @@ async function performRefreshToken(): Promise<string | null> {
   }
   try {
     const resp = await rawHttp.post<
-      CommonResult<{ accessToken: string; refreshToken: string }>
+      CommonResult<{
+        accessToken: string;
+        refreshToken: string;
+        passwordChangeRequired?: boolean;
+      }>
     >('/system/auth/refresh-token', { refreshToken });
     const body = resp.data;
     if (body?.code === 0 && body.data?.accessToken) {
-      setTokens(body.data.accessToken, body.data.refreshToken || refreshToken);
+      setTokens(
+        body.data.accessToken,
+        body.data.refreshToken || refreshToken,
+        body.data.passwordChangeRequired,
+      );
       return body.data.accessToken;
     }
     return null;
