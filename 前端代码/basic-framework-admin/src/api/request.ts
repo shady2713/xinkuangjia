@@ -73,24 +73,30 @@ async function performRefreshToken(): Promise<string | null> {
   if (!refreshToken) {
     return null;
   }
+  const previousAccessToken = getAccessToken();
+  let body: CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>> | undefined;
   try {
     const resp = await rawHttp.post<CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>>>(
       '/system/auth/refresh-token',
       { refreshToken },
     );
-    const body = resp.data;
-    if (body?.code === 0 && body.data?.accessToken) {
-      setTokens(
-        body.data.accessToken,
-        body.data.refreshToken || refreshToken,
-        body.data.passwordChangeRequired,
-      );
-      return body.data.accessToken;
-    }
-    return null;
+    body = resp.data;
   } catch {
+    // A failed rotation is handled below after checking for an updated session.
+  }
+  const currentAccessToken = getAccessToken();
+  if (currentAccessToken !== previousAccessToken || getRefreshToken() !== refreshToken) {
+    return currentAccessToken || null;
+  }
+  if (body?.code !== 0 || !body.data?.accessToken) {
     return null;
   }
+  setTokens(
+    body.data.accessToken,
+    body.data.refreshToken || refreshToken,
+    body.data.passwordChangeRequired,
+  );
+  return body.data.accessToken;
 }
 
 function redirectToLogin(): void {

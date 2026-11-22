@@ -1,6 +1,6 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { createPinia } from 'pinia';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { rawHttp, request, resolveErrorMessage, unwrapBlobJsonError } from '@/api/request';
 import { useUserStore } from '@/stores/user';
@@ -9,8 +9,25 @@ import {
   getAccessToken,
   getRefreshToken,
   isPasswordChangeRequired,
+  passwordChangeRequiredFlag,
   setTokens,
 } from '@/utils/token';
+
+const SESSION_KEY = 'bf_session';
+const LEGACY_KEYS = ['bf_access_token', 'bf_refresh_token', 'bf_password_change_required'];
+
+function persistedSession(): unknown {
+  const raw = localStorage.getItem(SESSION_KEY);
+  return raw === null ? null : JSON.parse(raw);
+}
+
+function currentSession() {
+  return {
+    accessToken: getAccessToken(),
+    refreshToken: getRefreshToken(),
+    passwordChangeRequired: isPasswordChangeRequired(),
+  };
+}
 
 describe('request error helpers', () => {
   it('unwraps JSON business error returned inside a Blob download response', async () => {
@@ -49,7 +66,6 @@ describe('request error helpers', () => {
 });
 
 describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
-  const PASSWORD_CHANGE_KEY = 'bf_password_change_required';
   const originalRawAdapter = rawHttp.defaults.adapter;
   let testPinia: ReturnType<typeof createPinia>;
 
@@ -80,7 +96,8 @@ describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
   function expectFlag(expected: boolean): void {
     expect(useUserStore(testPinia).passwordChangeRequired).toBe(expected);
     expect(isPasswordChangeRequired()).toBe(expected);
-    expect(localStorage.getItem(PASSWORD_CHANGE_KEY)).toBe(String(expected));
+    expect(persistedSession()).toEqual(currentSession());
+    LEGACY_KEYS.forEach((key) => expect(localStorage.getItem(key)).toBeNull());
   }
 
   beforeEach(() => {
@@ -141,5 +158,92 @@ describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
     setTokens('next-access', 'next-refresh');
 
     expectFlag(true);
+  });
+});
+
+describe('bf_session snapshot syncs across tabs', () => {
+  const EMPTY = { accessToken: '', refreshToken: '', passwordChangeRequired: false };
+  const login = {
+    accessToken: 'b-access',
+    refreshToken: 'b-refresh',
+    passwordChangeRequired: true,
+  };
+  const rotated = {
+    accessToken: 'b-access-2',
+    refreshToken: 'b-refresh-2',
+    passwordChangeRequired: false,
+  };
+
+  /** Mimics another tab: mutate shared storage, then deliver a real StorageEvent here. */
+  function fromOtherTab(key: string | null, newValue: string | null): void {
+    if (key === null) {
+      localStorage.clear();
+    } else if (newValue === null) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, newValue);
+    }
+    const setSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const removeSpy = vi.spyOn(Storage.prototype, 'removeItem');
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea: localStorage }));
+    const writes = setSpy.mock.calls.length + removeSpy.mock.calls.length;
+    vi.restoreAllMocks();
+    expect(writes).toBe(0);
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    clearTokens();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearTokens();
+  });
+
+  it('applies incoming login, rotation and logout from another tab', () => {
+    setTokens('a-access', 'a-refresh', false);
+
+    fromOtherTab(SESSION_KEY, JSON.stringify(login));
+    expect(currentSession()).toEqual(login);
+    expect(passwordChangeRequiredFlag.value).toBe(true);
+
+    fromOtherTab(SESSION_KEY, JSON.stringify(rotated));
+    expect(currentSession()).toEqual(rotated);
+    expect(passwordChangeRequiredFlag.value).toBe(false);
+
+    fromOtherTab(SESSION_KEY, null);
+    expect(currentSession()).toEqual(EMPTY);
+
+    fromOtherTab(SESSION_KEY, JSON.stringify(login));
+    expect(currentSession()).toEqual(login);
+    fromOtherTab(null, null);
+    expect(currentSession()).toEqual(EMPTY);
+  });
+
+  it('rehydrates legacy keys read-only, then migrates on takeover and clears on logout', () => {
+    fromOtherTab('bf_access_token', 'legacy-access');
+    fromOtherTab('bf_refresh_token', 'legacy-refresh');
+    fromOtherTab('bf_password_change_required', 'true');
+    expect(currentSession()).toEqual({
+      accessToken: 'legacy-access',
+      refreshToken: 'legacy-refresh',
+      passwordChangeRequired: true,
+    });
+    expect(persistedSession()).toBeNull();
+
+    setTokens('own-access', 'own-refresh');
+    const owned = {
+      accessToken: 'own-access',
+      refreshToken: 'own-refresh',
+      passwordChangeRequired: true,
+    };
+    expect(currentSession()).toEqual(owned);
+    expect(persistedSession()).toEqual(owned);
+    LEGACY_KEYS.forEach((key) => expect(localStorage.getItem(key)).toBeNull());
+
+    clearTokens();
+    expect(currentSession()).toEqual(EMPTY);
+    expect(persistedSession()).toBeNull();
   });
 });
