@@ -64,8 +64,8 @@ function handleReset() {
 }
 
 async function handlePreview(row: FileRecord) {
-  if (!row.privateFile) {
-    if (row.url) window.open(row.url, '_blank', 'noopener,noreferrer');
+  if (!row.privateFile && row.url) {
+    window.open(row.url, '_blank', 'noopener,noreferrer');
     return;
   }
   if (!row.id) return;
