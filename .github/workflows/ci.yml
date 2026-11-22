@@ -8,6 +8,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # 更新 PR 正文时重新核对切片和候选证据。
+    types: [opened, reopened, synchronize, edited]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +19,8 @@ jobs:
   backend:
     name: backend (Maven quality-gate)
     runs-on: ubuntu-latest
+    outputs:
+      proof: ${{ steps.ci_evidence.outputs.proof }}
     defaults:
       run:
         working-directory: 后端代码/basic-framework-boot
@@ -29,11 +33,22 @@ jobs:
           cache: maven
           cache-dependency-path: 后端代码/basic-framework-boot/**/pom.xml
       - name: Maven quality-gate verify
+        id: maven_verify
         run: mvn -B -ntp -Pquality-gate verify
+      - name: Record CI evidence
+        id: ci_evidence
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_STEPS_JSON: ${{ toJSON(steps) }}
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record backend --junit '后端代码/basic-framework-boot/**/target/surefire-reports/TEST-*.xml'
 
   frontend:
     name: frontend (unit + typecheck + lint + build)
     runs-on: ubuntu-latest
+    outputs:
+      proof: ${{ steps.ci_evidence.outputs.proof }}
     env:
       # GitHub runner 默认 TZ=UTC；仓库时区相关单测期望 IANA 区域名（如 Asia/Shanghai）。
       TZ: Asia/Shanghai
@@ -53,7 +68,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Shared frontend quality, test, build and security gates
-        run: pnpm run quality:gates
+        id: frontend_gates
+        shell: bash
+        env:
+          FORCE_COLOR: "1"
+        run: |
+          set -euo pipefail
+          pnpm run quality:gates 2>&1 | tee "$RUNNER_TEMP/frontend-gates.log"
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v6
@@ -68,6 +89,7 @@ jobs:
             pnpm exec playwright install --with-deps chromium
           fi
       - name: Critical browser E2E path (production preview)
+        id: browser_e2e
         run: pnpm run test:e2e:ci
       - name: Upload Playwright failure artifacts
         if: failure()
@@ -77,10 +99,23 @@ jobs:
           path: 前端代码/basic-framework-admin/apps/web-ele/test-results
           retention-days: 7
           if-no-files-found: ignore
+      - name: Record CI evidence
+        id: ci_evidence
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          CI_STEPS_JSON: ${{ toJSON(steps) }}
+          CI_JOB_STATUS: ${{ job.status }}
+        run: >-
+          python3 -B -X utf8 scripts/workflow/ci_evidence.py record frontend
+          --vitest-log "$RUNNER_TEMP/frontend-gates.log"
+          --playwright 前端代码/basic-framework-admin/apps/web-ele/test-results/ci-e2e-results.json
 
   docs-comments:
     name: docs + comments
     runs-on: ubuntu-latest
+    outputs:
+      proof: ${{ steps.ci_evidence.outputs.proof }}
     env:
       EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
@@ -108,14 +143,17 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
         run: pnpm install --frozen-lockfile
       - name: Docs checks (with mermaid)
+        id: docs_checks
         run: |
           set -euo pipefail
           python -B -X utf8 scripts/workflow/run_checks.py --group docs
       - name: Comments checks
+        id: changed_comments
         run: |
           set -euo pipefail
           python -B -X utf8 scripts/workflow/run_checks.py --group comments --base "${{ steps.baseline.outputs.sha }}"
       - name: PR slice size guard
+        id: pr_size_guard
         if: github.event_name == 'pull_request'
         shell: bash
         env:
@@ -140,10 +178,19 @@ jobs:
             echo "PR non-generated additions ($ADDED_LINES lines) exceed 600-line slice budget; split into smaller PRs or add a standalone '[slice-override]: <rationale>' line in PR body." >&2
             exit 1
           fi
+      - name: Record CI evidence
+        id: ci_evidence
+        if: always()
+        env:
+          CI_STEPS_JSON: ${{ toJSON(steps) }}
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record docs-comments
 
   pytest:
     name: pytest (scripts/tests)
     runs-on: ubuntu-latest
+    outputs:
+      proof: ${{ steps.ci_evidence.outputs.proof }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -163,13 +210,26 @@ jobs:
         working-directory: 前端代码/basic-framework-admin
         run: pnpm install --frozen-lockfile
       - name: Pytest tooling tests
+        id: pytest_tests
+        env:
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pytest-results.xml
         run: python -B -X utf8 -m pytest scripts/tests
+      - name: Record CI evidence
+        id: ci_evidence
+        if: always()
+        env:
+          CI_STEPS_JSON: ${{ toJSON(steps) }}
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record pytest --junit "$RUNNER_TEMP/pytest-results.xml"
 
   secrets-scan:
     name: secrets scan (staged-equivalent)
     runs-on: ubuntu-latest
+    outputs:
+      proof: ${{ steps.ci_evidence.outputs.proof }}
     env:
       EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -182,15 +242,84 @@ jobs:
         shell: bash
         run: python -B -X utf8 scripts/workflow/resolve_ci_baseline.py
       - name: Scan changed files for secrets
+        id: scan_history
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
         run: |
           set -euo pipefail
-          # 脚本只扫 git 暂存区，不接受文件路径参数。
-          BASE="${{ steps.baseline.outputs.sha }}"
-          if [ -z "$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD)" ]; then
-            echo "No changed files to scan."
-            exit 0
-          fi
-          # 索引对齐到 BASE，工作区保持 HEAD，再 add 全部差异，等价于扫本次变更。
-          git reset --mixed "$BASE"
-          git add -A
-          python -B -X utf8 scripts/security/scan_staged_secrets.py
+          # 扫描已提交的版本范围，保持 checkout 和索引一致。
+          # PR 使用事件 head，push 使用实际检出的 HEAD。
+          HEAD_SHA="${EVENT_HEAD_SHA:-$(git rev-parse HEAD)}"
+          python -B -X utf8 scripts/security/scan_staged_secrets.py --base "$BASE_SHA" --head "$HEAD_SHA"
+      - name: Record CI evidence
+        id: ci_evidence
+        if: always()
+        env:
+          CI_STEPS_JSON: ${{ toJSON(steps) }}
+          CI_JOB_STATUS: ${{ job.status }}
+        run: python3 -B -X utf8 scripts/workflow/ci_evidence.py record secrets-scan
+
+  acceptance:
+    name: acceptance
+    if: always()
+    needs: [backend, frontend, docs-comments, pytest, secrets-scan]
+    runs-on: ubuntu-latest
+    env:
+      EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install pinned quality tools
+        run: python -m pip install --disable-pip-version-check -r tools/quality/requirements.txt
+      - name: Resolve comparison baseline
+        id: baseline
+        shell: bash
+        run: python -B -X utf8 scripts/workflow/resolve_ci_baseline.py
+      - name: Plan slice verification
+        id: slice_plan
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
+        run: python3 -B -X utf8 scripts/workflow/verify_slice.py --base "$BASE_SHA" --plan --json > "$RUNNER_TEMP/slice-plan.json"
+      - name: Assemble acceptance evidence
+        id: assemble
+        if: always()
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: >-
+          python3 -B -X utf8 scripts/workflow/ci_evidence.py assemble
+          --plan "$RUNNER_TEMP/slice-plan.json" --output "$RUNNER_TEMP/acceptance"
+      - name: Skills report (strict)
+        id: skills_report
+        if: always()
+        run: |
+          dir="$RUNNER_TEMP/acceptance"
+          # 只在两份输入都存在时生成技能验收制品。
+          for f in skill-outcomes.json acceptance.json; do
+            [ -s "$dir/$f" ] || { echo "::error::$f is missing or empty"; exit 1; }
+          done
+          python3 -B -X utf8 scripts/skills/record_skill_evidence.py --strict \
+            --outcomes "$dir/skill-outcomes.json" --output "$dir/skill-evidence.json"
+          [ -s "$dir/skill-evidence.json" ] || { echo "::error::skill-evidence.json is missing or empty"; exit 1; }
+      - name: Upload diagnostic acceptance
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-diagnostic-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/acceptance/acceptance.json
+          if-no-files-found: warn
+      - name: Upload acceptance proof
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: acceptance-proof-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/acceptance/acceptance.json
+            ${{ runner.temp }}/acceptance/skill-evidence.json
+          if-no-files-found: error

@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -48,7 +51,11 @@ def _prepare_fake_repo(root: Path, *, init_git: bool = False) -> Path:
         "REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD\n"
         "SM2_PRIVATE_KEY=\n"
         "MINIO_ACCESS_KEY=\n"
-        "MINIO_SECRET_KEY=\n",
+        "MINIO_SECRET_KEY=\n"
+        "MINIO_BUCKET=basic-framework\n"
+        "MINIO_PUBLIC_ACCESS=true\n"
+        "MINIO_ENDPOINT=http://127.0.0.1:19000\n"
+        "MINIO_SECURE=false\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -69,11 +76,13 @@ def check_ci_doc_alignment(workflow_data: dict, index_text: str, readme_text: st
     """
     errors: list[str] = []
     jobs = workflow_data.get("jobs", {})
-    frontend_steps = [step.get("run", "") for step in jobs.get("frontend", {}).get("steps", [])]
-    if any(
-        cmd in frontend_steps
-        for cmd in ("pnpm lint", "pnpm run quality:gates", "pnpm quality:gates")
-    ):
+    frontend_steps = jobs.get("frontend", {}).get("steps", [])
+    frontend_commands = {
+        line.partition("|")[0].strip().removesuffix(" 2>&1").rstrip()
+        for step in frontend_steps
+        for line in step.get("run", "").splitlines()
+    }
+    if not frontend_commands.isdisjoint(("pnpm lint", "pnpm run quality:gates", "pnpm quality:gates")):
         if "lint 暂不作为必过门禁" in index_text:
             errors.append("脚本使用索引仍声称前端 lint 暂不作为必过门禁，与 ci.yml 冲突")
         if "lint" not in index_text.lower():
@@ -144,8 +153,11 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     assert {"mysql", "redis", "minio", "minio-init"} <= set(services)
     assert services["mysql"]["image"] == "mysql:8.0.46"
     assert services["redis"]["image"] == "redis:7.4.10-alpine"
-    assert services["minio"]["image"] == "minio/minio:RELEASE.2025-09-07T16-13-09Z"
-    assert services["minio-init"]["image"] == "minio/mc:RELEASE.2025-08-13T08-35-41Z"
+    assert services["minio"]["build"]["context"] == "./tools/minio"
+    assert services["minio-init"]["image"] == services["minio"]["image"]
+    dockerfile = (DEFAULT_ROOT / "tools/minio/Dockerfile").read_text(encoding="utf-8")
+    assert "RELEASE.2025-09-07T16-13-09Z" in dockerfile
+    assert "RELEASE.2025-08-13T08-35-41Z" in dockerfile
     assert services["minio"]["ports"] == [
         "127.0.0.1:${MINIO_API_PORT:-19000}:9000",
         "127.0.0.1:${MINIO_CONSOLE_PORT:-19001}:9001",
@@ -167,9 +179,169 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     minio_health_test = services["minio"]["healthcheck"]["test"]
     assert minio_health_test == ["CMD", "mc", "ready", "local"]
     assert "curl" not in " ".join(minio_health_test)
-    # MinIO 初始化容器必须为开发桶设置匿名下载策略，避免本地上传文件预览 403
-    minio_init_ep = "\n".join(services["minio-init"]["entrypoint"])
-    assert "mc anonymous set download" in minio_init_ep
+    minio_init_cmd = "\n".join(services["minio-init"]["command"])
+    assert "apply-bucket-policy.sh /policy/bucket-policy.json" in minio_init_cmd
+    assert "set none" not in minio_init_cmd
+    assert services["minio-init"]["volumes"][0]["source"] == "${MINIO_POLICY_FILE:-./.e2e-env/minio-bucket-policy.json}"
+    assert services["minio-init"]["volumes"][1]["source"] == "./tools/minio/apply-bucket-policy.sh"
+    helper = (DEFAULT_ROOT / "tools/minio/apply-bucket-policy.sh").read_text(encoding="utf-8")
+    assert "mc anonymous set-json" in helper and "mc --json anonymous get-json" in helper
+    assert "apk add --no-cache jq" in dockerfile
+
+
+
+@pytest.mark.skipif(os.name == "nt", reason="需要顺序执行 POSIX Compose 启动入口")
+@pytest.mark.parametrize(("init_exit", "conflict"), [
+    (0, None), (1, None), (0, "bucket-env"), (0, "access-env"), (0, "bucket-files"), (0, "stale-policy"),
+    (0, "java-override"), (0, "spring-json"), (0, "argument-override"),
+    (0, "endpoint-env"), (0, "endpoint-file"), (0, "port-env"), (0, "published-port"),
+    (0, "endpoint-override"), (0, "remote-docker"),
+    (0, "argument-file"), (0, "shell-argument-file"), (0, "jdk-argument-file"),
+    (0, "jvm-option-file"), (0, "jvm-flags-file"),
+    (0, "jdk-single-quoted-option"), (0, "jdk-double-quoted-option"), (0, "jdk-override"),
+])
+def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int, conflict: str | None) -> None:
+    """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
+    repo = _prepare_fake_repo(tmp_path)
+    shell = repo / "scripts/runtime/start_dev_stack.sh"
+    shell.parent.mkdir(parents=True)
+    for script in ("start_dev_stack.sh", "init_local_dev.py", "render_minio_bucket_policy.py"):
+        shutil.copyfile(DEFAULT_ROOT / "scripts/runtime" / script, shell.parent / script)
+    (repo / ".gitignore").write_text(".env.dev\n.env\n.e2e-env/\n", encoding="utf-8")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    backend = repo / init_local_dev.BACKEND_DIR / ".env"
+    if conflict == "bucket-files":
+        backend.write_text(backend.read_text(encoding="utf-8").replace(
+            "MINIO_BUCKET=basic-framework", "MINIO_BUCKET=different-fixture"), encoding="utf-8")
+    if conflict == "endpoint-file":
+        backend.write_text(backend.read_text(encoding="utf-8").replace(
+            "MINIO_ENDPOINT=http://127.0.0.1:19000", "MINIO_ENDPOINT=http://127.0.0.1:19002"), encoding="utf-8")
+    if conflict == "stale-policy":
+        policy.write_text("{}", encoding="utf-8")
+    commands = tmp_path / "compose.log"
+    fake_docker = tmp_path / "docker"
+    fake_docker.write_text(
+        '#!/bin/sh\n[ "$1" != context ] || { echo unix:///fixture/docker.sock; exit 0; }\n'
+        '[ "$1" = compose ] || exit 2\nshift 5\n'
+        'printf "%s\\n" "$*" >> "$COMMANDS"\n'
+        '[ "$MINIO_BUCKET" = basic-framework ] && [ "$MINIO_PUBLIC_ACCESS" = true ] || exit 3\n'
+        '[ "$MINIO_POLICY_FILE" != "$ORIGINAL_POLICY" ] && cmp "$ORIGINAL_POLICY" "$MINIO_POLICY_FILE" || exit 4\n'
+        '[ "$MINIO_ENDPOINT" = http://127.0.0.1:19000 ] || exit 5\n'
+        'case "$1" in up) exit 0 ;; port) echo "127.0.0.1:$PUBLISHED_PORT" ;; run) exit "$INIT_EXIT" ;; *) exit 2 ;; esac\n',
+        encoding="utf-8",
+    )
+    fake_docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit), "ORIGINAL_POLICY": str(policy),
+           "PUBLISHED_PORT": "19002" if conflict == "published-port" else "19000",
+           "DOCKER_CONTEXT": "", "DOCKER_HOST": ""}
+    if conflict == "remote-docker":
+        env["DOCKER_HOST"] = "ssh://fixture.invalid"
+    if conflict == "endpoint-env":
+        env["BASICFRAMEWORK_FILE_MINIO_ENDPOINT"] = "http://127.0.0.1:19002"
+    if conflict == "port-env":
+        env["MINIO_API_PORT"] = "19002"
+    if conflict == "bucket-env":
+        env["MINIO_BUCKET"] = "different-fixture"
+    if conflict == "access-env":
+        env["BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS"] = "false"
+    if conflict == "java-override":
+        env["JAVA_TOOL_OPTIONS"] = "-Xmx256m -Dbasic-framework.file.minio.public-access=false"
+    if conflict == "spring-json":
+        env["SPRING_APPLICATION_JSON"] = "{}"
+    if conflict is None:
+        env["JAVA_TOOL_OPTIONS"] = "-Xmx128m -Dfixture.label=qa@local"
+        env["JDK_JAVA_OPTIONS"] = "-Xmx128m\t-Dfixture.label=qa@local"
+    cmd = 'printf "%s %s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" "$MINIO_ENDPOINT" >> "$COMMANDS"'
+    command = ["sh", "-c", cmd]
+    if conflict == "argument-override":
+        command = ["java", "-Dbasic-framework.file.minio.bucket=different-fixture", "-version"]
+    if conflict == "endpoint-override":
+        command = ["java", "-Dbasic-framework.file.minio.endpoint=http://127.0.0.1:19002", "-version"]
+    option_file = conflict in ("argument-file", "shell-argument-file", "jdk-argument-file",
+                               "jvm-option-file", "jvm-flags-file")
+    if option_file:
+        fixture_file = "fixture-options" if conflict == "jdk-argument-file" else "fixture options"
+        (tmp_path / fixture_file).write_text("-Xmx128m\n", encoding="utf-8")
+    if conflict == "argument-file":
+        command = ["java", "@fixture options", "-version"]
+    if conflict == "shell-argument-file":
+        command = ["sh", "-c", 'exec java "@fixture options" -version']
+    if conflict == "jdk-argument-file":
+        env["JDK_JAVA_OPTIONS"] = "@fixture-options"
+    if conflict == "jdk-single-quoted-option":
+        env["JDK_JAVA_OPTIONS"] = "-Dfixture.label='fixture label'"
+    if conflict == "jdk-double-quoted-option":
+        env["JDK_JAVA_OPTIONS"] = '-Dfixture.label="fixture label"'
+    if conflict == "jdk-override":
+        env["JDK_JAVA_OPTIONS"] = "-Xmx128m\t-Dbasic-framework.file.minio.public-access=true"
+    if conflict == "jvm-option-file":
+        env["JAVA_TOOL_OPTIONS"] = '-XX:VMOptionsFile="fixture options"'
+    if conflict == "jvm-flags-file":
+        command = ["java", "-XX:Flags=fixture options", "-version"]
+    result = subprocess.run(["sh", str(shell), "--", *command],
+                            cwd=tmp_path, env=env, check=False, capture_output=True, text=True, timeout=10)
+    assert not list(policy.parent.glob("validated-policy.*"))
+    started = ["up --build -d --wait mysql redis minio", "port minio 9000"]
+    if conflict == "published-port":
+        assert result.returncode == 1 and commands.read_text(encoding="utf-8").splitlines() == started
+        assert "published MinIO endpoint differs" in result.stderr
+        return
+    if conflict:
+        assert result.returncode == 1 and not commands.exists(), result.stderr
+        if option_file:
+            assert "含间接 Java 参数文件" in result.stderr
+            assert fixture_file not in result.stderr
+        if conflict in ("jdk-single-quoted-option", "jdk-double-quoted-option"):
+            assert "JDK_JAVA_OPTIONS 仅支持不带引号" in result.stderr
+            assert "fixture label" not in result.stderr
+        if conflict == "jdk-override":
+            assert "JDK_JAVA_OPTIONS 覆盖了 MinIO 配置" in result.stderr
+        return
+    expected = [*started, "run --rm --no-deps minio-init"]
+    if init_exit == 0:
+        expected.append("basic-framework true http://127.0.0.1:19000")
+    assert result.returncode == init_exit, result.stderr
+    assert commands.read_text(encoding="utf-8").splitlines() == expected
+
+
+
+def test_bootstrap_pairs_custom_minio_port_with_backend_endpoint(tmp_path: Path, monkeypatch) -> None:
+    """引导以自定义 Compose 端口生成同一个后端直连地址，保留独立签名配置。"""
+    repo = _prepare_fake_repo(tmp_path)
+    monkeypatch.setenv("MINIO_API_PORT", "19123")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    compose = _parse_env_map((repo / ".env.dev").read_text(encoding="utf-8"))
+    backend = _parse_env_map((repo / init_local_dev.BACKEND_DIR / ".env").read_text(encoding="utf-8"))
+    assert compose["MINIO_API_PORT"] == "19123"
+    assert backend["MINIO_ENDPOINT"] == "http://127.0.0.1:19123"
+    backend_env = repo / init_local_dev.BACKEND_DIR / ".env"
+    with backend_env.open("a", encoding="utf-8") as config:
+        config.write("MINIO_SIGNING_ENDPOINT=http://127.0.0.1:19124\n")
+    snapshot = tmp_path / "policy.json"
+    assert init_local_dev.verify_bucket_policy(repo, snapshot)[2:] == ("http://127.0.0.1:19123", "19123")
+
+
+def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:
+    """验证初始化根据已有后端配置切换匿名权限，且保留本地环境内容。"""
+    repo = _prepare_fake_repo(tmp_path)
+    backend_env = repo / "后端代码/basic-framework-boot/.env"
+    policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    mixed = json.loads(policy.read_text(encoding="utf-8"))
+    blocked = mixed["Statement"][1]["Resource"]
+    assert "arn:aws:s3:::basic-framework/PRIVATE/*" in blocked
+    assert "arn:aws:s3:::basic-framework/private" in blocked
+    assert "arn:aws:s3:::basic-framework/ *" in blocked
+
+    content = backend_env.read_text(encoding="utf-8").replace("MINIO_PUBLIC_ACCESS=true", "MINIO_PUBLIC_ACCESS=false")
+    backend_env.write_text(content, encoding="utf-8")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
+    deny = {"Sid": "DenyAnonymousGetObject", "Effect": "Deny", "Principal": {"AWS": ["*"]},
+            "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::basic-framework/*"]}
+    assert json.loads(policy.read_text(encoding="utf-8"))["Statement"] == [deny]
+    assert backend_env.read_text(encoding="utf-8") == content
 
 
 def test_ci_workflow_and_documentation_have_no_drift() -> None:
@@ -207,3 +379,17 @@ def test_cli_entrypoint_runs_outside_repository(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "只读预览" in result.stdout
+
+
+
+def test_bootstrap_refuses_conflicting_files_before_replacing_policy(tmp_path: Path) -> None:
+    """引导发现两个桶配置不一致时保留已有配置和策略。"""
+    root = _prepare_fake_repo(tmp_path)
+    assert init_local_dev.main(["--root", str(root), "--apply"]) == 0
+    config = root / ".env.dev"
+    config.write_text(config.read_text(encoding="utf-8").replace(
+        "MINIO_BUCKET=basic-framework", "MINIO_BUCKET=different-fixture"), encoding="utf-8")
+    policy = root / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    before = policy.read_bytes()
+    assert init_local_dev.main(["--root", str(root), "--apply"]) == 1
+    assert policy.read_bytes() == before

@@ -9,6 +9,9 @@ import org.hibernate.validator.constraints.URL;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+
 /**
  * S3 文件客户端的配置类
  *
@@ -97,6 +100,13 @@ public class S3FileClientConfig implements FileClientConfig {
     private String region;
 
     /**
+     * 仅用于预签名的 HTTP(S) 根地址，要求网关保留原始 Host 和桶路径以通过 SigV4 验签。
+     *
+     * <p>留空时沿用 {@link #domain} 推导，无法推导时回到 {@link #endpoint}。</p>
+     */
+    private String signingEndpoint;
+
+    /**
      * 校验自定义域名配置是否满足存储服务要求。
      *
      * @return 七牛云场景必须配置 domain，其它场景允许自动生成访问域名
@@ -110,6 +120,41 @@ public class S3FileClientConfig implements FileClientConfig {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 校验预签名配置的站点地址。
+     *
+     * @return 留空或配置为有效 HTTP(S) 根地址时返回 true
+     */
+    @AssertTrue(message = "signingEndpoint must be a root HTTP(S) origin")
+    @JsonIgnore
+    public boolean isSigningEndpointValid() {
+        return StrUtil.isBlank(signingEndpoint) || isRootHttpOrigin(signingEndpoint);
+    }
+
+    /**
+     * 核对地址是否仅包含 HTTP(S) 协议和有效的主机端口。
+     *
+     * @param value 待核对地址，接受首尾空白及单个末尾斜线
+     * @return 符合根地址形式且无用户信息、查询或片段时返回 true
+     */
+    public static boolean isRootHttpOrigin(String value) {
+        if (StrUtil.isBlank(value)) {
+            return false;
+        }
+        try {
+            URI uri = new URI(value.trim());
+            String scheme = uri.getScheme();
+            return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && StrUtil.isNotEmpty(uri.getHost())
+                    && uri.getRawUserInfo() == null
+                    && (StrUtil.isEmpty(uri.getRawPath()) || "/".equals(uri.getRawPath()))
+                    && uri.getRawQuery() == null
+                    && uri.getRawFragment() == null;
+        } catch (URISyntaxException ex) {
+            return false;
+        }
     }
 
 }

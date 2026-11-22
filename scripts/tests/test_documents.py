@@ -14,7 +14,9 @@ from scripts.docs.markdown_support import parse
 from scripts.docs.verify_doc_refs import collect as refs
 from scripts.docs.verify_md_links import collect as links
 from scripts.docs.verify_md_links import decode_path
-from scripts.skills.verify_skill_metadata import frontmatter, validate
+from scripts.skills.record_skill_evidence import build_report
+from scripts.skills.verify_skill_metadata import VERIFICATION_GATES, frontmatter, validate
+from scripts.skills.verify_skill_metadata import collect as skills
 
 
 def write(root: Path, path: str, text: str) -> Path:
@@ -23,6 +25,54 @@ def write(root: Path, path: str, text: str) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     return target
+
+
+CI_WORKFLOW_FIXTURE = (
+    "name: CI\n"
+    "on:\n"
+    "  push:\n"
+    "    branches: [main]\n"
+    "jobs:\n"
+    "  backend:\n"
+    "    steps:\n"
+    "      - id: maven_verify\n"
+    "        name: Maven quality-gate verify\n"
+    "        run: mvn -B -ntp -Pquality-gate verify\n"
+    "  frontend:\n"
+    "    steps:\n"
+    "      - id: frontend_gates\n"
+    "        name: Shared frontend quality, test, build and security gates\n"
+    "        run: pnpm run quality:gates\n"
+    "      - id: browser_e2e\n"
+    "        name: Browser E2E step renamed by the follow-up\n"
+    "        run: pnpm run test:e2e:ci\n"
+    "  docs-comments:\n"
+    "    steps:\n"
+    "      - id: docs_checks\n"
+    "      - id: changed_comments\n"
+    "  acceptance:\n"
+    "    steps:\n"
+    "      - id: slice_plan\n"
+)
+
+
+def seed_repository(root: Path, workflow: str = CI_WORKFLOW_FIXTURE) -> None:
+    """创建可供验证入口检查的合成仓库目录。"""
+    for gate in VERIFICATION_GATES.values():
+        if gate.script is not None:
+            write(root, gate.script, "# synthetic entrypoint fixture\n")
+    write(root, ".github/workflows/ci.yml", workflow)
+
+
+def skill_source(name: str, *fields: str) -> str:
+    """构造含必需字段与待验声明的合成技能内容。"""
+    extra = "".join(f"{field}\n" for field in fields)
+    return f"---\nname: {name}\ndescription: synthetic fixture\n{extra}---\n"
+
+
+def skill_messages(root: Path, folder: Path) -> list[str]:
+    """核对临时技能定义并收集其元数据诊断。"""
+    return [item.message for item in validate(folder / "SKILL.md", folder / "agents/openai.yaml", root)]
 
 
 def test_markdown_links_and_anchors(tmp_path: Path) -> None:
@@ -261,6 +311,7 @@ def test_frontmatter_crlf_and_wrong_policy(tmp_path: Path) -> None:
 
 def test_skill_lifecycle_and_verification_metadata(tmp_path: Path) -> None:
     """技能生命周期状态、替代、退役与行为验收元数据按契约通过或阻断。"""
+    seed_repository(tmp_path)
     write(
         tmp_path,
         "new-skill/SKILL.md",
@@ -272,7 +323,7 @@ def test_skill_lifecycle_and_verification_metadata(tmp_path: Path) -> None:
             "supersedes:\n"
             "  - legacy-skill\n"
             "verification:\n"
-            "  - python -B -X utf8 -m pytest scripts/tests/test_documents.py\n"
+            "  - python -B -X utf8 scripts/workflow/run_checks.py --group docs\n"
             "---\n"
         ),
     )
@@ -318,6 +369,158 @@ def test_skill_lifecycle_and_verification_metadata(tmp_path: Path) -> None:
     assert any("disable-model-invocation" in msg for msg in messages)
     assert any("不存在的技能" in msg for msg in messages)
     assert any("verification" in msg for msg in messages)
+
+
+def test_skill_verification_allowlist_and_entrypoints(tmp_path: Path) -> None:
+    """验证技能声明只能引用允许且存在的执行入口。"""
+    seed_repository(tmp_path)
+    folder = tmp_path / "demo"
+    write(tmp_path, "demo/SKILL.md", skill_source("demo", "verification:", "  - python -B -X utf8 -m pytest scripts/tests"))
+    assert any("not allowlisted" in msg for msg in skill_messages(tmp_path, folder))
+
+    write(
+        tmp_path,
+        "demo/SKILL.md",
+        skill_source(
+            "demo",
+            "verification:",
+            '  - "mvn -B -ntp -Pquality-gate verify"',
+            '  - "pnpm run quality:gates"',
+            '  - "pnpm run test:e2e:ci"',
+            '  - "python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan"',
+        ),
+    )
+    # Every gate, including file-based verify_slice, resolves through its stable CI step id.
+    assert not skill_messages(tmp_path, folder)
+
+    (tmp_path / "scripts/workflow/verify_slice.py").unlink()
+    assert any("scripts/workflow/verify_slice.py" in msg for msg in skill_messages(tmp_path, folder))
+
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("run: mvn -B -ntp -Pquality-gate verify", "run: mvn -B verify"))
+    assert any("does not run" in msg and "backend/maven_verify" in msg for msg in skill_messages(tmp_path, folder))
+
+    # The same stable id survives a display-name change; a missing id fails the gate.
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("name: Shared frontend", "name: Renamed frontend"))
+    assert not skill_messages(tmp_path, folder)
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("id: frontend_gates", "id: renamed_gates"))
+    assert any("frontend/frontend_gates not found" in msg for msg in skill_messages(tmp_path, folder))
+    seed_repository(tmp_path, CI_WORKFLOW_FIXTURE.replace("id: slice_plan", "name: Slice plan"))
+    assert any("acceptance/slice_plan not found" in msg for msg in skill_messages(tmp_path, folder))
+
+    (tmp_path / ".github/workflows/ci.yml").unlink()
+    assert any(".github/workflows/ci.yml is missing" in msg for msg in skill_messages(tmp_path, folder))
+
+
+def test_skill_replacement_tracks_rename_delete_and_retire(tmp_path: Path) -> None:
+    """验证更名、删除或退役后失效的替代关系会阻断。"""
+    base = tmp_path / ".agents/skills"
+    legacy = base / "legacy"
+    retired = ("status: retired", "disable-model-invocation: true")
+    write(base, "legacy/SKILL.md", skill_source("legacy", *retired, "replaced-by: current"))
+    write(base, "current/SKILL.md", skill_source("current", "supersedes: [legacy]"))
+    write(base, "unrelated/SKILL.md", skill_source("unrelated"))
+    assert skills(tmp_path, []) == (3, [])
+
+    write(base, "current/SKILL.md", skill_source("current", *retired, "retirement-reason: retired too", "supersedes: [legacy]"))
+    # A path subset still re-checks lifecycle-linked skills, so the retired target is caught.
+    count, findings = skills(tmp_path, [".agents/skills/unrelated"])
+    assert count == 3
+    assert any("current must be active" in item.message for item in findings)
+
+    (base / "current").rename(base / "renamed")
+    write(base, "renamed/SKILL.md", skill_source("renamed", "supersedes: [legacy]"))
+    assert any("replaced-by" in msg and "current" in msg for msg in skill_messages(tmp_path, legacy))
+    assert any("replaced by current, not renamed" in msg for msg in skill_messages(tmp_path, base / "renamed"))
+
+    write(base, "current/SKILL.md", skill_source("other", "supersedes: [legacy]"))
+    assert any("declares another name" in msg for msg in skill_messages(tmp_path, legacy))
+
+    (base / "current/SKILL.md").unlink()
+    assert any("replaced-by" in msg and "current" in msg for msg in skill_messages(tmp_path, legacy))
+
+
+def test_skill_supersedes_reciprocity_terminal_and_cycles(tmp_path: Path) -> None:
+    """验证替代关系互相对应，且禁止终止退役和循环引用。"""
+    retired = ("status: retired", "disable-model-invocation: true")
+    write(
+        tmp_path,
+        "successor/SKILL.md",
+        skill_source("successor", "supersedes: [still-active, terminal, elsewhere, long-gone]"),
+    )
+    write(tmp_path, "still-active/SKILL.md", skill_source("still-active"))
+    write(tmp_path, "terminal/SKILL.md", skill_source("terminal", *retired, "retirement-reason: no successor planned"))
+    write(tmp_path, "elsewhere/SKILL.md", skill_source("elsewhere", *retired, "replaced-by: other-target"))
+    write(tmp_path, "other-target/SKILL.md", skill_source("other-target", "supersedes: [elsewhere]"))
+    found = skill_messages(tmp_path, tmp_path / "successor")
+    assert len(found) == 3
+    assert any("still-active" in msg and "neither deprecated nor retired" in msg for msg in found)
+    assert any("terminal" in msg and "no successor" in msg for msg in found)
+    assert any("replaced by other-target, not successor" in msg for msg in found)
+    # Decision: a terminal retirement (retirement-reason without replaced-by) is valid on its own.
+    assert not skill_messages(tmp_path, tmp_path / "terminal")
+
+    write(tmp_path, "one-way/SKILL.md", skill_source("one-way", *retired, "replaced-by: other-target"))
+    assert any("must list one-way in supersedes" in msg for msg in skill_messages(tmp_path, tmp_path / "one-way"))
+
+    write(tmp_path, "loop-a/SKILL.md", skill_source("loop-a", "status: deprecated", "replaced-by: loop-b", "supersedes: [loop-b]"))
+    write(tmp_path, "loop-b/SKILL.md", skill_source("loop-b", "status: deprecated", "replaced-by: loop-a", "supersedes: [loop-a]"))
+    assert any("lifecycle cycle" in msg for msg in skill_messages(tmp_path, tmp_path / "loop-a"))
+
+    write(tmp_path, "bad-ref/SKILL.md", skill_source("bad-ref", "supersedes: [Bad_Name]"))
+    assert skill_messages(tmp_path, tmp_path / "bad-ref")
+    write(tmp_path, "bad-active/SKILL.md", skill_source("bad-active", "replaced-by: other-target"))
+    assert any("active skills must not declare" in msg for msg in skill_messages(tmp_path, tmp_path / "bad-active"))
+
+
+def test_skill_evidence_report_from_ci_outcomes(tmp_path: Path) -> None:
+    """验证技能行为状态来自绑定受验版本的 CI 步骤证据。"""
+    seed_repository(tmp_path)
+    base = tmp_path / ".agents/skills"
+    docs = '  - "python -B -X utf8 scripts/workflow/run_checks.py --group docs"'
+    slice_plan = '  - "python -B -X utf8 scripts/workflow/verify_slice.py --base main --plan"'
+    write(base, "tasks/SKILL.md", skill_source("tasks", "verification:", docs, slice_plan))
+    write(base, "java/SKILL.md", skill_source("java", "verification:", '  - "mvn -B -ntp -Pquality-gate verify"'))
+    write(base, "plain/SKILL.md", skill_source("plain"))
+    head = "a" * 40
+    envelope = {"tested_sha": head, "run_id": "101", "run_attempt": "1"}
+    run = {"sha": head, "run_id": "101", "run_attempt": "1"}
+    outcomes = {
+        **envelope,
+        "steps": {
+            "docs-comments/docs_checks": {"outcome": "success", **run},
+            "acceptance/slice_plan": {"outcome": "success", **run},
+            "backend/maven_verify": {"outcome": "failure", **run},
+        },
+    }
+    report = build_report(tmp_path, outcomes)
+    by_skill = {item["skill"]: item for item in report["skills"]}
+    assert [item["status"] for item in by_skill["tasks"]["behaviors"]] == ["passed", "passed"]
+    assert by_skill["tasks"]["behaviors"][1]["gate"] == "acceptance/slice_plan"
+    assert by_skill["java"]["result"] == "failed"
+    assert by_skill["plain"]["result"] == "undeclared"
+    assert report["result"] == "failed"
+    assert (report["tested_sha"], report["run_id"], report["run_attempt"]) == (head, "101", "1")
+
+    del outcomes["steps"]["docs-comments/docs_checks"]
+    outcomes["steps"]["acceptance/slice_plan"]["sha"] = "b" * 40
+    tasks = next(item for item in build_report(tmp_path, outcomes)["skills"] if item["skill"] == "tasks")
+    assert [item["status"] for item in tasks["behaviors"]] == ["missing", "stale"]
+    # A successful non-slice gate from another attempt, or lacking run identity, is stale.
+    outcomes["steps"]["backend/maven_verify"] = {"outcome": "success", **run, "run_attempt": "2"}
+    outcomes["steps"]["docs-comments/docs_checks"] = {"outcome": "success", "sha": head}
+    by_skill = {item["skill"]: item for item in build_report(tmp_path, outcomes)["skills"]}
+    assert by_skill["java"]["behaviors"][0]["status"] == "stale"
+    assert by_skill["tasks"]["behaviors"][0]["status"] == "stale"
+
+    with pytest.raises(CheckError):
+        build_report(tmp_path, {**envelope, "steps": {"backend/unknown_step": {"outcome": "success"}}})
+    with pytest.raises(CheckError):
+        build_report(tmp_path, {**envelope, "steps": {"backend/maven_verify": {"outcome": "green"}}})
+    with pytest.raises(CheckError):
+        build_report(tmp_path, {"tested_sha": head, "run_attempt": "1", "steps": {}})
+    write(base, "plain/SKILL.md", skill_source("plain", "verification:", "  - echo unapproved"))
+    with pytest.raises(CheckError):
+        build_report(tmp_path, {**envelope, "steps": {}})
 
 
 def test_note_paths_without_creating_hidden_dirs(

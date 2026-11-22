@@ -67,6 +67,14 @@ mvn -q -DskipTests package
 java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
 ```
 
+使用仓库的 Compose 开发栈时，从当前 Java 工程目录通过同一入口启动后端。启动入口核对 `.env.dev`、后端 `.env` 和调用环境的配置。后端的 `MINIO_ENDPOINT` 必须是本地 Compose 发布的 HTTP 环回地址，端口由 `MINIO_API_PORT` 指定，默认 19000。入口使用本地 Docker 并核对实际发布端口，桶策略应用和读回成功后才执行 Java 命令。桶名和访问模式使用无插值的字面值。更改模式后重新运行初始化生成策略。浏览器公开地址 `MINIO_PUBLIC_URL` 和签名网关 `MINIO_SIGNING_ENDPOINT` 可独立填写。通过该入口启动时，在命令或 JVM 启动环境中直接填写 Java 选项。入口遇到间接参数文件引用会在启动中间件前退出。
+
+`JDK_JAVA_OPTIONS` 只接受以 ASCII 空白分隔、不带单引号或双引号的直接参数，例如 `-Xmx512m -Dfile.encoding=UTF-8`。需要在选项值中保留空格时，直接在 Java 命令中传入该选项作为一个参数。入口遇到带引号的 `JDK_JAVA_OPTIONS` 会在启动中间件前退出。
+
+```bash
+sh ../../scripts/runtime/start_dev_stack.sh -- java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
+```
+
 第二条命令跳过测试，不能替代第一条或交付门禁。也可在 IDE 运行 [BasicFrameworkServerApplication](basic-framework-server/src/main/java/com/basicframework/server/BasicFrameworkServerApplication.java)。
 
 从仓库根运行 `pwsh -File scripts/runtime/start_java.ps1 -Build` 可打包后启动；脚本需要 PATH 上的 `mvn.cmd` 与 `java`。不加 `-Build` 使用已有 JAR。默认服务 http://127.0.0.1:48080；检查 Started 日志、实际认证和权限接口，不能只看进程或端口。

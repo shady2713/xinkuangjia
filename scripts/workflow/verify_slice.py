@@ -60,6 +60,8 @@ class SlicePlan:
     doc_files: tuple[str, ...]
     steps: tuple[SliceStep, ...]
     skipped_steps: tuple[SkippedStep, ...] = ()
+    # Changed paths not claimed by any existing routing category; informational only.
+    unmatched_files: tuple[str, ...] = ()
 
 
 def resolve_head_sha(root: Path) -> str:
@@ -608,6 +610,19 @@ def build_slice_plan(
             )
         )
 
+    # Record every changed path that no existing exact category claims, even when
+    # other paths in the same change set already produced verification steps.
+    matched_paths = set(java_files) | set(web_files) | set(python_files) | set(doc_files)
+    unmatched_files = [
+        p
+        for p in changed_files
+        if p not in matched_paths
+        and not p.startswith("前端代码/basic-framework-admin/apps/web-ele/src/api/generated/")
+        and p != ".github/workflows/ci.yml"
+        and p != "数据库文件/basic_framework.sql"
+        and not resolve_java_modules(resolved, [p])
+    ]
+
     return SlicePlan(
         base=base,
         effective_base=effective_base,
@@ -618,6 +633,7 @@ def build_slice_plan(
         doc_files=tuple(doc_files),
         steps=tuple(steps),
         skipped_steps=tuple(skipped_steps),
+        unmatched_files=tuple(unmatched_files),
     )
 
 
@@ -628,6 +644,7 @@ def build_acceptance_evidence(
     *,
     code: int,
     pr_ref: str = "",
+    pr_head_sha: str | None = None,
 ) -> dict[str, object]:
     """按 PR 与 head SHA 汇总可交接的结构化验收证据。
 
@@ -637,6 +654,7 @@ def build_acceptance_evidence(
         outcomes: 实际执行步骤的退出码与耗时记录。
         code: 本次验收汇总退出码。
         pr_ref: 可选关联 PR 编号或链接。
+        pr_head_sha: Optional PR head SHA from --pr-head-sha; recorded as evidence only.
     Returns:
         包含受验版本、工作区状态、执行步骤与跳过原因的验收证据字典。
     """
@@ -651,15 +669,20 @@ def build_acceptance_evidence(
         }
         for item in outcomes
     ]
+    # head_sha stays the actual checkout for backward compatibility; tested_sha mirrors it.
+    head_sha = resolve_head_sha(root)
     return {
         "pr": pr_ref or "unassigned",
-        "head_sha": resolve_head_sha(root),
+        "head_sha": head_sha,
+        "tested_sha": head_sha,
+        "pr_head_sha": pr_head_sha,
         "base": plan.base,
         "effective_base": plan.effective_base,
         "worktree_dirty": is_worktree_dirty(root),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "overall_code": code,
         "changed_files": list(plan.changed_files),
+        "unmatched_files": list(plan.unmatched_files),
         "executed_steps": executed,
         "skipped_steps": [asdict(item) for item in plan.skipped_steps],
     }
@@ -673,6 +696,8 @@ def render_acceptance_markdown(evidence: dict[str, object]) -> str:
         f"- 关联 PR：`{evidence['pr']}`",
         f"- 受验版本（head SHA）：`{evidence['head_sha']}`"
         + ("（存在未提交工作区改动）" if evidence["worktree_dirty"] else "（工作区干净）"),
+        f"- 实际受验 SHA： `{evidence['tested_sha']}`",
+        f"- PR head SHA: `{evidence['pr_head_sha'] or '未提供'}`",
         f"- 比较基线：`{evidence['base']}`（有效对比点 `{evidence['effective_base']}`）",
         f"- 生成时间（UTC）：`{evidence['generated_at']}`",
         f"- 汇总退出码：`{evidence['overall_code']}`（变更文件 {len(evidence['changed_files'])} 个）",
@@ -695,6 +720,12 @@ def render_acceptance_markdown(evidence: dict[str, object]) -> str:
             lines.append(f"- `{item['name']}`：{item['reason']}")
     else:
         lines.append("- 无跳过项。")
+    lines.extend(["", "### 未匹配文件", ""])
+    unmatched = evidence["unmatched_files"]
+    if unmatched:
+        lines.extend(f"- `{path}`" for path in unmatched)
+    else:
+        lines.append("- 无未匹配文件。")
     return "\n".join(lines) + "\n"
 
 
@@ -719,6 +750,14 @@ def execute_slice_plan(plan: SlicePlan) -> tuple[int, list[dict[str, object]]]:
     return overall, results
 
 
+def _pr_head_sha_arg(value: str) -> str:
+    """核对可选 PR head 参数的提交标识格式，供证据关联。"""
+    sha = value.strip().lower()
+    if len(sha) not in (40, 64) or any(ch not in "0123456789abcdef" for ch in sha):
+        raise argparse.ArgumentTypeError(f"invalid PR head SHA (expected 40 or 64 hex characters): {value!r}")
+    return sha
+
+
 def main(argv: list[str] | None = None) -> int:
     """解析命令行参数并输出切片计划、执行增量门禁或汇出 PR/SHA 验收证据。"""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -730,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pr", default="", help="关联 PR 编号或链接，用于写入统一验收证据")
     parser.add_argument("--evidence-json", type=Path, help="将绑定 PR 与 head SHA 的结构化验收证据写入 JSON 文件")
     parser.add_argument("--evidence-md", type=Path, help="将绑定 PR 与 head SHA 的验收证据摘要写入 Markdown 文件")
+    parser.add_argument("--pr-head-sha", type=_pr_head_sha_arg, default=None, help="PR head SHA recorded in acceptance evidence only (40 or 64 hex characters)")
     args = parser.parse_args(argv)
 
     try:
@@ -758,7 +798,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         code, outcomes = execute_slice_plan(plan)
 
-    evidence = build_acceptance_evidence(args.root, plan, outcomes, code=code, pr_ref=args.pr)
+    evidence = build_acceptance_evidence(
+        args.root, plan, outcomes, code=code, pr_ref=args.pr, pr_head_sha=args.pr_head_sha
+    )
     if args.evidence_json is not None:
         args.evidence_json.parent.mkdir(parents=True, exist_ok=True)
         args.evidence_json.write_text(

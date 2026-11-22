@@ -1,6 +1,7 @@
 package com.basicframework.module.infra.framework.file.config;
 
 import com.basicframework.module.infra.framework.file.core.client.s3.S3FileClientConfig;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
@@ -60,6 +61,44 @@ public class MinioFileProperties {
     private boolean publicAccess = true;
 
     /**
+     * 仅用于预签名的 HTTP(S) 站点根地址。
+     *
+     * <p>留空时沿用公开 URL 推导。网关必须保留请求的 Host 和桶路径，供 MinIO 验签。</p>
+     */
+    private String signingEndpoint;
+
+    /**
+     * 校验可选的签名配置是否为 HTTP(S) 站点根地址。
+     *
+     * @return 未配置或配置合法时返回 true
+     */
+    @AssertTrue(message = "MinIO signing-endpoint must be a root HTTP(S) origin")
+    public boolean isSigningEndpointValid() {
+        return signingEndpoint == null || signingEndpoint.isBlank() || S3FileClientConfig.isRootHttpOrigin(signingEndpoint);
+    }
+
+    /**
+     * 缺少显式签名地址时，公开 URL 只允许根地址或仅含桶名的路径。
+     * 网关挂载路径必须另设签名根地址，确保浏览器发送的路径与签名一致。
+     *
+     * @return 配置允许生成可用的签名链接时返回 true
+     */
+    @AssertTrue(message = "MinIO public-url below the root (e.g. /files) requires signing-endpoint")
+    public boolean isPublicUrlSignable() {
+        // Blank values are reported by @NotBlank.
+        if ((signingEndpoint != null && !signingEndpoint.isBlank())
+                || publicUrl == null || publicUrl.isBlank() || bucket == null || bucket.isBlank()) {
+            return true;
+        }
+        String base = trimTrailingSlash(publicUrl.trim());
+        String bucketSuffix = "/" + bucket.trim();
+        if (base.endsWith(bucketSuffix)) {
+            base = base.substring(0, base.length() - bucketSuffix.length());
+        }
+        return S3FileClientConfig.isRootHttpOrigin(base);
+    }
+
+    /**
      * 生成 S3 客户端配置。
      *
      * <p>MinIO 固定使用 Path-Style；公开访问开关由 {@link #publicAccess} 决定。</p>
@@ -76,6 +115,7 @@ public class MinioFileProperties {
         clientConfig.setEnablePathStyleAccess(true);
         clientConfig.setEnablePublicAccess(publicAccess);
         clientConfig.setRegion(region.trim());
+        clientConfig.setSigningEndpoint(resolveSigningEndpoint());
         return clientConfig;
     }
 
@@ -106,6 +146,18 @@ public class MinioFileProperties {
             return normalizedPublicUrl;
         }
         return normalizedPublicUrl + bucketSuffix;
+    }
+
+    /**
+     * 规范化可选的签名地址，便于 SDK 拼接桶路径。
+     *
+     * @return 去掉末尾斜线的根地址，未配置时为 {@code null}
+     */
+    private String resolveSigningEndpoint() {
+        if (signingEndpoint == null || signingEndpoint.isBlank()) {
+            return null;
+        }
+        return trimTrailingSlash(signingEndpoint.trim());
     }
 
     /**

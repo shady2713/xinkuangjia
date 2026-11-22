@@ -267,10 +267,12 @@ def scan_secret_source(
 
     def read_git(arguments: Sequence[str], *, text: bool = True) -> str | bytes:
         """返回指定暂存对象，拒绝任何未预期的 Git 操作。"""
-        if arguments[0] == "show" and arguments[1] == ":" + path:
+        if list(arguments) == ["cat-file", "blob", ":0:" + path]:
             result = source
-        elif arguments[0] == "diff":
-            result = path + "\0" if "--name-only" in arguments else patch
+        elif arguments[0] == "diff" and "--name-only" in arguments:
+            result = path + "\0"
+        elif arguments[0] == "diff" and arguments[-1] == ":(top,literal)" + path:
+            result = patch
         else:
             raise AssertionError("未覆盖的只读 Git 调用")
         return result if text else result.encode("utf-8")
