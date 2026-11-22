@@ -83,12 +83,14 @@ class DeptServiceImplSecurityTest {
     /** 验证部门下仍存在活跃用户时拒绝删除，避免产生孤儿部门归属。 */
     @Test
     void deleteDeptRejectsWhenActiveUsersExist() {
+        setLoginUser(20L);
         DeptDO dept = new DeptDO();
         dept.setId(100L);
         dept.setRoleType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         when(deptMapper.selectById(100L)).thenReturn(dept);
         when(deptMapper.selectCountByParentId(100L)).thenReturn(0L);
         when(adminUserServiceProvider.getIfAvailable()).thenReturn(adminUserService);
+        when(adminUserService.getLoginUserTypeOrDefault()).thenReturn(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         when(adminUserService.getUserListByDeptIds(List.of(100L))).thenReturn(List.of(new AdminUserDO()));
 
         assertThatThrownBy(() -> deptService.deleteDept(100L))

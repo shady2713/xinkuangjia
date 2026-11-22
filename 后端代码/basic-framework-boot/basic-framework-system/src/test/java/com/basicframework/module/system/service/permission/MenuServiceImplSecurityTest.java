@@ -99,6 +99,55 @@ class MenuServiceImplSecurityTest {
         verify(menuMapper, never()).insert(any(MenuDO.class));
     }
 
+    /** 验证非超管修改菜单状态或父节点时被拒绝（防止自启用禁用菜单或停用菜单反锁超管）。 */
+    @Test
+    void updateMenuRejectsStatusOrParentMutationByNonSuperAdmin() {
+        setLoginUser(20L);
+        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
+        when(permissionServiceProvider.getObject()).thenReturn(permissionService);
+        when(permissionService.hasAnyRoles(20L, RoleCodeEnum.SUPER_ADMIN.getCode())).thenReturn(false);
+        when(permissionService.hasAnyPermissions(20L, "system:user:query")).thenReturn(true);
+
+        MenuDO oldMenu = new MenuDO();
+        oldMenu.setId(100L);
+        oldMenu.setParentId(1L);
+        oldMenu.setStatus(1);
+        oldMenu.setMenuType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        oldMenu.setPermission("system:user:query");
+        when(menuMapper.selectById(100L)).thenReturn(oldMenu);
+
+        MenuSaveVO updateReqVO = new MenuSaveVO();
+        updateReqVO.setId(100L);
+        updateReqVO.setParentId(1L);
+        updateReqVO.setStatus(0);
+        updateReqVO.setName("用户查询");
+        updateReqVO.setType(MenuTypeEnum.BUTTON.getType());
+        updateReqVO.setMenuType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        updateReqVO.setPermission("system:user:query");
+
+        assertThatThrownBy(() -> menuService.updateMenu(updateReqVO))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(menuMapper, never()).updateById(any(MenuDO.class));
+    }
+
+    /** 验证无登录上下文时写操作 fail-closed 拒绝。 */
+    @Test
+    void updateMenuRejectsWhenNoOperatorLoginContext() {
+        MenuDO oldMenu = new MenuDO();
+        oldMenu.setId(100L);
+        when(menuMapper.selectById(100L)).thenReturn(oldMenu);
+
+        MenuSaveVO updateReqVO = new MenuSaveVO();
+        updateReqVO.setId(100L);
+        updateReqVO.setName("无登录态更新");
+
+        assertThatThrownBy(() -> menuService.updateMenu(updateReqVO))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(menuMapper, never()).updateById(any(MenuDO.class));
+    }
+
     /** 设置当前线程登录用户。 */
     private static void setLoginUser(Long userId) {
         LoginUser loginUser = new LoginUser();

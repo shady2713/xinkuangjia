@@ -25,14 +25,9 @@ description: 评审指定代码、模块、本地变更或补丁时使用；按�
 
 | 涉及内容 | 读取范围 |
 | --- | --- |
-| basic-framework Java | [Java 规范](../weetion-development-java-standards/SKILL.md)中对应模块与场景的引用，涉及权限、密钥、软删唯一索引或跨栈契约时结合[框架安全威胁清单](references/framework-threat-checklist.md) |
-| Python 质量与交付辅助工具 | 根规则、相关脚本、测试和相邻实现；本框架没有 Python 业务服务或独立 Python 技能 |
-| basic-framework Web | [Web 规范](../weetion-development-web-standards/SKILL.md)中受影响的框架、组件及注释约定，涉及外链、弹窗渲染或运行配置时结合[框架安全威胁清单](references/framework-threat-checklist.md) |
-| 资源与异步生命周期 | [通用防御性模式](../../../docs/测试与可靠性/通用防御性模式.md)的相关章节，具体行为以模块契约为准 |
-| 共享状态、并发、时钟、子进程或清理相关测试 | [测试可靠性](../../../docs/测试与可靠性/测试可靠性.md)的相关章节；调查已有偶发失败时才读[诊断流程](../../../docs/测试与可靠性/偶发失败诊断.md) |
-| 验证证据与测试入口 | 目标工程的测试配置和实际报告；basic-framework 使用[测试策略](../../../docs/测试与可靠性/测试策略.md)与[脚本索引](../../../docs/开发指南/脚本使用索引.md)，行为证据边界见[通用测试原则](../../../docs/测试与可靠性/通用测试原则.md) |
-| 文档或文字的专项评审 | [文档规范](../weetion-doc/SKILL.md)对应主题及[表达规则](../weetion-doc/references/style.md#clear-technical-expression)；普通代码评审核对受影响说明的准确性，不自动扩展为全文润色 |
-| 评审非小改动，或设计取舍、记录状态受影响 | 本次需求与相关活动决策记录；按项目记录门槛核对是否已有对应 Note，编写及生命周期细则见[Agent Note 规则](../weetion-doc-archive-agent-notes/SKILL.md#when-to-write-a-note) |
+| basic-framework Java | [Java 规范](../weetion-development-java-standards/SKILL.md)与[框架安全威胁清单](references/framework-threat-checklist.md) |
+| basic-framework Web | [Web 规范](../weetion-development-web-standards/SKILL.md)与[框架安全威胁清单](references/framework-threat-checklist.md) |
+| 架构、开发与部署契约 | [架构说明](../../../docs/架构说明.md)、[开发与标准 CRUD 范例](../../../docs/开发与标准CRUD范例.md)、[部署与运维说明](../../../docs/部署与运维说明.md) |
 
 表内资料按条件组合，不要求全部加载。语言规范仍要求读取的专项内容不能省略；其回链到本技能时不重复读取。其他项目使用自身框架与规则，跨项目复用共享资料时核对依赖或映射，不将 basic-framework 的实现与命令视为通用要求。
 

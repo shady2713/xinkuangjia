@@ -4100,7 +4100,7 @@
         "parameters" : [ {
           "in" : "query",
           "name" : "id",
-          "required" : false,
+          "required" : true,
           "schema" : {
             "format" : "int64",
             "type" : "integer"
