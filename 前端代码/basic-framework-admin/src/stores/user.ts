@@ -1,8 +1,9 @@
 /**
  * 用户认证状态、角色权限码与后端菜单树存储。
  */
+import { CanceledError } from 'axios';
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 import {
   type CurrentUserInfo,
@@ -17,8 +18,10 @@ import {
 import {
   clearTokens,
   getAccessToken,
+  getSessionId,
   passwordChangeRequiredFlag,
-  setTokens,
+  sessionId,
+  setLoginTokens,
 } from '@/utils/token';
 
 export const useUserStore = defineStore('user', () => {
@@ -29,22 +32,45 @@ export const useUserStore = defineStore('user', () => {
   const routesLoaded = ref(false);
   const passwordChangeRequired = passwordChangeRequiredFlag;
 
+  function clearUserState() {
+    userInfo.value = null;
+    roles.value = [];
+    permissions.value = [];
+    menus.value = [];
+    routesLoaded.value = false;
+  }
+
+  watch(sessionId, clearUserState, { flush: 'sync' });
+
+  /** Rejects results that belong to a login replaced while the request was in flight. */
+  function assertSession(startId: string | null) {
+    if (getSessionId() !== startId) {
+      throw new CanceledError('登录会话已切换');
+    }
+  }
+
   async function loginByPassword(params: LoginReq) {
+    const startId = getSessionId();
     const res = await loginApi(params);
-    const mustChange = Boolean(res.passwordChangeRequired);
-    setTokens(res.accessToken, res.refreshToken, mustChange);
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+      throw new CanceledError('登录会话已切换');
+    }
     return res;
   }
 
   async function loginBySms(params: SmsLoginReq) {
+    const startId = getSessionId();
     const res = await smsLoginApi(params);
-    const mustChange = Boolean(res.passwordChangeRequired);
-    setTokens(res.accessToken, res.refreshToken, mustChange);
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+      throw new CanceledError('登录会话已切换');
+    }
     return res;
   }
 
   async function fetchPermissionInfo() {
+    const startId = getSessionId();
     const info = await getPermissionInfoApi();
+    assertSession(startId);
     userInfo.value = info.user ?? null;
     roles.value = info.roles ?? [];
     permissions.value = info.permissions ?? [];
@@ -56,26 +82,24 @@ export const useUserStore = defineStore('user', () => {
     routesLoaded.value = loaded;
   }
 
-  function resetState() {
-    userInfo.value = null;
-    roles.value = [];
-    permissions.value = [];
-    menus.value = [];
-    routesLoaded.value = false;
-    clearTokens();
+  /** Clears only the login identified by expectedId; returns false if another login is current. */
+  function resetState(expectedId: string | null = getSessionId()): boolean {
+    if (!clearTokens(expectedId)) return false;
+    clearUserState();
+    return true;
   }
 
-  async function logout() {
+  async function logout(): Promise<boolean> {
+    const startId = getSessionId();
     const token = getAccessToken();
     try {
       if (token) {
         await logoutApi(token);
       }
     } catch {
-      // 忽略登出接口异常，始终清理本地登录态
-    } finally {
-      resetState();
+      // 忽略登出接口异常，仍清理发起登出的本地登录态
     }
+    return resetState(startId);
   }
 
   return {

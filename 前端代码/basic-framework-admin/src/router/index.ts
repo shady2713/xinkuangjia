@@ -6,6 +6,8 @@
  */
 import NProgress from 'nprogress';
 import 'nprogress/nprogress.css';
+import type { Pinia } from 'pinia';
+import { watch } from 'vue';
 import {
   createRouter,
   createWebHistory,
@@ -15,8 +17,9 @@ import {
 import type { MenuRouteItem } from '@/api/auth';
 import { getAppConfig } from '@/config/app';
 import { useDictStore } from '@/stores/dict';
+import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
-import { getAccessToken } from '@/utils/token';
+import { getAccessToken, getSessionId, sessionId } from '@/utils/token';
 
 NProgress.configure({ showSpinner: false });
 
@@ -111,6 +114,24 @@ export function clearDynamicRoutes(): void {
   }
 }
 
+export function syncSessionRoutes(pinia: Pinia): void {
+  const tabs = useTabsStore(pinia);
+  const dict = useDictStore(pinia);
+  watch(sessionId, (next, previous) => {
+    clearDynamicRoutes();
+    tabs.reset();
+    dict.reset();
+    if (!previous) return;
+    queueMicrotask(() => {
+      if (getSessionId() !== next) return;
+      const to = next ? '/dashboard' : '/login';
+      if (next || router.currentRoute.value.path !== to) {
+        void router.replace({ path: to, force: true });
+      }
+    });
+  }, { flush: 'sync' });
+}
+
 export function registerMenuRoutes(menus: MenuRouteItem[]): void {
   clearDynamicRoutes();
   const walk = (nodes: MenuRouteItem[], parentPath: string) => {
@@ -155,11 +176,11 @@ router.beforeEach(async (to) => {
   const { appTitle } = getAppConfig();
   document.title = to.meta?.title ? `${String(to.meta.title)} - ${appTitle}` : appTitle;
 
-  const token = getAccessToken();
+  const owner = getSessionId();
   const userStore = useUserStore();
   const dictStore = useDictStore();
 
-  if (!token) {
+  if (!getAccessToken()) {
     if (PUBLIC_PATHS.has(to.path)) {
       return true;
     }
@@ -183,12 +204,15 @@ router.beforeEach(async (to) => {
   if (!userStore.routesLoaded) {
     try {
       const info = await userStore.fetchPermissionInfo();
+      if (getSessionId() !== owner) return false;
       registerMenuRoutes(info.menus ?? []);
       userStore.markRoutesLoaded(true);
-      void dictStore.ensureLoaded();
+      void dictStore.ensureLoaded().catch(() => {
+        // Request errors have already been handled by the transport.
+      });
       return { path: to.fullPath, replace: true };
     } catch {
-      userStore.resetState();
+      if (!userStore.resetState(owner)) return false;
       return { path: '/login', query: { redirect: to.fullPath } };
     }
   }

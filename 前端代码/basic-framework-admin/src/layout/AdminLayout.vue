@@ -23,19 +23,17 @@ import MenuIcon from '@/components/MenuIcon.vue';
 import { getAppConfig } from '@/config/app';
 import SidebarMenuItem from '@/layout/SidebarMenuItem.vue';
 import TabsChrome from '@/layout/TabsChrome.vue';
-import { clearDynamicRoutes } from '@/router';
 import { useAppStore } from '@/stores/app';
-import { useDictStore } from '@/stores/dict';
 import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
 import { confirmAction } from '@/utils/confirm';
+import { getSessionId, sessionId } from '@/utils/token';
 
 const route = useRoute();
 const router = useRouter();
 const appStore = useAppStore();
 const userStore = useUserStore();
 const tabsStore = useTabsStore();
-const dictStore = useDictStore();
 
 const { appTitle } = getAppConfig();
 const logoUrl = `${import.meta.env.BASE_URL}brand-logo.svg`;
@@ -170,15 +168,13 @@ async function handleUserCommand(cmd: string) {
     return;
   }
   if (cmd === 'logout') {
+    const owner = getSessionId();
     await confirmAction('确定要退出当前登录账号吗？', {
       title: '退出登录',
       confirmText: '退出登录',
       cancelText: '取消',
     });
-    await userStore.logout();
-    clearDynamicRoutes();
-    tabsStore.reset();
-    dictStore.reset();
+    if (getSessionId() !== owner || !await userStore.logout()) return;
     await router.replace('/login');
   }
 }
@@ -349,7 +345,7 @@ async function handleUserCommand(cmd: string) {
       <main class="min-h-0 flex-1 overflow-auto bg-[var(--bf-bg-deep)] p-4">
         <router-view v-slot="{ Component }">
           <transition name="bf-fade-slide" mode="out-in">
-            <keep-alive :include="tabsStore.cachedNames">
+            <keep-alive :key="sessionId ?? undefined" :include="tabsStore.cachedNames">
               <component :is="Component" :key="`${route.path}-${tabsStore.refreshKey}`" />
             </keep-alive>
           </transition>

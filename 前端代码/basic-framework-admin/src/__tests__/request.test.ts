@@ -8,8 +8,10 @@ import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  getSessionId,
   isPasswordChangeRequired,
   passwordChangeRequiredFlag,
+  setLoginTokens,
   setTokens,
 } from '@/utils/token';
 
@@ -96,7 +98,7 @@ describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
   function expectFlag(expected: boolean): void {
     expect(useUserStore(testPinia).passwordChangeRequired).toBe(expected);
     expect(isPasswordChangeRequired()).toBe(expected);
-    expect(persistedSession()).toEqual(currentSession());
+    expect(persistedSession()).toEqual({ ...currentSession(), sessionId: getSessionId() });
     LEGACY_KEYS.forEach((key) => expect(localStorage.getItem(key)).toBeNull());
   }
 
@@ -232,18 +234,149 @@ describe('bf_session snapshot syncs across tabs', () => {
     });
     expect(persistedSession()).toBeNull();
 
+    const legacyLogin = getSessionId();
+    expect(legacyLogin).toBeTruthy();
     setTokens('own-access', 'own-refresh');
+    expect(getSessionId()).toBe(legacyLogin);
     const owned = {
       accessToken: 'own-access',
       refreshToken: 'own-refresh',
       passwordChangeRequired: true,
     };
     expect(currentSession()).toEqual(owned);
-    expect(persistedSession()).toEqual(owned);
+    expect(persistedSession()).toEqual({ ...owned, sessionId: getSessionId() });
     LEGACY_KEYS.forEach((key) => expect(localStorage.getItem(key)).toBeNull());
 
     clearTokens();
     expect(currentSession()).toEqual(EMPTY);
     expect(persistedSession()).toBeNull();
+  });
+});
+
+describe('refreshes stay with the login that started the requests', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  function reply(config: InternalAxiosRequestConfig, code: number, data: unknown): AxiosResponse {
+    return { data: { code, data, msg: '' }, status: 200, statusText: 'OK', headers: {}, config };
+  }
+
+  const originalRawAdapter = rawHttp.defaults.adapter;
+
+  beforeEach(() => {
+    clearTokens();
+  });
+
+  afterEach(() => {
+    rawHttp.defaults.adapter = originalRawAdapter;
+    clearTokens();
+  });
+
+  it.each(['rotation', 'replacement-success', 'replacement-failure', 'logout'] as const)(
+    'handles two requests during a normal %s',
+    async (transition) => {
+      setTokens('first-access', 'first-refresh', false);
+      const initialLogin = getSessionId();
+      const refreshStarted = deferred<void>();
+      const finishRefresh = deferred<void>();
+      const secondRequestStarted = deferred<void>();
+      const seen: string[] = [];
+      let rotationCount = 0;
+      const replacement = transition.startsWith('replacement-');
+      const refreshSucceeded = transition === 'rotation' || transition === 'replacement-success';
+      rawHttp.defaults.adapter = async (config) => {
+        rotationCount++;
+        refreshStarted.resolve();
+        await finishRefresh.promise;
+        return reply(config, refreshSucceeded ? 0 : 401, {
+          accessToken: 'rotated-access',
+          refreshToken: 'rotated-refresh',
+        });
+      };
+
+      const adapter: AxiosAdapter = async (config) => {
+        const auth = String(config.headers.Authorization);
+        seen.push(auth);
+        if (config.url === '/second') secondRequestStarted.resolve();
+        return reply(config, auth === 'Bearer first-access' ? 401 : 0, config.url);
+      };
+      const first = request.get('/first', { adapter });
+      const second = request.get('/second', { adapter });
+      const settled = Promise.allSettled([first, second]);
+      await Promise.all([refreshStarted.promise, secondRequestStarted.promise]);
+
+      if (replacement) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+          accessToken: 'peer-access',
+          refreshToken: 'peer-refresh',
+          passwordChangeRequired: false,
+          sessionId: 'peer-login',
+        }));
+        // A pending StorageEvent need not have reached this tab yet.
+      }
+      if (transition === 'logout') clearTokens();
+      finishRefresh.resolve();
+      const outcome = await settled;
+      expect(rotationCount).toBe(1);
+      if (transition === 'rotation') {
+        expect(outcome.map((item) => item.status)).toEqual(['fulfilled', 'fulfilled']);
+        expect(seen).toEqual([
+          'Bearer first-access', 'Bearer first-access', 'Bearer rotated-access', 'Bearer rotated-access',
+        ]);
+        expect(getSessionId()).toBe(initialLogin);
+      } else {
+        expect(outcome.map((item) => item.status)).toEqual(['rejected', 'rejected']);
+        expect(seen).toEqual(['Bearer first-access', 'Bearer first-access']);
+        expect(getAccessToken()).toBe(replacement ? 'peer-access' : '');
+      }
+    },
+  );
+
+  it('checks the original login before a queued request reaches its adapter', async () => {
+    setLoginTokens('first-access', 'first-refresh', false);
+    const adapter = vi.fn();
+    const pending = request.get('/synthetic/current-user', { adapter });
+    setLoginTokens('second-access', 'second-refresh', false);
+
+    await expect(pending).rejects.toMatchObject({ code: 'ERR_CANCELED' });
+    expect(adapter).not.toHaveBeenCalled();
+  });
+
+  it('keeps a same-login rotation in another tab without a second rotation', async () => {
+    setTokens('first-access', 'first-refresh');
+    const sessionId = getSessionId();
+    const sent = deferred<void>();
+    const finish = deferred<void>();
+    const rotate = vi.fn();
+    rawHttp.defaults.adapter = rotate;
+    const credentials: string[] = [];
+    const response = request.get<string>('/synthetic/current-user', {
+      adapter: async (config) => {
+        const auth = String(config.headers.Authorization);
+        credentials.push(auth);
+        if (auth === 'Bearer first-access') {
+          sent.resolve();
+          await finish.promise;
+          return reply(config, 401, null);
+        }
+        return reply(config, 0, 'same login');
+      },
+    });
+    await sent.promise;
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      sessionId,
+      accessToken: 'rotated-access',
+      refreshToken: 'rotated-refresh',
+      passwordChangeRequired: false,
+    }));
+    finish.resolve();
+    await expect(response).resolves.toBe('same login');
+    expect(rotate).not.toHaveBeenCalled();
+    expect(credentials).toEqual(['Bearer first-access', 'Bearer rotated-access']);
   });
 });
