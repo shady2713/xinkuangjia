@@ -357,7 +357,7 @@ def test_execute_slice_plan_preserves_env_error_code_and_handles_os_error(tmp_pa
 
 
 def test_verify_slice_routes_ci_workflow_and_reports_skipped_coverage(tmp_path: Path) -> None:
-    """ci.yml 变更路由到基线单测；无暂存分支增量与未映射变更均显式记录 skipped_steps。"""
+    """工作流与本地栈变更按域路由；分支提交触发范围密钥扫描，未映射变更显式记录 skipped_steps。"""
     repo = _init_git_repo(tmp_path / "ci-route-repo")
     subprocess.run(["git", "-C", str(repo), "checkout", "-b", "feat/ci"], check=True, capture_output=True)
     ci_file = repo / ".github/workflows/ci.yml"
@@ -370,17 +370,27 @@ def test_verify_slice_routes_ci_workflow_and_reports_skipped_coverage(tmp_path: 
     plan = verify_slice.build_slice_plan(repo, changed, base="main", skip_runtime=False)
     step_names = [step.name for step in plan.steps]
     assert "ci-workflow-pytest" in step_names
-    skipped_names = {item.name for item in plan.skipped_steps}
-    assert "base-secrets-scan" in skipped_names
+    assert "branch-secrets" in step_names
+
+    stack_plan = verify_slice.build_slice_plan(
+        repo,
+        [".github/workflows/attachment-integration.yml", "docker-compose.dev.yml"],
+        base="HEAD",
+        skip_runtime=False,
+    )
+    stack_steps = [step.name for step in stack_plan.steps]
+    assert "ci-workflow-pytest" in stack_steps
+    assert "dev-stack-pytest" in stack_steps
+    assert stack_plan.unmatched_files == ()
 
     mixed_plan = verify_slice.build_slice_plan(
-        repo, [".github/workflows/ci.yml", "docker-compose.dev.yml"], base="HEAD", skip_runtime=False
+        repo, [".github/workflows/ci.yml", ".editorconfig"], base="HEAD", skip_runtime=False
     )
     assert "ci-workflow-pytest" in [step.name for step in mixed_plan.steps]
-    assert mixed_plan.unmatched_files == ("docker-compose.dev.yml",)
+    assert mixed_plan.unmatched_files == (".editorconfig",)
 
     unmapped_plan = verify_slice.build_slice_plan(
-        repo, ["docker-compose.dev.yml"], base="HEAD", skip_runtime=False
+        repo, [".editorconfig"], base="HEAD", skip_runtime=False
     )
     assert unmapped_plan.steps == ()
     assert any(item.name == "unmapped-changes" for item in unmapped_plan.skipped_steps)

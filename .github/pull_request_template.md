@@ -26,7 +26,7 @@
 
 ## 独立审查与托管合并门禁承接
 
-- 核对 `acceptance-proof-<attempt>` 中的实际受验 SHA、PR head、基线、测试计数及未执行项。附件变更同时核对 `attachment-integration-summary-<attempt>` 的同一 PR head、合并 SHA、服务版本及结果。
+- 核对 `acceptance-proof-<attempt>` 中的实际受验 SHA、PR head、基线、测试计数及未执行项，并同步核对 `attachment-integration-summary-<attempt>` 的同一 PR head、合并 SHA、服务版本及结果。
 - 按[受信验收流程](../docs/开发指南/受信PR验收.md)取独立门禁结果。单维护者完成独立只读审查后，仓库所有者以单条 PR 评论签收实际报告。多人模式还需要符合条件的非作者维护者在本 head 上的 GitHub `APPROVED`，并由同一维护者签收当前 head 和 base。使用当前 PR 编号及两个完整 SHA。
 
 ```text

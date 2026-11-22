@@ -31,7 +31,7 @@ WORKFLOWS = {
         "attachment-integration.yml", "attachment-integration-summary", ("attachment-integration-summary.json",),
         {"real-attachment-it": (
             "Run RealAttachmentServiceIT", "Write sanitized summary", "Upload summary artifact",
-            "Enforce exactly one successful test without skips",
+            "Enforce at least one successful test without skips",
         )},
     ),
 }
@@ -106,17 +106,32 @@ def matches_pr(association, pr):
     )
 
 
+def _matches_fork_run(item, pr):
+    """在 Fork PR 场景下 GitHub REST API 返回空 pull_requests，按源仓库与分支匹配运行记录。"""
+    head_repo = item.get("head_repository")
+    return (
+        pr["head"]["repo"]["id"] != pr["base"]["repo"]["id"]
+        and item.get("pull_requests") == []
+        and isinstance(head_repo, dict)
+        and head_repo.get("id") == pr["head"]["repo"]["id"]
+        and item.get("head_branch") == pr["head"]["ref"]
+    )
+
+
 def latest_run(runs, run, pr, allowed_shas):
     """从完整工作流列表选择同版本最新一次运行，并核对最新尝试与结论。"""
     candidates = []
     for item in runs:
         repository = item.get("repository")
         links = item.get("pull_requests")
+        pr_matched = (
+            isinstance(links, list) and any(matches_pr(link, pr) for link in links)
+        ) or _matches_fork_run(item, pr)
         if (item.get("workflow_id") == run["workflow_id"]
                 and item.get("event") == "pull_request" and item.get("head_sha") in allowed_shas
                 and isinstance(repository, dict) and repository.get("id") == run["repository"]["id"]
                 and repository.get("full_name") == run["repository"]["full_name"]
-                and isinstance(links, list) and any(matches_pr(link, pr) for link in links)):
+                and pr_matched):
             require(positive_int(item.get("run_number")) and positive_int(item.get("id"))
                     and positive_int(item.get("run_attempt")), "invalid workflow run history identity")
             candidates.append(item)
@@ -152,7 +167,13 @@ def check_archive(folder, names, artifact):
         entries = archive.infolist()
         require(sorted(entry.filename for entry in entries) == sorted(names), "artifact members mismatch")
         require(all(entry.file_size <= MAX_BYTES for entry in entries), "artifact member too large")
-        return {entry.filename: parse(archive.read(entry), dict) for entry in entries}
+        parsed = {}
+        for entry in entries:
+            with archive.open(entry) as member:
+                member_data = member.read(MAX_BYTES + 1)
+            require(len(member_data) <= MAX_BYTES, "artifact member too large")
+            parsed[entry.filename] = parse(member_data, dict)
+        return parsed
 
 
 def check_ci_status(proofs):
@@ -171,15 +192,16 @@ def check_ci_status(proofs):
 
 
 def check_attachment_status(proofs):
-    """要求附件作业用实际服务版本执行一次完整且成功的集成测试。"""
+    """要求附件作业用实际服务版本执行至少一次完整且成功的集成测试。"""
     summary = proofs["attachment-integration-summary.json"]
-    surefire = {"tests": 1, "failures": 0, "errors": 0, "skipped": 0}
+    zero_fields = ("failures", "errors", "skipped")
     counts = summary["surefire"]
     versions = summary["service_versions"]
     require(summary.get("conclusion") == summary.get("test_outcome") == "success"
             and summary.get("gate_passed") is True
             and isinstance(counts, dict)
-            and all(type(counts.get(key)) is int and counts[key] == value for key, value in surefire.items())
+            and positive_int(counts.get("tests"))
+            and all(type(counts.get(key)) is int and counts[key] == 0 for key in zero_fields)
             and isinstance(versions, dict)
             and all(isinstance(versions.get(svc), str) and versions[svc].strip()
                     for svc in ("mysql", "redis", "minio", "nginx")),
@@ -208,8 +230,9 @@ def check_workflow(folder, config, event, checkout):
             and run.get("head_sha") in allowed_shas
             and run["repository"]["id"] == repo["id"] and run["repository"]["full_name"] == repo["full_name"]
             and run["head_repository"]["id"] == head["repo"]["id"], "wrong or unsuccessful workflow run")
-    association = matching(run.get("pull_requests"), "number", number)
-    require(matches_pr(association, pr), "wrong PR base or head")
+    if not _matches_fork_run(run, pr):
+        association = matching(run.get("pull_requests"), "number", number)
+        require(matches_pr(association, pr), "wrong PR base or head")
     latest_run(records(folder / "runs.json", list), run, pr, allowed_shas)
     check_jobs(records(folder / "jobs.json", list), expected_jobs, run, allowed_shas)
     artifact = matching(records(folder / "artifacts.json", list), "name", f"{prefix}-{run['run_attempt']}")

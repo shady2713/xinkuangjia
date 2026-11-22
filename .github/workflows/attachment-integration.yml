@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: attachment-integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   real-attachment-it:
     runs-on: ubuntu-latest
@@ -32,6 +36,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: maven
+          cache-dependency-path: 后端代码/basic-framework-boot/**/pom.xml
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -99,7 +105,7 @@ jobs:
           version_ok = all(versions.values()) and checkout and checkout == e.get("GITHUB_SHA")
           if e.get("GITHUB_EVENT_NAME") == "pull_request":
               version_ok = version_ok and parents.split()[1:] == [e.get("PR_BASE"), e.get("PR_HEAD")]
-          gate = bool(version_ok) and ok and t["tests"] == 1 and t["failures"] == t["errors"] == t["skipped"] == 0
+          gate = bool(version_ok) and ok and t["tests"] >= 1 and t["failures"] == t["errors"] == t["skipped"] == 0
           gate = gate and o == "success" and e.get("JOB_STATUS") == "success"
           if gate: conclusion = "success"
           elif e.get("JOB_STATUS") == "cancelled": conclusion = "cancelled"
@@ -131,7 +137,7 @@ jobs:
           ef=(); [ -f .env.dev ] && ef=(--env-file .env.dev)
           docker compose -f docker-compose.dev.yml "${ef[@]}" --project-name issue103 down -v --remove-orphans || true
           rm -f "$RUNNER_TEMP/issue103-nginx.conf"
-      - name: Enforce exactly one successful test without skips
+      - name: Enforce at least one successful test without skips
         if: always()
         env:
           CONCLUSION: ${{ steps.summary.outputs.conclusion }}

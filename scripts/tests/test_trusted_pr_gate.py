@@ -260,3 +260,41 @@ def test_attachment_checkout_depth_contains_merge_parents(tmp_path: Path, pr_obj
         options = ["--depth", str(limit)] if limit else []
         git(tmp_path, "clone", "-q", *options, "--branch", "fixture-merge", source.as_uri(), str(dest))
         assert git(dest, "rev-list", "--parents", "-n", "1", "HEAD").split() == expected
+
+
+def test_trusted_gate_accepts_multiple_attachment_tests_and_fork_pr(
+    gate_command, pr_objects, tmp_path: Path
+) -> None:
+    """附件集成支持多个成功用例，且 Fork PR 在 pull_requests 为空数组时凭制品与仓库身份通过。"""
+    command, snapshot, source, *_ = gate_command
+    _, base, head, merge = pr_objects
+    write_snapshot(snapshot, base, head, merge)
+    event_path = Path(command[command.index("--event") + 1])
+    event_data = json.loads(event_path.read_text(encoding="utf-8"))
+    fork_repo = {"id": 99, "full_name": "contributor/example"}
+    event_data["pull_request"]["head"]["repo"] = fork_repo
+    event_path.write_text(json.dumps(event_data), encoding="utf-8")
+
+    for label in ("ci", "attachment"):
+        folder = snapshot / label
+        run = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+        run["head_repository"] = fork_repo
+        run["head_branch"] = "fix"
+        run["pull_requests"] = []
+        (folder / "run.json").write_text(json.dumps(run), encoding="utf-8")
+        (folder / "runs.json").write_text(json.dumps([run]), encoding="utf-8")
+        artifacts = json.loads((folder / "artifacts.json").read_text(encoding="utf-8"))
+        artifacts[0]["workflow_run"]["head_repository_id"] = fork_repo["id"]
+        if label == "attachment":
+            with zipfile.ZipFile(folder / "proof.zip", "r") as zin:
+                payload = json.loads(zin.read("attachment-integration-summary.json"))
+            payload["surefire"]["tests"] = 2
+            with zipfile.ZipFile(folder / "proof.zip", "w") as zout:
+                zout.writestr("attachment-integration-summary.json", json.dumps(payload))
+            raw = (folder / "proof.zip").read_bytes()
+            artifacts[0]["size_in_bytes"] = len(raw)
+            artifacts[0]["digest"] = f"sha256:{sha256(raw).hexdigest()}"
+        (folder / "artifacts.json").write_text(json.dumps(artifacts), encoding="utf-8")
+
+    result = subprocess.run(command, cwd=source, check=False, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr

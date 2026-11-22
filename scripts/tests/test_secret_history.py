@@ -56,7 +56,7 @@ class CommitRangeScanTest(unittest.TestCase):
         else:
             target = self.repo / path
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_text(content, encoding="utf-8", newline="\n")
             self.git("add", "--", path)
         self.git("commit", "-q", "-m", f"update {path}")
         return self.git("rev-parse", "HEAD")
@@ -179,7 +179,7 @@ class CommitRangeScanTest(unittest.TestCase):
 
     def test_history_aborts_for_unreadable_or_unclassified_object(self) -> None:
         """读取失败或类型证据缺失时终止，底层错误内容不进入输出。"""
-        head = self.commit("ordinary.txt", "synthetic input\n")
+        head = self.commit("ordinary.py", "# synthetic input\n")
         original = scanner._run_git
         for operation, expected in (("ls-tree", "cannot classify"), ("cat-file", "read")):
             with self.subTest(operation=operation):
@@ -196,6 +196,27 @@ class CommitRangeScanTest(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, expected) as caught:
                         scanner._scan_staged_diff(head, self.base)
                 self.assertNotIn("synthetic diagnostic", str(caught.exception))
+
+    def test_crlf_lines_strip_carriage_return_and_unrebased_pr_skips_ruleset_bump(self) -> None:
+        """CRLF 文本剥离尾随回车；主干递增规则版本后，未改扫描器的分支不得被误杀。"""
+        self.commit("scripts/security/scan_staged_secrets.py", 'RULESET_VERSION = "2026.15"\n')
+        branch_base = self.git("rev-parse", "HEAD")
+        self.git("checkout", "-q", "-b", "feat/crlf")
+        crlf_target = self.repo / "crlf.txt"
+        crlf_target.write_bytes(b"synthetic crlf line\r\n")
+        self.git("add", "--", "crlf.txt")
+        self.git("commit", "-q", "-m", "add crlf file")
+        feat_head = self.git("rev-parse", "HEAD")
+
+        self.git("checkout", "-q", "-")
+        main_head = self.commit("scripts/security/scan_staged_secrets.py", 'RULESET_VERSION = "2026.16"\n')
+        self.assertNotEqual(branch_base, main_head)
+
+        with mock.patch.object(scanner, "_scan_added_line", wraps=scanner._scan_added_line) as scan:
+            _, findings = scanner._scan_commit_range(main_head, feat_head)
+        self.assertEqual(findings, [])
+        checked = {(call.args[0], call.args[2]) for call in scan.call_args_list}
+        self.assertIn(("crlf.txt", "synthetic crlf line"), checked)
 
 
 if __name__ == "__main__":

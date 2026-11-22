@@ -136,6 +136,7 @@ REVIEWER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 RULES_SCOPE_PATH = "scripts/security/rules_scope.py"
 EXIT_CODES = {"pass": 0, "fail": 1, "error": 2}
 GIT_TIMEOUT_SECONDS = 60
+MAX_JSON_BYTES = 8 * 1024 * 1024
 
 
 class GateError(Exception):
@@ -217,14 +218,17 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def load_json(path: str, code: str) -> Any:
-    """严格读取门禁输入，把读取或解析错误归为固定错误码。"""
+    """严格读取门禁输入并限制文件体积，把读取或解析错误归为固定错误码。"""
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(
-                handle,
-                object_pairs_hook=_reject_duplicate_keys,
-                parse_constant=_reject_constant,
-            )
+        with open(path, "rb") as handle:
+            raw = handle.read(MAX_JSON_BYTES + 1)
+        if len(raw) > MAX_JSON_BYTES:
+            raise ValueError("json too large")
+        return json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_constant,
+        )
     except (OSError, UnicodeDecodeError, ValueError, RecursionError):
         raise GateError(code) from None
 

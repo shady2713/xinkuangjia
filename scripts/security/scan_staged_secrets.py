@@ -2,9 +2,9 @@
 """扫描 Git 暂存区新增内容，明确凭据阻断，名称歧义提示核查。
 
 扫描结果只报告文件、行号和规则，不回显命中的敏感值，避免检查工具造成二次泄露。
-覆盖边界：本脚本面向增量暂存差异或 CI 相对基线差异，不回溯历史提交；首次接入、安全事件排查或
-规则大版本升级后，须另行执行全仓或历史提交专项审计。任何规则放宽、豁免增删与 RULESET_VERSION
-变更均须由安全审查方独立复核并附带正反例回归测试。
+覆盖边界：默认面向增量暂存差异，传入 --base <SHA> --head <SHA> 时逐提交扫描提交范围并校验
+RULESET_VERSION 严格递增；首次接入、安全事件排查或规则大版本升级后，须另行执行全仓或历史提交专项审计。
+任何规则放宽、豁免增删与 RULESET_VERSION 变更均须由安全审查方独立复核并附带正反例回归测试。
 Python 测试文件允许 unit- 加 8 至 128 个相同小写字母或数字的虚拟凭据，
 支持字符串字面量及 "unit-" + "a" * 16 写法；其他凭据检查保持生效。
 
@@ -29,7 +29,7 @@ else:
     from rules_scope import SCANNER_RULES_PATHS
 
 # 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
-RULESET_VERSION = "2026.16"
+RULESET_VERSION = "2026.17"
 # Empty tree object id (SHA-1 repositories); used as the parent of root commits.
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 # Known (mode, type) pairs of ls-tree entries a commit-scan type change may produce.
@@ -865,10 +865,8 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         return output
 
     def read_blob(path: str, object_id: bytes) -> bytes:
-        """按对象标识核对并读取已提交的 blob。"""
+        """按已通过 ls-tree 校验的对象标识读取提交中的 blob 内容。"""
         oid = object_id.decode("ascii")
-        if git(["cat-file", "-t", oid], f"classify {path!r}").strip() != b"blob":
-            raise RuntimeError(f"expected blob at {path!r}; scan aborted")
         return git(["cat-file", "blob", oid], f"read {path!r}")
 
     def strict_text(path: str, blob: bytes) -> str:
@@ -943,9 +941,10 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
     for current_path in paths:
         docstring_lines: set[int] = set()
         python_code_lines: set[int] = set()
-        blob = read_blob(current_path, object_ids[current_path]) if target is not None else None
         if current_path.lower().endswith((".py", ".md")):
-            if blob is None:
+            if target is not None:
+                blob = read_blob(current_path, object_ids[current_path])
+            else:
                 blob = git(["cat-file", "blob", f"{blob_prefix}{current_path}"], f"read {current_path!r}")
             source = blob.decode("utf-8", errors="replace")
             if current_path.lower().endswith(".py"):
@@ -963,8 +962,9 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         ).decode("utf-8", errors="replace")
         current_line = 0
         in_hunk = False
-        # Split on "\n" only; file headers precede the first hunk and are never scanned.
-        for diff_line in output.split("\n"):
+        # Split on "\n" only and strip trailing "\r" for CRLF portability; file headers are never scanned.
+        for raw_diff_line in output.split("\n"):
+            diff_line = raw_diff_line.removesuffix("\r")
             hunk = HUNK_HEADER_PATTERN.match(diff_line)
             if hunk:
                 current_line = int(hunk.group("line"))
@@ -994,7 +994,8 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         code_lines = _markdown_python_lines(text) if not plain and path.lower().endswith(".md") else set()
         if is_python:
             python_candidates[path] = _python_assignment_candidates(text)
-        for number, line in enumerate(text.split("\n"), 1):
+        for number, raw_line in enumerate(text.split("\n"), 1):
+            line = raw_line.removesuffix("\r")
             findings.extend(_scan_added_line(
                 path, number, line, is_docstring=number in docstrings, is_python_code=number in code_lines,
                 scan_assignment=python_candidates.get(path) is None, plain_data=plain,
@@ -1053,11 +1054,27 @@ def _ruleset_version_at(revision: str) -> tuple[int, ...] | None:
     return _ruleset_version(source)
 
 
+def _is_ancestor(ancestor: str, descendant: str) -> bool:
+    """判断 ancestor 是否为 descendant 的祖先提交，用于避免合并提交重复扫描主干历史。"""
+
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    return completed.returncode == 0
+
+
 def _check_ruleset_version(base: str, head: str) -> list[Finding]:
-    """在扫描规则文件变更时要求版本严格递增。"""
+    """仅当候选分支相对 merge-base 改动了扫描规则文件时，要求版本严格高于 base。"""
 
     scope = [f":(top,literal){path}" for path in sorted(SCANNER_RULES_PATHS)]
-    changed = _run_git(["diff", "--name-only", "--no-renames", base, head, "--", *scope])
+    try:
+        merge_base = str(_run_git(["merge-base", base, head])).strip() or base
+    except RuntimeError:
+        merge_base = base
+    changed = _run_git(["diff", "--name-only", "--no-renames", merge_base, head, "--", *scope])
     if not str(changed).strip():
         return []
     try:
@@ -1074,7 +1091,7 @@ def _check_ruleset_version(base: str, head: str) -> list[Finding]:
 
 
 def _scan_commit_range(base: str, head: str) -> tuple[list[str], list[Finding]]:
-    """逐提交扫描相对第一父提交的增量并记录对应版本。"""
+    """逐提交扫描相对有效父提交的增量并记录对应版本。"""
 
     if _run_git(["rev-parse", "--is-shallow-repository"]).strip() == "true":
         raise RuntimeError("提交范围扫描需要完整 Git 历史")
@@ -1085,7 +1102,13 @@ def _scan_commit_range(base: str, head: str) -> tuple[list[str], list[Finding]]:
     findings: list[Finding] = []
     for commit in commits:
         parents = str(_run_git(["rev-list", "--parents", "-n", "1", commit])).split()
-        parent = parents[1] if len(parents) > 1 else EMPTY_TREE_HASH
+        if len(parents) > 2:
+            # 合并主干的提交优先以归属 base 的父提交作基线，避免重复扫描已合入主干的历史改动，
+            # 同时保留对冲突解决中新增内容的扫描能力。
+            base_parent = next((p for p in parents[2:] if _is_ancestor(p, base_sha)), None)
+            parent = base_parent or parents[1]
+        else:
+            parent = parents[1] if len(parents) > 1 else EMPTY_TREE_HASH
         findings.extend(replace(item, commit=commit) for item in _scan_staged_diff(commit, parent))
     findings.extend(_check_ruleset_version(base_sha, head_sha))
     return commits, list(dict.fromkeys(findings))
