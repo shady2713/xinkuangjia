@@ -580,12 +580,12 @@ class OpenApiContractSnapshotTest {
     /** 向上查找仓库前端工程下的 OpenAPI 契约快照路径。 */
     private static Path resolveOpenApiSnapshotPath() {
         for (Path current = Path.of("").toAbsolutePath(); current != null; current = current.getParent()) {
-            Path frontendRoot = current.resolve("前端代码/basic-framework-admin/apps/web-ele/src/api").normalize();
+            Path frontendRoot = current.resolve("前端代码/basic-framework-admin/src/api").normalize();
             if (Files.isDirectory(frontendRoot)) {
                 return frontendRoot.resolve("generated/openapi.json");
             }
         }
-        throw new IllegalStateException("找不到 前端代码/basic-framework-admin/apps/web-ele/src/api 目录");
+        throw new IllegalStateException("找不到 前端代码/basic-framework-admin/src/api 目录");
     }
 
     /** 控制器方法映射的 HTTP 动词数组与路径数组。 */
