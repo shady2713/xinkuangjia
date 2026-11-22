@@ -60,6 +60,9 @@ function useAuthState() {
 
       if (accessToken) {
         const wasModalExpired = accessStore.loginExpired;
+        const previousAccessToken = accessStore.accessToken;
+        const previousRefreshToken = accessStore.refreshToken;
+        const previousPasswordChangeRequired = passwordChangeRequired.value;
         accessStore.setAccessToken(accessToken);
         accessStore.setRefreshToken(refreshToken);
         passwordChangeRequired.value = Boolean(
@@ -68,14 +71,21 @@ function useAuthState() {
 
         let fetchUserInfoResult: AuthPermissionInfo;
         try {
-          fetchUserInfoResult = await fetchUserInfo();
+          // 弹窗重登录时保留已转换为 MenuRecordRaw 的侧边栏菜单，避免原始后端路由覆盖菜单状态。
+          fetchUserInfoResult = await fetchUserInfo({
+            preserveMenus: wasModalExpired,
+          });
         } catch (error) {
-          // 非弹窗重登录阶段拉取权限失败时回滚已持久化令牌，避免刷新后落入异常路由循环。
-          if (!wasModalExpired) {
-            accessStore.setAccessToken(null);
-            accessStore.setRefreshToken(null);
-            passwordChangeRequired.value = false;
-          }
+          // 无论普通登录还是弹窗重登录，拉取权限失败时都回滚本次写入的令牌与强制改密标记。
+          accessStore.setAccessToken(
+            wasModalExpired ? previousAccessToken : null,
+          );
+          accessStore.setRefreshToken(
+            wasModalExpired ? previousRefreshToken : null,
+          );
+          passwordChangeRequired.value = wasModalExpired
+            ? previousPasswordChangeRequired
+            : false;
           throw error;
         }
         userInfo = fetchUserInfoResult.user;
@@ -137,8 +147,14 @@ function useAuthState() {
     });
   }
 
-  /** 获取当前用户权限信息并更新到各个 store 中。 */
-  async function fetchUserInfo() {
+  /**
+   * 获取当前用户权限信息并更新到各个 store 中。
+   *
+   * @param options 可选控制项
+   * @param options.preserveMenus 为 true 时保留已转换的侧边栏菜单结构
+   * @returns 后端返回的权限与用户信息
+   */
+  async function fetchUserInfo(options?: { preserveMenus?: boolean }) {
     const authPermissionInfo: AuthPermissionInfo | null =
       await getAuthPermissionInfoApi();
     userStore.setUserInfo(authPermissionInfo.user);
@@ -146,7 +162,9 @@ function useAuthState() {
       passwordChangeRequired.value ||
       Boolean(authPermissionInfo.user?.passwordChangeRequired);
     userStore.setUserRoles(authPermissionInfo.roles);
-    accessStore.setAccessMenus(authPermissionInfo.menus);
+    if (!options?.preserveMenus) {
+      accessStore.setAccessMenus(authPermissionInfo.menus);
+    }
     accessStore.setAccessCodes(authPermissionInfo.permissions);
     return authPermissionInfo;
   }

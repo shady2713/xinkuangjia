@@ -13,6 +13,7 @@ export {
   type AxiosProgressEvent,
   createFile,
   getFilePresignedUrl,
+  getPrivateFilePresignedUrl,
   uploadFile,
 } from '#/api/core/file';
 

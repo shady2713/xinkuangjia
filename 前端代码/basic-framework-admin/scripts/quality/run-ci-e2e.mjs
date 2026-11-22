@@ -2,7 +2,13 @@
  * 在可重复的 CI 环境中执行 web-ele 关键业务浏览器路径 Playwright 校验并记录结果。
  */
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -96,6 +102,7 @@ function recordExecutionSummary(summary, exitCode) {
  */
 function runCiE2e() {
   mkdirSync(join(appRoot, 'test-results'), { recursive: true });
+  rmSync(reportFile, { force: true });
   const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
   const result = spawnSync(
     pnpmCommand,
@@ -117,12 +124,22 @@ function runCiE2e() {
       stdio: 'inherit',
     },
   );
-  const exitCode = result.error ? 2 : (result.status ?? 1);
+  let exitCode = result.error ? 2 : (result.status ?? 1);
   if (existsSync(reportFile)) {
     const raw = JSON.parse(readFileSync(reportFile, 'utf8'));
-    recordExecutionSummary(summarizePlaywrightSuites(raw.suites), exitCode);
+    const summary = summarizePlaywrightSuites(raw.suites);
+    if (exitCode === 0 && summary.passed === 0) {
+      console.error(
+        'Playwright 关键路径未通过任何用例（可能全部被跳过），拒绝假绿',
+      );
+      exitCode = 1;
+    }
+    recordExecutionSummary(summary, exitCode);
   } else {
     console.error(`未生成 Playwright JSON 报告：${reportFile}`);
+    if (exitCode === 0) {
+      exitCode = 1;
+    }
   }
   return exitCode;
 }

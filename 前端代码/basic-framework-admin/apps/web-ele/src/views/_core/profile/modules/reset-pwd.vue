@@ -12,6 +12,7 @@ import {
   useVbenForm,
 } from '#/adapter/form';
 import { updateUserPassword } from '#/api/system/user/profile';
+import { isErrorMessageHandled, showError } from '#/utils/feedback';
 import { encryptPassword } from '#/utils/sm2';
 
 const props = defineProps<{ silentSuccess?: boolean }>();
@@ -98,6 +99,9 @@ async function handleSubmit(values: Recordable<any>) {
     emit('success');
   } catch (error) {
     logError('profile:reset-password:submit', error);
+    if (!isErrorMessageHandled(error)) {
+      showError(error, '修改密码失败，请稍后重试');
+    }
   } finally {
     formApi.setLoading(false);
   }

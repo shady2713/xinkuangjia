@@ -63,8 +63,8 @@ function handleClick(path?: string) {
             </div>
             <BreadcrumbLink
               v-else-if="index !== breadcrumbs.length - 1"
-              href="javascript:void 0"
-              @click.stop="handleClick(item.path)"
+              href="#"
+              @click.stop.prevent="handleClick(item.path)"
             >
               <div class="flex-center">
                 <VbenIcon

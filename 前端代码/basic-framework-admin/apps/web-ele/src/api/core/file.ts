@@ -81,3 +81,20 @@ export function uploadFile(
     onUploadProgress,
   });
 }
+
+/**
+ * 为已认证用户按文件记录编号申请私有附件的限时预签名读取地址。
+ *
+ * @param id 文件记录主键编号
+ * @param expirationSeconds 可选有效期（秒，受后端 60~3600 秒约束）
+ * @returns 限时预签名访问地址
+ */
+export function getPrivateFilePresignedUrl(
+  id: number | string,
+  expirationSeconds?: number,
+) {
+  return requestClient.get<string>('/infra/file/private/presigned-get-url', {
+    params:
+      expirationSeconds === undefined ? { id } : { expirationSeconds, id },
+  });
+}

@@ -22,6 +22,83 @@ interface StorageItem<T> {
  */
 const rawKeyWriters = new WeakMap<Storage, Map<string, symbol>>();
 
+/**
+ * 在无 window 或浏览器禁用 Web Storage 时提供进程内降级实现，避免模块初始化即崩溃。
+ *
+ * @returns 符合标准 Storage 接口的内存存储对象
+ */
+function createMemoryStorage(): Storage {
+  const store = new Map<string, string>();
+  return {
+    /** 清空内存存储中的全部键值。 */
+    clear() {
+      store.clear();
+    },
+    /**
+     * 按键读取内存存储值。
+     *
+     * @param key 存储键名
+     * @returns 对应的字符串值，不存在时返回 null
+     */
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    /**
+     * 按序号读取当前存储的键名。
+     *
+     * @param index 键序号
+     * @returns 对应位置的键名，越界时返回 null
+     */
+    key(index: number) {
+      return [...store.keys()][index] ?? null;
+    },
+    /**
+     * 获取当前内存存储中的条目数量。
+     *
+     * @returns 条目总数
+     */
+    get length() {
+      return store.size;
+    },
+    /**
+     * 按键移除内存存储条目。
+     *
+     * @param key 待移除的存储键名
+     */
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    /**
+     * 写入或覆盖内存存储条目。
+     *
+     * @param key 存储键名
+     * @param value 字符串化的存储内容
+     */
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+}
+
+/**
+ * 安全解析底层 Web Storage；SSR 或受限上下文抛出 SecurityError 时降级为内存存储。
+ *
+ * @param storageType 目标存储类型
+ * @returns 可用的 Storage 实例
+ */
+function resolveStorage(storageType: StorageType): Storage {
+  if (typeof window === 'undefined') {
+    return createMemoryStorage();
+  }
+  try {
+    return storageType === 'localStorage'
+      ? window.localStorage
+      : window.sessionStorage;
+  } catch {
+    return createMemoryStorage();
+  }
+}
+
 /** 封装命名空间前缀与 TTL 淘汰策略的 Web Storage 管理类。 */
 class StorageManager {
   /**
@@ -52,10 +129,7 @@ class StorageManager {
     storageType = 'localStorage',
   }: StorageManagerOptions = {}) {
     this.prefix = prefix;
-    this.storage =
-      storageType === 'localStorage'
-        ? window.localStorage
-        : window.sessionStorage;
+    this.storage = resolveStorage(storageType);
   }
 
   /**
@@ -74,7 +148,7 @@ class StorageManager {
       }
     }
     // 成功移除后也结束该键的原始键归属。
-    keysToRemove.forEach((key) => this.storage.removeItem(key));
+    keysToRemove.forEach((key) => this.removeRawItem(key));
   }
 
   /**
@@ -115,8 +189,18 @@ class StorageManager {
     }
 
     try {
-      const item: StorageItem<T> = JSON.parse(itemStr);
-      if (item.expiry && Date.now() > item.expiry) {
+      const parsed: unknown = JSON.parse(itemStr);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed) ||
+        !Object.prototype.hasOwnProperty.call(parsed, 'value')
+      ) {
+        this.removeRawItem(fullKey);
+        return defaultValue;
+      }
+      const item = parsed as StorageItem<T>;
+      if (typeof item.expiry === 'number' && Date.now() > item.expiry) {
         this.removeRawItem(fullKey);
         return defaultValue;
       }
@@ -147,7 +231,7 @@ class StorageManager {
    */
   setItem<T>(key: string, value: T, ttl?: number): void {
     const fullKey = this.getFullKey(key);
-    const expiry = ttl ? Date.now() + ttl : undefined;
+    const expiry = typeof ttl === 'number' ? Date.now() + ttl : undefined;
     const item: StorageItem<T> = { expiry, value };
     try {
       const serialized = JSON.stringify(item);

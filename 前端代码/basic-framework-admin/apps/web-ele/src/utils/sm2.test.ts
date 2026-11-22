@@ -84,13 +84,36 @@ async function retriesAfterPublicKeyFailure() {
   expect(getSm2PublicKey).toHaveBeenCalledTimes(2);
 }
 
+/** 验证非法公钥格式与非法密文模式均被拒绝，且空密码不清空已缓存公钥。 */
+async function rejectsInvalidKeyAndPreservesCacheOnEmptyPassword() {
+  vi.mocked(getSm2PublicKey)
+    .mockResolvedValueOnce({ cipherMode: 1, publicKey: 'invalid-key' })
+    .mockResolvedValueOnce({ cipherMode: 0 as any, publicKey: TEST_PUBLIC_KEY })
+    .mockResolvedValueOnce({ cipherMode: 1, publicKey: TEST_PUBLIC_KEY });
+
+  await expect(encryptPassword('Another#1')).rejects.toThrow(
+    'SM2 公钥格式不正确',
+  );
+  await expect(encryptPassword('Another#1')).rejects.toThrow(
+    '服务端 SM2 密文模式不受支持',
+  );
+  await expect(encryptPassword('Another#1')).resolves.toMatch(/^04/);
+  await expect(encryptPassword('')).rejects.toThrow('密码不能为空');
+  await expect(encryptPassword('Another#2')).resolves.toMatch(/^04/);
+  expect(getSm2PublicKey).toHaveBeenCalledTimes(3);
+}
+
 /** SM2 密码加密测试套件。 */
 function sm2EncryptionSuite() {
   it('生成带 04 前缀的密文，并能还原 p/t/n 载荷', encryptsAndDecryptsPayload);
   it('缓存服务端公钥，连续提交只请求一次', cachesPublicKey);
   it(
-    '拒绝格式非法的公钥，且失败后不缓存错误状态',
+    '公钥接口网络失败后不缓存错误状态并允许重试',
     retriesAfterPublicKeyFailure,
+  );
+  it(
+    '拒绝非法公钥与密文模式，且空密码入参不清空已缓存公钥',
+    rejectsInvalidKeyAndPreservesCacheOnEmptyPassword,
   );
 }
 

@@ -11,7 +11,12 @@ import { useClipboard } from '@vueuse/core';
 import { ElButton, ElImage } from 'element-plus';
 
 import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
-import { deleteFile, deleteFileList, getFilePage } from '#/api/infra/file';
+import {
+  deleteFile,
+  deleteFileList,
+  getFilePage,
+  getPrivateFilePresignedUrl,
+} from '#/api/infra/file';
 import { useCrudActions } from '#/composables/use-crud-actions';
 import { $t } from '#/locales';
 import { showErrorMessage, showSuccessMessage } from '#/utils/feedback';
@@ -45,17 +50,59 @@ const {
   refresh: handleRefresh,
 });
 
-/** 复制链接到剪贴板 */
-const { copy } = useClipboard({ legacy: true });
-async function handleCopyUrl(row: InfraFileApi.File) {
-  if (!row.url) {
-    showErrorMessage('文件 URL 为空');
-    return;
+/**
+ * 解析文件访问地址：公开资源直接返回持久化 URL，私有附件（url 为空）按需申请限时预签名地址。
+ *
+ * @param row 文件列表行记录
+ * @returns 包含目标地址与是否为临时授权链接的解析结果
+ */
+async function resolveFileAccessUrl(
+  row: InfraFileApi.File,
+): Promise<{ isPrivate: boolean; url: string }> {
+  if (row.url) {
+    return { isPrivate: false, url: row.url };
   }
+  if (row.id === undefined || row.id === null || row.id === '') {
+    return { isPrivate: true, url: '' };
+  }
+  const signedUrl = await getPrivateFilePresignedUrl(row.id);
+  return { isPrivate: true, url: signedUrl || '' };
+}
 
+/**
+ * 打开预览或下载链接，私有附件自动先获取限时授权地址。
+ *
+ * @param row 文件列表行记录
+ */
+async function handleOpenFile(row: InfraFileApi.File) {
   try {
-    await copy(row.url);
-    showSuccessMessage('复制成功');
+    const { url } = await resolveFileAccessUrl(row);
+    if (!url) {
+      showErrorMessage('未获取到可用的文件访问地址');
+      return;
+    }
+    openWindow(url);
+  } catch {
+    showErrorMessage('获取文件访问地址失败');
+  }
+}
+
+const { copy } = useClipboard({ legacy: true });
+
+/**
+ * 复制链接到剪贴板，私有附件自动复制限时预签名链接并提示时效性。
+ *
+ * @param row 文件列表行记录
+ */
+async function handleCopyUrl(row: InfraFileApi.File) {
+  try {
+    const { isPrivate, url } = await resolveFileAccessUrl(row);
+    if (!url) {
+      showErrorMessage('文件 URL 为空');
+      return;
+    }
+    await copy(url);
+    showSuccessMessage(isPrivate ? '已复制限时授权链接' : '复制成功');
   } catch {
     showErrorMessage('复制失败');
   }
@@ -119,9 +166,18 @@ const [Grid, gridApi] = useVbenVxeGrid({
         />
       </template>
       <template #file-content="{ row }">
-        <ElImage v-if="row.type && row.type.includes('image')" :src="row.url" />
-        <ElButton type="primary" link @click="() => openWindow(row.url!)">
-          {{ row.type && row.type.includes('pdf') ? '预览' : '下载' }}
+        <ElImage
+          v-if="row.url && row.type && row.type.includes('image')"
+          :src="row.url"
+        />
+        <ElButton type="primary" link @click="() => handleOpenFile(row)">
+          {{
+            row.type &&
+            (row.type.includes('pdf') ||
+              (!row.url && row.type.includes('image')))
+              ? '预览'
+              : '下载'
+          }}
         </ElButton>
       </template>
       <template #actions="{ row }">

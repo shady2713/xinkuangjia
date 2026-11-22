@@ -172,22 +172,34 @@ export function useFormInitial(
     return resultSlots;
   });
 
+  /**
+   * 汇总字段显式默认值与 Zod Schema 推导默认值，并支持点号嵌套字段路径。
+   *
+   * @returns 合并后的表单初始值对象
+   */
   function generateInitialValues() {
     const initialValues: Record<string, any> = {};
 
     const zodObject: ZodRawShape = {};
-    (unref(props).schema || []).forEach((item) => {
-      if (Reflect.has(item, 'defaultValue')) {
-        set(initialValues, item.fieldName, item.defaultValue);
-      } else if (item.rules && !isString(item.rules)) {
-        // 检查规则是否适合提取默认值
-        const customDefaultValue = getCustomDefaultValue(item.rules);
-        zodObject[item.fieldName] = item.rules;
-        if (customDefaultValue !== undefined) {
-          initialValues[item.fieldName] = customDefaultValue;
+    (unref(props).schema || []).forEach(
+      /**
+       * 处理单个表单项的默认值或校验规则提取。
+       *
+       * @param item 表单字段配置项
+       */
+      (item) => {
+        if (Reflect.has(item, 'defaultValue')) {
+          set(initialValues, item.fieldName, item.defaultValue);
+        } else if (item.rules && !isString(item.rules)) {
+          // 检查规则是否适合提取默认值
+          const customDefaultValue = getCustomDefaultValue(item.rules);
+          zodObject[item.fieldName] = item.rules;
+          if (customDefaultValue !== undefined) {
+            set(initialValues, item.fieldName, customDefaultValue);
+          }
         }
-      }
-    });
+      },
+    );
 
     const schemaInitialValues = getDefaultsForSchema(object(zodObject));
 
