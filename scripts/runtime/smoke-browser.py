@@ -110,7 +110,9 @@ def run(p, browser, pwd, new_pwd):
 
     ctx, page = new_page()
     with step("admin-ui-login-forced-change"):
-        ui_login(page, "admin", pwd)
+        with page.expect_response("**/admin-api/system/auth/super-admin-login") as login:
+            ui_login(page, "admin", pwd)
+        check(ok(login.value)["passwordChangeRequired"] is True, "server did not require password change")
         page.wait_for_url(CHANGE)
         check(cfg["n"] >= 1, "captcha config not overridden")
         old = store(page, "bf_access_token")
@@ -135,7 +137,9 @@ def run(p, browser, pwd, new_pwd):
         ctx.close()
     ctx, page = new_page()
     with step("admin-fresh-login-new-password"):
-        ui_login(page, "admin", new_pwd)
+        with page.expect_response("**/admin-api/system/auth/super-admin-login") as login:
+            ui_login(page, "admin", new_pwd)
+        check(ok(login.value)["passwordChangeRequired"] is False, "server did not clear password-change requirement")
         page.wait_for_url(lambda u: "/login" not in u and "/profile/change-password" not in u)
         admin = store(page, "bf_access_token")
     with step("admin-role-crud"):
