@@ -1,7 +1,2 @@
-# 受保护门禁、工作流与安全扫描规则的代码所有者配置
 /.github/workflows/ @shady2713
 /.github/CODEOWNERS @shady2713
-/scripts/workflow/ @shady2713
-/scripts/security/ @shady2713
-/scripts/skills/ @shady2713
-/.agents/skills/ @shady2713
