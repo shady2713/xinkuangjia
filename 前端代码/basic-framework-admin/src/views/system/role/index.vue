@@ -2,10 +2,16 @@
 /**
  * 角色管理：CRUD + 分配菜单权限树 + 分配部门数据权限范围。
  */
-import { Delete, Plus, Search } from '@element-plus/icons-vue';
+import {
+  DataAnalysis,
+  Delete,
+  Edit,
+  Menu as MenuIconEl,
+  Plus,
+  Search,
+} from '@element-plus/icons-vue';
 import {
   ElMessage,
-  ElMessageBox,
   type ElTree,
   type FormInstance,
   type FormRules,
@@ -29,12 +35,21 @@ import {
   updateRoleApi,
 } from '@/api/system/role';
 import DictTag from '@/components/DictTag.vue';
+import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
+import TableAction from '@/components/TableAction.vue';
 import {
   CommonStatusEnum,
   DICT_TYPE,
   SystemDataScopeEnum,
 } from '@/constants/enums';
+import {
+  deleteConfirmMessage,
+  FIELD_LIMITS,
+  maxLenRule,
+  requiredRule,
+} from '@/constants/validation';
+import { confirmAction } from '@/utils/confirm';
 import { formatDateTime } from '@/utils/format';
 import { handleTree } from '@/utils/tree';
 
@@ -67,21 +82,24 @@ const form = reactive({
 });
 
 const formRules: FormRules = {
-  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入角色标识', trigger: 'blur' }],
-  roleType: [{ required: true, message: '请选择所属平台', trigger: 'change' }],
+  name: [requiredRule('角色名称'), maxLenRule('角色名称', FIELD_LIMITS.ROLE_NAME)],
+  code: [requiredRule('角色标识'), maxLenRule('角色标识', FIELD_LIMITS.ROLE_CODE)],
+  roleType: [requiredRule('所属平台', 'change')],
+  remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
 };
 
 // 菜单权限弹窗
 const menuDialogVisible = ref(false);
+const menuSubmitting = ref(false);
 const menuTreeRef = ref<InstanceType<typeof ElTree>>();
-const menuTreeData = ref<any[]>([]);
+const menuTreeData = ref<Record<string, unknown>[]>([]);
 const currentRole = ref<RoleItem | null>(null);
 
 // 数据权限弹窗
 const scopeDialogVisible = ref(false);
+const scopeSubmitting = ref(false);
 const deptTreeRef = ref<InstanceType<typeof ElTree>>();
-const deptTreeData = ref<any[]>([]);
+const deptTreeData = ref<Record<string, unknown>[]>([]);
 const scopeForm = reactive({
   roleId: undefined as number | string | undefined,
   name: '',
@@ -95,8 +113,8 @@ async function loadList() {
     const res = await getRolePageApi({
       pageNo: query.pageNo,
       pageSize: query.pageSize,
-      name: query.name || undefined,
-      code: query.code || undefined,
+      name: query.name.trim() || undefined,
+      code: query.code.trim() || undefined,
       status: query.status,
     });
     list.value = res.list ?? [];
@@ -156,7 +174,7 @@ async function submitForm() {
       roleType: form.roleType,
       sort: form.sort,
       status: form.status,
-      remark: form.remark || undefined,
+      remark: form.remark.trim() || undefined,
     };
     if (form.id) {
       await updateRoleApi(payload);
@@ -172,9 +190,6 @@ async function submitForm() {
 }
 
 async function handleDelete(row: RoleItem) {
-  await ElMessageBox.confirm(`确认删除角色「${row.name}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteRoleApi(row.id);
   ElMessage.success('删除成功');
   await loadList();
@@ -182,10 +197,9 @@ async function handleDelete(row: RoleItem) {
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) return;
-  await ElMessageBox.confirm(
-    `确认删除已勾选的 ${selectedIds.value.length} 个角色吗？`,
-    '批量删除',
-    { type: 'warning' },
+  await confirmAction(
+    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个角色？删除后无法恢复。`,
+    { title: '批量删除确认', confirmText: '确认删除' },
   );
   await deleteRoleListApi(selectedIds.value);
   ElMessage.success('批量删除成功');
@@ -201,23 +215,29 @@ async function openMenuDialog(row: RoleItem) {
     getRoleMenuListApi(row.id),
   ]);
   const parentIds = new Set(menus.map((m: MenuSimple) => String(m.parentId)));
-  menuTreeData.value = handleTree(menus as any[]);
+  menuTreeData.value = handleTree(
+    menus as { id: number | string; parentId?: number | string }[],
+  );
   await nextTick();
-  // 仅勾选叶子节点，避免 Element Plus Tree 级联自动全选子节点
   const leafIds = checkedIds.filter((id) => !parentIds.has(String(id)));
-  menuTreeRef.value?.setCheckedKeys(leafIds as any[]);
+  menuTreeRef.value?.setCheckedKeys(leafIds as (number | string)[]);
 }
 
 async function submitAssignMenu() {
   if (!currentRole.value || !menuTreeRef.value) return;
-  const checked = menuTreeRef.value.getCheckedKeys() as (number | string)[];
-  const halfChecked = menuTreeRef.value.getHalfCheckedKeys() as (number | string)[];
-  await assignRoleMenuApi({
-    roleId: currentRole.value.id,
-    menuIds: [...checked, ...halfChecked],
-  });
-  ElMessage.success('菜单权限已更新');
-  menuDialogVisible.value = false;
+  menuSubmitting.value = true;
+  try {
+    const checked = menuTreeRef.value.getCheckedKeys() as (number | string)[];
+    const halfChecked = menuTreeRef.value.getHalfCheckedKeys() as (number | string)[];
+    await assignRoleMenuApi({
+      roleId: currentRole.value.id,
+      menuIds: [...checked, ...halfChecked],
+    });
+    ElMessage.success('菜单权限已更新');
+    menuDialogVisible.value = false;
+  } finally {
+    menuSubmitting.value = false;
+  }
 }
 
 async function openScopeDialog(row: RoleItem) {
@@ -227,25 +247,32 @@ async function openScopeDialog(row: RoleItem) {
   scopeForm.dataScopeDeptIds = row.dataScopeDeptIds ?? [];
   scopeDialogVisible.value = true;
   const depts: DeptSimple[] = await getSimpleDeptListApi();
-  deptTreeData.value = handleTree(depts as any[]);
+  deptTreeData.value = handleTree(
+    depts as { id: number | string; parentId?: number | string }[],
+  );
   await nextTick();
-  deptTreeRef.value?.setCheckedKeys(scopeForm.dataScopeDeptIds as any[]);
+  deptTreeRef.value?.setCheckedKeys(scopeForm.dataScopeDeptIds as (number | string)[]);
 }
 
 async function submitDataScope() {
   if (!scopeForm.roleId) return;
-  const deptIds =
-    scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM
-      ? ((deptTreeRef.value?.getCheckedKeys() as (number | string)[]) ?? [])
-      : [];
-  await assignRoleDataScopeApi({
-    roleId: scopeForm.roleId,
-    dataScope: scopeForm.dataScope,
-    dataScopeDeptIds: deptIds,
-  });
-  ElMessage.success('数据权限已更新');
-  scopeDialogVisible.value = false;
-  await loadList();
+  scopeSubmitting.value = true;
+  try {
+    const deptIds =
+      scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM
+        ? ((deptTreeRef.value?.getCheckedKeys() as (number | string)[]) ?? [])
+        : [];
+    await assignRoleDataScopeApi({
+      roleId: scopeForm.roleId,
+      dataScope: scopeForm.dataScope,
+      dataScopeDeptIds: deptIds,
+    });
+    ElMessage.success('数据权限已更新');
+    scopeDialogVisible.value = false;
+    await loadList();
+  } finally {
+    scopeSubmitting.value = false;
+  }
 }
 
 onMounted(() => {
@@ -266,13 +293,25 @@ onMounted(() => {
       <template #search>
         <el-form :inline="true" :model="query" @submit.prevent="handleSearch">
           <el-form-item label="角色名称">
-            <el-input v-model="query.name" placeholder="请输入角色名称" clearable />
+            <el-input
+              v-model="query.name"
+              placeholder="请输入角色名称"
+              :maxlength="FIELD_LIMITS.ROLE_NAME"
+              clearable
+              style="width: 170px"
+            />
           </el-form-item>
           <el-form-item label="角色标识">
-            <el-input v-model="query.code" placeholder="请输入角色标识" clearable />
+            <el-input
+              v-model="query.code"
+              placeholder="请输入角色标识"
+              :maxlength="FIELD_LIMITS.ROLE_CODE"
+              clearable
+              style="width: 170px"
+            />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px">
+            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
@@ -307,80 +346,108 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <el-table
-        :data="list"
-        border
-        stripe
-        @selection-change="(rows: RoleItem[]) => (selectedIds = rows.map((r) => r.id))"
-      >
-        <el-table-column type="selection" width="44" />
-        <el-table-column prop="id" label="编号" width="80" />
-        <el-table-column prop="name" label="角色名称" min-width="140" />
-        <el-table-column prop="code" label="角色标识" min-width="140" />
-        <el-table-column prop="roleType" label="所属平台" width="130">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.roleType === 'super_admin' ? 'danger' : 'primary'">
-              {{ row.roleType === 'super_admin' ? '超管平台' : '业务平台' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="sort" label="排序" width="80" align="center" />
-        <el-table-column label="状态" width="90" align="center">
-          <template #default="{ row }">
-            <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
-          </template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="170">
-          <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
-          <template #default="{ row }">
-            <el-button v-has-permi="'system:role:update'" link type="primary" size="small" @click="openForm(row)">
-              编辑
-            </el-button>
-            <el-button
-              v-has-permi="'system:permission:assign-role-menu'"
-              link
-              type="primary"
-              size="small"
-              @click="openMenuDialog(row)"
-            >
-              菜单权限
-            </el-button>
-            <el-button
-              v-has-permi="'system:permission:assign-role-data-scope'"
-              link
-              type="primary"
-              size="small"
-              @click="openScopeDialog(row)"
-            >
-              数据权限
-            </el-button>
-            <el-button v-has-permi="'system:role:delete'" link type="danger" size="small" @click="handleDelete(row)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #default="{ size }">
+        <el-table
+          :data="list"
+          :size="size"
+          border
+          stripe
+          @selection-change="(rows: RoleItem[]) => (selectedIds = rows.map((r) => r.id))"
+        >
+          <el-table-column type="selection" width="44" align="center" />
+          <el-table-column prop="id" label="编号" width="76" align="center" />
+          <el-table-column prop="name" label="角色名称" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="code" label="角色标识" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="roleType" label="所属平台" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.roleType === 'super_admin' ? 'danger' : 'primary'">
+                {{ row.roleType === 'super_admin' ? '超管平台' : '业务平台' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sort" label="排序" width="76" align="center" />
+          <el-table-column label="状态" width="84" align="center">
+            <template #default="{ row }">
+              <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
+          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="192" align="center" fixed="right">
+            <template #default="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '编辑',
+                    icon: Edit,
+                    auth: 'system:role:update',
+                    onClick: () => openForm(row),
+                  },
+                  {
+                    label: '删除',
+                    type: 'danger',
+                    icon: Delete,
+                    auth: 'system:role:delete',
+                    popConfirm: {
+                      title: deleteConfirmMessage(row.name),
+                      confirm: () => handleDelete(row),
+                    },
+                  },
+                ]"
+                :drop-down-actions="[
+                  {
+                    label: '菜单权限',
+                    icon: MenuIconEl,
+                    auth: 'system:permission:assign-role-menu',
+                    onClick: () => openMenuDialog(row),
+                  },
+                  {
+                    label: '数据权限',
+                    icon: DataAnalysis,
+                    auth: 'system:permission:assign-role-data-scope',
+                    onClick: () => openScopeDialog(row),
+                  },
+                ]"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </ProTable>
 
     <!-- 新增/编辑角色弹窗 -->
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑角色' : '新增角色'" width="520px" destroy-on-close>
+    <FormDialog
+      v-model="formVisible"
+      :title="form.id ? '编辑角色' : '新增角色'"
+      width="540px"
+      :confirm-loading="formSubmitting"
+      @confirm="submitForm"
+    >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="角色名称" prop="name">
-          <el-input v-model="form.name" />
+          <el-input
+            v-model="form.name"
+            :maxlength="FIELD_LIMITS.ROLE_NAME"
+            placeholder="请输入角色名称（最多 30 字符）"
+          />
         </el-form-item>
         <el-form-item label="角色标识" prop="code">
-          <el-input v-model="form.code" />
+          <el-input
+            v-model="form.code"
+            :maxlength="FIELD_LIMITS.ROLE_CODE"
+            placeholder="请输入角色标识，如 business_operator"
+          />
         </el-form-item>
         <el-form-item label="所属平台" prop="roleType">
-          <el-select v-model="form.roleType" class="w-full" :disabled="Boolean(form.id)">
+          <el-select v-model="form.roleType" class="w-full" placeholder="请选择所属平台">
             <el-option label="业务平台 (business_admin)" value="business_admin" />
             <el-option label="超管平台 (super_admin)" value="super_admin" />
           </el-select>
         </el-form-item>
-        <el-form-item label="显示排序">
-          <el-input-number v-model="form.sort" :min="0" />
+        <el-form-item label="显示顺序">
+          <el-input-number v-model="form.sort" :min="0" :max="99999" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -388,19 +455,29 @@ onMounted(() => {
             <el-radio :value="CommonStatusEnum.DISABLE">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="form.remark" type="textarea" :rows="2" />
+        <el-form-item label="备注" prop="remark">
+          <el-input
+            v-model="form.remark"
+            type="textarea"
+            :rows="3"
+            :maxlength="FIELD_LIMITS.REMARK"
+            show-word-limit
+            placeholder="请输入角色职责说明（选填）"
+          />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formSubmitting" @click="submitForm">确定</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 分配菜单权限弹窗 -->
-    <el-dialog v-model="menuDialogVisible" :title="`分配菜单权限 - ${currentRole?.name || ''}`" width="500px">
-      <div class="max-h-[420px] overflow-auto rounded border border-[#e4e4e7] p-2">
+    <FormDialog
+      v-model="menuDialogVisible"
+      :title="`菜单权限 - ${currentRole?.name || ''}`"
+      width="540px"
+      confirm-text="保存"
+      :confirm-loading="menuSubmitting"
+      @confirm="submitAssignMenu"
+    >
+      <div class="max-h-[420px] overflow-auto rounded-md border border-[#e4e4e7] p-3">
         <el-tree
           ref="menuTreeRef"
           :data="menuTreeData"
@@ -410,20 +487,20 @@ onMounted(() => {
           default-expand-all
         />
       </div>
-      <template #footer>
-        <el-button @click="menuDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitAssignMenu">保存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 分配数据权限弹窗 -->
-    <el-dialog v-model="scopeDialogVisible" title="分配数据权限" width="500px">
+    <FormDialog
+      v-model="scopeDialogVisible"
+      :title="`数据权限 - ${scopeForm.name}`"
+      width="540px"
+      confirm-text="保存"
+      :confirm-loading="scopeSubmitting"
+      @confirm="submitDataScope"
+    >
       <el-form label-width="90px">
-        <el-form-item label="角色名称">
-          <el-input :model-value="scopeForm.name" disabled />
-        </el-form-item>
         <el-form-item label="权限范围">
-          <el-select v-model="scopeForm.dataScope" class="w-full">
+          <el-select v-model="scopeForm.dataScope" class="w-full" placeholder="请选择数据权限范围">
             <el-option label="全部数据权限" :value="SystemDataScopeEnum.ALL" />
             <el-option label="指定部门数据权限" :value="SystemDataScopeEnum.DEPT_CUSTOM" />
             <el-option label="本部门数据权限" :value="SystemDataScopeEnum.DEPT_ONLY" />
@@ -431,8 +508,11 @@ onMounted(() => {
             <el-option label="仅本人数据权限" :value="SystemDataScopeEnum.DEPT_SELF" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM" label="指定部门">
-          <div class="max-h-[280px] w-full overflow-auto rounded border border-[#e4e4e7] p-2">
+        <el-form-item
+          v-if="scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM"
+          label="指定部门"
+        >
+          <div class="max-h-[300px] w-full overflow-auto rounded-md border border-[#e4e4e7] p-3">
             <el-tree
               ref="deptTreeRef"
               :data="deptTreeData"
@@ -445,10 +525,6 @@ onMounted(() => {
           </div>
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="scopeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitDataScope">保存</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>

@@ -86,16 +86,23 @@ public abstract class AbstractFileClient<Config extends FileClientConfig> implem
         return id;
     }
 
+    private static final String FILE_CONTENT_PATH = "/admin-api/infra/file/content";
+
     /**
      * 格式化文件的 URL 访问地址
      * 使用场景：local、ftp、db，通过 FileController 的 getFile 来获取文件内容
      *
-     * @param domain 自定义域名
-     * @param path 文件路径
+     * @param domain 自定义域名或已包含内容前缀的公开访问路径
+     * @param path   文件路径
      * @return URL 访问地址
      */
     protected String formatFileUrl(String domain, String path) {
-        return StrUtil.format("{}/admin-api/infra/file/content/{}", domain, path);
+        String normalizedDomain = StrUtil.removeSuffix(StrUtil.blankToDefault(domain, "").trim(), "/");
+        String normalizedPath = StrUtil.removePrefix(StrUtil.blankToDefault(path, "").trim(), "/");
+        if (normalizedDomain.endsWith(FILE_CONTENT_PATH)) {
+            return normalizedDomain + "/" + normalizedPath;
+        }
+        return normalizedDomain + FILE_CONTENT_PATH + "/" + normalizedPath;
     }
 
     /**

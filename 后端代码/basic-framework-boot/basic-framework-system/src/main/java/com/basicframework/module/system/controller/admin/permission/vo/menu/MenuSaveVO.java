@@ -25,16 +25,16 @@ public class MenuSaveVO {
     /**
      * 菜单名称。
      */
-    @Schema(description = "菜单名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "系统管理")
+    @Schema(description = "菜单名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "系统设置")
     @NotBlank(message = "菜单名称不能为空")
-    @Size(max = 50, message = "菜单名称长度不能超过50个字符")
+    @Size(max = 50, message = "菜单名称长度不能超过 50 个字符")
     private String name;
 
     /**
      * 权限标识,仅菜单类型为按钮时，才需要传递。
      */
     @Schema(description = "权限标识,仅菜单类型为按钮时，才需要传递", example = "sys:menu:add")
-    @Size(max = 100)
+    @Size(max = 100, message = "权限标识长度不能超过 100 个字符")
     private String permission;
 
     /**

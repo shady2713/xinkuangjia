@@ -277,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
             if code == 0 and args.admin_password_hash is None:
                 print(
                     "提示：未传入 --admin-password-hash 或 SEED_ADMIN_PASSWORD_HASH，"
-                    "基线 SQL 中 admin 密码为空，登录前请按 docs/开发指南/SM2密码传输与密码策略.md 写入 BCrypt 哈希。"
+                    "基线 SQL 中 admin 密码为空，登录前请按 docs/部署与运维说明.md 写入 BCrypt 哈希。"
                 )
             return code
         except ValueError as exc:

@@ -155,6 +155,12 @@ export namespace OpenApiSchemas {
     msg?: string;
   }
 
+  export interface CommonResult_DashboardSummaryRespVO {
+    code?: number;
+    data?: OpenApiSchemas.DashboardSummaryRespVO;
+    msg?: string;
+  }
+
   export interface CommonResult_DeptRespVO {
     code?: number;
     data?: OpenApiSchemas.DeptRespVO;
@@ -363,6 +369,76 @@ export namespace OpenApiSchemas {
     code?: number;
     data?: OpenApiSchemas.UserRespVO;
     msg?: string;
+  }
+
+  /** 管理后台 - 概览统计摘要 Response VO */
+  export interface DashboardSummaryRespVO {
+    /** 近 7 日活跃趋势列表 */
+    dailyTrend: OpenApiSchemas.DashboardSummaryRespVO_DailyTrendItem[];
+    /** 当前平台部门总数 */
+    deptTotal: number | string;
+    /** 系统字典类型总数 */
+    dictTypeTotal: number | string;
+    /** 最近登录日志（最多 6 条） */
+    recentLogins: OpenApiSchemas.DashboardSummaryRespVO_RecentLoginItem[];
+    /** 最近操作审计（最多 6 条） */
+    recentOperates: OpenApiSchemas.DashboardSummaryRespVO_RecentOperateItem[];
+    /** 当前平台角色总数 */
+    roleTotal: number | string;
+    /** 近 7 日登录总次数 */
+    sevenDayLoginCount: number | string;
+    /** 近 7 日登录失败次数 */
+    sevenDayLoginFailCount: number | string;
+    /** 近 7 日登录成功次数 */
+    sevenDayLoginSuccessCount: number | string;
+    /** 近 7 日操作审计总次数 */
+    sevenDayOperateCount: number | string;
+    /** 今日登录次数 */
+    todayLoginCount: number | string;
+    /** 今日操作审计次数 */
+    todayOperateCount: number | string;
+    /** 当前平台启用用户数 */
+    userEnabledCount: number | string;
+    /** 当前平台用户总数 */
+    userTotal: number | string;
+  }
+
+  /** 按日活跃趋势项 */
+  export interface DashboardSummaryRespVO_DailyTrendItem {
+    /** 日期（MM-dd） */
+    date: string;
+    /** 当日登录次数 */
+    loginCount: number | string;
+    /** 当日操作审计次数 */
+    operateCount: number | string;
+  }
+
+  /** 最近登录记录项 */
+  export interface DashboardSummaryRespVO_RecentLoginItem {
+    /** 登录时间 */
+    createTime: number;
+    /** 日志编号 */
+    id: number | string;
+    /** 登录结果（0=成功，其余为失败码） */
+    result: number;
+    /** 登录 IP */
+    userIp?: string;
+    /** 用户账号 */
+    username: string;
+  }
+
+  /** 最近操作审计项 */
+  export interface DashboardSummaryRespVO_RecentOperateItem {
+    /** 操作详情 */
+    action?: string;
+    /** 操作时间 */
+    createTime: number;
+    /** 日志编号 */
+    id: number | string;
+    /** 操作子类型 */
+    subType?: string;
+    /** 操作模块 */
+    type?: string;
   }
 
   /** 管理后台 - 部门列表 Request VO */
@@ -1189,7 +1265,7 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - 用户个人信息更新 Request VO */
   export interface UserProfileUpdateReqVO {
-    /** 角色头像 */
+    /** 用户头像 */
     avatar?: string;
     /** 用户邮箱 */
     email?: string;
@@ -1377,6 +1453,10 @@ export interface OpenApiPaths {
   "/admin-api/system/captcha/get": {
     /** 获得验证码 */
     post: { body: OpenApiSchemas.CaptchaVO; query: never; response: OpenApiSchemas.ResponseModel };
+  };
+  "/admin-api/system/dashboard/summary": {
+    /** 获得首页概览统计摘要 */
+    get: { body: never; query: never; response: OpenApiSchemas.CommonResult_DashboardSummaryRespVO };
   };
   "/admin-api/system/dept/create": {
     /** 创建部门 */

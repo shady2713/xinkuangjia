@@ -2,10 +2,9 @@
 /**
  * OAuth2.0 第三方开放应用管理（仅保留 clientId / secret / 有效期 / grantTypes / scopes 核心字段）。
  */
-import { Delete, Plus, Search } from '@element-plus/icons-vue';
+import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue';
 import {
   ElMessage,
-  ElMessageBox,
   type FormInstance,
   type FormRules,
 } from 'element-plus';
@@ -21,8 +20,17 @@ import {
   updateOAuth2ClientApi,
 } from '@/api/system/oauth2';
 import DictTag from '@/components/DictTag.vue';
+import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
+import TableAction from '@/components/TableAction.vue';
 import { CommonStatusEnum, DICT_TYPE } from '@/constants/enums';
+import {
+  deleteConfirmMessage,
+  FIELD_LIMITS,
+  maxLenRule,
+  requiredRule,
+} from '@/constants/validation';
+import { confirmAction } from '@/utils/confirm';
 import { formatDateTime } from '@/utils/format';
 
 defineOptions({ name: 'SystemOAuth2Client' });
@@ -56,7 +64,10 @@ const form = reactive({
 });
 
 const formRules: FormRules = {
-  clientId: [{ required: true, message: '请输入客户端编号', trigger: 'blur' }],
+  clientId: [
+    requiredRule('客户端编号'),
+    maxLenRule('客户端编号', FIELD_LIMITS.OAUTH_CLIENT_ID),
+  ],
   secret: [
     {
       validator: (_rule, val, cb) => {
@@ -68,8 +79,13 @@ const formRules: FormRules = {
       },
       trigger: 'blur',
     },
+    maxLenRule('客户端密钥', FIELD_LIMITS.OAUTH_SECRET),
   ],
-  name: [{ required: true, message: '请输入应用名称', trigger: 'blur' }],
+  name: [
+    requiredRule('应用名称'),
+    maxLenRule('应用名称', FIELD_LIMITS.OAUTH_NAME),
+  ],
+  description: [maxLenRule('应用描述', FIELD_LIMITS.OAUTH_DESCRIPTION)],
 };
 
 async function loadList() {
@@ -78,7 +94,7 @@ async function loadList() {
     const res = await getOAuth2ClientPageApi({
       pageNo: query.pageNo,
       pageSize: query.pageSize,
-      name: query.name || undefined,
+      name: query.name.trim() || undefined,
       status: query.status,
     });
     list.value = res.list ?? [];
@@ -140,7 +156,7 @@ async function submitForm() {
       clientId: form.clientId.trim(),
       secret: form.secret.trim() || undefined,
       name: form.name.trim(),
-      description: form.description || undefined,
+      description: form.description.trim() || undefined,
       status: form.status,
       accessTokenValiditySeconds: form.accessTokenValiditySeconds,
       refreshTokenValiditySeconds: form.refreshTokenValiditySeconds,
@@ -161,9 +177,6 @@ async function submitForm() {
 }
 
 async function handleDelete(row: OAuth2ClientItem) {
-  await ElMessageBox.confirm(`确认删除应用「${row.name}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteOAuth2ClientApi(row.id);
   ElMessage.success('删除成功');
   await loadList();
@@ -171,10 +184,9 @@ async function handleDelete(row: OAuth2ClientItem) {
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) return;
-  await ElMessageBox.confirm(
-    `确认删除已勾选的 ${selectedIds.value.length} 个应用吗？`,
-    '批量删除',
-    { type: 'warning' },
+  await confirmAction(
+    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个应用？删除后无法恢复。`,
+    { title: '批量删除确认', confirmText: '确认删除' },
   );
   await deleteOAuth2ClientListApi(selectedIds.value);
   ElMessage.success('批量删除成功');
@@ -198,12 +210,18 @@ onMounted(() => {
       @refresh="loadList"
     >
       <template #search>
-        <el-form :inline="true" :model="query" @submit.prevent="loadList">
+        <el-form :inline="true" :model="query" @submit.prevent="() => ((query.pageNo = 1), loadList())">
           <el-form-item label="应用名称">
-            <el-input v-model="query.name" placeholder="请输入应用名" clearable />
+            <el-input
+              v-model="query.name"
+              placeholder="请输入应用名称"
+              :maxlength="FIELD_LIMITS.OAUTH_NAME"
+              clearable
+              style="width: 180px"
+            />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 120px">
+            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
@@ -218,7 +236,13 @@ onMounted(() => {
       </template>
 
       <template #toolbar>
-        <el-button v-has-permi="'system:oauth2-client:create'" type="primary" :icon="Plus" size="small" @click="openForm()">
+        <el-button
+          v-has-permi="'system:oauth2-client:create'"
+          type="primary"
+          :icon="Plus"
+          size="small"
+          @click="openForm()"
+        >
           新增
         </el-button>
         <el-button
@@ -234,55 +258,90 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <el-table
-        :data="list"
-        border
-        stripe
-        @selection-change="(rows: OAuth2ClientItem[]) => (selectedIds = rows.map((r) => r.id))"
-      >
-        <el-table-column type="selection" width="44" />
-        <el-table-column prop="clientId" label="客户端编号" min-width="130" />
-        <el-table-column prop="name" label="应用名称" min-width="140" />
-        <el-table-column label="状态" width="85" align="center">
-          <template #default="{ row }">
-            <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
-          </template>
-        </el-table-column>
-        <el-table-column prop="accessTokenValiditySeconds" label="访问令牌有效期(秒)" width="150" align="center" />
-        <el-table-column prop="refreshTokenValiditySeconds" label="刷新令牌有效期(秒)" width="150" align="center" />
-        <el-table-column label="授权类型" min-width="160">
-          <template #default="{ row }">
-            <el-tag v-for="gt in row.authorizedGrantTypes || []" :key="gt" size="small" class="mr-1">
-              {{ gt }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="创建时间" width="170">
-          <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
-          <template #default="{ row }">
-            <el-button v-has-permi="'system:oauth2-client:update'" link type="primary" size="small" @click="openForm(row)">
-              编辑
-            </el-button>
-            <el-button v-has-permi="'system:oauth2-client:delete'" link type="danger" size="small" @click="handleDelete(row)">
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <template #default="{ size }">
+        <el-table
+          :data="list"
+          :size="size"
+          border
+          stripe
+          @selection-change="(rows: OAuth2ClientItem[]) => (selectedIds = rows.map((r) => r.id))"
+        >
+          <el-table-column type="selection" width="44" align="center" />
+          <el-table-column prop="clientId" label="客户端编号" min-width="130" show-overflow-tooltip />
+          <el-table-column prop="name" label="应用名称" min-width="140" show-overflow-tooltip />
+          <el-table-column label="状态" width="82" align="center">
+            <template #default="{ row }">
+              <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
+            </template>
+          </el-table-column>
+          <el-table-column prop="accessTokenValiditySeconds" label="访问令牌有效期(秒)" width="150" align="center" />
+          <el-table-column prop="refreshTokenValiditySeconds" label="刷新令牌有效期(秒)" width="150" align="center" />
+          <el-table-column label="授权类型" min-width="160" show-overflow-tooltip>
+            <template #default="{ row }">
+              <el-tag v-for="gt in row.authorizedGrantTypes || []" :key="gt" size="small" class="mr-1">
+                {{ gt }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+            <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="148" align="center" fixed="right">
+            <template #default="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '编辑',
+                    icon: Edit,
+                    auth: 'system:oauth2-client:update',
+                    onClick: () => openForm(row),
+                  },
+                  {
+                    label: '删除',
+                    type: 'danger',
+                    icon: Delete,
+                    auth: 'system:oauth2-client:delete',
+                    popConfirm: {
+                      title: deleteConfirmMessage(row.name),
+                      confirm: () => handleDelete(row),
+                    },
+                  },
+                ]"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
     </ProTable>
 
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑应用' : '新增应用'" width="560px" destroy-on-close>
+    <FormDialog
+      v-model="formVisible"
+      :title="form.id ? '编辑应用' : '新增应用'"
+      width="580px"
+      :confirm-loading="formSubmitting"
+      @confirm="submitForm"
+    >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="135px">
         <el-form-item label="客户端编号" prop="clientId">
-          <el-input v-model="form.clientId" />
+          <el-input
+            v-model="form.clientId"
+            :maxlength="FIELD_LIMITS.OAUTH_CLIENT_ID"
+            placeholder="请输入客户端唯一编号"
+          />
         </el-form-item>
         <el-form-item label="客户端密钥" prop="secret">
-          <el-input v-model="form.secret" />
+          <el-input
+            v-model="form.secret"
+            :maxlength="FIELD_LIMITS.OAUTH_SECRET"
+            :placeholder="form.id ? '留空表示保持原密钥不变' : '请输入客户端密钥'"
+          />
         </el-form-item>
         <el-form-item label="应用名称" prop="name">
-          <el-input v-model="form.name" />
+          <el-input
+            v-model="form.name"
+            :maxlength="FIELD_LIMITS.OAUTH_NAME"
+            placeholder="请输入应用名称"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">
@@ -297,22 +356,31 @@ onMounted(() => {
           <el-input-number v-model="form.refreshTokenValiditySeconds" :min="60" class="w-full" />
         </el-form-item>
         <el-form-item label="授权类型">
-          <el-select v-model="form.authorizedGrantTypes" multiple class="w-full">
-            <el-option label="client_credentials" value="client_credentials" />
-            <el-option label="refresh_token" value="refresh_token" />
+          <el-select v-model="form.authorizedGrantTypes" multiple class="w-full" placeholder="请选择授权类型">
+            <el-option label="客户端模式 (client_credentials)" value="client_credentials" />
+            <el-option label="授权码模式 (authorization_code)" value="authorization_code" />
+            <el-option label="密码模式 (password)" value="password" />
+            <el-option label="刷新模式 (refresh_token)" value="refresh_token" />
           </el-select>
         </el-form-item>
-        <el-form-item label="授权范围 (Scope)">
-          <el-input v-model="form.scopesText" placeholder="多个范围以逗号分隔，如 read,write" />
+        <el-form-item label="授权范围">
+          <el-input
+            v-model="form.scopesText"
+            :maxlength="FIELD_LIMITS.OAUTH_DESCRIPTION"
+            placeholder="多个范围以逗号分隔，例如 user_info,read"
+          />
         </el-form-item>
-        <el-form-item label="应用描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
+        <el-form-item label="应用描述" prop="description">
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="3"
+            :maxlength="FIELD_LIMITS.OAUTH_DESCRIPTION"
+            show-word-limit
+            placeholder="请输入应用用途说明（选填）"
+          />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formSubmitting" @click="submitForm">确定</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </div>
 </template>

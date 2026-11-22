@@ -2,8 +2,12 @@
 /**
  * 字典管理：左右双栏联动（左侧字典类型 + 右侧字典数据）。
  */
-import { Plus, Search } from '@element-plus/icons-vue';
-import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus';
+import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue';
+import {
+  ElMessage,
+  type FormInstance,
+  type FormRules,
+} from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
 import {
@@ -21,8 +25,16 @@ import {
   updateDictTypeApi,
 } from '@/api/system/dict';
 import DictTag from '@/components/DictTag.vue';
+import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
+import TableAction from '@/components/TableAction.vue';
 import { CommonStatusEnum, DICT_TYPE } from '@/constants/enums';
+import {
+  deleteConfirmMessage,
+  FIELD_LIMITS,
+  maxLenRule,
+  requiredRule,
+} from '@/constants/validation';
 import { useDictStore } from '@/stores/dict';
 
 defineOptions({ name: 'SystemDictType' });
@@ -37,6 +49,7 @@ const typeQuery = reactive({ pageNo: 1, pageSize: 10, name: '', type: '' });
 const selectedType = ref<DictTypeItem | null>(null);
 
 const typeDialogVisible = ref(false);
+const typeSubmitting = ref(false);
 const typeFormRef = ref<FormInstance>();
 const typeForm = reactive({
   id: undefined as number | string | undefined,
@@ -45,6 +58,11 @@ const typeForm = reactive({
   status: CommonStatusEnum.ENABLE as number,
   remark: '',
 });
+const typeFormRules: FormRules = {
+  name: [requiredRule('字典名称'), maxLenRule('字典名称', FIELD_LIMITS.DICT_NAME)],
+  type: [requiredRule('字典类型'), maxLenRule('字典类型', FIELD_LIMITS.DICT_TYPE)],
+  remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
+};
 
 // 右侧：字典数据
 const dataLoading = ref(false);
@@ -53,6 +71,7 @@ const dataTotal = ref(0);
 const dataQuery = reactive({ pageNo: 1, pageSize: 10, label: '' });
 
 const dataDialogVisible = ref(false);
+const dataSubmitting = ref(false);
 const dataFormRef = ref<FormInstance>();
 const dataForm = reactive({
   id: undefined as number | string | undefined,
@@ -65,6 +84,11 @@ const dataForm = reactive({
   cssClass: '',
   remark: '',
 });
+const dataFormRules: FormRules = {
+  label: [requiredRule('数据标签'), maxLenRule('数据标签', FIELD_LIMITS.DICT_LABEL)],
+  value: [requiredRule('数据键值'), maxLenRule('数据键值', FIELD_LIMITS.DICT_VALUE)],
+  remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
+};
 
 async function loadTypes() {
   typeLoading.value = true;
@@ -72,8 +96,8 @@ async function loadTypes() {
     const res = await getDictTypePageApi({
       pageNo: typeQuery.pageNo,
       pageSize: typeQuery.pageSize,
-      name: typeQuery.name || undefined,
-      type: typeQuery.type || undefined,
+      name: typeQuery.name.trim() || undefined,
+      type: typeQuery.type.trim() || undefined,
     });
     typeList.value = res.list ?? [];
     typeTotal.value = res.total ?? 0;
@@ -83,6 +107,13 @@ async function loadTypes() {
   } finally {
     typeLoading.value = false;
   }
+}
+
+function resetTypeSearch() {
+  typeQuery.name = '';
+  typeQuery.type = '';
+  typeQuery.pageNo = 1;
+  void loadTypes();
 }
 
 function selectTypeRow(row: DictTypeItem) {
@@ -103,13 +134,19 @@ async function loadDataList() {
       pageNo: dataQuery.pageNo,
       pageSize: dataQuery.pageSize,
       dictType: selectedType.value.type,
-      label: dataQuery.label || undefined,
+      label: dataQuery.label.trim() || undefined,
     });
     dataList.value = res.list ?? [];
     dataTotal.value = res.total ?? 0;
   } finally {
     dataLoading.value = false;
   }
+}
+
+function resetDataSearch() {
+  dataQuery.label = '';
+  dataQuery.pageNo = 1;
+  void loadDataList();
 }
 
 async function openTypeForm(row?: DictTypeItem) {
@@ -134,24 +171,30 @@ async function openTypeForm(row?: DictTypeItem) {
 }
 
 async function submitTypeForm() {
-  if (!typeForm.name.trim() || !typeForm.type.trim()) {
-    ElMessage.warning('请填写字典名称和字典类型');
-    return;
+  const valid = await typeFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  typeSubmitting.value = true;
+  try {
+    const payload = {
+      ...typeForm,
+      name: typeForm.name.trim(),
+      type: typeForm.type.trim(),
+      remark: typeForm.remark.trim() || undefined,
+    };
+    if (typeForm.id) {
+      await updateDictTypeApi(payload);
+    } else {
+      await createDictTypeApi(payload);
+    }
+    ElMessage.success(typeForm.id ? '修改成功' : '新增成功');
+    typeDialogVisible.value = false;
+    await loadTypes();
+  } finally {
+    typeSubmitting.value = false;
   }
-  if (typeForm.id) {
-    await updateDictTypeApi({ ...typeForm });
-  } else {
-    await createDictTypeApi({ ...typeForm });
-  }
-  ElMessage.success(typeForm.id ? '修改成功' : '新增成功');
-  typeDialogVisible.value = false;
-  await loadTypes();
 }
 
 async function deleteType(row: DictTypeItem) {
-  await ElMessageBox.confirm(`确认删除字典类型「${row.name}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteDictTypeApi(row.id);
   ElMessage.success('删除成功');
   if (selectedType.value?.id === row.id) {
@@ -194,24 +237,30 @@ async function openDataForm(row?: DictDataItem) {
 }
 
 async function submitDataForm() {
-  if (!dataForm.label.trim() || !dataForm.value.trim()) {
-    ElMessage.warning('请填写字典标签和字典键值');
-    return;
+  const valid = await dataFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  dataSubmitting.value = true;
+  try {
+    const payload = {
+      ...dataForm,
+      label: dataForm.label.trim(),
+      value: dataForm.value.trim(),
+      remark: dataForm.remark.trim() || undefined,
+    };
+    if (dataForm.id) {
+      await updateDictDataApi(payload);
+    } else {
+      await createDictDataApi(payload);
+    }
+    ElMessage.success(dataForm.id ? '修改成功' : '新增成功');
+    dataDialogVisible.value = false;
+    await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
+  } finally {
+    dataSubmitting.value = false;
   }
-  if (dataForm.id) {
-    await updateDictDataApi({ ...dataForm });
-  } else {
-    await createDictDataApi({ ...dataForm });
-  }
-  ElMessage.success(dataForm.id ? '修改成功' : '新增成功');
-  dataDialogVisible.value = false;
-  await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
 }
 
 async function deleteData(row: DictDataItem) {
-  await ElMessageBox.confirm(`确认删除字典数据「${row.label}」吗？`, '删除确认', {
-    type: 'warning',
-  });
   await deleteDictDataApi(row.id);
   ElMessage.success('删除成功');
   await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
@@ -235,58 +284,96 @@ onMounted(() => {
         @refresh="loadTypes"
       >
         <template #search>
-          <el-form :inline="true" :model="typeQuery" @submit.prevent="loadTypes">
+          <el-form :inline="true" :model="typeQuery" @submit.prevent="() => ((typeQuery.pageNo = 1), loadTypes())">
             <el-form-item>
-              <el-input v-model="typeQuery.name" placeholder="字典名称" clearable style="width: 140px" />
+              <el-input
+                v-model="typeQuery.name"
+                placeholder="字典名称"
+                :maxlength="FIELD_LIMITS.DICT_NAME"
+                clearable
+                style="width: 136px"
+              />
             </el-form-item>
             <el-form-item>
-              <el-input v-model="typeQuery.type" placeholder="字典类型" clearable style="width: 140px" />
+              <el-input
+                v-model="typeQuery.type"
+                placeholder="字典类型"
+                :maxlength="FIELD_LIMITS.DICT_TYPE"
+                clearable
+                style="width: 136px"
+              />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :icon="Search" @click="() => ((typeQuery.pageNo = 1), loadTypes())">
                 搜索
               </el-button>
+              <el-button @click="resetTypeSearch">重置</el-button>
             </el-form-item>
           </el-form>
         </template>
 
         <template #toolbar>
-          <el-button v-has-permi="'system:dict:create'" type="primary" :icon="Plus" size="small" @click="openTypeForm()">
+          <el-button
+            v-has-permi="'system:dict:create'"
+            type="primary"
+            :icon="Plus"
+            size="small"
+            @click="openTypeForm()"
+          >
             新增类型
           </el-button>
         </template>
 
-        <el-table
-          :data="typeList"
-          border
-          highlight-current-row
-          @row-click="selectTypeRow"
-        >
-          <el-table-column prop="name" label="字典名称" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="type" label="字典类型" min-width="140" show-overflow-tooltip />
-          <el-table-column label="状态" width="75" align="center">
-            <template #default="{ row }">
-              <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right">
-            <template #default="{ row }">
-              <el-button v-has-permi="'system:dict:update'" link type="primary" size="small" @click.stop="openTypeForm(row)">
-                编辑
-              </el-button>
-              <el-button v-has-permi="'system:dict:delete'" link type="danger" size="small" @click.stop="deleteType(row)">
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <template #default="{ size }">
+          <el-table
+            :data="typeList"
+            :size="size"
+            border
+            highlight-current-row
+            @row-click="selectTypeRow"
+          >
+            <el-table-column prop="name" label="字典名称" min-width="110" show-overflow-tooltip />
+            <el-table-column prop="type" label="字典类型" min-width="135" show-overflow-tooltip />
+            <el-table-column label="状态" width="74" align="center">
+              <template #default="{ row }">
+                <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="144" align="center" fixed="right">
+              <template #default="{ row }">
+                <div @click.stop>
+                  <TableAction
+                    :actions="[
+                      {
+                        label: '编辑',
+                        icon: Edit,
+                        auth: 'system:dict:update',
+                        onClick: () => openTypeForm(row),
+                      },
+                      {
+                        label: '删除',
+                        type: 'danger',
+                        icon: Delete,
+                        auth: 'system:dict:delete',
+                        popConfirm: {
+                          title: deleteConfirmMessage(row.name),
+                          confirm: () => deleteType(row),
+                        },
+                      },
+                    ]"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
       </ProTable>
     </el-col>
 
     <!-- 右侧：字典数据 -->
     <el-col :xs="24" :lg="13">
       <ProTable
-        :title="selectedType ? `字典数据（${selectedType.name} / ${selectedType.type}）` : '字典数据'"
+        :title="selectedType ? `字典数据（${selectedType.name}）` : '字典数据'"
         :loading="dataLoading"
         :total="dataTotal"
         v-model:page-no="dataQuery.pageNo"
@@ -294,14 +381,21 @@ onMounted(() => {
         @refresh="loadDataList"
       >
         <template #search>
-          <el-form :inline="true" :model="dataQuery" @submit.prevent="loadDataList">
+          <el-form :inline="true" :model="dataQuery" @submit.prevent="() => ((dataQuery.pageNo = 1), loadDataList())">
             <el-form-item>
-              <el-input v-model="dataQuery.label" placeholder="字典标签" clearable style="width: 180px" />
+              <el-input
+                v-model="dataQuery.label"
+                placeholder="请输入字典标签"
+                :maxlength="FIELD_LIMITS.DICT_LABEL"
+                clearable
+                style="width: 180px"
+              />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" :icon="Search" @click="() => ((dataQuery.pageNo = 1), loadDataList())">
                 搜索
               </el-button>
+              <el-button @click="resetDataSearch">重置</el-button>
             </el-form-item>
           </el-form>
         </template>
@@ -319,38 +413,69 @@ onMounted(() => {
           </el-button>
         </template>
 
-        <el-table :data="dataList" border stripe>
-          <el-table-column prop="label" label="标签" min-width="110" />
-          <el-table-column prop="value" label="键值" width="100" />
-          <el-table-column prop="sort" label="排序" width="70" align="center" />
-          <el-table-column label="状态" width="75" align="center">
-            <template #default="{ row }">
-              <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
-            </template>
-          </el-table-column>
-          <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-          <el-table-column label="操作" width="110" fixed="right">
-            <template #default="{ row }">
-              <el-button v-has-permi="'system:dict:update'" link type="primary" size="small" @click="openDataForm(row)">
-                编辑
-              </el-button>
-              <el-button v-has-permi="'system:dict:delete'" link type="danger" size="small" @click="deleteData(row)">
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+        <template #default="{ size }">
+          <el-table :data="dataList" :size="size" border stripe>
+            <el-table-column prop="label" label="标签" min-width="110" show-overflow-tooltip />
+            <el-table-column prop="value" label="键值" min-width="96" show-overflow-tooltip />
+            <el-table-column prop="sort" label="排序" width="68" align="center" />
+            <el-table-column label="状态" width="74" align="center">
+              <template #default="{ row }">
+                <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
+              </template>
+            </el-table-column>
+            <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+            <el-table-column label="操作" width="144" align="center" fixed="right">
+              <template #default="{ row }">
+                <TableAction
+                  :actions="[
+                    {
+                      label: '编辑',
+                      icon: Edit,
+                      auth: 'system:dict:update',
+                      onClick: () => openDataForm(row),
+                    },
+                    {
+                      label: '删除',
+                      type: 'danger',
+                      icon: Delete,
+                      auth: 'system:dict:delete',
+                      popConfirm: {
+                        title: deleteConfirmMessage(row.label),
+                        confirm: () => deleteData(row),
+                      },
+                    },
+                  ]"
+                />
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
       </ProTable>
     </el-col>
 
     <!-- 字典类型弹窗 -->
-    <el-dialog v-model="typeDialogVisible" :title="typeForm.id ? '编辑字典类型' : '新增字典类型'" width="480px">
-      <el-form ref="typeFormRef" :model="typeForm" label-width="85px">
-        <el-form-item label="字典名称" required>
-          <el-input v-model="typeForm.name" />
+    <FormDialog
+      v-model="typeDialogVisible"
+      :title="typeForm.id ? '编辑字典类型' : '新增字典类型'"
+      width="500px"
+      :confirm-loading="typeSubmitting"
+      @confirm="submitTypeForm"
+    >
+      <el-form ref="typeFormRef" :model="typeForm" :rules="typeFormRules" label-width="88px">
+        <el-form-item label="字典名称" prop="name">
+          <el-input
+            v-model="typeForm.name"
+            :maxlength="FIELD_LIMITS.DICT_NAME"
+            placeholder="请输入字典名称"
+          />
         </el-form-item>
-        <el-form-item label="字典类型" required>
-          <el-input v-model="typeForm.type" :disabled="Boolean(typeForm.id)" />
+        <el-form-item label="字典类型" prop="type">
+          <el-input
+            v-model="typeForm.type"
+            :disabled="Boolean(typeForm.id)"
+            :maxlength="FIELD_LIMITS.DICT_TYPE"
+            placeholder="请输入字典类型编码，如 system_user_sex"
+          />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="typeForm.status">
@@ -358,30 +483,47 @@ onMounted(() => {
             <el-radio :value="CommonStatusEnum.DISABLE">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="typeForm.remark" type="textarea" :rows="2" />
+        <el-form-item label="备注" prop="remark">
+          <el-input
+            v-model="typeForm.remark"
+            type="textarea"
+            :rows="3"
+            :maxlength="FIELD_LIMITS.REMARK"
+            show-word-limit
+            placeholder="请输入备注说明（选填）"
+          />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="typeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitTypeForm">确定</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
 
     <!-- 字典数据弹窗 -->
-    <el-dialog v-model="dataDialogVisible" :title="dataForm.id ? '编辑字典数据' : '新增字典数据'" width="480px">
-      <el-form ref="dataFormRef" :model="dataForm" label-width="85px">
+    <FormDialog
+      v-model="dataDialogVisible"
+      :title="dataForm.id ? '编辑字典数据' : '新增字典数据'"
+      width="500px"
+      :confirm-loading="dataSubmitting"
+      @confirm="submitDataForm"
+    >
+      <el-form ref="dataFormRef" :model="dataForm" :rules="dataFormRules" label-width="88px">
         <el-form-item label="字典类型">
           <el-input :model-value="dataForm.dictType" disabled />
         </el-form-item>
-        <el-form-item label="数据标签" required>
-          <el-input v-model="dataForm.label" />
+        <el-form-item label="数据标签" prop="label">
+          <el-input
+            v-model="dataForm.label"
+            :maxlength="FIELD_LIMITS.DICT_LABEL"
+            placeholder="请输入展示标签"
+          />
         </el-form-item>
-        <el-form-item label="数据键值" required>
-          <el-input v-model="dataForm.value" />
+        <el-form-item label="数据键值" prop="value">
+          <el-input
+            v-model="dataForm.value"
+            :maxlength="FIELD_LIMITS.DICT_VALUE"
+            placeholder="请输入存储键值"
+          />
         </el-form-item>
         <el-form-item label="显示排序">
-          <el-input-number v-model="dataForm.sort" :min="0" />
+          <el-input-number v-model="dataForm.sort" :min="0" :max="99999" />
         </el-form-item>
         <el-form-item label="标签颜色">
           <el-select v-model="dataForm.colorType" class="w-full">
@@ -398,14 +540,17 @@ onMounted(() => {
             <el-radio :value="CommonStatusEnum.DISABLE">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="备注">
-          <el-input v-model="dataForm.remark" type="textarea" :rows="2" />
+        <el-form-item label="备注" prop="remark">
+          <el-input
+            v-model="dataForm.remark"
+            type="textarea"
+            :rows="3"
+            :maxlength="FIELD_LIMITS.REMARK"
+            show-word-limit
+            placeholder="请输入备注说明（选填）"
+          />
         </el-form-item>
       </el-form>
-      <template #footer>
-        <el-button @click="dataDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitDataForm">确定</el-button>
-      </template>
-    </el-dialog>
+    </FormDialog>
   </el-row>
 </template>

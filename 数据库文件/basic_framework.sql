@@ -285,14 +285,13 @@ CREATE TABLE `system_menu`  (
 -- ----------------------------
 -- Records of system_menu
 -- ----------------------------
-INSERT INTO `system_menu` VALUES (1, '系统管理', '', 1, 'super_admin', 10, 0, '/system', 'ep:tools', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (2, '基础设施', '', 1, 'super_admin', 20, 0, '/infra', 'ep:monitor', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1, '系统设置', '', 1, 'super_admin', 10, 0, '/system', 'ep:tools', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (100, '用户管理', 'system:user:list', 2, 'super_admin', 1, 1, 'user', 'ep:avatar', 'system/user/index', 'SystemUser', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (101, '角色管理', '', 2, 'super_admin', 2, 1, 'role', 'ep:user', 'system/role/index', 'SystemRole', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (102, '菜单管理', '', 2, 'super_admin', 3, 1, 'menu', 'ep:menu', 'system/menu/index', 'SystemMenu', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (103, '部门管理', '', 2, 'super_admin', 4, 1, 'dept', 'fa:address-card', 'system/dept/index', 'SystemDept', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (105, '字典管理', '', 2, 'super_admin', 6, 1, 'dict', 'ep:collection', 'system/dict/index', 'SystemDictType', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (107, '文件管理', 'infra:file:query', 2, 'super_admin', 3, 2, 'file', 'ep:document', 'infra/file/index', 'InfraFile', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (107, '文件管理', 'infra:file:query', 2, 'super_admin', 7, 1, 'file', 'ep:document', 'infra/file/index', 'InfraFile', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (108, '审计日志', '', 1, 'super_admin', 9, 1, 'log', 'ep:document-copy', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (500, '操作日志', '', 2, 'super_admin', 1, 108, 'operate-log', 'ep:position', 'system/operatelog/index', 'SystemOperateLog', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (501, '登录日志', '', 2, 'super_admin', 2, 108, 'login-log', 'ep:promotion', 'system/loginlog/index', 'SystemLoginLog', 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '1', '2026-10-01 19:42:37', b'0');
@@ -327,11 +326,11 @@ INSERT INTO `system_menu` VALUES (1063, '设置角色菜单权限', 'system:perm
 INSERT INTO `system_menu` VALUES (1064, '设置角色数据权限', 'system:permission:assign-role-data-scope', 3, 'super_admin', 7, 101, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-01-06 17:56:31', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1065, '设置用户角色', 'system:permission:assign-user-role', 3, 'super_admin', 8, 101, '', '', '', NULL, 0, b'1', b'1', b'1', '', '2021-01-07 10:23:28', '', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1070, '文件删除', 'infra:file:delete', 3, 'super_admin', 1, 107, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2021-01-05 17:03:48', '', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1090, '令牌管理', '', 2, 'super_admin', 0, 1261, 'oauth2/token', 'ep:key', 'system/oauth2/token/index', 'SystemOAuth2Token', 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1090, '令牌管理', '', 2, 'super_admin', 0, 1261, 'token', 'ep:key', 'system/oauth2/token/index', 'SystemOAuth2Token', 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1091, '令牌列表', 'system:oauth2-token:page', 3, 'super_admin', 1, 1090, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1092, '令牌删除', 'system:oauth2-token:delete', 3, 'super_admin', 2, 1090, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:51:42', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1261, 'OAuth 2.0', '', 1, 'super_admin', 10, 1, 'oauth2', 'ep:connection', NULL, NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-09 23:38:17', '1', '2026-10-01 19:42:37', b'0');
-INSERT INTO `system_menu` VALUES (1263, '应用管理', '', 2, 'super_admin', 1, 1261, 'oauth2/application', 'ep:grid', 'system/oauth2/client/index', 'SystemOAuth2Client', 0, b'1', b'1', b'1', 'admin', '2022-05-10 00:11:33', '1', '2026-10-01 19:42:37', b'0');
+INSERT INTO `system_menu` VALUES (1263, '应用管理', '', 2, 'super_admin', 1, 1261, 'application', 'ep:grid', 'system/oauth2/client/index', 'SystemOAuth2Client', 0, b'1', b'1', b'1', 'admin', '2022-05-10 00:11:33', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1264, '客户端查询', 'system:oauth2-client:query', 3, 'super_admin', 1, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:06', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1265, '客户端创建', 'system:oauth2-client:create', 3, 'super_admin', 2, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:23', '1', '2026-10-01 19:42:37', b'0');
 INSERT INTO `system_menu` VALUES (1266, '客户端更新', 'system:oauth2-client:update', 3, 'super_admin', 3, 1263, '', '', '', NULL, 0, b'1', b'1', b'1', 'admin', '2022-05-11 00:31:28', '1', '2026-10-01 19:42:37', b'0');
@@ -505,7 +504,6 @@ CREATE TABLE `system_role_menu`  (
 -- Records of system_role_menu
 -- ----------------------------
 INSERT INTO `system_role_menu` VALUES (6293, 1, 1, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
-INSERT INTO `system_role_menu` VALUES (6294, 1, 2, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6295, 1, 100, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6296, 1, 101, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');
 INSERT INTO `system_role_menu` VALUES (6297, 1, 103, '1', '2026-04-07 08:29:41', '1', '2026-04-07 08:29:41', b'0');

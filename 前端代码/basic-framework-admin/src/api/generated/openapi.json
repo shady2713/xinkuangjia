@@ -357,6 +357,21 @@
         },
         "type" : "object"
       },
+      "CommonResult_DashboardSummaryRespVO" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/DashboardSummaryRespVO"
+          },
+          "msg" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CommonResult_DeptRespVO" : {
         "properties" : {
           "code" : {
@@ -909,6 +924,171 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "DashboardSummaryRespVO" : {
+        "description" : "管理后台 - 概览统计摘要 Response VO",
+        "properties" : {
+          "dailyTrend" : {
+            "description" : "近 7 日活跃趋势列表",
+            "items" : {
+              "$ref" : "#/components/schemas/DashboardSummaryRespVO_DailyTrendItem"
+            },
+            "type" : "array"
+          },
+          "deptTotal" : {
+            "description" : "当前平台部门总数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "dictTypeTotal" : {
+            "description" : "系统字典类型总数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "recentLogins" : {
+            "description" : "最近登录日志（最多 6 条）",
+            "items" : {
+              "$ref" : "#/components/schemas/DashboardSummaryRespVO_RecentLoginItem"
+            },
+            "type" : "array"
+          },
+          "recentOperates" : {
+            "description" : "最近操作审计（最多 6 条）",
+            "items" : {
+              "$ref" : "#/components/schemas/DashboardSummaryRespVO_RecentOperateItem"
+            },
+            "type" : "array"
+          },
+          "roleTotal" : {
+            "description" : "当前平台角色总数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sevenDayLoginCount" : {
+            "description" : "近 7 日登录总次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sevenDayLoginFailCount" : {
+            "description" : "近 7 日登录失败次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sevenDayLoginSuccessCount" : {
+            "description" : "近 7 日登录成功次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sevenDayOperateCount" : {
+            "description" : "近 7 日操作审计总次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "todayLoginCount" : {
+            "description" : "今日登录次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "todayOperateCount" : {
+            "description" : "今日操作审计次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "userEnabledCount" : {
+            "description" : "当前平台启用用户数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "userTotal" : {
+            "description" : "当前平台用户总数",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "dailyTrend", "deptTotal", "dictTypeTotal", "recentLogins", "recentOperates", "roleTotal", "sevenDayLoginCount", "sevenDayLoginFailCount", "sevenDayLoginSuccessCount", "sevenDayOperateCount", "todayLoginCount", "todayOperateCount", "userEnabledCount", "userTotal" ],
+        "type" : "object"
+      },
+      "DashboardSummaryRespVO_DailyTrendItem" : {
+        "description" : "按日活跃趋势项",
+        "properties" : {
+          "date" : {
+            "description" : "日期（MM-dd）",
+            "type" : "string"
+          },
+          "loginCount" : {
+            "description" : "当日登录次数",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "operateCount" : {
+            "description" : "当日操作审计次数",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "date", "loginCount", "operateCount" ],
+        "type" : "object"
+      },
+      "DashboardSummaryRespVO_RecentLoginItem" : {
+        "description" : "最近登录记录项",
+        "properties" : {
+          "createTime" : {
+            "description" : "登录时间",
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          },
+          "id" : {
+            "description" : "日志编号",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "result" : {
+            "description" : "登录结果（0=成功，其余为失败码）",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "userIp" : {
+            "description" : "登录 IP",
+            "type" : "string"
+          },
+          "username" : {
+            "description" : "用户账号",
+            "type" : "string"
+          }
+        },
+        "required" : [ "createTime", "id", "result", "username" ],
+        "type" : "object"
+      },
+      "DashboardSummaryRespVO_RecentOperateItem" : {
+        "description" : "最近操作审计项",
+        "properties" : {
+          "action" : {
+            "description" : "操作详情",
+            "type" : "string"
+          },
+          "createTime" : {
+            "description" : "操作时间",
+            "format" : "int64",
+            "type" : "integer",
+            "x-java-type" : "LocalDateTime-epoch-ms"
+          },
+          "id" : {
+            "description" : "日志编号",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "subType" : {
+            "description" : "操作子类型",
+            "type" : "string"
+          },
+          "type" : {
+            "description" : "操作模块",
+            "type" : "string"
+          }
+        },
+        "required" : [ "createTime", "id" ],
         "type" : "object"
       },
       "DeptListReqVO" : {
@@ -2787,7 +2967,7 @@
         "description" : "管理后台 - 用户个人信息更新 Request VO",
         "properties" : {
           "avatar" : {
-            "description" : "角色头像",
+            "description" : "用户头像",
             "type" : "string"
           },
           "email" : {
@@ -3632,6 +3812,25 @@
         "security" : [ ],
         "summary" : "获得验证码",
         "tags" : [ "管理后台 - 验证码" ]
+      }
+    },
+    "/admin-api/system/dashboard/summary" : {
+      "get" : {
+        "operationId" : "DashboardController_getDashboardSummary",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CommonResult_DashboardSummaryRespVO"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "获得首页概览统计摘要",
+        "tags" : [ "管理后台 - 概览统计" ]
       }
     },
     "/admin-api/system/dept/create" : {
