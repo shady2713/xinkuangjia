@@ -1,0 +1,86 @@
+<script setup lang="ts">
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
+import { reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+import { updateUserPasswordApi } from '@/api/system/profile';
+import { useUserStore } from '@/stores/user';
+import { encryptPassword } from '@/utils/sm2';
+
+const router = useRouter();
+const userStore = useUserStore();
+const formRef = ref<FormInstance>();
+const loading = ref(false);
+
+const form = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+});
+
+const rules: FormRules = {
+  oldPassword: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 8, max: 32, message: '密码长度需在 8~32 位之间', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (_r, v, cb) => {
+        if (v !== form.newPassword) cb(new Error('两次输入的密码不一致'));
+        else cb();
+      },
+      trigger: 'blur',
+    },
+  ],
+};
+
+async function handleSubmit() {
+  const valid = await formRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  loading.value = true;
+  try {
+    const oldPassword = await encryptPassword(form.oldPassword);
+    const newPassword = await encryptPassword(form.newPassword);
+    await updateUserPasswordApi({ oldPassword, newPassword });
+    userStore.markPasswordChanged();
+    ElMessage.success('密码修改成功，正在进入系统');
+    await router.replace('/dashboard');
+  } finally {
+    loading.value = false;
+  }
+}
+</script>
+
+<template>
+  <div class="mx-auto max-w-[520px] pt-8">
+    <el-card shadow="never">
+      <template #header>
+        <span class="text-base font-semibold">首次登录请先修改初始密码</span>
+      </template>
+      <el-alert
+        type="warning"
+        :closable="false"
+        title="为满足安全合规要求，修改密码后方可继续使用系统功能。"
+        class="mb-4"
+      />
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="95px">
+        <el-form-item label="当前密码" prop="oldPassword">
+          <el-input v-model="form.oldPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="form.newPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="确认新密码" prop="confirmPassword">
+          <el-input v-model="form.confirmPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="loading" @click="handleSubmit">
+            确认修改
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </div>
+</template>
