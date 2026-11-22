@@ -139,6 +139,45 @@ class CommitRangeScanTest(unittest.TestCase):
             scanner._scan_commit_range(relinked, self.git("rev-parse", "HEAD"))
         self.assertNotIn("api_token", str(caught.exception))
 
+    def test_committed_link_and_gitlink_are_classified_without_resolving_paths(self) -> None:
+        """从提交读取符号链接文本和普通文件，且无需签出 Git 子模块。"""
+        (self.repo / "link-content").write_text("synthetic relative target", encoding="utf-8")
+        oid = self.git("hash-object", "-w", "link-content")
+        self.git("update-index", "--add", "--cacheinfo", f"120000,{oid},fixture.py")
+        self.git("update-index", "--add", "--cacheinfo", f"160000,{'a' * 40},fixture-submodule")
+        self.git("commit", "-q", "-m", "synthetic object types")
+        self.commit("ordinary.txt", "synthetic ordinary text\n")
+        (self.repo / "fixture.py").write_text("different worktree content", encoding="utf-8")
+        with mock.patch.object(scanner, "_scan_added_line", wraps=scanner._scan_added_line) as scan:
+            commits, findings = scanner._scan_commit_range(self.base, self.git("rev-parse", "HEAD"))
+        checked = {(call.args[0], call.args[2]) for call in scan.call_args_list}
+        self.assertIn(("fixture.py", "synthetic relative target"), checked)
+        self.assertIn(("ordinary.txt", "synthetic ordinary text"), checked)
+        self.assertNotIn(("fixture.py", "different worktree content"), checked)
+        self.assertFalse(any(path == "fixture-submodule" for path, _ in checked))
+        self.assertEqual(len(commits), 2)
+        self.assertFalse(findings)
+
+    def test_history_aborts_for_unreadable_or_unclassified_object(self) -> None:
+        """读取失败或类型证据缺失时终止，底层错误内容不进入输出。"""
+        head = self.commit("ordinary.txt", "synthetic input\n")
+        original = scanner._run_git
+        for operation, expected in (("ls-tree", "cannot classify"), ("cat-file", "read")):
+            with self.subTest(operation=operation):
+                def run(arguments, **kwargs):
+                    """在其余操作保持真实 Git 的情况下模拟指定读取错误。"""
+                    if arguments[0] == operation and kwargs.get("text") is False:
+                        if operation == "ls-tree":
+                            return b""
+                        if arguments[1] == "blob":
+                            raise RuntimeError("synthetic diagnostic omitted from gate output")
+                    return original(arguments, **kwargs)
+
+                with mock.patch.object(scanner, "_run_git", side_effect=run):
+                    with self.assertRaisesRegex(RuntimeError, expected) as caught:
+                        scanner._scan_staged_diff(head, self.base)
+                self.assertNotIn("synthetic diagnostic", str(caught.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

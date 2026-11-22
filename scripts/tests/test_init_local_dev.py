@@ -51,7 +51,9 @@ def _prepare_fake_repo(root: Path, *, init_git: bool = False) -> Path:
         "REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD\n"
         "SM2_PRIVATE_KEY=\n"
         "MINIO_ACCESS_KEY=\n"
-        "MINIO_SECRET_KEY=\n",
+        "MINIO_SECRET_KEY=\n"
+        "MINIO_BUCKET=basic-framework\n"
+        "MINIO_PUBLIC_ACCESS=true\n",
         encoding="utf-8",
         newline="\n",
     )
@@ -178,7 +180,7 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
     minio_init_cmd = "\n".join(services["minio-init"]["command"])
     assert "apply-bucket-policy.sh /policy/bucket-policy.json" in minio_init_cmd
     assert "set none" not in minio_init_cmd
-    assert services["minio-init"]["volumes"][0]["source"] == "./.e2e-env/minio-bucket-policy.json"
+    assert services["minio-init"]["volumes"][0]["source"] == "${MINIO_POLICY_FILE:-./.e2e-env/minio-bucket-policy.json}"
     assert services["minio-init"]["volumes"][1]["source"] == "./tools/minio/apply-bucket-policy.sh"
     helper = (DEFAULT_ROOT / "tools/minio/apply-bucket-policy.sh").read_text(encoding="utf-8")
     assert "mc anonymous set-json" in helper and "mc --json anonymous get-json" in helper
@@ -187,34 +189,60 @@ def test_dev_compose_binds_loopback_only_and_requires_env_file() -> None:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="需要顺序执行 POSIX Compose 启动入口")
-@pytest.mark.parametrize("init_exit", [0, 1])
-def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int) -> None:
+@pytest.mark.parametrize(("init_exit", "conflict"), [
+    (0, None), (1, None), (0, "bucket-env"), (0, "access-env"), (0, "bucket-files"), (0, "stale-policy"),
+    (0, "java-override"), (0, "spring-json"), (0, "argument-override"),
+])
+def test_existing_volume_reinitializes_before_downstream(tmp_path: Path, init_exit: int, conflict: str | None) -> None:
     """复用已有卷时，同步等 MinIO 策略读回并阻断初始化失败的下游启动。"""
     repo = _prepare_fake_repo(tmp_path)
     shell = repo / "scripts/runtime/start_dev_stack.sh"
     shell.parent.mkdir(parents=True)
-    shutil.copyfile(DEFAULT_ROOT / "scripts/runtime/start_dev_stack.sh", shell)
-    (repo / ".gitignore").write_text(".env.dev\n.e2e-env/\n", encoding="utf-8")
-    (repo / ".env.dev").write_text("# synthetic existing volume\n", encoding="utf-8")
+    for script in ("start_dev_stack.sh", "init_local_dev.py", "render_minio_bucket_policy.py"):
+        shutil.copyfile(DEFAULT_ROOT / "scripts/runtime" / script, shell.parent / script)
+    (repo / ".gitignore").write_text(".env.dev\n.env\n.e2e-env/\n", encoding="utf-8")
+    assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
     policy = repo / init_local_dev.MINIO_POLICY_RELATIVE_PATH
-    policy.parent.mkdir()
-    policy.write_text("{}", encoding="utf-8")
+    if conflict == "bucket-files":
+        backend = repo / init_local_dev.BACKEND_DIR / ".env"
+        backend.write_text(backend.read_text(encoding="utf-8").replace(
+            "MINIO_BUCKET=basic-framework", "MINIO_BUCKET=different-fixture"), encoding="utf-8")
+    if conflict == "stale-policy":
+        policy.write_text("{}", encoding="utf-8")
     commands = tmp_path / "compose.log"
     fake_docker = tmp_path / "docker"
     fake_docker.write_text(
         '#!/bin/sh\n[ "$1" = compose ] || exit 2\nshift 5\n'
         'printf "%s\\n" "$*" >> "$COMMANDS"\n'
+        '[ "$MINIO_BUCKET" = basic-framework ] && [ "$MINIO_PUBLIC_ACCESS" = true ] || exit 3\n'
+        '[ "$MINIO_POLICY_FILE" != "$ORIGINAL_POLICY" ] && cmp "$ORIGINAL_POLICY" "$MINIO_POLICY_FILE" || exit 4\n'
         'case "$1" in up) exit 0 ;; run) exit "$INIT_EXIT" ;; *) exit 2 ;; esac\n',
         encoding="utf-8",
     )
     fake_docker.chmod(0o755)
     env = {**os.environ, "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
-           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit)}
-    result = subprocess.run(["sh", str(shell), "--", "sh", "-c", 'echo downstream >> "$COMMANDS"'],
+           "COMMANDS": str(commands), "INIT_EXIT": str(init_exit), "ORIGINAL_POLICY": str(policy)}
+    if conflict == "bucket-env":
+        env["MINIO_BUCKET"] = "different-fixture"
+    if conflict == "access-env":
+        env["BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS"] = "false"
+    if conflict == "java-override":
+        env["JAVA_TOOL_OPTIONS"] = "-Xmx256m -Dbasic-framework.file.minio.public-access=false"
+    if conflict == "spring-json":
+        env["SPRING_APPLICATION_JSON"] = "{}"
+    cmd = 'printf "%s %s\\n" "$MINIO_BUCKET" "$MINIO_PUBLIC_ACCESS" >> "$COMMANDS"'
+    command = ["sh", "-c", cmd]
+    if conflict == "argument-override":
+        command = ["java", "-Dbasic-framework.file.minio.bucket=different-fixture", "-version"]
+    result = subprocess.run(["sh", str(shell), "--", *command],
                             cwd=tmp_path, env=env, check=False, capture_output=True, text=True, timeout=10)
+    assert not list(policy.parent.glob("validated-policy.*"))
+    if conflict:
+        assert result.returncode == 1 and not commands.exists(), result.stderr
+        return
     expected = ["up --build -d --wait mysql redis minio", "run --rm --no-deps minio-init"]
     if init_exit == 0:
-        expected.append("downstream")
+        expected.append("basic-framework true")
     assert result.returncode == init_exit, result.stderr
     assert commands.read_text(encoding="utf-8").splitlines() == expected
 
@@ -231,7 +259,7 @@ def test_bucket_policy_follows_saved_public_access(tmp_path: Path) -> None:
     assert "arn:aws:s3:::basic-framework/private" in blocked
     assert "arn:aws:s3:::basic-framework/ *" in blocked
 
-    content = backend_env.read_text(encoding="utf-8") + "MINIO_PUBLIC_ACCESS=false\n"
+    content = backend_env.read_text(encoding="utf-8").replace("MINIO_PUBLIC_ACCESS=true", "MINIO_PUBLIC_ACCESS=false")
     backend_env.write_text(content, encoding="utf-8")
     assert init_local_dev.main(["--root", str(repo), "--apply"]) == 0
     deny = {"Sid": "DenyAnonymousGetObject", "Effect": "Deny", "Principal": {"AWS": ["*"]},
@@ -275,3 +303,17 @@ def test_cli_entrypoint_runs_outside_repository(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "只读预览" in result.stdout
+
+
+
+def test_bootstrap_refuses_conflicting_files_before_replacing_policy(tmp_path: Path) -> None:
+    """引导发现两个桶配置不一致时保留已有配置和策略。"""
+    root = _prepare_fake_repo(tmp_path)
+    assert init_local_dev.main(["--root", str(root), "--apply"]) == 0
+    config = root / ".env.dev"
+    config.write_text(config.read_text(encoding="utf-8").replace(
+        "MINIO_BUCKET=basic-framework", "MINIO_BUCKET=different-fixture"), encoding="utf-8")
+    policy = root / init_local_dev.MINIO_POLICY_RELATIVE_PATH
+    before = policy.read_bytes()
+    assert init_local_dev.main(["--root", str(root), "--apply"]) == 1
+    assert policy.read_bytes() == before

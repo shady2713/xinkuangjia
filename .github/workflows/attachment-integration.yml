@@ -42,11 +42,10 @@ jobs:
           run_install: false
       - name: Initialize gitignored env files with random values
         run: python -B -X utf8 scripts/runtime/init_local_dev.py --apply
-      - name: Start MySQL, Redis and MinIO
+      - name: Run RealAttachmentServiceIT
+        id: test
         env:
           COMPOSE_PROJECT_NAME: issue103
-        run: sh scripts/runtime/start_dev_stack.sh
-      - name: Start loopback-only Nginx signing proxy
         run: |
           src=docs/部署/object-storage.conf
           conf="$RUNNER_TEMP/issue103-nginx.conf"
@@ -54,19 +53,20 @@ jobs:
           # 复用部署网关配置，指向本作业的 Compose 上游。
           { printf 'server {\n  listen 8080;\n'; sed 's/basic-framework-minio/minio/g' "$src"; printf '}\n'; } > "$conf"
           if grep -q 'basic-framework-minio' "$conf"; then exit 1; fi
-          docker run -d --name issue103-nginx --network issue103_default -p 127.0.0.1:18081:8080 -v "$conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine
-          docker exec issue103-nginx nginx -t
-      # Spring 从本作业生成的本地配置加载一次性凭据。
-      - name: Run RealAttachmentServiceIT
-        id: test
-        working-directory: 后端代码/basic-framework-boot
-        run: mvn -B -ntp -pl basic-framework-server -am -Dtest=RealAttachmentServiceIT -Dsurefire.failIfNoSpecifiedTests=false test
+          # 网关和后端测试在桶策略读回成功后才启动，继承核验过的桶配置。
+          sh scripts/runtime/start_dev_stack.sh -- sh -eu -c '
+            docker run -d --name issue103-nginx --network issue103_default -p 127.0.0.1:18081:8080 -v "$1:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine
+            docker exec issue103-nginx nginx -t
+            cd "$2"
+            exec mvn -B -ntp -pl basic-framework-server -am -Dtest=RealAttachmentServiceIT -Dsurefire.failIfNoSpecifiedTests=false test
+          ' sh "$conf" "$GITHUB_WORKSPACE/后端代码/basic-framework-boot"
       - name: Write sanitized summary
         id: summary
         if: always()
         env:
           TEST_OUTCOME: ${{ steps.test.outcome }}
           JOB_STATUS: ${{ job.status }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           SUMMARY_PATH: ${{ runner.temp }}/attachment-integration-summary.json
@@ -100,12 +100,17 @@ jobs:
           if e.get("GITHUB_EVENT_NAME") == "pull_request":
               version_ok = version_ok and parents.split()[1:] == [e.get("PR_BASE"), e.get("PR_HEAD")]
           gate = bool(version_ok) and ok and t["tests"] == 1 and t["failures"] == t["errors"] == t["skipped"] == 0
-          if o == "success" and gate: conclusion = "success"
+          gate = gate and o == "success" and e.get("JOB_STATUS") == "success"
+          if gate: conclusion = "success"
           elif e.get("JOB_STATUS") == "cancelled": conclusion = "cancelled"
           else: conclusion = "skipped" if o == "skipped" else "failure"
-          summary = {"git_head": checkout, "pr_head": e.get("PR_HEAD") or None,
-                     "pr_base": e.get("PR_BASE") or None, "test_outcome": o, "conclusion": conclusion, "gate_passed": gate,
-                     "run": {k.lower(): e.get("GITHUB_" + k) for k in ("REPOSITORY", "WORKFLOW", "RUN_ID", "RUN_ATTEMPT", "EVENT_NAME", "SHA")},
+          pr_number = e.get("PR_NUMBER", "")
+          summary = {"tested_sha": checkout,
+                     "repository": e.get("GITHUB_REPOSITORY"), "workflow_ref": e.get("GITHUB_WORKFLOW_REF"),
+                     "pr_number": int(pr_number) if pr_number.isdecimal() else None,
+                     "pr_head_sha": e.get("PR_HEAD") or None, "pr_base_sha": e.get("PR_BASE") or None,
+                     "run_id": e.get("GITHUB_RUN_ID"), "run_attempt": e.get("GITHUB_RUN_ATTEMPT"),
+                     "event_name": e.get("GITHUB_EVENT_NAME"), "test_outcome": o, "conclusion": conclusion, "gate_passed": gate,
                      "service_versions": versions, "surefire": t}
           with open(e["SUMMARY_PATH"], "w", encoding="utf-8") as fh:
               json.dump(summary, fh, indent=2, sort_keys=True)

@@ -12,6 +12,7 @@ kind: package-reference
 ## 目录
 
 - [首次发布](#首次发布)
+- [采集托管证据](#采集托管证据)
 - [运行门禁](#运行门禁)
 - [托管承接](#托管承接)
 
@@ -19,7 +20,31 @@ kind: package-reference
 
 ## 首次发布
 
-首次引入受信门禁时，由独立复核者审查启动器、审查校验器、扫描器和规则路径清单。维护者将同一组已审查文件发布到独立受控位置，并在该位置记录完整提交标识和发布包 SHA-256。首次 PR 使用这个预先批准的发布包，合入后从明确选定的受保护 `main` 提交发布后续版本。批准值来自受控位置。更新门禁时重复此审核和发布流程。基线尚无启动器时同样适用。
+首次引入受信门禁时，由独立复核者审查启动器、CI 证据校验器、审查校验器、扫描器和规则路径清单。维护者将同一组已审查文件发布到独立受控位置，并在该位置记录完整提交标识和发布包 SHA-256。首次 PR 使用这个预先批准的发布包，合入后从明确选定的受保护 `main` 提交发布后续版本。批准值来自受控位置。更新门禁时重复此审核和发布流程。基线尚无启动器时同样适用。
+
+<a id="采集托管证据"></a>
+
+## 采集托管证据
+
+在独立受控目录中保存当前 PR 的 GitHub API 记录。使用仅具备 Contents、Pull requests 和 Actions 读取权限的认证。对两个工作流分别从仓库的工作流运行列表选取当前 PR 的正式 `pull_request` 运行，记录各自的运行 ID。PR 或运行重试发生变化时重新采集。
+
+把 CI 保存到 `$CI_SNAPSHOT/ci`，附件集成保存到 `$CI_SNAPSHOT/attachment`。在每个目录中执行下列步骤。参数 `REPO` 由受控任务提供，`WORKFLOW` 分别是 `ci.yml` 和 `attachment-integration.yml`，`ARTIFACT_PREFIX` 分别是 `acceptance-proof` 和 `attachment-integration-summary`。
+
+```bash
+set -euo pipefail
+gh api --hostname github.com "repos/$REPO/actions/workflows/$WORKFLOW" > workflow.json
+gh api --hostname github.com "repos/$REPO/actions/runs/$RUN_ID" > run.json
+ATTEMPT=$(jq -er '.run_attempt | select(type == "number" and . > 0)' run.json)
+gh api --hostname github.com --paginate "repos/$REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs?per_page=100" \
+  --jq '.jobs[]' | jq -s . > jobs.json
+gh api --hostname github.com --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" \
+  --jq '.artifacts[]' | jq -s . > artifacts.json
+ARTIFACT_ID=$(jq -er --arg name "$ARTIFACT_PREFIX-$ATTEMPT" \
+  '[.[] | select(.name == $name and .expired == false)] | select(length == 1) | .[0].id' artifacts.json)
+gh api --hostname github.com "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > proof.zip
+```
+
+保留 API 返回的制品摘要和 ZIP 原始字节。运行入口核对工作流来源、作业和步骤结论、运行和尝试号、ZIP 摘要及三份文件中的同版本标识。每次接受结果前重新读取 PR、当前主干、测试合并 ref 和两个运行的最新尝试号及状态。 [运行记录](https://docs.github.com/en/rest/actions/workflow-runs) · [作业记录](https://docs.github.com/en/rest/actions/workflow-jobs) · [制品记录](https://docs.github.com/en/rest/actions/artifacts)
 
 <a id="运行门禁"></a>
 
@@ -30,13 +55,13 @@ kind: package-reference
 ```bash
 python -I "$TRUSTED_ROOT/scripts/workflow/run_trusted_pr_gate.py" \
   --repo "$BARE_REPO" --event "$EVENT_JSON" --checkout-sha "$MERGE_SHA" \
-  --comments "$COMMENTS_JSON" --reviews "$REVIEWS_JSON" --mode solo
+  --comments "$COMMENTS_JSON" --reviews "$REVIEWS_JSON" --ci-snapshot "$CI_SNAPSHOT" --mode solo
 ```
 
-两名及以上维护者按实际协作配置使用 `--mode team` 和重复的 `--maintainer`。启动器校验裸仓库和双亲，并以受信发布包的扫描规则检查实际 PR 提交范围。扫描规则改动也需要独立的 `security-rules` 签收。运行记录包含受信包摘要、PR 编号、base、head、合并 SHA、扫描规则版本和退出结果。重新读取 GitHub 当前版本后再接受或报告结果。base、head 或受验合并提交变化时重新取证。
+两名及以上维护者按实际协作配置使用 `--mode team` 和重复的 `--maintainer`。启动器校验裸仓库及测试合并的两条父提交，并以受信发布包的扫描规则检查实际 PR 提交范围。历史扫描使用 Git 2.43 或更新版本读取提交内的属性。扫描规则改动也需要独立的 `security-rules` 签收。运行记录包含受信包摘要、PR 编号、base、head、合并 SHA、扫描规则版本和退出结果。重新读取 GitHub 当前版本后再接受或报告结果。base、head 或受验合并提交变化时重新取证。
 
 <a id="托管承接"></a>
 
 ## 托管承接
 
-候选 CI 的 `acceptance-proof` 与真实附件作业提供测试证据。维护者从独立入口另外采集权威门禁结果。若启用自动托管合并阻断，维护者选择独立 GitHub App 作为 `trusted-pr-gate` check 的预期发布来源，并开启严格的最新分支检查。只读获取使用 Contents 和 Pull requests 读权限，发布 check 的独立 App 仅按需增加 Checks 写权限。App 凭据保存在受控环境，候选 CI 无权使用。首次配置前先由该 App 报告一次同一合并 SHA 的实际门禁结果，再设置预期来源。相关开关和团队审批配置由维护者核对。 [GitHub 分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) · [GitHub 必过状态来源](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)
+候选 CI 的 `acceptance-proof` 和真实附件作业提供测试证据。受信入口核验两次工作流的运行和制品后才接受独立签收。若启用自动托管合并阻断，维护者选择独立 GitHub App 作为 `trusted-pr-gate` check 的预期发布来源，并开启严格的最新分支检查。只读获取使用 Contents 和 Pull requests 读权限，发布 check 的独立 App 仅按需增加 Checks 写权限。App 凭据保存在受控环境，候选 CI 无权使用。首次配置前先由该 App 报告一次同一合并 SHA 的实际门禁结果，再设置预期来源。相关开关和团队审批配置由维护者核对。 [GitHub 分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) · [GitHub 必过状态来源](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)

@@ -154,6 +154,8 @@ def build_report(root: Path, outcomes: object) -> dict:
         )
     declared = [item["result"] for item in skills if item["result"] != "undeclared"]
     return {
+        **{key: outcomes[key] for key in ("repository", "pr_number", "pr_base_sha", "pr_head_sha",
+                                          "event_name", "workflow_ref") if key in outcomes},
         "schema": REPORT_SCHEMA,
         "tested_sha": identity["sha"],
         "run_id": identity["run_id"],

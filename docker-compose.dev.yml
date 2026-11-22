@@ -96,7 +96,7 @@ services:
     volumes:
       # Written by: python -B -X utf8 scripts/runtime/init_local_dev.py --apply
       - type: bind
-        source: ./.e2e-env/minio-bucket-policy.json
+        source: ${MINIO_POLICY_FILE:-./.e2e-env/minio-bucket-policy.json}
         target: /policy/bucket-policy.json
         read_only: true
         bind:

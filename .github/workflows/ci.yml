@@ -153,6 +153,7 @@ jobs:
           set -euo pipefail
           python -B -X utf8 scripts/workflow/run_checks.py --group comments --base "${{ steps.baseline.outputs.sha }}"
       - name: PR slice size guard
+        id: pr_size_guard
         if: github.event_name == 'pull_request'
         shell: bash
         env:

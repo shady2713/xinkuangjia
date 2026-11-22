@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import secrets
 import shutil
@@ -25,6 +27,13 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path("后端代码") / "basic-framework-boot"
+BUCKET_VAR = "MINIO_BUCKET"
+PUBLIC_ACCESS_VAR = "MINIO_PUBLIC_ACCESS"
+DEFAULT_BUCKET = "basic-framework"
+BUCKET_ALIASES = (BUCKET_VAR, "BASICFRAMEWORK_FILE_MINIO_BUCKET", "BASIC_FRAMEWORK_FILE_MINIO_BUCKET")
+ACCESS_ALIASES = (PUBLIC_ACCESS_VAR, "BASICFRAMEWORK_FILE_MINIO_PUBLICACCESS", "BASICFRAMEWORK_FILE_MINIO_PUBLIC_ACCESS",
+                  "BASIC_FRAMEWORK_FILE_MINIO_PUBLICACCESS", "BASIC_FRAMEWORK_FILE_MINIO_PUBLIC_ACCESS")
 # 国密 SM2 推荐椭圆曲线阶 n，合法私钥整数须严格落在 [1, SM2_CURVE_ORDER - 1]。
 SM2_CURVE_ORDER = int("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFF7203DF6B21C6052B53BBF40939D54123", 16)
 REQUIRED_TOOLS = ("git", "python", "java", "mvn", "node", "pnpm")
@@ -148,6 +157,94 @@ def current_hooks_path(root: Path) -> str:
     return completed.stdout.strip() if completed.returncode == 0 else ""
 
 
+def bucket_fields(path: Path, *, compose: bool = False) -> dict[str, str]:
+    """读取桶设置的字面量，拒绝可让 Compose 与 Spring 产生不同解释的语法。"""
+    fields = {}
+    direct_properties = {
+        re.sub(r"[^a-z]", "", alias.lower()) for alias in (*BUCKET_ALIASES[1:], *ACCESS_ALIASES[1:])
+    }
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.lstrip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        if line.endswith("\\") or (match := re.fullmatch(r"([A-Za-z0-9_.-]+)=(.*)", line)) is None:
+            raise ValueError(f"{path.name} 必须使用逐行的 KEY=VALUE 配置")
+        key, value = match.groups()
+        if re.sub(r"[^a-z]", "", key.lower()) in direct_properties:
+            raise ValueError(f"{path.name} 的桶和访问模式必须使用 MINIO_BUCKET 和 MINIO_PUBLIC_ACCESS")
+        if key not in (BUCKET_VAR, PUBLIC_ACCESS_VAR):
+            continue
+        if key in fields or not value or value != value.strip():
+            raise ValueError(f"{path.name} 的 {key} 为空、重复或含空白")
+        if compose and value[:1] in ("'", '"') and value[-1:] == value[:1]:
+            value = value[1:-1]
+        if not re.fullmatch(r"[A-Za-z0-9.-]+", value):
+            raise ValueError(f"{path.name} 的 {key} 必须是字面量")
+        fields[key] = value
+    return fields
+
+
+def effective_bucket(compose_env: Path | None, backend_env: Path | None) -> tuple[str, str]:
+    """解析后端和 Compose 的共同桶设置，环境冲突时拒绝继续。"""
+    compose = bucket_fields(compose_env, compose=True) if compose_env else {}
+    backend = bucket_fields(backend_env) if backend_env else {}
+    compose_bucket = compose.get(BUCKET_VAR, DEFAULT_BUCKET)
+    bucket = backend.get(BUCKET_VAR) if backend_env else compose_bucket
+    if not bucket:
+        raise ValueError("后端 .env 缺少 MINIO_BUCKET")
+    if compose_env and compose_bucket != bucket:
+        raise ValueError(".env.dev 与后端 .env 的 MINIO_BUCKET 不一致")
+    public = (backend.get(PUBLIC_ACCESS_VAR, "true") if backend_env else compose.get(PUBLIC_ACCESS_VAR, "true")).lower()
+    if public not in {"true", "false"}:
+        raise ValueError("MINIO_PUBLIC_ACCESS 必须是 true 或 false")
+    if PUBLIC_ACCESS_VAR in compose and compose[PUBLIC_ACCESS_VAR].lower() != public:
+        raise ValueError(".env.dev 与后端 .env 的 MINIO_PUBLIC_ACCESS 不一致")
+    for key in BUCKET_ALIASES:
+        if key in os.environ and os.environ[key] != bucket:
+            raise ValueError(f"环境变量 {key} 与有效桶名不一致")
+    for key in ACCESS_ALIASES:
+        if key in os.environ and os.environ[key].lower() != public:
+            raise ValueError(f"环境变量 {key} 与有效访问模式不一致")
+    return bucket, public
+
+
+def check_launcher_overrides(args: list[str]) -> None:
+    """拒绝优先于已核验环境配置的 Spring 或 JVM 启动覆盖项。"""
+    if os.environ.get("SPRING_APPLICATION_JSON"):
+        raise ValueError("本地启动入口要求 SPRING_APPLICATION_JSON 为空")
+    guarded = {
+        "".join(ch for ch in name if ch.isalnum()).upper()
+        for name in (*BUCKET_ALIASES, *ACCESS_ALIASES, "SPRING_APPLICATION_JSON")
+    }
+    separators = str.maketrans({ch: " " for ch in "\"'=,;"})
+    options = ("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS", "JAVA_OPTS", "MAVEN_OPTS", "MAVEN_ARGS")
+    sources = {key: os.environ.get(key, "") for key in options}
+    sources["启动命令"] = " ".join(args)
+    for source, text in sources.items():
+        tokens = text.translate(separators).split()
+        for index, token in enumerate(tokens):
+            if not token.startswith(("-D", "--")):
+                continue
+            name = token[2:] or (tokens[index + 1] if index + 1 < len(tokens) else "")
+            if "".join(ch for ch in name if ch.isalnum()).upper() in guarded:
+                raise ValueError(f"{source} 覆盖了 MinIO 桶、访问模式或 Spring JSON 配置")
+
+
+def verify_bucket_policy(root: Path, snapshot: Path) -> tuple[str, str]:
+    """验证现有桶策略与有效配置一致，为本次启动写入独立策略快照。"""
+    bucket, public = effective_bucket(root / ".env.dev", root / BACKEND_DIR / ".env")
+    policy_text = render_policy_json(bucket, "mixed" if public == "true" else "private")
+    policy_path = root / MINIO_POLICY_RELATIVE_PATH
+    try:
+        matches = json.loads(policy_path.read_text(encoding="utf-8")) == json.loads(policy_text)
+    except (OSError, ValueError):
+        matches = False
+    if not matches:
+        raise ValueError("MinIO 桶策略与有效配置不一致，请重新运行初始化")
+    snapshot.write_text(policy_text, encoding="utf-8", newline="\n")
+    return bucket, public
+
+
 def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> BootstrapPlan:
     """执行或预览本地开发环境初始化，保证幂等且不泄露随机凭据。
 
@@ -159,7 +256,7 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         本次自检及处理动作的结构化汇总。
     """
     resolved_root = root.resolve()
-    backend_dir = resolved_root / "后端代码" / "basic-framework-boot"
+    backend_dir = resolved_root / BACKEND_DIR
     template_path = backend_dir / ".env.example"
     if not template_path.is_file():
         raise FileNotFoundError(f"未找到后端环境模板：{template_path.as_posix()}")
@@ -189,6 +286,9 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         if backend_env_path.exists():
             existing_vals.update(_parse_existing_env(backend_env_path))
 
+    active_compose = compose_env_path if not force and compose_env_path.exists() else None
+    active_backend = backend_env_path if not force and backend_env_path.exists() else None
+    bucket, public_access = effective_bucket(active_compose, active_backend)
     db_password = existing_vals.get("DB_PASSWORD") or generate_local_secret(20)
     redis_password = existing_vals.get("REDIS_PASSWORD") or generate_local_secret(20)
     minio_access = existing_vals.get("MINIO_ACCESS_KEY") or generate_local_secret(16)
@@ -213,16 +313,13 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         "MINIO_PUBLIC_URL": existing_vals.get("MINIO_PUBLIC_URL") or "http://127.0.0.1:19000",
         "MINIO_ACCESS_KEY": minio_access,
         "MINIO_SECRET_KEY": minio_secret,
-        "MINIO_BUCKET": existing_vals.get("MINIO_BUCKET") or "basic-framework",
-        "MINIO_PUBLIC_ACCESS": existing_vals.get("MINIO_PUBLIC_ACCESS") or "true",
+        BUCKET_VAR: bucket,
+        PUBLIC_ACCESS_VAR: public_access,
         "MINIO_SIGNING_ENDPOINT": existing_vals.get("MINIO_SIGNING_ENDPOINT", ""),
     }
 
-    public_access = generated_values["MINIO_PUBLIC_ACCESS"].lower()
-    if public_access not in {"true", "false"}:
-        raise ValueError("MINIO_PUBLIC_ACCESS 必须是 true 或 false")
     minio_mode = "mixed" if public_access == "true" else "private"
-    policy_text = render_policy_json(generated_values["MINIO_BUCKET"], minio_mode)
+    policy_text = render_policy_json(bucket, minio_mode)
 
     if not compose_env_path.exists() or force:
         verb = "写入" if apply else "将写入"
@@ -289,7 +386,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="只读预览自检与拟写入动作，不写入本地文件（默认）",
     )
     mode_group.add_argument("--apply", action="store_true", help="实际写入本地忽略环境文件并挂载 .githooks")
+    mode_group.add_argument("--check-bucket-policy", metavar="SNAPSHOT", type=Path,
+                            help="核对本地桶配置并为 Compose 生成本次启动的策略快照")
     parser.add_argument("--force", action="store_true", help="与 --apply 联用时覆盖已有本地环境文件")
+    parser.add_argument("command", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     return parser
 
 
@@ -299,7 +399,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.force and not args.apply:
         print("参数错误：--force 必须与 --apply 同时传入。", file=sys.stderr)
         return 2
-    plan = bootstrap(args.root, apply=args.apply, force=args.force)
+    try:
+        if args.check_bucket_policy is not None:
+            check_launcher_overrides(args.command)
+            print(*verify_bucket_policy(args.root, args.check_bucket_policy))
+            return 0
+        if args.command:
+            raise ValueError("启动命令仅适用于 --check-bucket-policy")
+        plan = bootstrap(args.root, apply=args.apply, force=args.force)
+    except (OSError, ValueError) as error:
+        print(f"本地配置校验失败：{error}", file=sys.stderr)
+        return 1
     mode_label = "已执行初始化（--apply）" if plan.applied else "只读预览（默认 --dry-run，传入 --apply 实际生效）"
     print(f"模式：{mode_label}")
     if plan.missing_required_tools:

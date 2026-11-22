@@ -29,7 +29,7 @@ else:
     from rules_scope import SCANNER_RULES_PATHS
 
 # 规则集版本：变更拦截模式或豁免白名单时须同步递增并经独立安全复核。
-RULESET_VERSION = "2026.14"
+RULESET_VERSION = "2026.15"
 # Empty tree object id (SHA-1 repositories); used as the parent of root commits.
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 # Known (mode, type) pairs of ls-tree entries a commit-scan type change may produce.
@@ -860,6 +860,39 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         assert isinstance(output, bytes)
         return output
 
+    def read_blob(path: str, object_id: bytes) -> bytes:
+        """按对象标识核对并读取已提交的 blob。"""
+        oid = object_id.decode("ascii")
+        if git(["cat-file", "-t", oid], f"classify {path!r}").strip() != b"blob":
+            raise RuntimeError(f"expected blob at {path!r}; scan aborted")
+        return git(["cat-file", "blob", oid], f"read {path!r}")
+
+    def strict_text(path: str, blob: bytes) -> str:
+        """严格解码需整段扫描的文本，拒绝含 NUL 或无效 UTF-8 的对象。"""
+        try:
+            if b"\0" in blob:
+                raise ValueError
+            return blob.decode("utf-8")
+        except ValueError:
+            raise RuntimeError(f"cannot safely check {path!r}; scan aborted") from None
+
+    def classify(path: str) -> tuple[bytes, bytes]:
+        """按字面路径读取并验证目标提交中的对象模式和标识。"""
+        assert target is not None
+        listing = git(
+            ["ls-tree", "-z", "--full-tree", target, "--", f":(top,literal){path}"], f"classify {path!r}"
+        )
+        records = [item.split(b"\t", 1) for item in listing.split(b"\0") if item]
+        fields = records[0][0].split(b" ") if len(records) == 1 and len(records[0]) == 2 else []
+        if (
+            len(fields) != 3
+            or records[0][1] != path.encode("utf-8")
+            or (fields[0], fields[1]) not in GIT_TREE_TYPES
+            or not re.fullmatch(rb"[0-9a-f]{40}|[0-9a-f]{64}", fields[2])
+        ):
+            raise RuntimeError(f"cannot classify {path!r}; scan aborted")
+        return fields[0], fields[2]
+
     raw_paths = git(
         ["diff", *revisions, "--name-only", "-z", "--no-renames", "--diff-filter=ACMR", "--"],
         "list changed paths",
@@ -873,7 +906,8 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         for path in paths
         if _is_forbidden_env_path(path)
     ]
-    full_text: dict[str, str] = {}
+    full_text: dict[str, tuple[str, bool]] = {}
+    object_ids: dict[str, bytes] = {}
     if target is not None:
         # Commit scans only: type changes (T) are classified via ls-tree, never diffed.
         raw_types = git(
@@ -887,27 +921,28 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
         for path in type_paths:
             if _is_forbidden_env_path(path):
                 findings.append(Finding(path, 0, "forbidden-env-file", "真实环境文件不得提交"))
-            listing = git(["ls-tree", "-z", target, "--", f":(top,literal){path}"], f"classify {path!r}")
-            records = [item.split(b"\t", 1) for item in listing.split(b"\0") if item]
-            fields = records[0][0].split(b" ") if len(records) == 1 and len(records[0]) == 2 else []
-            if len(fields) != 3 or records[0][1] != path.encode("utf-8") or (fields[0], fields[1]) not in GIT_TREE_TYPES:
-                raise RuntimeError(f"cannot classify type change {path!r}; scan aborted")
-            if fields[0] in (b"100644", b"100755"):
-                # Regular blobs are scanned in full; only strict UTF-8 text without NUL is checkable.
-                blob = git(["cat-file", "blob", f"{blob_prefix}{path}"], f"read {path!r}")
-                try:
-                    if b"\0" in blob:
-                        raise ValueError
-                    full_text[path] = blob.decode("utf-8")
-                except ValueError:
-                    raise RuntimeError(f"cannot safely check type change {path!r}; scan aborted") from None
+        # Classify every changed nondeleted path; only regular blobs keeping their type are diffed.
+        type_changes = set(type_paths)
+        for path in [*paths, *type_paths]:
+            mode, object_id = classify(path)
+            if mode == b"160000":
+                continue  # Gitlinks are not blobs and need not exist locally.
+            if mode == b"120000" or path in type_changes:
+                # Link content (plain text, never resolved) and type-changed blobs are scanned whole.
+                full_text[path] = (strict_text(path, read_blob(path, object_id)), mode == b"120000")
+            else:
+                object_ids[path] = object_id
+        paths = list(object_ids)
     added_lines_by_path: dict[str, list[tuple[int, str]]] = {}
     python_candidates: dict[str, list[tuple[int, int, str, bool]] | None] = {}
+    attr_source = [f"--attr-source={target}"] if target is not None else []
     for current_path in paths:
         docstring_lines: set[int] = set()
         python_code_lines: set[int] = set()
+        blob = read_blob(current_path, object_ids[current_path]) if target is not None else None
         if current_path.lower().endswith((".py", ".md")):
-            blob = git(["cat-file", "blob", f"{blob_prefix}{current_path}"], f"read {current_path!r}")
+            if blob is None:
+                blob = git(["cat-file", "blob", f"{blob_prefix}{current_path}"], f"read {current_path!r}")
             source = blob.decode("utf-8", errors="replace")
             if current_path.lower().endswith(".py"):
                 # 必须读取暂存版本；工作区中未暂存的引号变化不能影响提交判定。
@@ -918,7 +953,7 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
                 python_code_lines = _markdown_python_lines(source)
         # Force text and bypass external/textconv drivers so attributes cannot hide content.
         output = git(
-            ["diff", *revisions, "--no-ext-diff", "--no-textconv", "--text", "--no-color",
+            [*attr_source, "diff", *revisions, "--no-ext-diff", "--no-textconv", "--text", "--no-color",
              "--no-renames", "--unified=0", "--", f":(top,literal){current_path}"],
             f"diff {current_path!r}",
         ).decode("utf-8", errors="replace")
@@ -948,10 +983,12 @@ def _scan_staged_diff(target: str | None = None, base: str | None = None) -> lis
                 current_line += 1
             elif in_hunk and diff_line.startswith(" "):
                 current_line += 1
-    for path, text in full_text.items():
-        docstrings = _python_docstring_lines(text) if path.lower().endswith(".py") else set()
-        code_lines = _markdown_python_lines(text) if path.lower().endswith(".md") else set()
-        if path.lower().endswith(".py"):
+    for path, (text, plain) in full_text.items():
+        # Link content is plain text: no Python/Markdown helpers keyed on the filename.
+        is_python = not plain and path.lower().endswith(".py")
+        docstrings = _python_docstring_lines(text) if is_python else set()
+        code_lines = _markdown_python_lines(text) if not plain and path.lower().endswith(".md") else set()
+        if is_python:
             python_candidates[path] = _python_assignment_candidates(text)
         for number, line in enumerate(text.split("\n"), 1):
             findings.extend(_scan_added_line(

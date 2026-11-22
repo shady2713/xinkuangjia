@@ -15,6 +15,10 @@ import sys
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 TRUSTED_DIR = os.path.dirname(os.path.realpath(__file__))
 VERIFIER = os.path.join(TRUSTED_DIR, "verify_pr_review.py")
+# Python -I omits the script directory; add only the reviewed release location.
+sys.path.insert(0, TRUSTED_DIR)
+import trusted_ci
+
 SCANNER_DIR = os.path.join(os.path.dirname(TRUSTED_DIR), "security")
 SCANNER = os.path.join(SCANNER_DIR, "scan_staged_secrets.py")
 # Child runner: under -I only the trusted scanner directory is importable (rules_scope).
@@ -62,9 +66,9 @@ def run_trusted(script: str, repo: str, args: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """核对裸仓库及 PR 对象，然后执行两个受信门禁。"""
+    """核对裸仓库、受验版本和托管证据，再执行独立审查与扫描。"""
     parser = argparse.ArgumentParser(description="Run trusted PR review and secret gates.")
-    for flag in ("--repo", "--event", "--checkout-sha", "--comments", "--reviews"):
+    for flag in ("--repo", "--event", "--checkout-sha", "--comments", "--reviews", "--ci-snapshot"):
         parser.add_argument(flag, required=True)
     parser.add_argument("--mode", required=True, choices=("solo", "team"))
     parser.add_argument("--maintainer", action="append", default=[])
@@ -82,6 +86,9 @@ def main(argv: list[str] | None = None) -> int:
     base, head = pr_sha(event, "base"), pr_sha(event, "head")
     for value in (checkout, base, head):
         git(repo, "cat-file", "-e", f"{value}^{{commit}}")
+    if git(repo, "rev-list", "--parents", "-n", "1", checkout).split() != [checkout, base, head]:
+        raise SystemExit("trusted gate: checkout does not have the PR base and head as parents")
+    workflows = trusted_ci.verify(os.path.abspath(args.ci_snapshot), event, checkout)
     review = ["--repo", repo, "--event-name", "pull_request", "--checkout-sha", checkout]
     for flag in ("event", "comments", "reviews"):
         review += [f"--{flag}", os.path.abspath(getattr(args, flag))]
@@ -90,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
         review += ["--maintainer", login]
     verified = run_trusted(VERIFIER, repo, review)
     scanned = run_trusted(SCANNER, repo, ["--base", base, "--head", head])
-    print(json.dumps({"review": verified, "secrets": scanned}, sort_keys=True), file=sys.stderr)
+    print(json.dumps({"review": verified, "secrets": scanned, "workflows": workflows}, sort_keys=True), file=sys.stderr)
     return 0 if verified == 0 and scanned == 0 else 1
 
 

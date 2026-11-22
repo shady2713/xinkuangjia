@@ -29,6 +29,8 @@ JUNIT_STEP = {"backend": "maven_verify", "pytest": "pytest_tests"}
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 SHA = re.compile(r"[0-9a-f]{40}")
 STEP_ID = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*")
+PR_ONLY_STEP = "pr_size_guard"
+PR_SKIP_REASON = "PR-only step on push"
 
 
 def git(*args):
@@ -93,6 +95,8 @@ def junit_counts(pattern):
             root = ET.parse(name).getroot()
         except (ET.ParseError, OSError):
             return None, "junit report malformed"
+        if root.tag not in ("testsuites", "testsuite"):
+            return None, "junit report malformed"
         for case in root.iter("testcase"):
             tags = {child.tag for child in case}
             key = "failed" if tags & {"failure", "error"} else "skipped" if "skipped" in tags else "passed"
@@ -120,8 +124,11 @@ def playwright_counts(path):
         return None, "playwright report missing"
     try:
         stats = json.loads(text)["stats"]
-        return {"passed": int(stats["expected"]), "failed": int(stats["unexpected"]),
-                "flaky": int(stats.get("flaky", 0)), "skipped": int(stats["skipped"])}, None
+        counts = {"passed": stats["expected"], "failed": stats["unexpected"],
+                  "flaky": stats.get("flaky", 0), "skipped": stats["skipped"]}
+        if any(type(value) is not int or value < 0 for value in counts.values()):
+            return None, "playwright report malformed"
+        return counts, None
     except (ValueError, KeyError, TypeError, AttributeError):
         return None, "playwright report malformed"
 
@@ -134,7 +141,8 @@ def record(args):
         step = step if isinstance(step, dict) else {}
         entry = {"outcome": step.get("outcome"), "conclusion": step.get("conclusion")}
         if entry["outcome"] == "skipped":
-            entry["reason"] = "step skipped"
+            pr_only = sid == PR_ONLY_STEP and os.environ.get("GITHUB_EVENT_NAME") == "push"
+            entry["reason"] = PR_SKIP_REASON if pr_only else "step skipped"
         steps[sid] = entry
     reports = ((JUNIT_STEP.get(args.job), junit_counts, args.junit), ("frontend_gates", vitest_counts, args.vitest_log),
                ("browser_e2e", playwright_counts, args.playwright))
@@ -166,7 +174,7 @@ def clean_step(step):
     if "counts" in step:
         clean["counts"] = counts
     for key in ("reason", "counts_reason"):
-        if step.get(key) in ("step skipped", "step missing", "junit report missing", "junit report malformed",
+        if step.get(key) in ("step skipped", PR_SKIP_REASON, "step missing", "junit report missing", "junit report malformed",
                              "vitest log missing", "vitest summary missing", "playwright report missing",
                              "playwright report malformed"):
             clean[key] = step[key]
@@ -200,6 +208,21 @@ def check_proof(name, need, expect):
     return job, steps, None
 
 
+def required_step_error(name, step):
+    """验证必跑步骤的原始结论和实际测试计数，异常时返回诊断。"""
+    if step is None:
+        return "outcome missing"
+    if step.get("outcome") != "success" or step.get("conclusion") != "success":
+        return "required step did not succeed"
+    if name in COUNTED:
+        counts = step.get("counts")
+        if counts is None:
+            return "counts missing"
+        if counts.get("passed", 0) <= 0 or counts.get("failed", 0) != 0:
+            return "suite must report passed tests and zero failures"
+    return None
+
+
 def assemble(args):
     """校验实际受验版本和运行身份，生成验收及技能制品。"""
     out_dir = Path(args.output)
@@ -215,12 +238,15 @@ def assemble(args):
     if os.environ.get("GITHUB_SHA", head) != head:
         reasons.append("checkout does not match GITHUB_SHA")
     event_name = os.environ.get("GITHUB_EVENT_NAME", "")
-    pr_base = pr_head = None
+    pr_base = pr_head = pr_number = None
+    repository = os.environ.get("GITHUB_REPOSITORY")
+    workflow_ref = os.environ.get("GITHUB_WORKFLOW_REF")
     if event_name == "pull_request":
-        # Only the base/head SHAs are read from the event; nothing else is copied.
         event = load_json(read(os.environ.get("GITHUB_EVENT_PATH")))
         try:
-            pr_base, pr_head = (event["pull_request"][side]["sha"] for side in ("base", "head"))
+            pr = event["pull_request"]
+            pr_number = pr["number"]
+            pr_base, pr_head = (pr[side]["sha"] for side in ("base", "head"))
         except (KeyError, TypeError):
             pr_base = pr_head = None
         if not (is_sha(pr_base) and is_sha(pr_head)):
@@ -228,6 +254,12 @@ def assemble(args):
             reasons.append("pull_request event lacks base/head sha")
         elif not is_sha(head) or git("rev-list", "--parents", "-n", "1", head).split()[1:] != [pr_base, pr_head]:
             reasons.append("merge parents do not match pull_request base/head")
+        if (type(pr_number) is not int or pr_number <= 0 or not repository
+                or workflow_ref != f"{repository}/.github/workflows/ci.yml@refs/pull/{pr_number}/merge"):
+            reasons.append("pull_request repository, workflow ref or PR number unavailable")
+    identity = {"tested_sha": head, "run_id": run_id, "run_attempt": attempt, "event_name": event_name,
+                "repository": repository, "workflow_ref": workflow_ref, "pr_number": pr_number,
+                "pr_base_sha": pr_base, "pr_head_sha": pr_head}
     plan = native_plan(load_json(read(args.plan)))
     if plan is None:
         reasons.append("slice plan missing or malformed")
@@ -239,36 +271,42 @@ def assemble(args):
         reasons.append("CI_NEEDS_JSON missing or malformed")
         needs = {}
     expect = {"run_id": run_id, "run_attempt": attempt, "sha": head}
+    required = dict(REQUIRED_STEPS)
+    if event_name == "pull_request":
+        required["docs-comments"] += (PR_ONLY_STEP,)
     jobs, steps = {}, {}
-    for name in sorted(set(REQUIRED_STEPS) | set(needs)):
+    invalid_steps = set()
+    for name in sorted(set(required) | set(needs)):
         job, job_steps, why = check_proof(name, needs.get(name), expect)
-        if not why and name in REQUIRED_STEPS and job["result"] != "success":
+        if not why and name in required and job["result"] != "success":
             why = f"required job {job['result']}"
+        if not why and name in required and job.get("status") != "success":
+            why = f"required job proof status {job.get('status')}"
         if why:
             job["reason"] = why
             reasons.append(f"{name}: {why}")
         jobs[name] = job
         steps.update({f"{name}/{sid}": step for sid, step in job_steps.items()})
-        for sid in REQUIRED_STEPS.get(name, ()):
-            step = job_steps.get(sid) or {}
-            if step.get("outcome") not in OUTCOMES:
-                reasons.append(f"{name}/{sid}: outcome missing")
-            elif f"{name}/{sid}" in COUNTED and step["outcome"] != "skipped" and step.get("counts") is None:
-                reasons.append(f"{name}/{sid}: counts missing")
-    acceptance = {"ok": not reasons, "reasons": reasons, "event_name": event_name, "tested_sha": head,
-                  "pr_base_sha": pr_base, "pr_head_sha": pr_head, "run_id": run_id, "run_attempt": attempt,
-                  "plan": plan, "jobs": jobs, "steps": steps}
+        for sid in required.get(name, ()):
+            qualified = f"{name}/{sid}"
+            step = job_steps.get(sid)
+            error = required_step_error(qualified, step)
+            if error:
+                reasons.append(f"{qualified}: {error}")
+                invalid_steps.add(qualified)
+    acceptance = {**identity, "ok": not reasons, "reasons": reasons, "plan": plan, "jobs": jobs, "steps": steps}
     write_json(out_dir / "acceptance.json", acceptance)
     skill_path = out_dir / "skill-outcomes.json"
     if fatal:
         skill_path.unlink(missing_ok=True)  # never leave stale or partial skill evidence behind
         return 1
     stamp = {"sha": head, "run_id": run_id, "run_attempt": attempt}
-    skill = {sid: {"outcome": steps[sid]["outcome"], **stamp}
+    skill = {sid: {"outcome": "failure" if sid in invalid_steps and steps[sid]["outcome"] == "success"
+                   else steps[sid]["outcome"], **stamp}
              for sid in SKILL_IDS if steps.get(sid, {}).get("outcome") in OUTCOMES}
     # slice_plan evidence comes from the plan file actually loaded above.
     skill["acceptance/slice_plan"] = {"outcome": "success", **stamp}
-    write_json(skill_path, {"tested_sha": head, "run_id": run_id, "run_attempt": attempt, "steps": skill})
+    write_json(skill_path, {**{key: value for key, value in identity.items() if value is not None}, "steps": skill})
     return 1 if reasons else 0
 
 

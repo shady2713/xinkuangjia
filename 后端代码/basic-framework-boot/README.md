@@ -67,6 +67,12 @@ mvn -q -DskipTests package
 java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
 ```
 
+使用仓库的 Compose 开发栈时，从当前 Java 工程目录通过同一入口启动后端。入口核对 `.env.dev`、后端 `.env` 和启动环境的 `MINIO_BUCKET` 与 `MINIO_PUBLIC_ACCESS`。这两项使用无插值的字面值。更改访问模式后重新运行初始化生成策略。通过启动入口继承核验过的配置，桶策略读回成功后才执行 Java 命令。
+
+```bash
+sh ../../scripts/runtime/start_dev_stack.sh -- java -Dfile.encoding=UTF-8 -jar basic-framework-server/target/basic-framework-server.jar
+```
+
 第二条命令跳过测试，不能替代第一条或交付门禁。也可在 IDE 运行 [BasicFrameworkServerApplication](basic-framework-server/src/main/java/com/basicframework/server/BasicFrameworkServerApplication.java)。
 
 从仓库根运行 `pwsh -File scripts/runtime/start_java.ps1 -Build` 可打包后启动；脚本需要 PATH 上的 `mvn.cmd` 与 `java`。不加 `-Build` 使用已有 JAR。默认服务 http://127.0.0.1:48080；检查 Started 日志、实际认证和权限接口，不能只看进程或端口。

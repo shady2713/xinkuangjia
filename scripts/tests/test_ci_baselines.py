@@ -368,7 +368,7 @@ def test_real_attachment_job_is_available_on_first_pr() -> None:
     assert "-Dtest=RealAttachmentServiceIT" in next(step for step in steps if step.get("id") == "test")["run"]
     summary = next(step for step in steps if step.get("id") == "summary")
     assert summary["if"] == "always()"
-    assert all(key in summary["run"] for key in ("git_head", "pr_head", "service_versions", "surefire"))
+    assert all(key in summary["run"] for key in ("tested_sha", "pr_head_sha", "workflow_ref", "service_versions", "surefire"))
     assert any(step.get("with", {}).get("name", "").startswith("attachment-integration-summary-") for step in steps)
 
 
