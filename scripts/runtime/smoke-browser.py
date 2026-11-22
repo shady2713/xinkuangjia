@@ -146,7 +146,7 @@ def run(p, browser, pwd, new_pwd):
         other_role, other_body = role_crud(page.request, admin, "smoke_admin", remove=False)
     with step("member-api-login"):
         (enc,) = page.evaluate(SM2_JS, [SM2_MODULE, pwd])
-        member = ok(call(page.request, "POST", "/admin-api/system/auth/login", data={"username": "smoke_member", "password": enc}))["accessToken"]
+        member = ok(call(page.request, "POST", "/admin-api/system/auth/login", data={"username": "smokemember", "password": enc}))["accessToken"]
     with step("member-role-crud"):
         role_crud(page.request, member, "smoke_member")
     with step("member-other-platform-role-denied"):

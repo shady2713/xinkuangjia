@@ -48,7 +48,7 @@ UPDATE `system_users`
   WHERE `id` = 1 AND `deleted` = b'0';
 INSERT INTO `system_users`
   (`username`, `password`, `password_change_required`, `user_type`, `nickname`, `status`, `creator`, `updater`)
-  VALUES ('smoke_member', '{member_hash}', 0, 'business_admin', 'Smoke Member', 0, '{ACTOR}', '{ACTOR}');
+  VALUES ('smokemember', '{member_hash}', 0, 'business_admin', 'Smoke Member', 0, '{ACTOR}', '{ACTOR}');
 SET @smoke_user_id = LAST_INSERT_ID();
 INSERT INTO `system_role`
   (`name`, `code`, `role_type`, `sort`, `status`, `type`, `remark`, `creator`, `updater`)
