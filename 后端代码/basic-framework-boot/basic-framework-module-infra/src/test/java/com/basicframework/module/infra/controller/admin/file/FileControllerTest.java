@@ -202,6 +202,12 @@ class FileControllerTest {
         assertThat(privateResp.getStatus()).isEqualTo(HttpStatus.OK.value());
         assertThat(privateResp.getContentAsByteArray()).isEqualTo(data);
         verify(fileService, never()).openPrivateFileContent(7L);
+
+        HttpServletRequest emptyReq = mock(HttpServletRequest.class);
+        MockHttpServletResponse emptyResp = new MockHttpServletResponse();
+        when(emptyReq.getRequestURI()).thenReturn("/admin-api/infra/file/content/");
+        controller.getFileContent(emptyReq, emptyResp);
+        assertThat(emptyResp.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
     }
 
 }

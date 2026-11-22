@@ -32,7 +32,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -271,6 +274,41 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         adminUserService.validateUserManageable(accessTokenDO.getUserId(), operatorPlatformType);
         revokeAccessTokenRecord(accessTokenDO);
         return accessTokenDO;
+    }
+
+    /**
+     * 在单一事务内全量前置校验所有目标令牌及用户可管理性，再统一删除数据库记录并在提交后清理 Redis。
+     *
+     * @param ids 令牌记录编号集合
+     * @param operatorPlatformType 操作者管理平台类型
+     * @return 实际被移除的访问令牌列表
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<OAuth2AccessTokenDO> removeAccessTokenByIds(Collection<Long> ids, String operatorPlatformType) {
+        if (CollUtil.isEmpty(ids)) {
+            return Collections.emptyList();
+        }
+        List<OAuth2AccessTokenDO> targets = new ArrayList<>();
+        Set<Long> seenIds = new HashSet<>();
+        for (Long id : ids) {
+            if (id == null || !seenIds.add(id)) {
+                continue;
+            }
+            OAuth2AccessTokenDO accessTokenDO = oauth2AccessTokenMapper.selectById(id);
+            if (accessTokenDO == null) {
+                continue;
+            }
+            if (!UserTypeEnum.ADMIN.getValue().equals(accessTokenDO.getUserType())) {
+                throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+            }
+            adminUserService.validateUserManageable(accessTokenDO.getUserId(), operatorPlatformType);
+            targets.add(accessTokenDO);
+        }
+        for (OAuth2AccessTokenDO target : targets) {
+            revokeAccessTokenRecord(target);
+        }
+        return targets;
     }
 
     /**

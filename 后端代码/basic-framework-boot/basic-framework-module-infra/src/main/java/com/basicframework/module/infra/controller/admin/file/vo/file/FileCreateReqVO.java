@@ -39,11 +39,11 @@ public class FileCreateReqVO {
     private String name;
 
     /**
-     * 文件 URL（兼容字段，服务端按 path 重新生成）。
+     * 文件 URL（兼容字段，服务端按 path 重新生成；私有附件留空）。
      */
-    @NotBlank(message = "文件 URL 不能为空")
     @Size(max = FilePathUtils.MAX_FILE_URL_LENGTH, message = "文件 URL 长度不能超过 {max} 个字符")
-    @Schema(description = "文件 URL（兼容字段，服务端按 path 重新生成）", requiredMode = Schema.RequiredMode.REQUIRED,
+    @Schema(description = "文件 URL（兼容字段，服务端按 path 重新生成；私有附件留空）",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
             example = "https://www.example.com/basic-framework.jpg")
     private String url;
 

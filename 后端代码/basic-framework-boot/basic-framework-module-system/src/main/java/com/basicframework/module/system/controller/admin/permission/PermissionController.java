@@ -8,6 +8,7 @@ import com.basicframework.module.system.controller.admin.permission.vo.permissio
 import com.basicframework.module.system.dal.dataobject.permission.MenuDO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
+import com.basicframework.module.system.enums.ErrorCodeConstants;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.service.permission.MenuService;
 import com.basicframework.module.system.service.permission.PermissionService;
@@ -23,12 +24,12 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.Set;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 import static com.basicframework.framework.common.util.collection.CollectionUtils.convertSet;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 
 /**
  * 权限 Controller，提供赋予用户、角色的权限的 API 接口
@@ -38,6 +39,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_P
 @Tag(name = "管理后台 - 权限")
 @RestController
 @RequestMapping("/system/permission")
+@Validated
 public class PermissionController {
 
     @Resource
@@ -60,8 +62,12 @@ public class PermissionController {
     @Parameter(name = "roleId", description = "角色编号", required = true)
     @GetMapping("/list-role-menus")
     @PreAuthorize("@ss.hasPermission('system:permission:assign-role-menu')")
-    public CommonResult<Set<Long>> getRoleMenuList(Long roleId) {
-        validateRolePlatform(roleService.getRole(roleId));
+    public CommonResult<Set<Long>> getRoleMenuList(@RequestParam("roleId") @NotNull(message = "角色编号不能为空") Long roleId) {
+        RoleDO role = roleService.getRole(roleId);
+        if (role == null) {
+            throw exception(ErrorCodeConstants.ROLE_NOT_EXISTS);
+        }
+        validateRolePlatform(role);
         Set<Long> menuIds = permissionService.getRoleMenuListByRoleId(roleId);
         String loginUserType = getLoginUserType();
         return success(convertSet(menuService.getMenuList(menuIds).stream()
@@ -108,8 +114,13 @@ public class PermissionController {
     @Parameter(name = "userId", description = "用户编号", required = true)
     @GetMapping("/list-user-roles")
     @PreAuthorize("@ss.hasPermission('system:permission:assign-user-role')")
-    public CommonResult<Set<Long>> listAdminRoles(@RequestParam("userId") Long userId) {
-        validateUserPlatform(userService.getUser(userId));
+    public CommonResult<Set<Long>> listAdminRoles(@RequestParam("userId") @NotNull(message = "用户编号不能为空") Long userId) {
+        // 先经带部门数据权限过滤的 getUser 校验目标用户可见性，不可见时 fail-closed 拒绝，防止直查 system_user_role 越权。
+        AdminUserDO user = userService.getUser(userId);
+        if (user == null) {
+            throw exception(ErrorCodeConstants.USER_NOT_EXISTS);
+        }
+        validateUserPlatform(user);
         Set<Long> roleIds = permissionService.getUserRoleIdListByUserId(userId);
         String loginUserType = getLoginUserType();
         return success(convertSet(roleService.getRoleList(roleIds).stream()
@@ -144,7 +155,7 @@ public class PermissionController {
     private void validateRolePlatform(RoleDO role) {
         // 角色平台类型是授权隔离边界，当前平台不能读取另一个平台角色的菜单授权。
         if (role != null && !AdminPlatformTypeEnum.isSame(role.getRoleType(), getLoginUserType())) {
-            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }
 
@@ -154,7 +165,7 @@ public class PermissionController {
     private void validateUserPlatform(AdminUserDO user) {
         // 用户平台类型是账号隔离边界，当前平台不能读取另一个平台用户的角色授权。
         if (user != null && !AdminPlatformTypeEnum.isSame(user.getUserType(), getLoginUserType())) {
-            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }
 

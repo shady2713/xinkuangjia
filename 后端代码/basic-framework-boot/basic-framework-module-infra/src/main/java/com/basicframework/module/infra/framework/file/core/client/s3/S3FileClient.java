@@ -27,6 +27,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.MetadataDirective;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -34,11 +35,13 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -297,14 +300,15 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
      */
     @Override
     public String copy(String sourcePath, String targetPath, String type) {
-        CopyObjectRequest copyRequest = CopyObjectRequest.builder()
+        CopyObjectRequest.Builder builder = CopyObjectRequest.builder()
                 .sourceBucket(config.getBucket())
                 .sourceKey(sourcePath)
                 .destinationBucket(config.getBucket())
-                .destinationKey(targetPath)
-                .contentType(type)
-                .build();
-        client.copyObject(copyRequest);
+                .destinationKey(targetPath);
+        if (StrUtil.isNotBlank(type)) {
+            builder.contentType(type).metadataDirective(MetadataDirective.REPLACE);
+        }
+        client.copyObject(builder.build());
         return presignGetUrl(targetPath, null);
     }
 
@@ -366,7 +370,7 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     }
 
     /**
-     * 生成有效期为 24 小时的对象上传预签名地址。
+     * 生成有效期为 15 分钟的对象上传预签名地址。
      *
      * @param path 对象路径
      * @return 上传预签名地址
@@ -407,9 +411,25 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     public String presignGetUrl(String url, Integer expirationSeconds) {
         String path = extractObjectPath(url);
         if (!BooleanUtil.isFalse(config.getEnablePublicAccess()) && !FilePathUtils.isPrivateObjectPath(path)) {
-            return config.getDomain() + "/" + path;
+            return config.getDomain() + "/" + encodeObjectPath(path);
         }
         return signGetObjectUrl(path, expirationSeconds);
+    }
+
+    /** 按斜杠分段执行 RFC 3986 路径段编码，防止文件名中的 #/?/%/空格截断或破坏公开 URL。 */
+    private static String encodeObjectPath(String path) {
+        if (StrUtil.isEmpty(path)) {
+            return "";
+        }
+        String[] segments = path.split("/", -1);
+        StringBuilder encoded = new StringBuilder(path.length());
+        for (int i = 0; i < segments.length; i++) {
+            if (i > 0) {
+                encoded.append('/');
+            }
+            encoded.append(UriUtils.encodePathSegment(segments[i], StandardCharsets.UTF_8));
+        }
+        return encoded.toString();
     }
 
     /**

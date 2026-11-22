@@ -1771,11 +1771,11 @@
             "type" : "string"
           },
           "url" : {
-            "description" : "文件 URL（兼容字段，服务端按 path 重新生成）",
+            "description" : "文件 URL（兼容字段，服务端按 path 重新生成；私有附件留空）",
             "type" : "string"
           }
         },
-        "required" : [ "name", "path", "size", "url" ],
+        "required" : [ "name", "path", "size" ],
         "type" : "object"
       },
       "FilePageReqVO" : {
@@ -7775,7 +7775,7 @@
         "parameters" : [ {
           "in" : "query",
           "name" : "roleId",
-          "required" : false,
+          "required" : true,
           "schema" : {
             "format" : "int64",
             "type" : "integer"

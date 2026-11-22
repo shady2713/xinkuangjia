@@ -209,7 +209,7 @@ public class GlobalExceptionHandler {
         if (StrUtil.startWith(ex.getMessage(), "Required request body is missing")) {
             return CommonResult.error(BAD_REQUEST.getCode(), "请求参数类型错误: request body 缺失");
         }
-        return defaultExceptionHandler(ServletUtils.getRequest(), ex);
+        return CommonResult.error(BAD_REQUEST.getCode(), "请求参数格式错误");
     }
 
     /**

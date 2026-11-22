@@ -737,8 +737,8 @@ export namespace OpenApiSchemas {
     size: number | string;
     /** 文件 MIME 类型 */
     type?: string;
-    /** 文件 URL（兼容字段，服务端按 path 重新生成） */
-    url: string;
+    /** 文件 URL（兼容字段，服务端按 path 重新生成；私有附件留空） */
+    url?: string;
   }
 
   /** 管理后台 - 文件分页 Request VO */
@@ -2236,7 +2236,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/permission/list-role-menus": {
     /** 获得角色拥有的菜单编号 */
-    get: { body: never; query: { roleId?: number | string }; response: OpenApiSchemas.CommonResult_Set_Long };
+    get: { body: never; query: { roleId: number | string }; response: OpenApiSchemas.CommonResult_Set_Long };
   };
   "/admin-api/system/permission/list-user-roles": {
     /** 获得管理员拥有的角色编号列表 */
