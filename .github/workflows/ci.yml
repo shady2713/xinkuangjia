@@ -61,11 +61,47 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Scan working tree with Gitleaks
+          ref: ${{ github.event.pull_request.head.sha || github.event.after }}
+      - name: Scan commits with Gitleaks
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
         run: |
           set -euo pipefail
           GITLEAKS_VERSION="8.24.2"
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP" gitleaks
-          "$RUNNER_TEMP/gitleaks" dir --redact --verbose .
+          GITLEAKS_SHA256="fa0500f6b7e41d28791ebc680f5dd9899cd42b58629218a5f041efa899151a8e"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          download_dir="$(mktemp -d "$RUNNER_TEMP/gitleaks-download.XXXXXX")"
+          bin_dir="$(mktemp -d "$RUNNER_TEMP/gitleaks-bin.XXXXXX")"
+          curl -sSfL --proto '=https' --tlsv1.2 -o "$download_dir/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${download_dir}/${archive}" | sha256sum --check --strict --quiet -
+          tar -xzf "$download_dir/$archive" -C "$bin_dir" --no-same-owner gitleaks
+
+          is_commit_id() { [[ "$1" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]]; }
+          has_commit() { git cat-file -e "$1^{commit}" 2>/dev/null; }
+          fail() { echo "::error::$1"; exit 1; }
+
+          case "$EVENT_NAME" in
+            pull_request) base_sha="$PR_BASE_SHA"; head_sha="$PR_HEAD_SHA" ;;
+            push) base_sha="$PUSH_BEFORE"; head_sha="$PUSH_AFTER" ;;
+            *) fail "unsupported event for secret scan" ;;
+          esac
+
+          is_commit_id "$head_sha" || fail "invalid head commit ID"
+          is_commit_id "$base_sha" || fail "invalid base commit ID"
+          [[ "$(git rev-parse HEAD)" == "$head_sha" ]] || fail "checkout is not the event head commit"
+
+          if [[ "$EVENT_NAME" == push ]] && { [[ "$base_sha" =~ ^0+$ ]] || ! has_commit "$base_sha"; }; then
+            echo "New ref or missing push predecessor: scanning all commits reachable from head"
+            log_opts="$head_sha"
+          else
+            has_commit "$base_sha" || fail "base commit not available"
+            log_opts="${base_sha}..${head_sha}"
+          fi
+
+          "$bin_dir/gitleaks" git --no-banner --redact=100 --log-opts="$log_opts" .

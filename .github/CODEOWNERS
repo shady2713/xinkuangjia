@@ -1,2 +1,10 @@
 /.github/workflows/ @shady2713
 /.github/CODEOWNERS @shady2713
+
+# Declared-only: no hosted rule enforces these entries. See docs/review.md.
+/后端代码/basic-framework-boot/basic-framework-system/**/auth/ @shady2713
+/后端代码/basic-framework-boot/basic-framework-system/**/security/ @shady2713
+/后端代码/basic-framework-boot/basic-framework-system/**/profile/ @shady2713
+/后端代码/basic-framework-boot/**/application*.yaml @shady2713
+/后端代码/basic-framework-boot/**/application*.yml @shady2713
+/数据库文件/ @shady2713
