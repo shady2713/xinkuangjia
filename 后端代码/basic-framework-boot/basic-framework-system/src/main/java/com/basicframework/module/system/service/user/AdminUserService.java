@@ -257,7 +257,7 @@ public interface AdminUserService {
      * 判断密码是否匹配历史 bcrypt(md5(明文)) 格式。
      *
      * <p>仅用于前端 MD5 传输方案下线后的兼容迁移；登录成功后应立即调用
-     * {@link #updatePasswordHash(Long, String)} 升级为当前格式。</p>
+     * {@link #updatePasswordHash(Long, String, String)} 条件升级为当前格式。</p>
      *
      * @param rawPassword 未加密的密码
      * @param encodedPassword 历史加密后的密码
@@ -266,12 +266,14 @@ public interface AdminUserService {
     boolean isPasswordMatchLegacy(String rawPassword, String encodedPassword);
 
     /**
-     * 用当前 BCrypt 格式重写指定用户的密码哈希，不改变首次改密标志。
+     * 仅当存储值仍为已校验的历史哈希时，用当前 BCrypt 格式重写密码哈希，不改变首次改密标志。
      *
      * @param id 用户编号
+     * @param expectedEncodedPassword 本次已校验通过的存储值
      * @param rawPassword 未加密的密码
+     * @return 升级成功返回 true；存储值已被并发修改时返回 false 且不写入
      */
-    void updatePasswordHash(Long id, String rawPassword);
+    boolean updatePasswordHash(Long id, String expectedEncodedPassword, String rawPassword);
 
     /**
      * 校验目标用户存在且处于当前操作者可管理的平台、部门数据范围与角色边界内，越权时抛出业务异常。

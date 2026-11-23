@@ -13,6 +13,7 @@ import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2ClientDO;
 import com.basicframework.module.system.dal.mysql.oauth2.OAuth2ClientMapper;
 import com.basicframework.module.system.dal.redis.RedisKeyConstants;
 import com.basicframework.module.system.enums.oauth2.OAuth2ClientConstants;
+import com.basicframework.module.system.enums.oauth2.OAuth2GrantTypeEnum;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +62,7 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     @Override
     public Long createOAuth2Client(OAuth2ClientSaveReqVO createReqVO) {
         validateClientIdExists(null, createReqVO.getClientId());
+        validateAuthorizedGrantTypes(null, createReqVO.getAuthorizedGrantTypes());
         OAuth2ClientDO client = BeanUtils.toBean(createReqVO, OAuth2ClientDO.class);
         client.setSecret(passwordEncoder.encode(requireClientSecret(createReqVO.getSecret())));
         oauth2ClientMapper.insert(client);
@@ -78,6 +80,7 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     public void updateOAuth2Client(OAuth2ClientSaveReqVO updateReqVO) {
         OAuth2ClientDO existing = validateOAuth2ClientExists(updateReqVO.getId());
         validateClientIdExists(updateReqVO.getId(), updateReqVO.getClientId());
+        validateAuthorizedGrantTypes(existing.getAuthorizedGrantTypes(), updateReqVO.getAuthorizedGrantTypes());
 
         OAuth2ClientDO updateObj = BeanUtils.toBean(updateReqVO, OAuth2ClientDO.class);
         updateObj.setSecret(StrUtil.isBlank(updateReqVO.getSecret())
@@ -231,21 +234,19 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     public OAuth2ClientDO validOAuthClientFromCache(String clientId, String clientSecret, String authorizedGrantType,
                                                     Collection<String> scopes, String redirectUri) {
         // 校验客户端存在、且开启
-        OAuth2ClientDO client = getSelf().getOAuth2ClientFromCache(clientId);
-        if (client == null) {
-            throw exception(OAUTH2_CLIENT_NOT_EXISTS);
-        }
-        if (CommonStatusEnum.isDisable(client.getStatus())) {
-            throw exception(OAUTH2_CLIENT_DISABLE);
-        }
+        OAuth2ClientDO client = requireEnabledClient(getSelf().getOAuth2ClientFromCache(clientId));
 
-        // 新数据使用 BCrypt；历史明文只允许通过一次，成功后立即原地升级并清理缓存。
+        // 新数据使用 BCrypt；历史明文仅在存储值仍为本次已校验值时条件升级并清理缓存。
         if (StrUtil.isNotEmpty(clientSecret)) {
             if (!matchesClientSecret(clientSecret, client.getSecret())) {
                 throw exception(OAUTH2_CLIENT_CLIENT_SECRET_ERROR);
             }
-            if (!isPasswordHash(client.getSecret())) {
-                upgradeLegacyClientSecret(client, clientSecret);
+            if (!isPasswordHash(client.getSecret()) && !upgradeLegacyClientSecret(client, clientSecret)) {
+                // 条件升级未命中说明存储值已被并发修改：以数据库当前状态重新校验，不覆盖新值。
+                client = requireEnabledClient(oauth2ClientMapper.selectByClientId(clientId));
+                if (!matchesClientSecret(clientSecret, client.getSecret())) {
+                    throw exception(OAUTH2_CLIENT_CLIENT_SECRET_ERROR);
+                }
             }
         }
         // 校验授权方式
@@ -301,21 +302,52 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     }
 
     /**
-     * 将校验成功的历史明文密钥升级为 BCrypt，并清理旧客户端缓存。
+     * 仅当存储值仍为已校验的历史明文时升级为 BCrypt，并始终清理该客户端缓存；不修改传入的缓存对象。
      *
-     * @param client 当前客户端
+     * @param client 本次校验使用的客户端
      * @param rawSecret 已校验通过的原始密钥
+     * @return 升级成功返回 true；存储值已被并发修改时返回 false
      */
-    private void upgradeLegacyClientSecret(OAuth2ClientDO client, String rawSecret) {
-        String encodedSecret = passwordEncoder.encode(rawSecret);
-        OAuth2ClientDO updateObj = new OAuth2ClientDO();
-        updateObj.setId(client.getId());
-        updateObj.setSecret(encodedSecret);
-        oauth2ClientMapper.updateById(updateObj);
-        client.setSecret(encodedSecret);
+    private boolean upgradeLegacyClientSecret(OAuth2ClientDO client, String rawSecret) {
+        boolean upgraded = oauth2ClientMapper.updateSecretByIdAndSecret(client.getId(), client.getSecret(),
+                passwordEncoder.encode(rawSecret)) > 0;
         Cache cache = cacheManager.getCache(RedisKeyConstants.OAUTH_CLIENT);
         if (cache != null) {
             cache.evict(client.getClientId());
+        }
+        return upgraded;
+    }
+
+    /**
+     * 校验客户端存在且启用。
+     *
+     * @param client 客户端
+     * @return 校验通过的客户端
+     */
+    private OAuth2ClientDO requireEnabledClient(OAuth2ClientDO client) {
+        if (client == null) {
+            throw exception(OAUTH2_CLIENT_NOT_EXISTS);
+        }
+        if (CommonStatusEnum.isDisable(client.getStatus())) {
+            throw exception(OAUTH2_CLIENT_DISABLE);
+        }
+        return client;
+    }
+
+    /**
+     * 新增的授权类型只允许开放入口实际支持的 client_credentials；已持久化的历史值原样保留。
+     *
+     * @param existingGrantTypes 已持久化授权类型，创建时为空
+     * @param grantTypes 请求授权类型
+     */
+    private void validateAuthorizedGrantTypes(List<String> existingGrantTypes, List<String> grantTypes) {
+        for (String grantType : CollUtil.emptyIfNull(grantTypes)) {
+            if (CollUtil.contains(existingGrantTypes, grantType)) {
+                continue;
+            }
+            if (!OAuth2GrantTypeEnum.CLIENT_CREDENTIALS.getGrantType().equals(grantType)) {
+                throw exception(OAUTH2_CLIENT_AUTHORIZED_GRANT_TYPE_NOT_EXISTS);
+            }
         }
     }
 

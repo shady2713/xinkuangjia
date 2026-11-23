@@ -68,6 +68,7 @@ public interface ErrorCodeConstants {
             "密码必须为 8-32 位，且至少包含大写字母、小写字母、数字、特殊字符中的 3 类");
     ErrorCode PASSWORD_TRANSPORT_INVALID = new ErrorCode(1_002_003_015,
             "密码信息无效或已过期，请刷新页面后重试");
+    ErrorCode USER_PASSWORD_SAME_AS_OLD = new ErrorCode(1_002_003_016, "新密码不能与当前密码相同");
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");

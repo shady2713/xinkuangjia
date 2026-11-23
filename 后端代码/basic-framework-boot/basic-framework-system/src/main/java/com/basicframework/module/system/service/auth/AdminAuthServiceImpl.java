@@ -173,8 +173,16 @@ public class AdminAuthServiceImpl implements AdminAuthService {
         }
         boolean passwordMatched = userService.isPasswordMatch(password, user.getPassword());
         if (!passwordMatched && userService.isPasswordMatchLegacy(password, user.getPassword())) {
-            userService.updatePasswordHash(user.getId(), password);
-            passwordMatched = true;
+            // 仅当存储值仍为本次已校验的历史哈希时条件升级；未命中说明已被并发修改，按最新状态重新校验且不覆盖。
+            passwordMatched = userService.updatePasswordHash(user.getId(), user.getPassword(), password);
+            if (!passwordMatched) {
+                AdminUserDO current = userService.getUser(user.getId());
+                if (current != null) {
+                    user = current;
+                    passwordMatched = userService.isPasswordMatch(password, current.getPassword())
+                            || userService.isPasswordMatchLegacy(password, current.getPassword());
+                }
+            }
         }
         if (!passwordMatched) {
             loginFailureLockService.recordFailure(username);

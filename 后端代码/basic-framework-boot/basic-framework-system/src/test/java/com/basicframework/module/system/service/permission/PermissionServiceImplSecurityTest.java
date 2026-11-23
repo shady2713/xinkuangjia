@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Set;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.MENU_NOT_EXISTS;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.ROLE_IS_DISABLE;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static org.assertj.core.api.Assertions.assertThat;

@@ -5,8 +5,12 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.security.core.LoginUser;
+import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
+import com.basicframework.module.system.controller.admin.user.vo.user.UserImportExcelVO;
+import com.basicframework.module.system.controller.admin.user.vo.user.UserImportRespVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserSaveReqVO;
+import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
 import com.basicframework.module.system.dal.dataobject.user.AdminUserDO;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
@@ -33,6 +37,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Set;
@@ -40,10 +45,12 @@ import java.util.Set;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.PASSWORD_POLICY_NOT_MATCH;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PASSWORD_FAILED;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PASSWORD_SAME_AS_OLD;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -99,17 +106,42 @@ class AdminUserServiceImplTest {
         assertThat(userService.isPasswordMatch("Legacy#Pass1", encoded)).isFalse();
     }
 
-    /** 验证历史哈希升级后，新格式可直接用明文校验。 */
+    /** 验证历史哈希仅以已校验存储值为条件升级，新格式可直接用明文校验。 */
     @Test
     void upgradesLegacyHashToPlainBcrypt() {
-        userService.updatePasswordHash(1L, "Legacy#Pass1");
+        when(userMapper.updatePasswordByIdAndPassword(eq(1L), eq("legacy-hash"), any())).thenReturn(1);
 
-        ArgumentCaptor<AdminUserDO> captor = ArgumentCaptor.forClass(AdminUserDO.class);
-        verify(userMapper).updateById(captor.capture());
-        AdminUserDO update = captor.getValue();
-        assertThat(update.getId()).isEqualTo(1L);
-        assertThat(passwordEncoder.matches("Legacy#Pass1", update.getPassword())).isTrue();
-        assertThat(passwordEncoder.matches(DigestUtil.md5Hex("Legacy#Pass1"), update.getPassword())).isFalse();
+        assertThat(userService.updatePasswordHash(1L, "legacy-hash", "Legacy#Pass1")).isTrue();
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(userMapper).updatePasswordByIdAndPassword(eq(1L), eq("legacy-hash"), captor.capture());
+        assertThat(passwordEncoder.matches("Legacy#Pass1", captor.getValue())).isTrue();
+        assertThat(passwordEncoder.matches(DigestUtil.md5Hex("Legacy#Pass1"), captor.getValue())).isFalse();
+        verify(userMapper, never()).updateById(any(AdminUserDO.class));
+    }
+
+    /** 验证导入时可见范围内同名部门不唯一，按行报告歧义且不创建用户。 */
+    @Test
+    void importUserReportsAmbiguousDeptName() {
+        ReflectionTestUtils.setField(userService, "userInitPassword", "Init#Pass1");
+        DeptDO first = new DeptDO();
+        first.setId(10L);
+        first.setName("研发部");
+        DeptDO second = new DeptDO();
+        second.setId(11L);
+        second.setName("研发部");
+        when(deptService.getDeptList(any(DeptListReqVO.class))).thenReturn(List.of(first, second));
+        UserImportExcelVO row = new UserImportExcelVO();
+        row.setUsername("importuser1");
+        row.setNickname("Import User");
+        row.setDeptName("研发部");
+
+        UserImportRespVO resp = userService.importUserList(List.of(row), false);
+
+        assertThat(resp.getFailureUsernames().get("importuser1")).contains("多个匹配");
+        assertThat(resp.getCreateUsernames()).isEmpty();
+        verify(deptService, never()).validateDeptList(any());
+        verify(userMapper, never()).insert(any(AdminUserDO.class));
     }
 
     /** 验证管理员重置密码后置位首次改密标志。 */

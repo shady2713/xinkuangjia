@@ -1,5 +1,6 @@
 package com.basicframework.module.system.dal.mysql.user;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -146,6 +147,22 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
      */
     default List<AdminUserDO> selectListByDeptIds(Collection<Long> deptIds) {
         return selectList(AdminUserDO::getDeptId, deptIds);
+    }
+
+    /**
+     * 仅当存储密码仍等于已校验值时更新密码哈希。
+     *
+     * @param id 用户编号
+     * @param expectedPassword 已校验的当前存储值
+     * @param newPassword 新密码哈希
+     * @return 受影响行数；为 0 表示存储值已被并发修改
+     */
+    default int updatePasswordByIdAndPassword(Long id, String expectedPassword, String newPassword) {
+        AdminUserDO updateObj = new AdminUserDO();
+        updateObj.setPassword(newPassword);
+        return update(updateObj, new LambdaUpdateWrapper<AdminUserDO>()
+                .eq(AdminUserDO::getId, id)
+                .eq(AdminUserDO::getPassword, expectedPassword));
     }
 
 }
