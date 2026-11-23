@@ -162,7 +162,7 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         updateObj.setPassword(newPassword);
         return update(updateObj, new LambdaUpdateWrapper<AdminUserDO>()
                 .eq(AdminUserDO::getId, id)
-                .eq(AdminUserDO::getPassword, expectedPassword));
+                .apply("CAST(`password` AS BINARY) = CAST({0} AS BINARY)", expectedPassword));
     }
 
 }

@@ -53,7 +53,7 @@ public interface OAuth2ClientMapper extends BaseMapperX<OAuth2ClientDO> {
         updateObj.setSecret(newSecret);
         return update(updateObj, new LambdaUpdateWrapper<OAuth2ClientDO>()
                 .eq(OAuth2ClientDO::getId, id)
-                .eq(OAuth2ClientDO::getSecret, expectedSecret));
+                .apply("CAST(`secret` AS BINARY) = CAST({0} AS BINARY)", expectedSecret));
     }
 
 }
