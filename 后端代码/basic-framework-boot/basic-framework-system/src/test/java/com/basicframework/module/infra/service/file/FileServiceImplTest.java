@@ -264,9 +264,9 @@ class FileServiceImplTest {
         assertThat(captor.getValue().getUrl()).isEmpty();
     }
 
-    /** 验证公开读取只服务存储键与请求路径完全一致的记录，并保留权威长度回填。 */
+    /** 验证公开读取按登记对象键打开，并保留权威长度回填。 */
     @Test
-    void openFileContentServesOnlyExactlyMatchingRecord() throws Exception {
+    void openFileContentServesAuthorizedRecord() throws Exception {
         when(fileStorageService.isPublicAccess()).thenReturn(true);
         FileDO stored = new FileDO();
         stored.setPath("2026/logo.png");

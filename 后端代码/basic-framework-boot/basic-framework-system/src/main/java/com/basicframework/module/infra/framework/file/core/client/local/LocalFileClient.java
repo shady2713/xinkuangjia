@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIVATE_SIGNING_UNSUPPORTED;
 
@@ -46,7 +47,7 @@ public class LocalFileClient extends AbstractFileClient<LocalFileClientConfig> {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.write(target, content);
+        Files.write(target, content, StandardOpenOption.CREATE_NEW);
         return formatFileUrl(StrUtil.removeSuffix(config.getDomain(), "/"), path);
     }
 

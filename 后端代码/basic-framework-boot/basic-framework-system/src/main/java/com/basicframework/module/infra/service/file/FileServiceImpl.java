@@ -553,10 +553,12 @@ public class FileServiceImpl implements FileService {
             throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
         }
         FileDO file = fileMapper.selectByPath(path);
-        // 数据库排序规则可能忽略大小写或尾随空格；只服务存储键与请求路径完全一致的权威记录，
-        // 使上方可见性判定即为实际被服务记录的可见性。
-        if (file == null || !Objects.equals(path, file.getPath())) {
+        if (file == null) {
             return null;
+        }
+        // 数据库排序规则和存储键的比较语义不同，打开对象前以持久化路径判定可见性。
+        if (isPrivateObject(file.getPath())) {
+            throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
         }
         return openContentWithAuthoritativeSize(file);
     }
