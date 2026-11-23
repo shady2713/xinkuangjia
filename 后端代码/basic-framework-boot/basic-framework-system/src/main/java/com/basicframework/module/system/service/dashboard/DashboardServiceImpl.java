@@ -1,6 +1,7 @@
 package com.basicframework.module.system.service.dashboard;
 
 import com.basicframework.framework.common.enums.CommonStatusEnum;
+import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
 import com.basicframework.module.system.controller.admin.dashboard.vo.DashboardSummaryRespVO;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
@@ -63,7 +64,9 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public DashboardSummaryRespVO getDashboardSummary(Long operatorUserId) {
-        AdminUserDO operator = operatorUserId == null ? null : adminUserMapper.selectById(operatorUserId);
+        // 只按已认证 ID 取当前身份。指定部门范围可以不包含操作者本人。
+        AdminUserDO operator = operatorUserId == null ? null
+                : DataPermissionUtils.executeIgnore(() -> adminUserMapper.selectPlatformById(operatorUserId));
         String platformType = AdminPlatformTypeEnum.defaultType(operator == null ? null : operator.getUserType());
 
         long userTotal = countOrZero(adminUserMapper.selectCount(

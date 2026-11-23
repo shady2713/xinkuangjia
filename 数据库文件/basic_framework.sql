@@ -1,5 +1,5 @@
 -- basic-framework MySQL 8.x 空库初始化结构与元数据基线。
--- 导入前请通过受控初始化流程补充 system_users.password（BCrypt 哈希）及必要的业务参数配置；
+-- 空库导入后、启动后端前，按 docs/部署与运维说明.md 初始化种子超管口令，保留首次强制改密标志；
 -- 严禁将本重建脚本直接导入已有业务数据的生产数据库。
 
 SET NAMES utf8mb4;

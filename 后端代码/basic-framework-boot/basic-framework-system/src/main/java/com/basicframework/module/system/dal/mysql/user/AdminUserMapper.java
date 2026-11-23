@@ -116,6 +116,18 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
     }
 
     /**
+     * 按当前身份的主键读取平台，保留 ID 以区分空平台记录和不存在的账号。
+     *
+     * @param id 用户主键
+     * @return 仅含 ID 和平台字段的用户
+     */
+    default AdminUserDO selectPlatformById(Long id) {
+        return selectOne(new LambdaQueryWrapperX<AdminUserDO>()
+                .eq(AdminUserDO::getId, id)
+                .select(AdminUserDO::getId, AdminUserDO::getUserType));
+    }
+
+    /**
      * 首页日志按用户归属限定查询，只读取用户编号。
      */
     default List<Long> selectIdsByPlatform(String userType) {

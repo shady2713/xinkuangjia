@@ -291,6 +291,29 @@ class FileServiceImplTest {
         assertThat(second).startsWith("avatar/").endsWith(".png");
     }
 
+    /** 验证多字节主文件名保留完整字符和扩展名，且最后一级适合本地文件系统。 */
+    @Test
+    void generateUploadPathFitsUtf8NameBudget() {
+        String name = "界".repeat(71) + "📄".repeat(6) + ".txt";
+        String path = fileService.generateUploadPath(name, "docs");
+        String storedName = path.substring(path.lastIndexOf('/') + 1);
+        byte[] encoded = storedName.getBytes(StandardCharsets.UTF_8);
+
+        assertThat(encoded.length).isLessThanOrEqualTo(255);
+        assertThat(new String(encoded, StandardCharsets.UTF_8)).isEqualTo(storedName)
+                .startsWith("界").endsWith(".txt");
+    }
+
+    /** 验证较深目录会扣减完整路径预算，同时保留业务目录与文件扩展名。 */
+    @Test
+    void generateUploadPathFitsFullPathBudget() {
+        String directory = ("a".repeat(150) + "/").repeat(2) + "b".repeat(85);
+        String path = fileService.generateUploadPath("n".repeat(230) + ".txt", directory);
+
+        assertThat(path).startsWith(directory + "/").endsWith(".txt")
+                .hasSize(FilePathUtils.MAX_OBJECT_PATH_LENGTH);
+    }
+
     /** 验证元数据写入失败时补偿删除本次写入且无记录归属的对象。 */
     @Test
     void createFileDeletesOwnObjectWhenMetadataInsertFails() throws Exception {

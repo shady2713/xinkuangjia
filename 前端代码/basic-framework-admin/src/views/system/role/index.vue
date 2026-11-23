@@ -94,8 +94,9 @@ const menuSubmitting = ref(false);
 const menuReady = ref(false);
 let menuLoad = 0;
 let menuOwner: string | null = null;
-let menuSelection = new Map<string, number | string>();
-let displayedMenuIds = new Set<string>();
+let originalMenuIds: (number | string)[] = [];
+let initialTreeIds = new Set<string>();
+let clearAllMenus = false;
 const menuTreeRef = ref<InstanceType<typeof ElTree>>();
 const menuTreeData = ref<Record<string, unknown>[]>([]);
 const currentRole = ref<RoleItem | null>(null);
@@ -232,8 +233,9 @@ async function openMenuDialog(row: RoleItem) {
   if (load !== menuLoad || !menuDialogVisible.value || !menuTreeRef.value || getSessionId() !== owner) return;
   const leafIds = checkedIds.filter((id) => !parentIds.has(String(id)));
   menuTreeRef.value.setCheckedKeys(leafIds);
-  menuSelection = new Map(checkedIds.map((id) => [String(id), id]));
-  displayedMenuIds = new Set(treeMenuSelection().map(String));
+  originalMenuIds = checkedIds;
+  initialTreeIds = new Set(treeMenuSelection().map(String));
+  clearAllMenus = false;
   menuOwner = owner;
   menuReady.value = true;
 }
@@ -244,24 +246,20 @@ function treeMenuSelection(): (number | string)[] {
   return [...tree.getCheckedKeys(), ...tree.getHalfCheckedKeys()];
 }
 
-function updateMenuSelection() {
-  if (!menuReady.value) return;
-  const selected = treeMenuSelection();
-  const next = new Set(selected.map(String));
-  // 只保存本次树上的变化，保留未展示授权和独立父菜单的原始值。
-  for (const id of displayedMenuIds) {
-    if (!next.has(id)) menuSelection.delete(id);
-  }
-  for (const id of selected) {
-    if (!displayedMenuIds.has(String(id))) menuSelection.set(String(id), id);
-  }
-  displayedMenuIds = next;
+function menuIdsToSave(): (number | string)[] {
+  const finalSelection = treeMenuSelection();
+  if (clearAllMenus) return finalSelection;
+
+  // 只应用最终树相对回填状态的差分，撤销编辑后保留原有父项和未展示授权。
+  const finalIds = new Set(finalSelection.map(String));
+  const existing = originalMenuIds.filter((id) => !initialTreeIds.has(String(id)) || finalIds.has(String(id)));
+  const added = finalSelection.filter((id) => !initialTreeIds.has(String(id)));
+  return [...new Map([...existing, ...added].map((id) => [String(id), id])).values()];
 }
 
 function clearMenuSelection() {
   menuTreeRef.value?.setCheckedKeys([]);
-  displayedMenuIds.clear();
-  menuSelection.clear();
+  clearAllMenus = true;
 }
 
 async function submitAssignMenu() {
@@ -270,7 +268,7 @@ async function submitAssignMenu() {
   try {
     await assignRoleMenuApi({
       roleId: currentRole.value.id,
-      menuIds: [...menuSelection.values()],
+      menuIds: menuIdsToSave(),
     });
     ElMessage.success('菜单权限已更新');
     menuDialogVisible.value = false;
@@ -518,7 +516,6 @@ onMounted(() => {
         <el-tree
           ref="menuTreeRef"
           :data="menuTreeData"
-          @check="updateMenuSelection"
           :props="{ label: 'name', children: 'children' }"
           node-key="id"
           show-checkbox

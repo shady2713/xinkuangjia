@@ -1,5 +1,6 @@
 package com.basicframework.module.system.service.dashboard;
 
+import com.basicframework.framework.datapermission.core.aop.DataPermissionContextHolder;
 import com.basicframework.module.system.controller.admin.dashboard.vo.DashboardSummaryRespVO;
 import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.dal.dataobject.logger.OperateLogDO;
@@ -23,6 +24,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -60,7 +63,7 @@ class DashboardServiceImplTest {
         AdminUserDO operator = new AdminUserDO();
         operator.setId(1L);
         operator.setUserType(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
-        when(adminUserMapper.selectById(1L)).thenReturn(operator);
+        when(adminUserMapper.selectPlatformById(1L)).thenReturn(operator);
         when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
                 .thenReturn(List.of(1L, 2L));
         when(permissionService.hasAnyPermissions(1L, "system:login-log:query")).thenReturn(true);
@@ -136,27 +139,33 @@ class DashboardServiceImplTest {
         AdminUserDO operator = new AdminUserDO();
         operator.setId(2L);
         operator.setUserType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
-        when(adminUserMapper.selectById(2L)).thenReturn(operator);
+        when(adminUserMapper.selectPlatformById(2L)).thenAnswer(ignored -> {
+            assertFalse(DataPermissionContextHolder.get().enable());
+            return operator;
+        });
         when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
-                .thenReturn(List.of(2L));
+                .thenAnswer(ignored -> {
+                    assertNull(DataPermissionContextHolder.get());
+                    return List.of(3L);
+                });
 
         LocalDateTime now = LocalDateTime.now();
         LoginLogDO loginLog = new LoginLogDO();
         loginLog.setId(201L);
-        loginLog.setUserId(2L);
+        loginLog.setUserId(3L);
         loginLog.setUsername("biz-user");
         loginLog.setResult(LoginResultEnum.SUCCESS.getResult());
         loginLog.setCreateTime(now);
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(2L)), any(), eq(false)))
+        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(3L)), any(), eq(false)))
                 .thenReturn(List.of(loginLog));
 
         OperateLogDO operateLog = new OperateLogDO();
         operateLog.setId(60L);
-        operateLog.setUserId(2L);
+        operateLog.setUserId(3L);
         operateLog.setType("系统用户");
         operateLog.setSubType("修改用户");
         operateLog.setCreateTime(now);
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(2L)), any(), eq(false)))
+        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(3L)), any(), eq(false)))
                 .thenReturn(List.of(operateLog));
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(2L);

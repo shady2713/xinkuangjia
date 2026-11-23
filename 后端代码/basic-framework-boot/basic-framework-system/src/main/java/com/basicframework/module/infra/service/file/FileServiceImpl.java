@@ -27,6 +27,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -47,18 +50,8 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
 @Service
 public class FileServiceImpl implements FileService {
 
-    /**
-     * 上传文件的前缀，是否包含日期（yyyyMMdd）。
-     *
-     * 目的：按照日期分目录，便于后续定位和归档。
-     */
-    private static final boolean PATH_PREFIX_DATE_ENABLE = true;
-    /**
-     * 上传文件的后缀，是否包含时间戳。
-     *
-     * 目的：保证文件名唯一，避免同名文件覆盖。
-     */
-    private static final boolean PATH_SUFFIX_TIMESTAMP_ENABLE = true;
+    /** 本地文件系统常见的单个文件名 UTF-8 字节上限。 */
+    private static final int MAX_OBJECT_NAME_BYTES = 255;
     /** 预签名直传凭证有效期，与 S3 预签名上传有效期一致。 */
     private static final Duration PRESIGN_TICKET_TTL = Duration.ofMinutes(15);
     /** 无 Redis 环境下的本地预签名凭证缓存上限。 */
@@ -201,7 +194,7 @@ public class FileServiceImpl implements FileService {
      *
      * @param name 文件名
      * @param directory 可选业务目录
-     * @return 带日期和时间戳的对象路径
+     * @return 保留扩展名、带日期和独立对象标识的对象路径
      */
     @VisibleForTesting
     String generateUploadPath(String name, String directory) {
@@ -209,38 +202,41 @@ public class FileServiceImpl implements FileService {
         if (!FilePathUtils.isFileNameValid(name) || !FilePathUtils.isDirectoryValid(directory)) {
             throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
         }
-        // 先准备日期前缀和时间戳后缀，两者都可按需关闭。
-        String prefix = null;
-        if (PATH_PREFIX_DATE_ENABLE) {
-            prefix = LocalDateTimeUtil.format(LocalDateTimeUtil.now(), PURE_DATE_PATTERN);
-        }
-        String suffix = null;
-        if (PATH_SUFFIX_TIMESTAMP_ENABLE) {
-            // 时间戳便于人工定位，随机段保证同毫秒同名上传也获得独立对象键，不会互相覆盖。
-            suffix = System.currentTimeMillis() + StrUtil.UNDERLINE + IdUtil.fastSimpleUUID();
-        }
-
-        // 先拼接时间戳，保留原始扩展名结构。
-        if (StrUtil.isNotEmpty(suffix)) {
-            String ext = FileUtil.extName(name);
-            if (StrUtil.isNotEmpty(ext)) {
-                name = FileUtil.mainName(name) + StrUtil.C_UNDERLINE + suffix + StrUtil.DOT + ext;
-            } else {
-                name = name + StrUtil.C_UNDERLINE + suffix;
-            }
-        }
-        // 再拼接日期前缀，按天分目录。
-        if (StrUtil.isNotEmpty(prefix)) {
-            name = prefix + StrUtil.SLASH + name;
-        }
-        // 最后拼接业务目录，保持调用方传入的目录层级。
-        if (StrUtil.isNotEmpty(directory)) {
-            name = directory + StrUtil.SLASH + name;
-        }
-        if (!FilePathUtils.isObjectPathValid(name)) {
+        String dateDirectory = LocalDateTimeUtil.format(LocalDateTimeUtil.now(), PURE_DATE_PATTERN) + StrUtil.SLASH;
+        String prefix = StrUtil.isEmpty(directory) ? dateDirectory : directory + StrUtil.SLASH + dateDirectory;
+        String extension = FileUtil.extName(name);
+        String suffix = StrUtil.UNDERLINE + IdUtil.fastSimpleUUID()
+                + (StrUtil.isEmpty(extension) ? "" : StrUtil.DOT + extension);
+        int characterBudget = FilePathUtils.MAX_OBJECT_PATH_LENGTH - prefix.length() - suffix.length();
+        int byteBudget = MAX_OBJECT_NAME_BYTES - suffix.getBytes(StandardCharsets.UTF_8).length;
+        if (characterBudget < 0 || byteBudget < 0) {
             throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
         }
-        return name;
+
+        // 仅缩短新对象键中的主文件名，展示名称和历史对象键均由原有元数据提供。
+        String path = prefix + trimObjectName(FileUtil.mainName(name), characterBudget, byteBudget) + suffix;
+        if (!FilePathUtils.isObjectPathValid(path)) {
+            throw exception(ErrorCodeConstants.FILE_PATH_INVALID);
+        }
+        return path;
+    }
+
+    /**
+     * 截取同时适合存储文件名和数据库路径的 UTF-8 前缀，避免切断多字节字符。
+     *
+     * @param name 主文件名
+     * @param characterBudget 剩余路径字符数
+     * @param byteBudget 剩余文件名 UTF-8 字节数
+     * @return 完整字符组成的主文件名前缀
+     */
+    private static String trimObjectName(String name, int characterBudget, int byteBudget) {
+        int end = Math.min(name.length(), characterBudget);
+        if (end > 0 && end < name.length() && Character.isHighSurrogate(name.charAt(end - 1))) {
+            end--;
+        }
+        CharBuffer characters = CharBuffer.wrap(name, 0, end);
+        StandardCharsets.UTF_8.newEncoder().encode(characters, ByteBuffer.allocate(byteBudget), true);
+        return name.substring(0, characters.position());
     }
 
     /**

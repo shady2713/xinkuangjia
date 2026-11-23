@@ -13,6 +13,8 @@ sh scripts/runtime/start_dev_stack.sh
 python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
 ```
 
+需要使用本地超管登录时，在运行种子命令前通过受保护环境注入 BCrypt 哈希 `SEED_ADMIN_PASSWORD_HASH`，并加 `--require-password-change` 保留首改标志。
+
 启动应用（后端、前端各用一个终端，均从仓库根目录开始）：
 - 后端（端口 `48080`，终端 A）：干净 Maven 缓存下 `basic-framework-server` 依赖 `basic-framework-system` 与 `basic-framework-core`，须先聚合打包，再在后端目录运行 JAR（后端 `.env` 须含 `SPRING_PROFILES_ACTIVE=local`，见部署说明第 1 节）：
   ```bash
@@ -20,7 +22,7 @@ python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
   mvn -B -ntp clean package -DskipTests
   java -jar basic-framework-server/target/basic-framework-server.jar
   ```
-  Windows：在仓库根目录执行 `scripts/runtime/start_java.ps1 -Build`（保持其仅回环的 `local` profile）。
+  Windows：在仓库根目录执行 `scripts/runtime/start_java.ps1 -Build`（启动器要求 `local`，HTTP 监听地址取决于 `server.address`）。
 - 前端（端口 `5175`，终端 B）：`cd 前端代码/basic-framework-admin && pnpm install && pnpm dev`，或运行 `scripts/runtime/start_frontend.ps1`。
 
 ## 2. 端到端标准 CRUD 开发切片
