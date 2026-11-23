@@ -42,21 +42,6 @@ public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO
     }
 
     /**
-     * 查询分页数据。
-     *
-     * @param reqVO 请求参数
-     * @return 查询结果
-     */
-    default PageResult<OAuth2AccessTokenDO> selectPage(OAuth2AccessTokenPageReqVO reqVO) {
-        return selectPage(reqVO, new LambdaQueryWrapperX<OAuth2AccessTokenDO>()
-                .eqIfPresent(OAuth2AccessTokenDO::getUserId, reqVO.getUserId())
-                .eqIfPresent(OAuth2AccessTokenDO::getUserType, reqVO.getUserType())
-                .likeIfPresent(OAuth2AccessTokenDO::getClientId, reqVO.getClientId())
-                .gt(OAuth2AccessTokenDO::getExpiresTime, LocalDateTime.now())
-                .orderByDesc(OAuth2AccessTokenDO::getId));
-    }
-
-    /**
      * 按调用者管理平台分页查询有效的后台访问令牌，并在数据库端关联 {@code system_users} 执行平台隔离与数据权限过滤。
      *
      * @param reqVO 分页条件
