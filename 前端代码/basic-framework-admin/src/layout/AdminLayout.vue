@@ -25,6 +25,7 @@ import SidebarMenuItem from '@/layout/SidebarMenuItem.vue';
 import TabsChrome from '@/layout/TabsChrome.vue';
 import { useAppStore } from '@/stores/app';
 import { useTabsStore } from '@/stores/tabs';
+import { returnToLoginAfter } from '@/router';
 import { useUserStore } from '@/stores/user';
 import { confirmAction } from '@/utils/confirm';
 import { getSessionId, sessionId } from '@/utils/token';
@@ -174,7 +175,7 @@ async function handleUserCommand(cmd: string) {
       confirmText: '退出登录',
       cancelText: '取消',
     });
-    if (getSessionId() === owner) await userStore.logout();
+    if (getSessionId() === owner) await returnToLoginAfter(userStore.logout);
   }
 }
 </script>

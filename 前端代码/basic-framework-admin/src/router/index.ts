@@ -125,7 +125,8 @@ export function syncSessionRoutes(pinia: Pinia): void {
     clearDynamicRoutes();
     tabs.reset();
     dict.reset();
-    if (!previous.id && !fromStorage) return;
+    // Local sign-in and sign-out actions navigate after their own request completes.
+    if (!fromStorage && (!previous.id || !next)) return;
     queueMicrotask(() => {
       if (getSessionId() !== next) return;
       const to = next ? '/dashboard' : '/login';
@@ -135,6 +136,15 @@ export function syncSessionRoutes(pinia: Pinia): void {
       }
     });
   }, { flush: 'sync' });
+}
+
+/** 结束当前登录的操作成功后，返回该会话的平台入口。 */
+export async function returnToLoginAfter(operation: () => Promise<boolean>): Promise<boolean> {
+  if (!getSessionId()) return false;
+  const query = loginPlatformQuery(loginSession.value.platform);
+  if (!(await operation()) || getSessionId()) return false;
+  await router.replace({ path: '/login', query });
+  return true;
 }
 
 export function registerMenuRoutes(menus: MenuRouteItem[]): void {

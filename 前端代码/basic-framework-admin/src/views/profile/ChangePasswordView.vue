@@ -8,6 +8,7 @@ import {
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
+import { returnToLoginAfter } from '@/router';
 import { useUserStore } from '@/stores/user';
 import { getSessionId } from '@/utils/token';
 
@@ -43,7 +44,10 @@ async function handleSubmit() {
   if (!valid || getSessionId() !== owner) return;
   loading.value = true;
   try {
-    if (!(await userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword))) return;
+    const changed = await returnToLoginAfter(
+      () => userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword),
+    );
+    if (!changed) return;
     ElMessage.success('密码修改成功，请重新登录');
   } catch (error) {
     if (!axios.isCancel(error)) throw error;

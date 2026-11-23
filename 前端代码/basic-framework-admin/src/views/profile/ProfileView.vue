@@ -17,6 +17,7 @@ import {
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
+import { returnToLoginAfter } from '@/router';
 import { useUserStore } from '@/stores/user';
 import { formatDateTime } from '@/utils/format';
 import { getSessionId } from '@/utils/token';
@@ -121,7 +122,10 @@ async function handleSavePassword() {
   if (!valid || getSessionId() !== owner) return;
   savingPwd.value = true;
   try {
-    if (!(await userStore.changeOwnPassword(owner, pwdForm.oldPassword, pwdForm.newPassword))) return;
+    const changed = await returnToLoginAfter(
+      () => userStore.changeOwnPassword(owner, pwdForm.oldPassword, pwdForm.newPassword),
+    );
+    if (!changed) return;
     ElMessage.success('密码修改成功');
   } catch (error) {
     if (!axios.isCancel(error)) throw error;
