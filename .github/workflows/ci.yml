@@ -153,6 +153,7 @@ jobs:
       FRONTEND_DIR: 前端代码/basic-framework-admin
       SMOKE_BASE_URL: http://127.0.0.1:5175
       SMOKE_API_URL: http://127.0.0.1:48080
+      SMOKE_REPORT_FILE: smoke-trace.json
     steps:
       - uses: actions/checkout@v7
         with:
@@ -184,7 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          export SMOKE_SUMMARY="$RUNNER_TEMP/smoke-summary.json"
+          export SMOKE_SUMMARY="$RUNNER_TEMP/$SMOKE_REPORT_FILE"
           py="$RUNNER_TEMP/smoke-venv/bin/python"
           compose=(docker compose -f docker-compose.dev.yml --env-file .env.dev)
           pids=()
@@ -245,7 +246,7 @@ jobs:
       - name: Smoke summary
         if: always()
         run: |
-          SMOKE_SUMMARY="$RUNNER_TEMP/smoke-summary.json"
+          SMOKE_SUMMARY="$RUNNER_TEMP/$SMOKE_REPORT_FILE"
           if [[ -s "$SMOKE_SUMMARY" ]]; then
             printf '### Browser smoke\n\n```json\n' >> "$GITHUB_STEP_SUMMARY"
             cat "$SMOKE_SUMMARY" >> "$GITHUB_STEP_SUMMARY"
@@ -259,6 +260,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: smoke-trace
-          path: ${{ runner.temp }}/smoke-trace.json
+          path: ${{ runner.temp }}/${{ env.SMOKE_REPORT_FILE }}
           if-no-files-found: ignore
           retention-days: 7

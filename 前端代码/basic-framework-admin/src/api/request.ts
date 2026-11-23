@@ -145,7 +145,7 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   return installed ? body.data.accessToken : null;
 }
 
-function redirectToLogin(sessionId: string | null): void {
+function redirectToLogin(sessionId: string): void {
   const query = loginPlatformQuery(loginSession.value.platform);
   if (!clearTokens(sessionId)) {
     throw new CanceledError('登录会话已切换');
@@ -222,7 +222,9 @@ async function handleUnauthorized(
   originalConfig: RetryableRequestConfig,
 ): Promise<AxiosResponse> {
   assertCurrent(originalConfig);
-  const sessionId = originalConfig._sessionId ?? null;
+  const sessionId = originalConfig._sessionId;
+  // A request made while signed out does not own a session or its login navigation.
+  if (!sessionId) throw new Error('请先登录');
   if (originalConfig._retried) {
     if (getAccessToken() === originalConfig._bearer) redirectToLogin(sessionId);
     return Promise.reject(new Error('登录状态已过期，请重新登录'));
@@ -232,7 +234,7 @@ async function handleUnauthorized(
   // A late 401 for the previous bearer reuses the already rotated token without refreshing.
   let newToken: string | null = getAccessToken() || null;
   if (!newToken || newToken === originalConfig._bearer) {
-    newToken = sessionId ? await refreshFor(sessionId) : null;
+    newToken = await refreshFor(sessionId);
     assertCurrent(originalConfig);
   }
   if (!newToken) {

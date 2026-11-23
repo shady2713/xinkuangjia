@@ -39,17 +39,3 @@ updates:
       actions-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
-
-  # Python 质量检查工具依赖：tools/quality/requirements.txt。
-  - package-ecosystem: pip
-    directory: /tools/quality
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 3
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-    groups:
-      pip-minor-patch:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]

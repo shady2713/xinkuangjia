@@ -343,7 +343,8 @@ async function handleUserCommand(cmd: string) {
 
       <!-- 浅灰底主内容区 -->
       <main class="min-h-0 flex-1 overflow-auto bg-[var(--bf-bg-deep)] p-4">
-        <router-view v-slot="{ Component }">
+        <!-- 清理会话后，业务页停止挂载，避免导航期间以匿名状态发起请求。 -->
+        <router-view v-if="sessionId" v-slot="{ Component }">
           <transition name="bf-fade-slide" mode="out-in">
             <keep-alive :key="sessionId ?? undefined" :include="tabsStore.cachedNames">
               <component :is="Component" :key="`${route.path}-${tabsStore.refreshKey}`" />

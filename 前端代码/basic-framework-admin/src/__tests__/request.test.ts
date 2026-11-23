@@ -367,6 +367,24 @@ describe('refreshes stay with the login that started the requests', () => {
     },
   );
 
+  it('does not clear or navigate a session when an anonymous request is denied', async () => {
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem');
+    const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+    const rotate = vi.fn();
+    rawHttp.defaults.adapter = rotate;
+    try {
+      await expect(request.get('/synthetic/current-user', {
+        adapter: async (config) => reply(config, 401, null),
+      })).rejects.toThrow('请先登录');
+      expect(removeItem).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(rotate).not.toHaveBeenCalled();
+    } finally {
+      navigate.mockRestore();
+      removeItem.mockRestore();
+    }
+  });
+
   it('checks the original login before a queued request reaches its adapter', async () => {
     setLoginTokens('first-access', 'first-refresh', false);
     const adapter = vi.fn();
