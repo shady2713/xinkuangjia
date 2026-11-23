@@ -9,7 +9,6 @@ import {
   type CurrentUserInfo,
   getPermissionInfoApi,
   loginApi,
-  type LoginPlatform,
   type LoginReq,
   logoutApi,
   type MenuRouteItem,
@@ -22,6 +21,7 @@ import {
   clearTokens,
   getAccessToken,
   getSessionId,
+  type LoginPlatform,
   passwordChangeRequiredFlag,
   sessionId,
   setLoginTokens,
@@ -52,10 +52,10 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function loginByPassword(params: LoginReq, platform?: LoginPlatform) {
+  async function loginByPassword(params: LoginReq, platform: LoginPlatform = 'super') {
     const startId = getSessionId();
     const res = await loginApi(params, platform);
-    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId, platform)) {
       throw new CanceledError('登录会话已切换');
     }
     return res;
@@ -64,7 +64,7 @@ export const useUserStore = defineStore('user', () => {
   async function loginBySms(params: SmsLoginReq) {
     const startId = getSessionId();
     const res = await smsLoginApi(params);
-    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId, 'business')) {
       throw new CanceledError('登录会话已切换');
     }
     return res;

@@ -8,7 +8,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { onBeforeUnmount, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
-import { type LoginPlatform, sendSmsCodeApi } from '@/api/auth';
+import { sendSmsCodeApi } from '@/api/auth';
 import CaptchaVerify from '@/components/CaptchaVerify.vue';
 import { getAppConfig } from '@/config/app';
 import { SmsSceneEnum } from '@/constants/enums';
@@ -19,6 +19,8 @@ import {
 } from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
 import { encryptPassword } from '@/utils/sm2';
+
+import type { LoginPlatform } from '@/utils/token';
 
 const route = useRoute();
 const router = useRouter();

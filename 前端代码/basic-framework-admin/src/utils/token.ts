@@ -9,12 +9,15 @@ const LEGACY_REFRESH_KEY = 'bf_refresh_token';
 const LEGACY_PASSWORD_CHANGE_KEY = 'bf_password_change_required';
 const LEGACY_KEYS = [LEGACY_ACCESS_KEY, LEGACY_REFRESH_KEY, LEGACY_PASSWORD_CHANGE_KEY];
 
+export type LoginPlatform = 'super' | 'business';
+
 interface SessionSnapshot {
   accessToken: string;
   refreshToken: string;
   passwordChangeRequired: boolean;
   /** Opaque login ID; null when signed out. */
   sessionId: string | null;
+  loginPlatform?: LoginPlatform;
 }
 
 const EMPTY_SESSION: Readonly<SessionSnapshot> = {
@@ -65,6 +68,8 @@ function parseSnapshot(raw: string): SessionSnapshot {
           accessToken: record.accessToken,
           refreshToken: record.refreshToken,
           passwordChangeRequired: record.passwordChangeRequired,
+          loginPlatform: record.loginPlatform === 'business' || record.loginPlatform === 'super'
+            ? record.loginPlatform : undefined,
           sessionId:
             typeof storedId === 'string' && storedId
               ? storedId
@@ -111,7 +116,8 @@ function applySession(next: SessionSnapshot, fromStorage = false): void {
     current.accessToken !== next.accessToken ||
     current.refreshToken !== next.refreshToken ||
     current.passwordChangeRequired !== next.passwordChangeRequired ||
-    current.sessionId !== next.sessionId
+    current.sessionId !== next.sessionId ||
+    current.loginPlatform !== next.loginPlatform
   ) {
     sessionFromStorage = fromStorage;
     session.value = next;
@@ -151,6 +157,12 @@ export const passwordChangeRequiredFlag = computed(() => session.value.passwordC
 
 /** Reactive login ID, exposed read-only. */
 export const sessionId = computed(() => session.value.sessionId);
+export const loginPlatform = computed(() => session.value.loginPlatform);
+
+/** 仅业务登录需要在地址中明确标识平台。 */
+export function loginPlatformQuery(platform: LoginPlatform | undefined): { platform?: 'business' } {
+  return platform === 'business' ? { platform } : {};
+}
 
 /** Current login ID, synchronized with storage first so a queued StorageEvent cannot race. */
 export function getSessionId(): string | null {
@@ -189,6 +201,7 @@ export function setTokens(
         ? passwordChangeRequired
         : current.passwordChangeRequired,
     sessionId: current.sessionId ?? newSessionId(),
+    loginPlatform: current.loginPlatform,
   });
   return true;
 }
@@ -199,6 +212,7 @@ export function setLoginTokens(
   refreshToken: string,
   passwordChangeRequired?: boolean | null,
   expectedSessionId?: string | null,
+  platform?: LoginPlatform,
 ): boolean {
   if (expectedSessionId !== undefined && getSessionId() !== expectedSessionId) return false;
   persistSession({
@@ -206,6 +220,7 @@ export function setLoginTokens(
     refreshToken,
     passwordChangeRequired: passwordChangeRequired === true,
     sessionId: newSessionId(),
+    loginPlatform: platform,
   });
   return true;
 }

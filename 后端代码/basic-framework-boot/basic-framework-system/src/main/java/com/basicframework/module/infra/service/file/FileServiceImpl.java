@@ -333,19 +333,13 @@ public class FileServiceImpl implements FileService {
         } else {
             file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
             if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
-                var metadataException = exception(ErrorCodeConstants.FILE_METADATA_INVALID);
-                deleteUnregisteredObject(file.getPath(), metadataException);
-                throw metadataException;
+                throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
             }
         }
         try {
             fileMapper.insert(file);
         } catch (DuplicateKeyException ex) {
-            // 同路径已有记录，对象归属于该记录，禁止补偿删除。
             throw exception(ErrorCodeConstants.FILE_PATH_EXISTS);
-        } catch (RuntimeException ex) {
-            deleteUnregisteredObject(file.getPath(), ex);
-            throw ex;
         }
         return file.getId();
     }

@@ -45,7 +45,6 @@ import java.util.Set;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.PASSWORD_POLICY_NOT_MATCH;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PASSWORD_FAILED;
-import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PASSWORD_SAME_AS_OLD;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;

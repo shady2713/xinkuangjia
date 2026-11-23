@@ -10,6 +10,7 @@ import {
   getRefreshToken,
   getSessionId,
   isPasswordChangeRequired,
+  loginPlatform,
   passwordChangeRequiredFlag,
   setLoginTokens,
   setTokens,
@@ -177,6 +178,19 @@ describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
 
     expectFlag(true);
   });
+});
+
+it('keeps the platform of an active login through access token renewal', () => {
+  clearTokens();
+  try {
+    expect(setLoginTokens('initial-access', 'session-refresh', false, null, 'business')).toBe(true);
+    const owner = getSessionId()!;
+    expect(setTokens('renewed-access', 'session-refresh', undefined, owner)).toBe(true);
+    expect(loginPlatform.value).toBe('business');
+    expect(persistedSession()).toMatchObject({ loginPlatform: 'business' });
+  } finally {
+    clearTokens();
+  }
 });
 
 describe('bf_session snapshot syncs across tabs', () => {

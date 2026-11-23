@@ -2,7 +2,6 @@
 import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import {
   FIELD_LIMITS,
@@ -12,7 +11,6 @@ import {
 import { useUserStore } from '@/stores/user';
 import { getSessionId } from '@/utils/token';
 
-const router = useRouter();
 const userStore = useUserStore();
 const formRef = ref<FormInstance>();
 const loading = ref(false);
@@ -47,7 +45,6 @@ async function handleSubmit() {
   try {
     if (!(await userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword))) return;
     ElMessage.success('密码修改成功，请重新登录');
-    await router.replace('/login');
   } catch (error) {
     if (!axios.isCancel(error)) throw error;
   } finally {

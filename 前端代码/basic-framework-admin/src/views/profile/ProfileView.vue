@@ -2,7 +2,6 @@
 import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import {
   getUserProfileApi,
@@ -22,7 +21,6 @@ import { useUserStore } from '@/stores/user';
 import { formatDateTime } from '@/utils/format';
 import { getSessionId } from '@/utils/token';
 
-const router = useRouter();
 const userStore = useUserStore();
 const loading = ref(false);
 const savingBasic = ref(false);
@@ -125,7 +123,6 @@ async function handleSavePassword() {
   try {
     if (!(await userStore.changeOwnPassword(owner, pwdForm.oldPassword, pwdForm.newPassword))) return;
     ElMessage.success('密码修改成功');
-    await router.replace('/login');
   } catch (error) {
     if (!axios.isCancel(error)) throw error;
   } finally {

@@ -20,6 +20,8 @@ import {
   getAccessToken,
   getRefreshToken,
   getSessionId,
+  loginPlatform,
+  loginPlatformQuery,
   setTokens,
 } from '@/utils/token';
 
@@ -144,16 +146,15 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
 }
 
 function redirectToLogin(sessionId: string | null): void {
+  const query = loginPlatformQuery(loginPlatform.value);
   if (!clearTokens(sessionId)) {
     throw new CanceledError('登录会话已切换');
   }
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   const loginUrl = `${base}/login`;
   if (!window.location.pathname.endsWith('/login')) {
-    const redirect = encodeURIComponent(
-      window.location.pathname.replace(base, '') + window.location.search,
-    );
-    window.location.replace(`${loginUrl}?redirect=${redirect}`);
+    const redirect = window.location.pathname.replace(base, '') + window.location.search + window.location.hash;
+    window.location.replace(`${loginUrl}?${new URLSearchParams({ ...query, redirect })}`);
   }
 }
 

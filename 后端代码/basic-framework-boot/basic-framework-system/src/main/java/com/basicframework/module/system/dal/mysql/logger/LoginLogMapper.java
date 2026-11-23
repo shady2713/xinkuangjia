@@ -42,7 +42,7 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
     }
 
     /**
-     * 按日志归属用户查询指定时间之后的登录日志，按编号降序。
+     * 按日志归属用户查询指定时间之后的登录日志，明细按编号降序。
      *
      * <p>归属用户集合为空时直接返回空列表（fail-closed），避免退化为无归属过滤的全表查询。</p>
      *

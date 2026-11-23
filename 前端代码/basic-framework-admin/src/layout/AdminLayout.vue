@@ -174,8 +174,7 @@ async function handleUserCommand(cmd: string) {
       confirmText: '退出登录',
       cancelText: '取消',
     });
-    if (getSessionId() !== owner || !await userStore.logout()) return;
-    await router.replace('/login');
+    if (getSessionId() === owner) await userStore.logout();
   }
 }
 </script>

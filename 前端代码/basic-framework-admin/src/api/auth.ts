@@ -2,6 +2,7 @@
  * 认证、图形验证码、SM2 公钥与短信认证接口。
  */
 import type { OpenApiSchemas } from '@/api/generated/api-types';
+import type { LoginPlatform } from '@/utils/token';
 
 import { rawHttp, request } from '@/api/request';
 
@@ -18,9 +19,6 @@ export type SmsSendReq = Omit<OpenApiSchemas.AuthSmsSendReqVO, 'captchaVerificat
 };
 export type SmsLoginReq = OpenApiSchemas.AuthSmsLoginReqVO;
 export type ResetPasswordReq = OpenApiSchemas.AuthResetPasswordReqVO;
-
-/** Explicit password-login platform; super admin remains the default entry. */
-export type LoginPlatform = 'super' | 'business';
 
 export function loginApi(data: LoginReq, platform: LoginPlatform = 'super') {
   return request.post<LoginResp>(
