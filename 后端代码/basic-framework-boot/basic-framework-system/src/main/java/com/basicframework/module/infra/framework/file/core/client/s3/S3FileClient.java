@@ -35,13 +35,11 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
-import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -411,25 +409,9 @@ public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
     public String presignGetUrl(String url, Integer expirationSeconds) {
         String path = extractObjectPath(url);
         if (!BooleanUtil.isFalse(config.getEnablePublicAccess()) && !FilePathUtils.isPrivateObjectPath(path)) {
-            return config.getDomain() + "/" + encodeObjectPath(path);
+            return config.getDomain() + "/" + FilePathUtils.encodeObjectPath(path);
         }
         return signGetObjectUrl(path, expirationSeconds);
-    }
-
-    /** 按斜杠分段执行 RFC 3986 路径段编码，防止文件名中的 #/?/%/空格截断或破坏公开 URL。 */
-    private static String encodeObjectPath(String path) {
-        if (StrUtil.isEmpty(path)) {
-            return "";
-        }
-        String[] segments = path.split("/", -1);
-        StringBuilder encoded = new StringBuilder(path.length());
-        for (int i = 0; i < segments.length; i++) {
-            if (i > 0) {
-                encoded.append('/');
-            }
-            encoded.append(UriUtils.encodePathSegment(segments[i], StandardCharsets.UTF_8));
-        }
-        return encoded.toString();
     }
 
     /**

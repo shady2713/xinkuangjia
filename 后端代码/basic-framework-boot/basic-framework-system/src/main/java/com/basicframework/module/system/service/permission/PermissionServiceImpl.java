@@ -687,7 +687,12 @@ public class PermissionServiceImpl implements PermissionService {
             throw exception(ErrorCodeConstants.ROLE_CAN_NOT_UPDATE_SYSTEM_TYPE_ROLE);
         }
         String loginUserType = userService.getLoginUserTypeOrDefault();
-        for (MenuDO menu : menuService.getMenuList(menuIds)) {
+        // 空集合表示有意清空授权；非空时每个目标菜单都必须真实存在，避免写入悬空关联。
+        List<MenuDO> menus = CollUtil.isEmpty(menuIds) ? Collections.emptyList() : menuService.getMenuList(menuIds);
+        if (CollUtil.isNotEmpty(menuIds) && !convertSet(menus, MenuDO::getId).containsAll(menuIds)) {
+            throw exception(ErrorCodeConstants.MENU_NOT_EXISTS);
+        }
+        for (MenuDO menu : menus) {
             if (!AdminPlatformTypeEnum.isSame(menu.getMenuType(), loginUserType)) {
                 throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
             }

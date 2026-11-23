@@ -58,7 +58,7 @@ public interface RedisKeyConstants {
     String OAUTH_CLIENT = "oauth_client";
 
     /**
-     * 访问令牌的缓存
+     * 历史版本的访问令牌实体缓存（已停止读写，仅在吊销时清理遗留键；鉴权以数据库记录为准）
      * <p>
      * KEY 格式：oauth2_access_token:{token}
      * VALUE 数据类型：String 访问令牌信息 {@link OAuth2AccessTokenDO}

@@ -234,8 +234,14 @@ public class FileController {
         // 获取请求的路径
         String path = StrUtil.subAfter(request.getRequestURI(), "/content/", false);
         if (StrUtil.isEmpty(path)) {
-            response.setStatus(HttpStatus.NOT_FOUND.value());
-            return;
+            // 读取原始查询值，与旧路径入口共用单次解码和校验。普通路径 URL 始终优先。
+            String query = request.getQueryString();
+            String prefix = FilePathUtils.PUBLIC_FILE_KEY_QUERY_PREFIX;
+            if (query == null || !query.startsWith(prefix) || query.indexOf('&') >= 0) {
+                response.setStatus(HttpStatus.NOT_FOUND.value());
+                return;
+            }
+            path = query.substring(prefix.length());
         }
         // URL 解码以支持包含中文字符的相对对象路径。
         path = URLUtil.decode(path, StandardCharsets.UTF_8, false);

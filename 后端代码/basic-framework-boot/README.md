@@ -18,7 +18,10 @@ mvn -B -ntp -Pquality-gate verify
 mvn -B -ntp -Pquality-gate verify -Dopenapi.update=true
 
 # 本地启动服务（默认端口 48080，需先执行根目录 scripts/runtime/init_local_dev.py --apply）
-mvn -B -pl basic-framework-server spring-boot:run
+# 干净 Maven 缓存下 server 依赖 system 与 core：须先在本目录聚合打包，再在本目录运行 JAR
+mvn -B -ntp clean package -DskipTests
+java -jar basic-framework-server/target/basic-framework-server.jar
+# Windows：在仓库根目录执行 scripts/runtime/start_java.ps1 -Build（启动器要求 local，HTTP 监听地址取决于 server.address）
 
 # 构建生产可执行 JAR
 mvn -B -ntp clean package -DskipTests

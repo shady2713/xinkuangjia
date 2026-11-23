@@ -100,7 +100,7 @@ async function handleSubmit() {
       password: encryptedPassword,
     });
     ElMessage.success('密码重置成功，请重新登录');
-    await router.replace('/login');
+    await router.replace({ path: '/login', query: { platform: 'business' } });
   } finally {
     loading.value = false;
   }

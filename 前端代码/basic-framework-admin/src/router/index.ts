@@ -19,7 +19,7 @@ import { getAppConfig } from '@/config/app';
 import { useDictStore } from '@/stores/dict';
 import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
-import { getAccessToken, getSessionId, isSessionFromStorage, sessionId } from '@/utils/token';
+import { getAccessToken, getSessionId, isSessionFromStorage, loginPlatformQuery, loginSession } from '@/utils/token';
 
 NProgress.configure({ showSpinner: false });
 
@@ -117,21 +117,34 @@ export function clearDynamicRoutes(): void {
 export function syncSessionRoutes(pinia: Pinia): void {
   const tabs = useTabsStore(pinia);
   const dict = useDictStore(pinia);
-  watch(sessionId, (next, previous) => {
+  watch(loginSession, (current, previous) => {
+    const next = current.id;
+    if (next === previous.id) return;
     // Capture before resets: a local fresh login is left to LoginView; storage-driven ones redirect.
     const fromStorage = isSessionFromStorage();
     clearDynamicRoutes();
     tabs.reset();
     dict.reset();
-    if (!previous && !fromStorage) return;
+    // Local sign-in and sign-out actions navigate after their own request completes.
+    if (!fromStorage && (!previous.id || !next)) return;
     queueMicrotask(() => {
       if (getSessionId() !== next) return;
       const to = next ? '/dashboard' : '/login';
       if (next || router.currentRoute.value.path !== to) {
-        void router.replace({ path: to, force: true });
+        const query = next ? {} : loginPlatformQuery(previous.platform);
+        void router.replace({ path: to, query, force: true });
       }
     });
   }, { flush: 'sync' });
+}
+
+/** 结束当前登录的操作成功后，返回该会话的平台入口。 */
+export async function returnToLoginAfter(operation: () => Promise<boolean>): Promise<boolean> {
+  if (!getSessionId()) return false;
+  const query = loginPlatformQuery(loginSession.value.platform);
+  if (!(await operation()) || getSessionId()) return false;
+  await router.replace({ path: '/login', query });
+  return true;
 }
 
 export function registerMenuRoutes(menus: MenuRouteItem[]): void {
@@ -173,7 +186,7 @@ export function registerMenuRoutes(menus: MenuRouteItem[]): void {
   }
 }
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   NProgress.start();
   const { appTitle } = getAppConfig();
   document.title = to.meta?.title ? `${String(to.meta.title)} - ${appTitle}` : appTitle;
@@ -214,8 +227,12 @@ router.beforeEach(async (to) => {
       });
       return { path: to.path, query: to.query, hash: to.hash, replace: true };
     } catch {
-      if (!userStore.resetState(owner)) return false;
-      return { path: '/login', query: { redirect: to.fullPath } };
+      // An explicitly invalid or replaced login was already cleared by the transport or another tab.
+      if (getSessionId() !== owner) return false;
+      // Transient transport/bootstrap failure: keep the login; the next navigation retries.
+      if (from.matched.length) return false;
+      if (to.path === '/dashboard' || to.path === '/profile/change-password') return true;
+      return '/dashboard';
     }
   }
 

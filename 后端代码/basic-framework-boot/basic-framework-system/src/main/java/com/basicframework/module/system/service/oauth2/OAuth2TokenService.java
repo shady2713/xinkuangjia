@@ -100,14 +100,6 @@ public interface OAuth2TokenService {
     void removeAccessToken(Long userId, Integer userType);
 
     /**
-     * 分页查询访问令牌。
-     *
-     * @param reqVO 查询参数
-     * @return 访问令牌分页结果
-     */
-    PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO);
-
-    /**
      * 按调用者所属管理平台隔离分页查询在线访问令牌。
      *
      * @param reqVO 查询参数

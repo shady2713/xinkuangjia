@@ -25,6 +25,7 @@ import SidebarMenuItem from '@/layout/SidebarMenuItem.vue';
 import TabsChrome from '@/layout/TabsChrome.vue';
 import { useAppStore } from '@/stores/app';
 import { useTabsStore } from '@/stores/tabs';
+import { returnToLoginAfter } from '@/router';
 import { useUserStore } from '@/stores/user';
 import { confirmAction } from '@/utils/confirm';
 import { getSessionId, sessionId } from '@/utils/token';
@@ -174,8 +175,7 @@ async function handleUserCommand(cmd: string) {
       confirmText: '退出登录',
       cancelText: '取消',
     });
-    if (getSessionId() !== owner || !await userStore.logout()) return;
-    await router.replace('/login');
+    if (getSessionId() === owner) await returnToLoginAfter(userStore.logout);
   }
 }
 </script>
@@ -343,7 +343,8 @@ async function handleUserCommand(cmd: string) {
 
       <!-- 浅灰底主内容区 -->
       <main class="min-h-0 flex-1 overflow-auto bg-[var(--bf-bg-deep)] p-4">
-        <router-view v-slot="{ Component }">
+        <!-- 清理会话后，业务页停止挂载，避免导航期间以匿名状态发起请求。 -->
+        <router-view v-if="sessionId" v-slot="{ Component }">
           <transition name="bf-fade-slide" mode="out-in">
             <keep-alive :key="sessionId ?? undefined" :include="tabsStore.cachedNames">
               <component :is="Component" :key="`${route.path}-${tabsStore.refreshKey}`" />

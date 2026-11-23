@@ -5,7 +5,6 @@ export interface AppConfig {
   appTitle: string;
   apiBaseUrl: string;
   captchaEnabled: boolean;
-  uploadType: 'client' | 'server';
 }
 
 export function getAppConfig(): AppConfig {
@@ -15,10 +14,6 @@ export function getAppConfig(): AppConfig {
     runtime?.VITE_APP_CAPTCHA_ENABLE ??
     import.meta.env.VITE_APP_CAPTCHA_ENABLE ??
     'true';
-  const uploadMode =
-    runtime?.VITE_UPLOAD_TYPE ??
-    import.meta.env.VITE_UPLOAD_TYPE ??
-    'server';
   return {
     appTitle:
       runtime?.VITE_APP_TITLE || import.meta.env.VITE_APP_TITLE || '企业级中后台',
@@ -27,6 +22,5 @@ export function getAppConfig(): AppConfig {
       import.meta.env.VITE_GLOB_API_URL ||
       '/admin-api',
     captchaEnabled: String(captchaFlag) === 'true',
-    uploadType: uploadMode === 'client' ? 'client' : 'server',
   };
 }

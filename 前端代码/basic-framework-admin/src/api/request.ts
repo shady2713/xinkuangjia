@@ -20,6 +20,8 @@ import {
   getAccessToken,
   getRefreshToken,
   getSessionId,
+  loginSession,
+  loginPlatformQuery,
   setTokens,
 } from '@/utils/token';
 
@@ -107,14 +109,16 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   }
   const previousAccessToken = getAccessToken();
   let body: CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>> | undefined;
+  let transportFailure: unknown;
   try {
     const resp = await rawHttp.post<CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>>>(
       '/system/auth/refresh-token',
       { refreshToken },
     );
     body = resp.data;
-  } catch {
-    // A failed rotation is handled below after checking for an updated session.
+  } catch (error) {
+    // A peer may have completed a refresh while this request was in flight.
+    transportFailure = error;
   }
   if (getSessionId() !== sessionId) {
     return null;
@@ -123,8 +127,14 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   if (currentAccessToken !== previousAccessToken || getRefreshToken() !== refreshToken) {
     return currentAccessToken || null;
   }
+  if (transportFailure) {
+    const status = axios.isAxiosError(transportFailure) ? transportFailure.response?.status : undefined;
+    if (status === 401 || status === 403) return null;
+    throw transportFailure;
+  }
+  if (body?.code === 400 || body?.code === 401 || body?.code === 403) return null;
   if (body?.code !== 0 || !body.data?.accessToken) {
-    return null;
+    throw new Error(body?.msg || '暂时无法刷新会话，请稍后重试');
   }
   const installed = setTokens(
     body.data.accessToken,
@@ -135,17 +145,16 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   return installed ? body.data.accessToken : null;
 }
 
-function redirectToLogin(sessionId: string | null): void {
+function redirectToLogin(sessionId: string): void {
+  const query = loginPlatformQuery(loginSession.value.platform);
   if (!clearTokens(sessionId)) {
     throw new CanceledError('登录会话已切换');
   }
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   const loginUrl = `${base}/login`;
   if (!window.location.pathname.endsWith('/login')) {
-    const redirect = encodeURIComponent(
-      window.location.pathname.replace(base, '') + window.location.search,
-    );
-    window.location.replace(`${loginUrl}?redirect=${redirect}`);
+    const redirect = window.location.pathname.replace(base, '') + window.location.search + window.location.hash;
+    window.location.replace(`${loginUrl}?${new URLSearchParams({ ...query, redirect })}`);
   }
 }
 
@@ -213,7 +222,9 @@ async function handleUnauthorized(
   originalConfig: RetryableRequestConfig,
 ): Promise<AxiosResponse> {
   assertCurrent(originalConfig);
-  const sessionId = originalConfig._sessionId ?? null;
+  const sessionId = originalConfig._sessionId;
+  // A request made while signed out does not own a session or its login navigation.
+  if (!sessionId) throw new Error('请先登录');
   if (originalConfig._retried) {
     if (getAccessToken() === originalConfig._bearer) redirectToLogin(sessionId);
     return Promise.reject(new Error('登录状态已过期，请重新登录'));
@@ -223,7 +234,7 @@ async function handleUnauthorized(
   // A late 401 for the previous bearer reuses the already rotated token without refreshing.
   let newToken: string | null = getAccessToken() || null;
   if (!newToken || newToken === originalConfig._bearer) {
-    newToken = sessionId ? await refreshFor(sessionId) : null;
+    newToken = await refreshFor(sessionId);
     assertCurrent(originalConfig);
   }
   if (!newToken) {

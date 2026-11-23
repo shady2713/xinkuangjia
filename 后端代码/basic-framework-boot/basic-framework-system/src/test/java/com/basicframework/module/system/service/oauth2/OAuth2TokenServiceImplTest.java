@@ -106,7 +106,7 @@ class OAuth2TokenServiceImplTest {
     /** 验证访问令牌缺少活动标记时按空闲超时拒绝。 */
     @Test
     void checkAccessTokenRejectsIdleSession() {
-        when(oauth2AccessTokenRedisDAO.get("access-token")).thenReturn(buildAccessToken("access-token"));
+        when(oauth2AccessTokenMapper.selectByAccessToken("access-token")).thenReturn(buildAccessToken("access-token"));
         when(oauth2AccessTokenRedisDAO.refreshActive("access-token", Duration.ofMinutes(30)))
                 .thenReturn(false);
 
@@ -119,11 +119,22 @@ class OAuth2TokenServiceImplTest {
     @Test
     void checkAccessTokenRefreshesActiveSession() {
         OAuth2AccessTokenDO accessToken = buildAccessToken("access-token");
-        when(oauth2AccessTokenRedisDAO.get("access-token")).thenReturn(accessToken);
+        when(oauth2AccessTokenMapper.selectByAccessToken("access-token")).thenReturn(accessToken);
         when(oauth2AccessTokenRedisDAO.refreshActive("access-token", Duration.ofMinutes(30)))
                 .thenReturn(true);
 
         assertThat(tokenService.checkAccessToken("access-token")).isSameAs(accessToken);
+    }
+
+    /** 验证数据库中已不存在的访问令牌一律拒绝，鉴权不依赖 Redis 实体缓存。 */
+    @Test
+    void checkAccessTokenRejectsTokenMissingFromDatabase() {
+        when(oauth2AccessTokenMapper.selectByAccessToken("revoked-token")).thenReturn(null);
+
+        assertThatThrownBy(() -> tokenService.checkAccessToken("revoked-token"))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(UNAUTHORIZED.getCode()));
+        verify(oauth2AccessTokenRedisDAO, never()).refreshActive(anyString(), any(Duration.class));
     }
 
     /** 验证开放接口客户端的令牌不受管理后台空闲超时影响。 */
@@ -131,7 +142,7 @@ class OAuth2TokenServiceImplTest {
     void checkAccessTokenSkipsIdleCheckForPublicClient() {
         OAuth2AccessTokenDO accessToken = buildAccessToken("public-token");
         accessToken.setClientId("open-client");
-        when(oauth2AccessTokenRedisDAO.get("public-token")).thenReturn(accessToken);
+        when(oauth2AccessTokenMapper.selectByAccessToken("public-token")).thenReturn(accessToken);
 
         assertThat(tokenService.checkAccessToken("public-token")).isSameAs(accessToken);
         verify(oauth2AccessTokenRedisDAO, never()).refreshActive(anyString(), any(Duration.class));
@@ -142,7 +153,7 @@ class OAuth2TokenServiceImplTest {
     void checkAccessTokenRejectsLegacyDefaultClientToken() {
         OAuth2AccessTokenDO accessToken = buildAccessToken("legacy-token");
         accessToken.setClientId(OAuth2ClientConstants.CLIENT_ID_LEGACY_DEFAULT);
-        when(oauth2AccessTokenRedisDAO.get("legacy-token")).thenReturn(accessToken);
+        when(oauth2AccessTokenMapper.selectByAccessToken("legacy-token")).thenReturn(accessToken);
 
         assertThatThrownBy(() -> tokenService.checkAccessToken("legacy-token"))
                 .isInstanceOfSatisfying(ServiceException.class,
@@ -167,7 +178,7 @@ class OAuth2TokenServiceImplTest {
     @Test
     void checkAccessTokenSkipsIdleCheckWhenDisabled() {
         securityProperties.getSession().setIdleTimeout(Duration.ZERO);
-        when(oauth2AccessTokenRedisDAO.get("access-token")).thenReturn(buildAccessToken("access-token"));
+        when(oauth2AccessTokenMapper.selectByAccessToken("access-token")).thenReturn(buildAccessToken("access-token"));
 
         assertThat(tokenService.checkAccessToken("access-token")).isNotNull();
         verify(oauth2AccessTokenRedisDAO, never()).refreshActive(anyString(), any(Duration.class));

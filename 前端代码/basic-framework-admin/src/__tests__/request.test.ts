@@ -10,10 +10,27 @@ import {
   getRefreshToken,
   getSessionId,
   isPasswordChangeRequired,
+  loginSession,
   passwordChangeRequiredFlag,
   setLoginTokens,
   setTokens,
 } from '@/utils/token';
+
+const apiMocks = vi.hoisted(() => ({
+  getPermissionInfoApi: vi.fn(),
+  updateUserPasswordApi: vi.fn(),
+}));
+
+vi.mock('@/api/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/auth')>()),
+  getPermissionInfoApi: apiMocks.getPermissionInfoApi,
+}));
+vi.mock('@/api/system/profile', () => ({
+  updateUserPasswordApi: apiMocks.updateUserPasswordApi,
+}));
+vi.mock('@/utils/sm2', () => ({
+  encryptPassword: async (value: string) => `enc:${value}`,
+}));
 
 const SESSION_KEY = 'bf_session';
 const LEGACY_KEYS = ['bf_access_token', 'bf_refresh_token', 'bf_password_change_required'];
@@ -161,6 +178,19 @@ describe('refresh-token rotation keeps passwordChangeRequired aligned', () => {
 
     expectFlag(true);
   });
+});
+
+it('keeps the platform of an active login through access token renewal', () => {
+  clearTokens();
+  try {
+    expect(setLoginTokens('initial-access', 'session-refresh', false, null, 'business')).toBe(true);
+    const owner = getSessionId()!;
+    expect(setTokens('renewed-access', 'session-refresh', undefined, owner)).toBe(true);
+    expect(loginSession.value.platform).toBe('business');
+    expect(persistedSession()).toMatchObject({ loginPlatform: 'business' });
+  } finally {
+    clearTokens();
+  }
 });
 
 describe('bf_session snapshot syncs across tabs', () => {
@@ -337,6 +367,24 @@ describe('refreshes stay with the login that started the requests', () => {
     },
   );
 
+  it('does not clear or navigate a session when an anonymous request is denied', async () => {
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem');
+    const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => {});
+    const rotate = vi.fn();
+    rawHttp.defaults.adapter = rotate;
+    try {
+      await expect(request.get('/synthetic/current-user', {
+        adapter: async (config) => reply(config, 401, null),
+      })).rejects.toThrow('请先登录');
+      expect(removeItem).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(rotate).not.toHaveBeenCalled();
+    } finally {
+      navigate.mockRestore();
+      removeItem.mockRestore();
+    }
+  });
+
   it('checks the original login before a queued request reaches its adapter', async () => {
     setLoginTokens('first-access', 'first-refresh', false);
     const adapter = vi.fn();
@@ -378,5 +426,58 @@ describe('refreshes stay with the login that started the requests', () => {
     await expect(response).resolves.toBe('same login');
     expect(rotate).not.toHaveBeenCalled();
     expect(credentials).toEqual(['Bearer first-access', 'Bearer rotated-access']);
+  });
+});
+
+describe('self-service store actions stay with the current login', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearTokens();
+  });
+
+  afterEach(() => {
+    clearTokens();
+  });
+
+  it('refreshes identity without replacing permissions or menus', async () => {
+    setLoginTokens('first-access', 'first-refresh', false);
+    const store = useUserStore(createPinia());
+    store.permissions = ['kept:permission'];
+    apiMocks.getPermissionInfoApi.mockResolvedValue({
+      user: { nickname: 'updated' },
+      roles: [],
+      permissions: [],
+      menus: [],
+    });
+
+    await store.refreshUserInfo();
+
+    expect(store.userInfo).toEqual({ nickname: 'updated' });
+    expect(store.permissions).toEqual(['kept:permission']);
+    expect(store.menus).toEqual([]);
+  });
+
+  it('does not submit a self password change once the bound login is replaced', async () => {
+    setLoginTokens('first-access', 'first-refresh', false);
+    const owner = getSessionId();
+    const store = useUserStore(createPinia());
+    apiMocks.updateUserPasswordApi.mockResolvedValue(true);
+    setLoginTokens('second-access', 'second-refresh', false);
+
+    await expect(store.changeOwnPassword(owner, 'Old-pass1', 'New-pass1')).resolves.toBe(false);
+    expect(apiMocks.updateUserPasswordApi).not.toHaveBeenCalled();
+  });
+
+  it('submits encrypted values for the current login', async () => {
+    setLoginTokens('first-access', 'first-refresh', false);
+    const owner = getSessionId();
+    const store = useUserStore(createPinia());
+    apiMocks.updateUserPasswordApi.mockResolvedValue(true);
+
+    await expect(store.changeOwnPassword(owner, 'Old-pass1', 'New-pass1')).resolves.toBe(true);
+    expect(apiMocks.updateUserPasswordApi).toHaveBeenCalledWith({
+      oldPassword: 'enc:Old-pass1',
+      newPassword: 'enc:New-pass1',
+    });
   });
 });

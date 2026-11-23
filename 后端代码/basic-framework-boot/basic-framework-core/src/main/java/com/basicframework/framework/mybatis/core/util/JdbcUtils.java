@@ -4,6 +4,8 @@ import cn.hutool.core.util.ObjectUtil;
 import com.basicframework.framework.common.util.spring.SpringUtils;
 import com.basicframework.framework.mybatis.core.enums.DbTypeEnum;
 import com.baomidou.mybatisplus.annotation.DbType;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
@@ -51,10 +53,15 @@ public class JdbcUtils {
      */
     public static DbType getDbType() {
         DataSource dataSource = SpringUtils.getBean(DataSource.class);
-        try (Connection conn = dataSource.getConnection()) {
+        Connection conn = null;
+        try {
+            // 复用当前事务绑定的连接，避免事务内再借用第二个 JDBC 连接；无事务时按需获取并释放
+            conn = DataSourceUtils.getConnection(dataSource);
             return DbTypeEnum.find(conn.getMetaData().getDatabaseProductName());
-        } catch (SQLException e) {
+        } catch (SQLException | CannotGetJdbcConnectionException e) {
             throw new IllegalStateException("读取当前数据库类型失败", e);
+        } finally {
+            DataSourceUtils.releaseConnection(conn, dataSource);
         }
     }
 

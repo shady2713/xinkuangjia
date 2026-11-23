@@ -1,16 +1,12 @@
 package com.basicframework.module.system.dal.redis.oauth2;
 
-import cn.hutool.core.date.LocalDateTimeUtil;
 import com.basicframework.framework.common.util.collection.CollectionUtils;
-import com.basicframework.framework.common.util.json.JsonUtils;
 import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenDO;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
 import jakarta.annotation.Resource;
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +15,7 @@ import static com.basicframework.module.system.dal.redis.RedisKeyConstants.OAUTH
 import static com.basicframework.module.system.dal.redis.RedisKeyConstants.OAUTH2_ACCESS_ACTIVE;
 
 /**
- * {@link OAuth2AccessTokenDO} 的 RedisDAO
+ * {@link OAuth2AccessTokenDO} 会话空闲活动标记的 RedisDAO；鉴权以数据库令牌记录为准，不缓存令牌实体。
  *
  * @author 李杰
  */
@@ -30,37 +26,7 @@ public class OAuth2AccessTokenRedisDAO {
     private StringRedisTemplate stringRedisTemplate;
 
     /**
-     * 获取指定数据。
-     *
-     * @param accessToken 访问令牌参数
-     * @return 查询结果
-     */
-    public OAuth2AccessTokenDO get(String accessToken) {
-        String redisKey = formatKey(accessToken);
-        return JsonUtils.parseObject(stringRedisTemplate.opsForValue().get(redisKey), OAuth2AccessTokenDO.class);
-    }
-
-    /**
-     * 设置指定数据。
-     *
-     * @param accessTokenDO 访问令牌DO参数
-     */
-    public void set(OAuth2AccessTokenDO accessTokenDO) {
-        String redisKey = formatKey(accessTokenDO.getAccessToken());
-        // 清理多余字段，避免缓存
-        accessTokenDO.setUpdater(null);
-        accessTokenDO.setUpdateTime(null);
-        accessTokenDO.setCreateTime(null);
-        accessTokenDO.setCreator(null);
-        accessTokenDO.setDeleted(null);
-        long time = LocalDateTimeUtil.between(LocalDateTime.now(), accessTokenDO.getExpiresTime(), ChronoUnit.SECONDS);
-        if (time > 0) {
-            stringRedisTemplate.opsForValue().set(redisKey, JsonUtils.toJsonString(accessTokenDO), time, TimeUnit.SECONDS);
-        }
-    }
-
-    /**
-     * 删除指定数据。
+     * 删除历史版本遗留的访问令牌实体缓存键；当前版本不再读写该缓存，仅在吊销时清理以兼容滚动升级。
      *
      * @param accessToken 访问令牌参数
      */
@@ -70,7 +36,7 @@ public class OAuth2AccessTokenRedisDAO {
     }
 
     /**
-     * 删除列表。
+     * 批量删除活动标记及历史版本遗留的访问令牌实体缓存键。
      *
      * @param accessTokens 访问Tokens参数
      */

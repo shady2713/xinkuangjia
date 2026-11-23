@@ -1,39 +1,7 @@
----
-description: "需求卡按当前项目的模板、来源和编号约定维护；日常源码与文档发现不自动读取此目录的计划或卡片。"
-kind: package-reference
----
+# 需求卡
 
-# 需求卡目录约定
+常规源码和文档检索排除此目录。相关开发任务、明确指定的卡片及文档链接检查可以读取对应文件。
 
-## 摘要
+每张卡应记录目标、授权来源与范围、可观察的验收条件、验证门禁以及回滚方式。代码评审和验证应指向同一提交。 [仓库工程规范](../../AGENTS.md)
 
-需求卡按当前项目的模板、来源和编号约定维护；日常源码与文档发现不自动读取此目录的计划或卡片。
-
-## 目录
-
-- [检索范围](#检索范围)
-- [生成入口](#生成入口)
-- [已知限制与暂缓工作](#已知限制与暂缓工作)
-
-<a id="检索范围"></a>
-
-## 检索范围
-
-常规 rg 枚举、正文检索和自动读取链接时排除 `docs/需求卡/**`。仅在用户明确请求、提供具体路径或当前任务执行/检查该计划或卡时读取相关内容；该要求不免除质量检查。
-
-<a id="生成入口"></a>
-
-## 生成入口
-
-Minimum requirements for a task card:
-
-- Goal: the intended outcome in one sentence.
-- Scope: affected modules or paths, and what is out of scope.
-- Acceptance: observable checks that prove completion.
-- Validation: the gates from the authority below that must pass.
-
-Authority: [AGENTS.md](../../AGENTS.md).
-
-## 已知限制与暂缓工作
-
-当前没有已确认的需求卡，目录入口不代表任何计划已获执行授权。创建卡片时须按对应技能读取模板并核实来源。
+历史示例见 [角色平台调整](role-platform.md)。

@@ -7,8 +7,6 @@ import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.exception.util.ServiceExceptionUtil;
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.basicframework.framework.common.util.monitor.TracerUtils;
-import com.basicframework.framework.common.util.servlet.ServletUtils;
-import com.basicframework.framework.web.core.util.SensitiveDataUtils;
 import com.basicframework.framework.web.core.util.WebFrameworkUtils;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.google.common.util.concurrent.UncheckedExecutionException;
@@ -126,8 +124,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public CommonResult<?> methodArgumentTypeMismatchExceptionHandler(MethodArgumentTypeMismatchException ex) {
-        log.warn("[methodArgumentTypeMismatchExceptionHandler]", ex);
         String paramName = StrUtil.blankToDefault(ex.getName(), "未知参数");
+        // 仅记录参数名与目标类型，避免把原始请求值或转换异常消息写入日志
+        log.warn("[methodArgumentTypeMismatchExceptionHandler][param({}) requiredType({})]", paramName,
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : null);
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", paramName));
     }
 
@@ -136,10 +136,11 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public CommonResult<?> methodArgumentNotValidExceptionExceptionHandler(MethodArgumentNotValidException ex) {
-        log.warn("[methodArgumentNotValidExceptionExceptionHandler]", ex);
         // 获取 errorMessage
         String errorMessage = null;
         FieldError fieldError = ex.getBindingResult().getFieldError();
+        logValidationMetadata("methodArgumentNotValidExceptionExceptionHandler", fieldError,
+                ex.getBindingResult().getErrorCount());
         if (fieldError == null) {
             // 组合校验时，尝试从全量错误信息中提取提示
             List<ObjectError> allErrors = ex.getBindingResult().getAllErrors();
@@ -164,8 +165,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BindException.class)
     public CommonResult<?> bindExceptionHandler(BindException ex) {
-        log.warn("[handleBindException]", ex);
         FieldError fieldError = ex.getFieldError();
+        logValidationMetadata("handleBindException", fieldError, ex.getErrorCount());
         if (fieldError != null) {
             return CommonResult.error(BAD_REQUEST.getCode(), fieldError.getDefaultMessage());
         }
@@ -182,7 +183,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @SuppressWarnings("PatternVariableCanBeUsed")
     public CommonResult<?> methodArgumentTypeInvalidFormatExceptionHandler(HttpMessageNotReadableException ex) {
-        log.warn("[methodArgumentTypeInvalidFormatExceptionHandler]", ex);
+        // 反序列化异常消息可能回显请求体原文，仅记录异常类型
+        log.warn("[methodArgumentTypeInvalidFormatExceptionHandler][cause({})]",
+                ex.getCause() != null ? ex.getCause().getClass().getSimpleName() : null);
         if (ex.getCause() instanceof InvalidFormatException) {
             InvalidFormatException invalidFormatException = (InvalidFormatException) ex.getCause();
             String fieldName = CollUtil.isNotEmpty(invalidFormatException.getPath())
@@ -204,8 +207,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = ConstraintViolationException.class)
     public CommonResult<?> constraintViolationExceptionHandler(ConstraintViolationException ex) {
-        log.warn("[constraintViolationExceptionHandler]", ex);
         ConstraintViolation<?> constraintViolation = ex.getConstraintViolations().iterator().next();
+        log.warn("[constraintViolationExceptionHandler][path({}) violationCount({})]",
+                constraintViolation.getPropertyPath(), ex.getConstraintViolations().size());
         return CommonResult.error(BAD_REQUEST.getCode(), constraintViolation.getMessage());
     }
 
@@ -214,7 +218,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = ValidationException.class)
     public CommonResult<?> validationException(ValidationException ex) {
-        log.warn("[constraintViolationExceptionHandler]", ex);
+        // ValidationException 的消息为非结构化字符串，可能包含原始入参，仅记录异常类型
+        log.warn("[constraintViolationExceptionHandler][type({})]", ex.getClass().getSimpleName());
         // 无法拼接明细的错误信息，因为 Dubbo Consumer 抛出 ValidationException 异常时，是直接的字符串信息，且人类不可读
         return CommonResult.error(BAD_REQUEST);
     }
@@ -333,8 +338,8 @@ public class GlobalExceptionHandler {
         if (sqlResult != null) {
             return sqlResult;
         }
-        // 结构化记录脱敏后的异常上下文到应用日志，不再写入无 UI 消费的数据库异常表
-        logSanitizedException(req, ex);
+        // 仅记录请求定位元数据与异常堆栈，不输出 query/body 内容，也不写入无 UI 消费的数据库异常表
+        logUnhandledException(req, ex);
         // 返回 ERROR CommonResult
         return CommonResult.error(INTERNAL_SERVER_ERROR.getCode(), INTERNAL_SERVER_ERROR.getMsg());
     }
@@ -361,17 +366,28 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 将脱敏后的请求上下文与异常堆栈输出到应用日志。
+     * 将请求定位元数据与异常堆栈输出到应用日志，不记录请求参数与请求体内容。
      *
      * @param req HTTP 请求
      * @param ex 未捕获异常
      */
-    private void logSanitizedException(HttpServletRequest req, Throwable ex) {
-        String sanitizedQuery = SensitiveDataUtils.sanitizeMap(ServletUtils.getParamMap(req));
-        String sanitizedBody = SensitiveDataUtils.sanitizeJson(ServletUtils.getBody(req));
-        log.error("[defaultExceptionHandler][app({}) traceId({}) userId({}) method({}) url({}) query({}) body({})]",
+    private void logUnhandledException(HttpServletRequest req, Throwable ex) {
+        log.error("[defaultExceptionHandler][app({}) traceId({}) userId({}) method({}) url({})]",
                 applicationName, TracerUtils.getTraceId(), WebFrameworkUtils.getLoginUserId(req),
-                req.getMethod(), req.getRequestURI(), sanitizedQuery, sanitizedBody, ex);
+                req.getMethod(), req.getRequestURI(), ex);
+    }
+
+    /**
+     * 输出参数校验失败的安全元数据（字段名、约束编码、错误数），不记录被拒绝的原始值。
+     *
+     * @param handler 处理器标识
+     * @param fieldError 首个字段错误，可能为空
+     * @param errorCount 错误总数
+     */
+    private static void logValidationMetadata(String handler, FieldError fieldError, int errorCount) {
+        log.warn("[{}][field({}) code({}) errorCount({})]", handler,
+                fieldError != null ? fieldError.getField() : null,
+                fieldError != null ? fieldError.getCode() : null, errorCount);
     }
 
 }

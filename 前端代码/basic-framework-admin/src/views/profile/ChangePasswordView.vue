@@ -2,19 +2,16 @@
 import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
-import { updateUserPasswordApi } from '@/api/system/profile';
 import {
   FIELD_LIMITS,
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
+import { returnToLoginAfter } from '@/router';
 import { useUserStore } from '@/stores/user';
-import { encryptPassword } from '@/utils/sm2';
 import { getSessionId } from '@/utils/token';
 
-const router = useRouter();
 const userStore = useUserStore();
 const formRef = ref<FormInstance>();
 const loading = ref(false);
@@ -47,14 +44,11 @@ async function handleSubmit() {
   if (!valid || getSessionId() !== owner) return;
   loading.value = true;
   try {
-    const oldPassword = await encryptPassword(form.oldPassword);
-    if (getSessionId() !== owner) return;
-    const newPassword = await encryptPassword(form.newPassword);
-    if (getSessionId() !== owner) return;
-    await updateUserPasswordApi({ oldPassword, newPassword });
-    if (!userStore.resetState(owner)) return;
+    const changed = await returnToLoginAfter(
+      () => userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword),
+    );
+    if (!changed) return;
     ElMessage.success('密码修改成功，请重新登录');
-    await router.replace('/login');
   } catch (error) {
     if (!axios.isCancel(error)) throw error;
   } finally {

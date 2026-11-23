@@ -35,6 +35,9 @@ import { formatDateTime } from '@/utils/format';
 
 defineOptions({ name: 'SystemOAuth2Client' });
 
+const OPEN_GRANT_TYPE = 'client_credentials';
+const historicalGrantTypes = ref<string[]>([]);
+
 const loading = ref(false);
 const list = ref<OAuth2ClientItem[]>([]);
 const total = ref(0);
@@ -59,7 +62,7 @@ const form = reactive({
   status: CommonStatusEnum.ENABLE as number,
   accessTokenValiditySeconds: 1800,
   refreshTokenValiditySeconds: 2592000,
-  authorizedGrantTypes: ['client_credentials'] as string[],
+  authorizedGrantTypes: [OPEN_GRANT_TYPE] as string[],
   scopesText: '',
 });
 
@@ -121,12 +124,14 @@ async function openForm(row?: OAuth2ClientItem) {
     status: CommonStatusEnum.ENABLE,
     accessTokenValiditySeconds: 1800,
     refreshTokenValiditySeconds: 2592000,
-    authorizedGrantTypes: ['client_credentials'],
+    authorizedGrantTypes: [OPEN_GRANT_TYPE],
     scopesText: '',
   });
+  historicalGrantTypes.value = [];
   formVisible.value = true;
   if (row?.id) {
     const detail = await getOAuth2ClientApi(row.id);
+    historicalGrantTypes.value = (detail.authorizedGrantTypes ?? []).filter((type) => type !== OPEN_GRANT_TYPE);
     Object.assign(form, {
       id: detail.id,
       clientId: detail.clientId,
@@ -136,7 +141,7 @@ async function openForm(row?: OAuth2ClientItem) {
       status: detail.status ?? CommonStatusEnum.ENABLE,
       accessTokenValiditySeconds: detail.accessTokenValiditySeconds ?? 1800,
       refreshTokenValiditySeconds: detail.refreshTokenValiditySeconds ?? 2592000,
-      authorizedGrantTypes: detail.authorizedGrantTypes ?? ['client_credentials'],
+      authorizedGrantTypes: detail.authorizedGrantTypes ?? [OPEN_GRANT_TYPE],
       scopesText: (detail.scopes ?? []).join(','),
     });
   }
@@ -357,11 +362,23 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="授权类型">
           <el-select v-model="form.authorizedGrantTypes" multiple class="w-full" placeholder="请选择授权类型">
-            <el-option label="客户端模式 (client_credentials)" value="client_credentials" />
-            <el-option label="授权码模式 (authorization_code)" value="authorization_code" />
-            <el-option label="密码模式 (password)" value="password" />
-            <el-option label="刷新模式 (refresh_token)" value="refresh_token" />
+            <el-option label="客户端模式 (client_credentials)" :value="OPEN_GRANT_TYPE" />
+            <el-option
+              v-for="type in historicalGrantTypes"
+              :key="type"
+              :label="`历史配置（${type}）`"
+              :value="type"
+              disabled
+            />
           </el-select>
+          <el-button
+            v-if="form.authorizedGrantTypes.some((type) => type !== OPEN_GRANT_TYPE)"
+            link
+            type="primary"
+            @click="form.authorizedGrantTypes = [OPEN_GRANT_TYPE]"
+          >
+            改用客户端模式
+          </el-button>
         </el-form-item>
         <el-form-item label="授权范围">
           <el-input

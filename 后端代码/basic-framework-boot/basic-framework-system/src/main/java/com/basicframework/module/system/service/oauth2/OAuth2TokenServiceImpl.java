@@ -116,7 +116,6 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         accessTokenDO.setRefreshToken("");
         accessTokenDO.setExpiresTime(LocalDateTime.now().plusSeconds(clientDO.getAccessTokenValiditySeconds()));
         oauth2AccessTokenMapper.insert(accessTokenDO);
-        runAfterCommitOrNow(() -> oauth2AccessTokenRedisDAO.set(accessTokenDO));
         return accessTokenDO;
     }
 
@@ -173,33 +172,14 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 根据访问令牌获取令牌信息；Redis 故障时按失败关闭抛出 401，避免穿透成 HTTP 500。
+     * 根据访问令牌读取数据库中的持久化会话记录；数据库记录是鉴权的唯一权威来源，不使用 Redis 实体缓存。
      *
      * @param accessToken 访问令牌
      * @return 令牌信息，未找到时返回 {@code null}
      */
     @Override
     public OAuth2AccessTokenDO getAccessToken(String accessToken) {
-        OAuth2AccessTokenDO accessTokenDO;
-        try {
-            accessTokenDO = oauth2AccessTokenRedisDAO.get(accessToken);
-        } catch (RuntimeException ex) {
-            log.error("[getAccessToken][Redis 读取访问令牌异常，按失败关闭处理: {}]", ex.getClass().getSimpleName());
-            throw sessionIdleTimeout();
-        }
-        if (accessTokenDO != null) {
-            return accessTokenDO;
-        }
-
-        accessTokenDO = oauth2AccessTokenMapper.selectByAccessToken(accessToken);
-        if (accessTokenDO != null && !accessTokenDO.getExpiresTime().isBefore(LocalDateTime.now())) {
-            try {
-                oauth2AccessTokenRedisDAO.set(accessTokenDO);
-            } catch (RuntimeException ex) {
-                log.warn("[getAccessToken][回填访问令牌缓存失败: {}]", ex.getClass().getSimpleName());
-            }
-        }
-        return accessTokenDO;
+        return oauth2AccessTokenMapper.selectByAccessToken(accessToken);
     }
 
     /**
@@ -345,17 +325,6 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 获取访问令牌分页数据。
-     *
-     * @param reqVO 请求参数
-     * @return 令牌分页
-     */
-    @Override
-    public PageResult<OAuth2AccessTokenDO> getAccessTokenPage(OAuth2AccessTokenPageReqVO reqVO) {
-        return oauth2AccessTokenMapper.selectPage(reqVO);
-    }
-
-    /**
      * 按调用者管理平台分页查询在线访问令牌，并将平台隔离与 {@code system_users} 数据权限下推至数据库执行。
      *
      * @param reqVO 分页条件
@@ -368,7 +337,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 创建 OAuth2 访问令牌并在事务提交后同步写入 Redis。
+     * 创建 OAuth2 访问令牌，并在事务提交后写入会话空闲活动标记。
      */
     private OAuth2AccessTokenDO createOAuth2AccessToken(OAuth2RefreshTokenDO refreshTokenDO, OAuth2ClientDO clientDO) {
         OAuth2AccessTokenDO accessTokenDO = new OAuth2AccessTokenDO();
@@ -381,10 +350,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         accessTokenDO.setRefreshToken(refreshTokenDO.getRefreshToken());
         accessTokenDO.setExpiresTime(LocalDateTime.now().plusSeconds(clientDO.getAccessTokenValiditySeconds()));
         oauth2AccessTokenMapper.insert(accessTokenDO);
-        runAfterCommitOrNow(() -> {
-            oauth2AccessTokenRedisDAO.set(accessTokenDO);
-            markActive(accessTokenDO);
-        });
+        runAfterCommitOrNow(() -> markActive(accessTokenDO));
         return accessTokenDO;
     }
 

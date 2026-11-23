@@ -2,10 +2,12 @@ package com.basicframework.framework.web.core.handler;
 
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
@@ -32,6 +34,28 @@ class GlobalExceptionHandlerTest {
 
         assertThat(result.getCode()).isEqualTo(BAD_REQUEST.getCode());
         assertThat(result.getMsg()).isEqualTo("组合参数校验失败");
+    }
+
+    @Test
+    void shouldReturnFieldMessageForFieldBindingError() {
+        BindException exception = new BindException(new Object(), "request");
+        exception.addError(new FieldError("request", "username", "用户名不能为空"));
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("test-application");
+
+        CommonResult<?> result = handler.bindExceptionHandler(exception);
+
+        assertThat(result.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(result.getMsg()).isEqualTo("用户名不能为空");
+    }
+
+    @Test
+    void shouldKeepGenericBadRequestForValidationException() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("test-application");
+
+        CommonResult<?> result = handler.validationException(new ValidationException("validation failed"));
+
+        assertThat(result.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(result.getMsg()).isEqualTo(BAD_REQUEST.getMsg());
     }
 
     @Test

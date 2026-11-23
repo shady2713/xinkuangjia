@@ -1,5 +1,6 @@
 package com.basicframework.module.system.dal.mysql.user;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -111,9 +112,34 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
      * @return 查询结果
      */
     default List<AdminUserDO> selectListByStatusAndUserType(Integer status, String userType) {
-        LambdaQueryWrapperX<AdminUserDO> query = new LambdaQueryWrapperX<AdminUserDO>()
-                // 允许 status 为空时查询全部状态账号，避免生成 status = NULL 条件。
-                .eqIfPresent(AdminUserDO::getStatus, status);
+        return selectList(platformUsers(userType).eqIfPresent(AdminUserDO::getStatus, status));
+    }
+
+    /**
+     * 按当前身份的主键读取平台，保留 ID 以区分空平台记录和不存在的账号。
+     *
+     * @param id 用户主键
+     * @return 仅含 ID 和平台字段的用户
+     */
+    default AdminUserDO selectPlatformById(Long id) {
+        return selectOne(new LambdaQueryWrapperX<AdminUserDO>()
+                .eq(AdminUserDO::getId, id)
+                .select(AdminUserDO::getId, AdminUserDO::getUserType));
+    }
+
+    /**
+     * 首页日志按用户归属限定查询，只读取用户编号。
+     */
+    default List<Long> selectIdsByPlatform(String userType) {
+        return selectList(platformUsers(userType).select(AdminUserDO::getId))
+                .stream().map(AdminUserDO::getId).toList();
+    }
+
+    /**
+     * 平台用户查询统一兼容归属业务平台的历史空值。
+     */
+    private static LambdaQueryWrapperX<AdminUserDO> platformUsers(String userType) {
+        LambdaQueryWrapperX<AdminUserDO> query = new LambdaQueryWrapperX<>();
         if (AdminPlatformTypeEnum.BUSINESS_ADMIN.getType().equals(userType)) {
             // 老账号的平台字段可能为空；只允许业务管理平台兼容读取，不能扩大到其他平台。
             query.and(item -> item.eq(AdminUserDO::getUserType, userType)
@@ -122,7 +148,7 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         } else {
             query.eq(AdminUserDO::getUserType, userType);
         }
-        return selectList(query);
+        return query;
     }
 
     /**
@@ -133,6 +159,22 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
      */
     default List<AdminUserDO> selectListByDeptIds(Collection<Long> deptIds) {
         return selectList(AdminUserDO::getDeptId, deptIds);
+    }
+
+    /**
+     * 仅当存储密码仍等于已校验值时更新密码哈希。
+     *
+     * @param id 用户编号
+     * @param expectedPassword 已校验的当前存储值
+     * @param newPassword 新密码哈希
+     * @return 受影响行数；为 0 表示存储值已被并发修改
+     */
+    default int updatePasswordByIdAndPassword(Long id, String expectedPassword, String newPassword) {
+        AdminUserDO updateObj = new AdminUserDO();
+        updateObj.setPassword(newPassword);
+        return update(updateObj, new LambdaUpdateWrapper<AdminUserDO>()
+                .eq(AdminUserDO::getId, id)
+                .apply("CAST(`password` AS BINARY) = CAST({0} AS BINARY)", expectedPassword));
     }
 
 }

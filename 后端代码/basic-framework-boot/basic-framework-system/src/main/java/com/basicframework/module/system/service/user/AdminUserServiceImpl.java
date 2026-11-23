@@ -13,6 +13,7 @@ import com.basicframework.framework.common.util.validation.ValidationUtils;
 import com.basicframework.framework.datapermission.core.util.DataPermissionUtils;
 import com.basicframework.framework.operatelog.core.annotation.OperateLog;
 import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
+import com.basicframework.module.system.controller.admin.dept.vo.dept.DeptListReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdatePasswordReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.profile.UserProfileUpdateReqVO;
 import com.basicframework.module.system.controller.admin.user.vo.user.UserImportExcelVO;
@@ -214,6 +215,11 @@ public class AdminUserServiceImpl implements AdminUserService {
         }
         try {
             validatePasswordPolicy(reqVO.getNewPassword());
+            // 强制改密必须设置与已校验当前密码不同的新密码；普通自助改密保持原语义。
+            if (Boolean.TRUE.equals(user.getPasswordChangeRequired())
+                    && Objects.equals(reqVO.getNewPassword(), reqVO.getOldPassword())) {
+                throw exception(USER_PASSWORD_SAME_AS_OLD);
+            }
         } catch (ServiceException ex) {
             securityAuditService.record(LoginLogTypeEnum.PASSWORD_CHANGE,
                     LoginResultEnum.PASSWORD_POLICY_REJECTED, id, user.getUsername());
@@ -815,6 +821,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         UserImportRespVO respVO = UserImportRespVO.builder().createUsernames(new ArrayList<>())
                 .updateUsernames(new ArrayList<>()).failureUsernames(new LinkedHashMap<>()).build();
         AtomicInteger index = new AtomicInteger(1);
+        Map<String, List<DeptDO>> importDeptsByName = new HashMap<>();
         importUsers.forEach(importUser -> {
             int currentIndex = index.getAndIncrement();
             // 2.1.1 校验字段是否符合要求
@@ -827,15 +834,20 @@ public class AdminUserServiceImpl implements AdminUserService {
                 respVO.getFailureUsernames().put(key, ex.getMessage());
                 return;
             }
-            // 2.1.2 根据部门名称查找部门编号
+            // 2.1.2 在当前平台与数据权限范围内按名称精确匹配部门；同名多条时按行报告歧义，不任意选取
             Long deptId = null;
             if (StrUtil.isNotBlank(importUser.getDeptName())) {
-                DeptDO dept = deptService.getDeptByName(importUser.getDeptName());
-                if (dept == null) {
+                List<DeptDO> depts = importDeptsByName.computeIfAbsent(
+                        importUser.getDeptName(), this::findImportDeptsByName);
+                if (depts.isEmpty()) {
                     respVO.getFailureUsernames().put(importUser.getUsername(), "部门名称不存在");
                     return;
                 }
-                deptId = dept.getId();
+                if (depts.size() > 1) {
+                    respVO.getFailureUsernames().put(importUser.getUsername(), "部门名称存在多个匹配，无法确定所属部门");
+                    return;
+                }
+                deptId = depts.get(0).getId();
             }
 
             // 2.1.3 优先查询同平台存量账号，以便在更新分支按其真实主键核验邮箱/手机号唯一性与可见范围
@@ -877,6 +889,20 @@ public class AdminUserServiceImpl implements AdminUserService {
             respVO.getUpdateUsernames().add(importUser.getUsername());
         });
         return respVO;
+    }
+
+    /**
+     * 在当前平台与数据权限范围内按名称精确查找导入部门。
+     *
+     * @param deptName 部门名称
+     * @return 名称完全一致的可见部门
+     */
+    private List<DeptDO> findImportDeptsByName(String deptName) {
+        DeptListReqVO query = new DeptListReqVO();
+        query.setName(deptName);
+        return deptService.getDeptList(query).stream()
+                .filter(dept -> Objects.equals(dept.getName(), deptName))
+                .toList();
     }
 
     /**
@@ -935,17 +961,20 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     /**
-     * 登录成功后将历史哈希原地升级为当前 BCrypt(明文) 格式。
+     * 登录成功后，仅当存储值仍为已校验的历史哈希时，原地升级为当前 BCrypt(明文) 格式。
      *
      * @param id 用户编号
+     * @param expectedEncodedPassword 本次已校验通过的存储值
      * @param rawPassword 未加密的密码
+     * @return 升级成功返回 true；存储值已被并发修改时返回 false
      */
     @Override
-    public void updatePasswordHash(Long id, String rawPassword) {
-        AdminUserDO updateObj = new AdminUserDO();
-        updateObj.setId(id);
-        updateObj.setPassword(encodePassword(rawPassword));
-        userMapper.updateById(updateObj);
+    public boolean updatePasswordHash(Long id, String expectedEncodedPassword, String rawPassword) {
+        if (id == null || StrUtil.isEmpty(expectedEncodedPassword)) {
+            return false;
+        }
+        return userMapper.updatePasswordByIdAndPassword(id, expectedEncodedPassword,
+                encodePassword(rawPassword)) > 0;
     }
 
     /**

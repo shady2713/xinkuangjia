@@ -21,7 +21,7 @@ SM2_MODULE = "/src/utils/sm2.ts"
 PLATFORM_DENIED = 1_002_000_015
 FILE_DENIED = 1_001_003_008
 SIGNING_UNSUPPORTED = 1_001_003_010
-EXPECTED_STEPS = 16
+EXPECTED_STEPS = 19
 SM2_JS = "async ([m, ...ps]) => { const s = await import(m); return Promise.all(ps.map((x) => s.encryptPassword(x))); }"
 REFRESH_JS = "async () => { const m = await import('/src/api/request.ts'); await m.request.get('/system/auth/get-permission-info'); }"
 SESSION_JS = """f => { const v = localStorage.getItem('bf_session'); if (v === null) return null;
@@ -88,8 +88,9 @@ def denied(resp, codes):
     check(code in codes, f"expected denial {sorted(codes)}, got code {code}")
 
 
-def ui_login(page, username, password):
-    page.goto("/login")
+def ui_login(page, username, password, *, path="/login"):
+    if path is not None:
+        page.goto(path)
     page.fill("input[autocomplete=username]", username)
     page.fill("input[autocomplete=current-password]", password)
     page.locator(SUBMIT).first.click()
@@ -212,6 +213,34 @@ def run(p, browser, pwd, new_pwd):
     with step("member-download-denied"):
         denied(call(page.request, "GET", "/admin-api/infra/file/private/content", member, params={"id": file_id}), {FILE_DENIED})
 
+    ctx.close()
+    ctx, page = new_page()
+    with step("business-ui-password-login"):
+        with page.expect_response("**/admin-api/system/auth/login") as login:
+            ui_login(page, "smokemember", pwd, path="/login?platform=business")
+        ok(login.value)
+        page.wait_for_url("**/dashboard")
+        check(store(page, "loginPlatform") == "business", "business session platform missing")
+    with step("business-personal-password-change-returns-to-business-form"):
+        page.goto("/profile")
+        page.get_by_role("tab", name="修改密码").click()
+        for placeholder, value in zip(CHANGE_FIELDS, (pwd, new_pwd, new_pwd)):
+            page.get_by_placeholder(placeholder, exact=True).fill(value)
+        with page.expect_response("**/admin-api/system/user/profile/update-password") as put:
+            page.get_by_role("button", name="修改密码", exact=True).click()
+        ok(put.value)
+        page.locator("input[autocomplete=username]").wait_for(state="visible")
+        page.locator('input[type=radio][value=business]:checked').wait_for(state="attached")
+        check(store(page, "accessToken") is None and store(page, "refreshToken") is None,
+              "personal password change kept the old session")
+    with step("business-fresh-ui-login-without-reselecting-platform"):
+        with page.expect_response("**/admin-api/system/auth/login") as login:
+            ui_login(page, "smokemember", new_pwd, path=None)
+        ok(login.value)
+        page.wait_for_url("**/dashboard")
+        check(store(page, "loginPlatform") == "business", "re-login did not restore the business session")
+    ctx.close()
+
 
 def main():
     global ORIGIN
@@ -242,8 +271,6 @@ def main():
         "steps": STEPS, "error": error,
     }
     args.summary.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    if error:
-        args.summary.with_name("smoke-trace.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return 1 if error else 0
 
 

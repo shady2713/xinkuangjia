@@ -9,13 +9,21 @@ python -B -X utf8 scripts/runtime/init_local_dev.py --apply
 # 2. 启动本机回环 MySQL + Redis（自动导入 14 表基线 SQL）
 sh scripts/runtime/start_dev_stack.sh
 
-# 3. 按需生成本地开发演示组织/角色与管理员测试密码（仅允许回环地址）
+# 3. 可选：仅向本机回环数据库写入合成测试数据（不得用于生产或共享库）
 python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
 ```
 
-启动应用：
-- 后端（端口 `48080`）：在 `后端代码/basic-framework-boot` 执行 `mvn -B -pl basic-framework-server spring-boot:run` 或运行 `scripts/runtime/start_java.ps1`。
-- 前端（端口 `5175`）：在 `前端代码/basic-framework-admin` 执行 `pnpm install && pnpm dev` 或运行 `scripts/runtime/start_frontend.ps1`。
+需要使用本地超管登录时，在运行种子命令前通过受保护环境注入 BCrypt 哈希 `SEED_ADMIN_PASSWORD_HASH`，并加 `--require-password-change` 保留首改标志。
+
+启动应用（后端、前端各用一个终端，均从仓库根目录开始）：
+- 后端（端口 `48080`，终端 A）：干净 Maven 缓存下 `basic-framework-server` 依赖 `basic-framework-system` 与 `basic-framework-core`，须先聚合打包，再在后端目录运行 JAR（后端 `.env` 须含 `SPRING_PROFILES_ACTIVE=local`，见部署说明第 1 节）：
+  ```bash
+  cd 后端代码/basic-framework-boot
+  mvn -B -ntp clean package -DskipTests
+  java -jar basic-framework-server/target/basic-framework-server.jar
+  ```
+  Windows：在仓库根目录执行 `scripts/runtime/start_java.ps1 -Build`（启动器要求 `local`，HTTP 监听地址取决于 `server.address`）。
+- 前端（端口 `5175`，终端 B）：`cd 前端代码/basic-framework-admin && pnpm install && pnpm dev`，或运行 `scripts/runtime/start_frontend.ps1`。
 
 ## 2. 端到端标准 CRUD 开发切片
 
@@ -23,7 +31,9 @@ python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
 
 Role CRUD change example: [role change task card](需求卡/role-platform.md).
 
-1. **数据库表**：在 `数据库文件/basic_framework.sql` 增加建表 DDL（逻辑删除唯一索引须包含 `deleted_tag` 列）以及 `system_menu` / `system_role_menu` 菜单权限行。
+1. **数据库表**：新增表须同时交付两部分：
+   - **(a) 基线**：在 `数据库文件/basic_framework.sql` 增加建表 DDL（逻辑删除唯一索引须包含 `deleted_tag` 列）及 `system_menu` / `system_role_menu` 菜单权限行。同时审查 `scripts/runtime/bootstrap-empty-schema.sh` 的 14 表约定（剔除的 `DROP TABLE` 行数）与各文档中的"14 张表"表述。
+   - **(b) 迁移**：为已有 schema 单独提供按序编号、经过演练测试的迁移脚本。不得对已有库执行引导脚本或基线 SQL。
 2. **后端代码（位于 `basic-framework-system`）**：
    - `dal/dataobject/`：继承 `BaseDO`（含业务唯一键时继承 `UniqueBaseDO`）。
    - `dal/mysql/`：继承 `BaseMapperX<T>`，查询条件封装在 `LambdaQueryWrapperX`。
@@ -43,10 +53,6 @@ Role CRUD change example: [role change task card](需求卡/role-platform.md).
    - `src/api/system/<biz>.ts`：引用 `OpenApiSchemas` 类型并封装 `request.get/post/put/delete`。
    - `src/views/system/<biz>/index.vue`：使用 `<ProTable>` + `el-table` + `el-dialog` + `v-has-permi`，文件/图片上传使用 `<UploadField :cropper="true|false" />`。
 
-## 3. 质量门禁命令（与 CI 一致）
+## 3. 质量门禁
 
-| 范围 | 命令 | 校验内容 |
-| --- | --- | --- |
-| 后端 | `cd 后端代码/basic-framework-boot && mvn -B -ntp -Pquality-gate verify` | 编译、单元测试、H2 集成测试、ArchUnit 架构门禁、Schema-DO-RBAC 校验、OpenAPI 零漂移校验、JaCoCo、PMD |
-| 前端 | `cd 前端代码/basic-framework-admin && pnpm run quality:gates` | OpenAPI 类型同步校验、`vue-tsc --noEmit`、ESLint、Vitest 单测、Vite 生产构建 |
-| 密钥 | GitHub Actions `secrets`（Gitleaks） | 全仓零豁免密钥扫描 |
+从 [仓库质量门禁](../AGENTS.md#required-validation) 执行适用检查。提交评审时附运行结果与所验 SHA，托管扫描范围见 [评审指南](review.md)。

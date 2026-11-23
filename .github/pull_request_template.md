@@ -8,8 +8,8 @@
 - [ ] 已确认前后端接口、数据库表结构与配置变更一致
 - [ ] 未在源码、测试、SQL 或文档中引入真实密钥或敏感凭据
 
-## 本地验证
+## 验证结果
 
-- 后端验证（`mvn -B -ntp -Pquality-gate verify`）：
-- 前端验证（typecheck / lint / test / build）：
-- 其他冒烟或联调说明：
+- 所验提交 SHA
+- [适用门禁](../AGENTS.md#required-validation)及实际结果
+- 冒烟证据和未验项

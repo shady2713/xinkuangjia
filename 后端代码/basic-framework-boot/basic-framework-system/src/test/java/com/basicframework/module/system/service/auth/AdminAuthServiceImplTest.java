@@ -242,14 +242,17 @@ class AdminAuthServiceImplTest {
                 AdminPlatformTypeEnum.BUSINESS_ADMIN.getType())).thenReturn(user);
         when(userService.isPasswordMatch("Legacy#Pass1", "$2a$04$legacy")).thenReturn(false);
         when(userService.isPasswordMatchLegacy("Legacy#Pass1", "$2a$04$legacy")).thenReturn(true);
+        when(userService.updatePasswordHash(user.getId(), "$2a$04$legacy", "Legacy#Pass1")).thenReturn(true);
 
         AdminUserDO result = authService.authenticate("legacy-user", "Legacy#Pass1",
                 AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
 
         assertThat(result).isSameAs(user);
-        verify(userService).updatePasswordHash(user.getId(), "Legacy#Pass1");
+        verify(userService).updatePasswordHash(user.getId(), "$2a$04$legacy", "Legacy#Pass1");
+        verify(userService, never()).getUser(any());
         verify(loginFailureLockService).clearFailures("legacy-user");
     }
+
 
     /** 验证登录响应携带首次改密标志，供前端拦截到修改密码页。 */
     @Test

@@ -1,7 +1,9 @@
 package com.basicframework.module.infra.framework.file.core.utils;
 
 import cn.hutool.core.util.StrUtil;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
@@ -21,6 +23,8 @@ public final class FilePathUtils {
     public static final int MAX_DIRECTORY_LENGTH = MAX_OBJECT_PATH_LENGTH;
     /** 文件访问地址最大字符数，与 infra_file.url 字段一致。 */
     public static final int MAX_FILE_URL_LENGTH = 1024;
+    /** 公开下载 URL 使用查询参数传递含百分号或分号的原始对象键。 */
+    public static final String PUBLIC_FILE_KEY_QUERY_PREFIX = "key=";
     /** MIME 类型最大字符数，与 infra_file.type 字段一致。 */
     public static final int MAX_MIME_TYPE_LENGTH = 128;
     /** 单个上传文件允许的最大字节数（50 MB），与 multipart 及反向代理配置保持一致。 */
@@ -146,6 +150,29 @@ public final class FilePathUtils {
             return false;
         }
         return path.length() == 7 || path.charAt(7) == '/' || path.charAt(7) == ' ';
+    }
+
+    /**
+     * 按斜杠分段执行 RFC 3986 路径段编码，供 OSS 公开 URL 使用。
+     *
+     * <p>入参必须是原始对象键，禁止传入已编码地址，避免二次编码。</p>
+     *
+     * @param path 原始对象相对路径
+     * @return 分段编码后的路径；为空时返回空串
+     */
+    public static String encodeObjectPath(String path) {
+        if (StrUtil.isEmpty(path)) {
+            return "";
+        }
+        String[] segments = path.split("/", -1);
+        StringBuilder encoded = new StringBuilder(path.length());
+        for (int i = 0; i < segments.length; i++) {
+            if (i > 0) {
+                encoded.append('/');
+            }
+            encoded.append(UriUtils.encodePathSegment(segments[i], StandardCharsets.UTF_8));
+        }
+        return encoded.toString();
     }
 
     /**

@@ -15,10 +15,13 @@ import {
   smsLoginApi,
   type SmsLoginReq,
 } from '@/api/auth';
+import { updateUserPasswordApi } from '@/api/system/profile';
+import { encryptPassword } from '@/utils/sm2';
 import {
   clearTokens,
   getAccessToken,
   getSessionId,
+  type LoginPlatform,
   passwordChangeRequiredFlag,
   sessionId,
   setLoginTokens,
@@ -49,10 +52,10 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function loginByPassword(params: LoginReq) {
+  async function loginByPassword(params: LoginReq, platform: LoginPlatform = 'super') {
     const startId = getSessionId();
-    const res = await loginApi(params);
-    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+    const res = await loginApi(params, platform);
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId, platform)) {
       throw new CanceledError('登录会话已切换');
     }
     return res;
@@ -61,7 +64,7 @@ export const useUserStore = defineStore('user', () => {
   async function loginBySms(params: SmsLoginReq) {
     const startId = getSessionId();
     const res = await smsLoginApi(params);
-    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
+    if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId, 'business')) {
       throw new CanceledError('登录会话已切换');
     }
     return res;
@@ -76,6 +79,30 @@ export const useUserStore = defineStore('user', () => {
     permissions.value = info.permissions ?? [];
     menus.value = info.menus ?? [];
     return info;
+  }
+
+  /** Refreshes only the displayed identity; roles, permissions and menus stay aligned with registered routes. */
+  async function refreshUserInfo() {
+    const startId = getSessionId();
+    const info = await getPermissionInfoApi();
+    assertSession(startId);
+    if (info.user) userInfo.value = info.user;
+  }
+
+  /** Self-service password change bound to owner; signs that login out locally on success, false if no longer current. */
+  async function changeOwnPassword(
+    owner: string | null,
+    oldPlain: string,
+    newPlain: string,
+  ): Promise<boolean> {
+    if (!owner || getSessionId() !== owner) return false;
+    const oldPassword = await encryptPassword(oldPlain);
+    if (getSessionId() !== owner) return false;
+    const newPassword = await encryptPassword(newPlain);
+    if (getSessionId() !== owner) return false;
+    await updateUserPasswordApi({ oldPassword, newPassword });
+    // The committed change invalidates this login's server sessions; clear only the same login locally.
+    return resetState(owner);
   }
 
   function markRoutesLoaded(loaded: boolean) {
@@ -112,6 +139,8 @@ export const useUserStore = defineStore('user', () => {
     loginByPassword,
     loginBySms,
     fetchPermissionInfo,
+    refreshUserInfo,
+    changeOwnPassword,
     markRoutesLoaded,
     resetState,
     logout,

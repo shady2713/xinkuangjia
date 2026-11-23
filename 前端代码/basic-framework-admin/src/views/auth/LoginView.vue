@@ -20,6 +20,8 @@ import {
 import { useUserStore } from '@/stores/user';
 import { encryptPassword } from '@/utils/sm2';
 
+import type { LoginPlatform } from '@/utils/token';
+
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
@@ -29,6 +31,7 @@ const logoUrl = `${import.meta.env.BASE_URL}brand-logo.svg`;
 const sloganUrl = `${import.meta.env.BASE_URL}login-slogan.svg`;
 
 const activeTab = ref<'password' | 'sms'>('password');
+const platform = ref<LoginPlatform>(route.query.platform === 'business' ? 'business' : 'super');
 const loading = ref(false);
 const captchaRef = ref<InstanceType<typeof CaptchaVerify> | null>(null);
 const captchaPurpose = ref<'login' | 'sms'>('login');
@@ -84,6 +87,7 @@ async function navigateAfterLogin() {
 }
 
 async function doPasswordLogin(captchaVerification?: string) {
+  const selectedPlatform = platform.value;
   loading.value = true;
   try {
     const encryptedPassword = await encryptPassword(pwdForm.password);
@@ -91,7 +95,7 @@ async function doPasswordLogin(captchaVerification?: string) {
       username: pwdForm.username.trim(),
       password: encryptedPassword,
       captchaVerification,
-    });
+    }, selectedPlatform);
     ElMessage.success('登录成功');
     await navigateAfterLogin();
   } finally {
@@ -208,6 +212,12 @@ async function handleCaptchaSuccess({
               class="mt-2"
               @keyup.enter="handlePasswordSubmit"
             >
+              <el-form-item>
+                <el-radio-group v-model="platform" :disabled="loading">
+                  <el-radio-button value="super">平台管理员</el-radio-button>
+                  <el-radio-button value="business">业务账号</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
               <el-form-item prop="username">
                 <el-input
                   v-model="pwdForm.username"

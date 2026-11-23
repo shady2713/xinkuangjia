@@ -18,8 +18,6 @@ description: 在 basic-framework 3 模块 Java 后端（core/system/server）及
 5. **审计与日志**：关键写接口标注原生 `@OperateLog`；统一使用 SLF4J，禁止 `System.out`/`printStackTrace`/旧日志 API；业务模块抛 `ServiceException`，不抛裸 `RuntimeException`。
 6. **契约同步**：变更接口或 VO 后，同步运行 `mvn -B -ntp verify -Pquality-gate -Dopenapi.update=true` 与前端 `pnpm api:gen`。
 
-## 必跑验证
-```bash
-cd 后端代码/basic-framework-boot
-mvn -B -ntp -Pquality-gate verify
-```
+## 验证
+
+使用 [仓库质量门禁](../../../AGENTS.md#required-validation)。
