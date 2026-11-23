@@ -9,6 +9,7 @@ import {
   type CurrentUserInfo,
   getPermissionInfoApi,
   loginApi,
+  type LoginPlatform,
   type LoginReq,
   logoutApi,
   type MenuRouteItem,
@@ -51,9 +52,9 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function loginByPassword(params: LoginReq) {
+  async function loginByPassword(params: LoginReq, platform?: LoginPlatform) {
     const startId = getSessionId();
-    const res = await loginApi(params);
+    const res = await loginApi(params, platform);
     if (!setLoginTokens(res.accessToken, res.refreshToken, res.passwordChangeRequired, startId)) {
       throw new CanceledError('登录会话已切换');
     }
@@ -88,7 +89,7 @@ export const useUserStore = defineStore('user', () => {
     if (info.user) userInfo.value = info.user;
   }
 
-  /** Self-service password change bound to owner; false when that login is no longer current. */
+  /** Self-service password change bound to owner; signs that login out locally on success, false if no longer current. */
   async function changeOwnPassword(
     owner: string | null,
     oldPlain: string,
@@ -100,7 +101,8 @@ export const useUserStore = defineStore('user', () => {
     const newPassword = await encryptPassword(newPlain);
     if (getSessionId() !== owner) return false;
     await updateUserPasswordApi({ oldPassword, newPassword });
-    return getSessionId() === owner;
+    // The committed change invalidates this login's server sessions; clear only the same login locally.
+    return resetState(owner);
   }
 
   function markRoutesLoaded(loaded: boolean) {

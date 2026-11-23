@@ -46,7 +46,6 @@ async function handleSubmit() {
   loading.value = true;
   try {
     if (!(await userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword))) return;
-    if (!userStore.resetState(owner)) return;
     ElMessage.success('密码修改成功，请重新登录');
     await router.replace('/login');
   } catch (error) {
