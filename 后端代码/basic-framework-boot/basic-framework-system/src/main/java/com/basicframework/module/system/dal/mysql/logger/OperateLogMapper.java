@@ -52,7 +52,7 @@ public interface OperateLogMapper extends BaseMapperX<OperateLogDO> {
         if (CollUtil.isEmpty(userIds)) {
             return List.of();
         }
-        LambdaQueryWrapperX<OperateLogDO> query = new LambdaQueryWrapperX<OperateLogDO>()
+        var query = new LambdaQueryWrapperX<OperateLogDO>()
                 .in(OperateLogDO::getUserId, userIds)
                 .ge(OperateLogDO::getCreateTime, startTime);
         if (includeDetails) {

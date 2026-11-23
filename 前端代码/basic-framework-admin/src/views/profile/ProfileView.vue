@@ -148,6 +148,7 @@ onMounted(() => {
         <div class="mb-5 flex flex-col items-center">
           <UploadField
             v-model="basicForm.avatar"
+            require-public-url
             mode="image"
             :cropper="true"
             :aspect-ratio="1"

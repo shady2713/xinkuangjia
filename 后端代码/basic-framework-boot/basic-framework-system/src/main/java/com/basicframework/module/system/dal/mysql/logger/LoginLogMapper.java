@@ -28,7 +28,7 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
      * @return 查询结果
      */
     default PageResult<LoginLogDO> selectPage(LoginLogPageReqVO reqVO) {
-        LambdaQueryWrapperX<LoginLogDO> query = new LambdaQueryWrapperX<LoginLogDO>()
+        var query = new LambdaQueryWrapperX<LoginLogDO>()
                 .likeIfPresent(LoginLogDO::getUserIp, reqVO.getUserIp())
                 .likeIfPresent(LoginLogDO::getUsername, reqVO.getUsername())
                 .betweenIfPresent(LoginLogDO::getCreateTime, reqVO.getCreateTime());
@@ -56,7 +56,7 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
         if (CollUtil.isEmpty(userIds)) {
             return List.of();
         }
-        LambdaQueryWrapperX<LoginLogDO> query = new LambdaQueryWrapperX<LoginLogDO>()
+        var query = new LambdaQueryWrapperX<LoginLogDO>()
                 .in(LoginLogDO::getUserId, userIds)
                 .ge(LoginLogDO::getCreateTime, startTime);
         if (includeDetails) {

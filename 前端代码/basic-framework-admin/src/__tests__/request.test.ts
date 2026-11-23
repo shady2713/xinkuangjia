@@ -15,10 +15,6 @@ import {
   setTokens,
 } from '@/utils/token';
 
-const apiMocks = vi.hoisted<<<EDIT P1>>>
-<<<OLD>>>
-const SESSION_KEY = 'bf_session';
-<<<NEW>>>
 const apiMocks = vi.hoisted(() => ({
   getPermissionInfoApi: vi.fn(),
   updateUserPasswordApi: vi.fn(),

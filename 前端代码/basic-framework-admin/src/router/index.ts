@@ -218,7 +218,8 @@ router.beforeEach(async (to, from) => {
       if (getSessionId() !== owner) return false;
       // Transient transport/bootstrap failure: keep the login; the next navigation retries.
       if (from.matched.length) return false;
-      return to.matched.length ? true : '/dashboard';
+      if (to.path === '/dashboard' || to.path === '/profile/change-password') return true;
+      return '/dashboard';
     }
   }
 

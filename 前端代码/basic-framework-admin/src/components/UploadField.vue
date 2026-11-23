@@ -22,6 +22,7 @@ const props = withDefaults(
     maxSizeMb?: number;
     accept?: string;
     tip?: string;
+    requirePublicUrl?: boolean;
   }>(),
   {
     modelValue: '',
@@ -68,7 +69,7 @@ async function doUpload(file: File) {
   try {
     const url = await uploadFileApi(file, props.directory || undefined);
     // Private objects return no public URL; keep the current value and do not report it as usable.
-    if (!url) {
+    if (!url && props.requirePublicUrl) {
       ElMessage.warning('文件已上传，但未返回可公开访问的地址');
       return;
     }

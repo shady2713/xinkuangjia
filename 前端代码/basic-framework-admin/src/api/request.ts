@@ -107,14 +107,16 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   }
   const previousAccessToken = getAccessToken();
   let body: CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>> | undefined;
+  let transportFailure: unknown;
   try {
     const resp = await rawHttp.post<CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>>>(
       '/system/auth/refresh-token',
       { refreshToken },
     );
     body = resp.data;
-  } catch {
-    // A failed rotation is handled below after checking for an updated session.
+  } catch (error) {
+    // A peer may have completed a refresh while this request was in flight.
+    transportFailure = error;
   }
   if (getSessionId() !== sessionId) {
     return null;
@@ -123,8 +125,14 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   if (currentAccessToken !== previousAccessToken || getRefreshToken() !== refreshToken) {
     return currentAccessToken || null;
   }
+  if (transportFailure) {
+    const status = axios.isAxiosError(transportFailure) ? transportFailure.response?.status : undefined;
+    if (status === 401 || status === 403) return null;
+    throw transportFailure;
+  }
+  if (body?.code === 400 || body?.code === 401 || body?.code === 403) return null;
   if (body?.code !== 0 || !body.data?.accessToken) {
-    return null;
+    throw new Error(body?.msg || '暂时无法刷新会话，请稍后重试');
   }
   const installed = setTokens(
     body.data.accessToken,
