@@ -212,7 +212,7 @@ router.beforeEach(async (to) => {
       void dictStore.ensureLoaded().catch(() => {
         // Request errors have already been handled by the transport.
       });
-      return { path: to.fullPath, replace: true };
+      return { path: to.path, query: to.query, hash: to.hash, replace: true };
     } catch {
       if (!userStore.resetState(owner)) return false;
       return { path: '/login', query: { redirect: to.fullPath } };
