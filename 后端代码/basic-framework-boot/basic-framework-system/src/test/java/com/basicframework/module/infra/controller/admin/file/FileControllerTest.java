@@ -163,6 +163,26 @@ class FileControllerTest {
         assertThat(response.getContentAsByteArray()).isEqualTo(data);
     }
 
+    @Test
+    void getFileContentReadsQueryKeyThroughTheSamePublicFileContract() throws Exception {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getRequestURI()).thenReturn("/admin-api/infra/file/content/");
+        when(request.getQueryString()).thenReturn("key=20261119/%E5%9B%BE%E7%A4%BA%2020%25%20%2B.png");
+        String key = "20261119/图示 20% +.png";
+        byte[] data = "png".getBytes(StandardCharsets.UTF_8);
+        when(fileService.openFileContent(key)).thenReturn(new FileContentStream(new ByteArrayInputStream(data), 3L));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        controller.getFileContent(request, response);
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        assertThat(response.getContentAsByteArray()).isEqualTo(data);
+        verify(fileService).isPrivateObject(key);
+    }
+
     /** 验证单段 Range 请求返回 206 部分内容，越界 Range 返回 416 及总长度提示。 */
     @Test
     void getFileContentSupportsSingleRangeAndRejectsOutOfBoundsRange() throws Exception {

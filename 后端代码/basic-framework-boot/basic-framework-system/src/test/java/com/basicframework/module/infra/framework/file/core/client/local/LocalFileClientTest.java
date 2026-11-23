@@ -79,10 +79,24 @@ class LocalFileClientTest {
         client.init();
 
         byte[] data = "segment".getBytes(StandardCharsets.UTF_8);
-        String path = "合同📄/a b%#1+c.txt";
+        String path = "合同📄/a b#1+c.txt";
         String url = client.upload(data, path, "text/plain");
 
-        assertEquals("/admin-api/infra/file/content/合同📄/a%20b%25%231+c.txt", url);
+        assertEquals("/admin-api/infra/file/content/合同📄/a%20b%231+c.txt", url);
+        assertArrayEquals(data, client.getContent(path));
+    }
+
+    @Test
+    void upload_quotesLiteralPercentAndQuerySyntaxForPublicDownload() throws Exception {
+        LocalFileClientConfig config = new LocalFileClientConfig();
+        config.setBasePath(tempDir.toString());
+        LocalFileClient client = new LocalFileClient(1L, config);
+        client.init();
+
+        byte[] data = "review".getBytes(StandardCharsets.UTF_8);
+        String path = "合同📄/20% +#1&draft=2;.txt";
+        String url = client.upload(data, path, "text/plain");
+        assertEquals("/admin-api/infra/file/content/?key=合同📄/20%25%20%2B%231%26draft%3D2%3B.txt", url);
         assertArrayEquals(data, client.getContent(path));
     }
 

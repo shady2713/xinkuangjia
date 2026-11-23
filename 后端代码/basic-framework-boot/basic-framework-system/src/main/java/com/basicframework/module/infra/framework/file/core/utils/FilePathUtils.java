@@ -23,6 +23,8 @@ public final class FilePathUtils {
     public static final int MAX_DIRECTORY_LENGTH = MAX_OBJECT_PATH_LENGTH;
     /** 文件访问地址最大字符数，与 infra_file.url 字段一致。 */
     public static final int MAX_FILE_URL_LENGTH = 1024;
+    /** 公开下载 URL 使用查询参数传递含百分号或分号的原始对象键。 */
+    public static final String PUBLIC_FILE_KEY_QUERY_PREFIX = "key=";
     /** MIME 类型最大字符数，与 infra_file.type 字段一致。 */
     public static final int MAX_MIME_TYPE_LENGTH = 128;
     /** 单个上传文件允许的最大字节数（50 MB），与 multipart 及反向代理配置保持一致。 */
