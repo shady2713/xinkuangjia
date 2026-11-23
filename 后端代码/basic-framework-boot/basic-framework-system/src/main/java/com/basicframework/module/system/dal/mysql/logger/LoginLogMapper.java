@@ -1,5 +1,6 @@
 package com.basicframework.module.system.dal.mysql.logger;
 
+import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
@@ -7,6 +8,10 @@ import com.basicframework.module.system.controller.admin.logger.vo.loginlog.Logi
 import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
 import org.apache.ibatis.annotations.Mapper;
+
+import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * LoginLogMapper 数据访问接口，负责持久化查询与写入。
@@ -34,6 +39,26 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
         }
         query.orderByDesc(LoginLogDO::getId); // 降序
         return selectPage(reqVO, query);
+    }
+
+    /**
+     * 按日志归属用户查询指定时间之后的登录日志，按编号降序。
+     *
+     * <p>归属用户集合为空时直接返回空列表（fail-closed），避免退化为无归属过滤的全表查询。</p>
+     *
+     * @param userIds 允许查看的日志归属用户编号集合
+     * @param startTime 起始创建时间（含）
+     * @return 查询
+结果
+     */
+    default List<LoginLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime) {
+        if (CollUtil.isEmpty(userIds)) {
+            return List.of();
+        }
+        return selectList(new LambdaQueryWrapperX<LoginLogDO>()
+                .in(LoginLogDO::getUserId, userIds)
+                .ge(LoginLogDO::getCreateTime, startTime)
+                .orderByDesc(LoginLogDO::getId));
     }
 
 }
