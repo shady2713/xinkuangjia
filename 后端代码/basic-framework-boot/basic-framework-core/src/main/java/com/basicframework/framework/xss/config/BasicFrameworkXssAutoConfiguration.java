@@ -45,8 +45,7 @@ public class BasicFrameworkXssAutoConfiguration implements WebMvcConfigurer {
      * @return Jackson2ObjectMapperBuilderCustomizer
      */
     @Bean
-    @ConditionalOnMissingBean(name = "xssJacksonCustomizer")
-    @ConditionalOnProperty(value = "basic-framework.xss.enable", havingValue = "true")
+    @ConditionalOnMissingBean(name = "xssJacksonCustomizer") // 启用开关统一由类级 basic-framework.xss.enable 控制（缺省 true）
     public Jackson2ObjectMapperBuilderCustomizer xssJacksonCustomizer(XssProperties properties,
                                                                       PathMatcher pathMatcher,
                                                                       XssCleaner xssCleaner) {
