@@ -69,6 +69,21 @@ class LocalFileClientTest {
     }
 
     @Test
+    void upload_encodesPathSegmentsOnceAndKeepsRawKey() throws Exception {
+        LocalFileClientConfig config = new LocalFileClientConfig();
+        config.setBasePath(tempDir.toString());
+        config.setDomain("/admin-api/infra/file/content");
+        LocalFileClient client = new LocalFileClient(1L, config);
+        client.init();
+
+        byte[] data = "segment".getBytes(StandardCharsets.UTF_8);
+        String url = client.upload(data, "20261122/a b#1+c.txt", "text/plain");
+
+        assertEquals("/admin-api/infra/file/content/20261122/a%20b%231+c.txt", url);
+        assertArrayEquals(data, client.getContent("20261122/a b#1+c.txt"));
+    }
+
+    @Test
     void upload_rejectsDirectoryTraversal() {
         LocalFileClientConfig config = new LocalFileClientConfig();
         config.setBasePath(tempDir.toString());

@@ -1,6 +1,7 @@
 package com.basicframework.module.infra.framework.file.core.client;
 
 import cn.hutool.core.util.StrUtil;
+import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -98,7 +99,9 @@ public abstract class AbstractFileClient<Config extends FileClientConfig> implem
      */
     protected String formatFileUrl(String domain, String path) {
         String normalizedDomain = StrUtil.removeSuffix(StrUtil.blankToDefault(domain, "").trim(), "/");
-        String normalizedPath = StrUtil.removePrefix(StrUtil.blankToDefault(path, "").trim(), "/");
+        // 与 OSS 公开地址共用分段编码；入参为原始对象键，内容入口只解码一次，避免二次编码。
+        String normalizedPath = FilePathUtils.encodeObjectPath(
+                StrUtil.removePrefix(StrUtil.blankToDefault(path, "").trim(), "/"));
         if (normalizedDomain.endsWith(FILE_CONTENT_PATH)) {
             return normalizedDomain + "/" + normalizedPath;
         }

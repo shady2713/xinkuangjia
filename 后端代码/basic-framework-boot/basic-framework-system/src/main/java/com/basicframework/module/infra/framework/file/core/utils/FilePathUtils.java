@@ -1,7 +1,9 @@
 package com.basicframework.module.infra.framework.file.core.utils;
 
 import cn.hutool.core.util.StrUtil;
+import org.springframework.web.util.UriUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 /**
@@ -146,6 +148,29 @@ public final class FilePathUtils {
             return false;
         }
         return path.length() == 7 || path.charAt(7) == '/' || path.charAt(7) == ' ';
+    }
+
+    /**
+     * 按斜杠分段执行 RFC 3986 路径段编码，供本地与 OSS 公开 URL 共用。
+     *
+     * <p>入参必须是原始对象键，禁止传入已编码地址，避免二次编码。</p>
+     *
+     * @param path 原始对象相对路径
+     * @return 分段编码后的路径；为空时返回空串
+     */
+    public static String encodeObjectPath(String path) {
+        if (StrUtil.isEmpty(path)) {
+            return "";
+        }
+        String[] segments = path.split("/", -1);
+        StringBuilder encoded = new StringBuilder(path.length());
+        for (int i = 0; i < segments.length; i++) {
+            if (i > 0) {
+                encoded.append('/');
+            }
+            encoded.append(UriUtils.encodePathSegment(segments[i], StandardCharsets.UTF_8));
+        }
+        return encoded.toString();
     }
 
     /**

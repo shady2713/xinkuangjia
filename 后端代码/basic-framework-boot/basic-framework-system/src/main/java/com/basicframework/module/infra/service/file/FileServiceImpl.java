@@ -2,6 +2,7 @@ package com.basicframework.module.infra.service.file;
 
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
@@ -172,11 +173,7 @@ public class FileServiceImpl implements FileService {
         if (!privateObject && !FilePathUtils.isFileUrlValid(persistedUrl)) {
             // 对象已经上传但元数据无法入库时立即补偿删除，避免留下无法管理的孤立对象。
             var metadataException = exception(ErrorCodeConstants.FILE_METADATA_INVALID);
-            try {
-                fileStorageService.delete(path);
-            } catch (Exception cleanupException) {
-                metadataException.addSuppressed(cleanupException);
-            }
+            deleteUnregisteredObject(path, metadataException);
             throw metadataException;
         }
 
@@ -187,7 +184,13 @@ public class FileServiceImpl implements FileService {
         file.setUrl(persistedUrl);
         file.setType(type);
         file.setSize((long) content.length);
-        fileMapper.insert(file);
+        try {
+            fileMapper.insert(file);
+        } catch (RuntimeException ex) {
+            // 元数据写入失败时补偿删除本次以独立键写入的对象，避免留下孤立对象。
+            deleteUnregisteredObject(path, ex);
+            throw ex;
+        }
         return persistedUrl;
     }
 
@@ -213,7 +216,8 @@ public class FileServiceImpl implements FileService {
         }
         String suffix = null;
         if (PATH_SUFFIX_TIMESTAMP_ENABLE) {
-            suffix = String.valueOf(System.currentTimeMillis());
+            // 时间戳便于人工定位，随机段保证同毫秒同名上传也获得独立对象键，不会互相覆盖。
+            suffix = System.currentTimeMillis() + StrUtil.UNDERLINE + IdUtil.fastSimpleUUID();
         }
 
         // 先拼接时间戳，保留原始扩展名结构。
@@ -329,13 +333,19 @@ public class FileServiceImpl implements FileService {
         } else {
             file.setUrl(fileStorageService.presignGetUrl(file.getPath(), null));
             if (!FilePathUtils.isFileUrlValid(file.getUrl())) {
-                throw exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+                var metadataException = exception(ErrorCodeConstants.FILE_METADATA_INVALID);
+                deleteUnregisteredObject(file.getPath(), metadataException);
+                throw metadataException;
             }
         }
         try {
             fileMapper.insert(file);
         } catch (DuplicateKeyException ex) {
+            // 同路径已有记录，对象归属于该记录，禁止补偿删除。
             throw exception(ErrorCodeConstants.FILE_PATH_EXISTS);
+        } catch (RuntimeException ex) {
+            deleteUnregisteredObject(file.getPath(), ex);
+            throw ex;
         }
         return file.getId();
     }
@@ -455,6 +465,22 @@ public class FileServiceImpl implements FileService {
     }
 
     /**
+     * 元数据未能登记时补偿删除本次写入的对象；已存在同路径记录或无法确认归属时保留对象，避免误删他人文件。
+     *
+     * @param path 本次写入的对象路径
+     * @param failure 触发补偿的原始异常，清理异常作为其 suppressed 附加
+     */
+    private void deleteUnregisteredObject(String path, RuntimeException failure) {
+        try {
+            if (fileMapper.selectByPath(path) == null) {
+                fileStorageService.delete(path);
+            }
+        } catch (Exception cleanupException) {
+            failure.addSuppressed(cleanupException);
+        }
+    }
+
+    /**
      * 查询并校验文件存在。
      *
      * @param id 文件记录编号
@@ -527,7 +553,9 @@ public class FileServiceImpl implements FileService {
             throw exception(ErrorCodeConstants.FILE_ACCESS_DENIED);
         }
         FileDO file = fileMapper.selectByPath(path);
-        if (file == null) {
+        // 数据库排序规则可能忽略大小写或尾随空格；只服务存储键与请求路径完全一致的权威记录，
+        // 使上方可见性判定即为实际被服务记录的可见性。
+        if (file == null || !Objects.equals(path, file.getPath())) {
             return null;
         }
         return openContentWithAuthoritativeSize(file);

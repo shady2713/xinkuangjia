@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -49,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -260,6 +262,64 @@ class FileServiceImplTest {
         verify(fileMapper).insert(captor.capture());
         assertThat(captor.getValue().getPath()).startsWith("private/hr/");
         assertThat(captor.getValue().getUrl()).isEmpty();
+    }
+
+    /** 验证公开读取只服务存储键与请求路径完全一致的记录，并保留权威长度回填。 */
+    @Test
+    void openFileContentServesOnlyExactlyMatchingRecord() throws Exception {
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+        FileDO stored = new FileDO();
+        stored.setPath("2026/logo.png");
+        stored.setSize(4L);
+        when(fileMapper.selectByPath("2026/logo.png")).thenReturn(stored);
+
+        when(fileStorageService.openContent("2026/logo.png")).thenReturn(
+                new FileContentStream(new ByteArrayInputStream("logo".getBytes(StandardCharsets.UTF_8)), null));
+        try (FileContentStream stream = fileService.openFileContent("2026/logo.png")) {
+            assertThat(stream.contentLength()).isEqualTo(4L);
+        }
+        verify(fileStorageService).openContent("2026/logo.png");
+    }
+
+    /** 验证同名上传生成相互独立的对象键，且保留目录与扩展名。 */
+    @Test
+    void generateUploadPathUsesIndependentKeysForSameName() {
+        String first = fileService.generateUploadPath("same.png", "avatar");
+        String second = fileService.generateUploadPath("same.png", "avatar");
+
+        assertThat(first).isNotEqualTo(second).startsWith("avatar/").endsWith(".png");
+        assertThat(second).startsWith("avatar/").endsWith(".png");
+    }
+
+    /** 验证元数据写入失败时补偿删除本次写入且无记录归属的对象。 */
+    @Test
+    void createFileDeletesOwnObjectWhenMetadataInsertFails() throws Exception {
+        byte[] content = "plain-text".getBytes(StandardCharsets.UTF_8);
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+        when(fileStorageService.upload(eq(content), any(), eq("text/plain")))
+                .thenReturn("https://oss.example.test/docs/note.txt");
+        doThrow(new IllegalStateException("db unavailable")).when(fileMapper).insert(any(FileDO.class));
+
+        assertThatThrownBy(() -> fileService.createFile(content, "note.txt", "docs", "text/plain"))
+                .isInstanceOf(IllegalStateException.class);
+        ArgumentCaptor<FileDO> captor = ArgumentCaptor.forClass(FileDO.class);
+        verify(fileMapper).insert(captor.capture());
+        verify(fileStorageService).delete(captor.getValue().getPath());
+    }
+
+    /** 验证已存在同路径记录时不做补偿删除，避免误删归属于其他记录的对象。 */
+    @Test
+    void createFileKeepsObjectWhenOwnershipIsUncertain() throws Exception {
+        byte[] content = "plain-text".getBytes(StandardCharsets.UTF_8);
+        when(fileStorageService.isPublicAccess()).thenReturn(true);
+        when(fileStorageService.upload(eq(content), any(), eq("text/plain")))
+                .thenReturn("https://oss.example.test/docs/note.txt");
+        doThrow(new DuplicateKeyException("duplicate path")).when(fileMapper).insert(any(FileDO.class));
+        when(fileMapper.selectByPath(any())).thenReturn(new FileDO());
+
+        assertThatThrownBy(() -> fileService.createFile(content, "note.txt", "docs", "text/plain"))
+                .isInstanceOf(DuplicateKeyException.class);
+        verify(fileStorageService, never()).delete(any());
     }
 
     /** 验证 S3 预签名客户端在配置对外域名与显式签名根地址时的解析行为。 */
