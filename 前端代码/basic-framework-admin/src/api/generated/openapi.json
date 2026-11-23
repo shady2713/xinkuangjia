@@ -1627,6 +1627,10 @@
             "description" : "文件路径",
             "type" : "string"
           },
+          "privateFile" : {
+            "description" : "Whether the file is private (server-derived)",
+            "type" : "boolean"
+          },
           "size" : {
             "description" : "文件大小",
             "format" : "int64",
@@ -1641,7 +1645,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "createTime", "id", "name", "path", "size", "url" ],
+        "required" : [ "createTime", "id", "name", "path", "privateFile", "size", "url" ],
         "type" : "object"
       },
       "FileUploadReqVO" : {
@@ -2721,7 +2725,7 @@
         "type" : "object"
       },
       "RoleSaveReqVO" : {
-        "description" : "管理后台 - 角色创建/更新 Request VO",
+        "description" : "管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation.",
         "properties" : {
           "code" : {
             "description" : "角色标志",

@@ -25,7 +25,14 @@ kind: package-reference
 
 ## 生成入口
 
-生成前读取[需求卡技能](../../.agents/skills/weetion-task-cards/SKILL.md)及对应模板；先维护已确认来源，不从产物反推需求。当前目录只维护入口，不预建需求或任务。
+Minimum requirements for a task card:
+
+- Goal: the intended outcome in one sentence.
+- Scope: affected modules or paths, and what is out of scope.
+- Acceptance: observable checks that prove completion.
+- Validation: the gates from the authority below that must pass.
+
+Authority: [AGENTS.md](../../AGENTS.md).
 
 ## 已知限制与暂缓工作
 

@@ -11,14 +11,14 @@ import {
   deleteFileListApi,
   type FileRecord,
   getFilePageApi,
-  getPrivateFileSignedUrlApi,
+  getPrivateFileContentApi,
 } from '@/api/file';
 import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
 import TableAction from '@/components/TableAction.vue';
 import { deleteConfirmMessage, FIELD_LIMITS } from '@/constants/validation';
 import { confirmAction } from '@/utils/confirm';
-import { formatDateTime, formatFileSize } from '@/utils/format';
+import { downloadBlob, formatDateTime, formatFileSize } from '@/utils/format';
 import UploadField from '@/components/UploadField.vue';
 
 defineOptions({ name: 'InfraFile' });
@@ -64,18 +64,18 @@ function handleReset() {
 }
 
 async function handlePreview(row: FileRecord) {
-  let targetUrl = row.url;
-  if (row.path?.startsWith('private/') && row.id) {
-    targetUrl = await getPrivateFileSignedUrlApi(row.id, 300);
+  if (!row.privateFile && row.url) {
+    window.open(row.url, '_blank', 'noopener,noreferrer');
+    return;
   }
-  if (targetUrl) {
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
-  }
+  if (!row.id) return;
+  const blob = await getPrivateFileContentApi(row.id);
+  downloadBlob(blob, row.name || row.path?.split('/').pop() || `file-${row.id}`);
 }
 
-async function handleCopyUrl(url?: string) {
-  if (!url) return;
-  await navigator.clipboard?.writeText(url);
+async function handleCopyUrl(row: FileRecord) {
+  if (row.privateFile || !row.url) return;
+  await navigator.clipboard?.writeText(row.url);
   ElMessage.success('地址已复制到剪贴板');
 }
 
@@ -199,7 +199,8 @@ onMounted(() => {
                   {
                     label: '复制链接',
                     icon: CopyDocument,
-                    onClick: () => handleCopyUrl(row.url),
+                    disabled: row.privateFile || !row.url,
+                    onClick: () => handleCopyUrl(row),
                   },
                   {
                     label: '删除',

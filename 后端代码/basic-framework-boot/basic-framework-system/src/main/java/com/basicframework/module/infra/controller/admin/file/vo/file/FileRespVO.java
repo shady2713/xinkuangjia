@@ -39,6 +39,12 @@ public class FileRespVO {
     private String url;
 
     /**
+     * Server-derived visibility; private files expose an empty url and are downloaded by id.
+     */
+    @Schema(description = "Whether the file is private (server-derived)", requiredMode = Schema.RequiredMode.REQUIRED, example = "false")
+    private boolean privateFile;
+
+    /**
      * 文件 MIME 类型。
      */
     @Schema(description = "文件MIME类型", example = "application/octet-stream")

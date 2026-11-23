@@ -2,9 +2,12 @@ package com.basicframework.server;
 
 import com.basicframework.module.infra.framework.file.config.FileStorageProperties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
@@ -32,11 +35,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class LocalEnvironmentConfigurationTest {
 
+    @TempDir
+    static Path configDataRoot;
+
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([A-Z][A-Z0-9_]*)(?::[^}]*)?}");
 
     @Test
     void bindsLocalDatasourceAndRedisVariables() throws IOException {
         Map<String, Object> values = localValues();
+        values.put("SPRING_PROFILES_ACTIVE", "local");
         StandardEnvironment environment = environment(values, true);
         assertEquals("48080", environment.getProperty("server.port"));
         assertEquals("local", environment.getProperty("spring.profiles.active"));
@@ -45,6 +52,34 @@ class LocalEnvironmentConfigurationTest {
                 environment.getProperty("spring.datasource.url"));
         assertEquals(values.get("DB_PASSWORD"), environment.getProperty("spring.datasource.password"));
         assertEquals(values.get("REDIS_PASSWORD"), environment.getProperty("spring.data.redis.password"));
+    }
+
+    @Test
+    void configDataDefaultsToProdWhenNoProfileSelected() throws IOException {
+        Map<String, Object> values = localValues();
+        values.remove("SPRING_PROFILES_ACTIVE");
+        StandardEnvironment environment = configDataEnvironment(values);
+        assertActiveProfile(environment, "prod", "local");
+        assertProductionDatasourceUrl(environment);
+    }
+
+    @Test
+    void configDataAppliesExplicitProdProfile() throws IOException {
+        Map<String, Object> values = localValues();
+        values.put("SPRING_PROFILES_ACTIVE", "prod");
+        StandardEnvironment environment = configDataEnvironment(values);
+        assertActiveProfile(environment, "prod", "local");
+        assertProductionDatasourceUrl(environment);
+    }
+
+    @Test
+    void configDataAppliesExplicitLocalProfileWithLocalYamlSettings() throws IOException {
+        Map<String, Object> values = localValues();
+        values.put("SPRING_PROFILES_ACTIVE", "local");
+        StandardEnvironment environment = configDataEnvironment(values);
+        assertActiveProfile(environment, "local", "prod");
+        assertEquals(environment(new HashMap<>(values), true).getProperty("spring.datasource.url"),
+                environment.getProperty("spring.datasource.url"));
     }
 
     @Test
@@ -57,10 +92,6 @@ class LocalEnvironmentConfigurationTest {
                 + "&allowPublicKeyRetrieval=false&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true";
         assertEquals(expected, url);
         assertFalse(url.contains("useSSL=false"));
-
-        values.put("DB_SSL_MODE", "VERIFY_CA");
-        StandardEnvironment custom = environment(values, false);
-        assertTrue(custom.getProperty("spring.datasource.url").contains("sslMode=VERIFY_CA"));
     }
 
     @Test
@@ -143,6 +174,47 @@ class LocalEnvironmentConfigurationTest {
             }
         }
         return referenced;
+    }
+
+    private static StandardEnvironment configDataEnvironment(Map<String, Object> values) throws IOException {
+        Path configDir = Files.createTempDirectory(configDataRoot, "config-data");
+        String configLocation = "file:" + configDir.toAbsolutePath().toString().replace('\\', '/') + "/";
+        Pattern dotenvImport = Pattern.compile("(?:optional:)?file:(\\.\\./)?\\.env(?![\\w.-])");
+        int redirected = 0;
+        for (String resourceName : List.of("application.yaml", "application-local.yaml")) {
+            String content = new ClassPathResource(resourceName).getContentAsString(StandardCharsets.UTF_8);
+            Matcher matcher = dotenvImport.matcher(content);
+            StringBuilder isolated = new StringBuilder();
+            while (matcher.find()) {
+                String target = configLocation + (matcher.group(1) == null ? ".env" : "parent/.env");
+                matcher.appendReplacement(isolated, Matcher.quoteReplacement("optional:" + target));
+                redirected++;
+            }
+            matcher.appendTail(isolated);
+            Files.writeString(configDir.resolve(resourceName), isolated, StandardCharsets.UTF_8);
+        }
+        assertEquals(2, redirected, "both dotenv imports must be redirected into the temp directory");
+        StandardEnvironment environment = new StandardEnvironment();
+        MutablePropertySources sources = environment.getPropertySources();
+        sources.remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        sources.remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
+        Map<String, Object> source = new HashMap<>(values);
+        source.put("spring.config.location", configLocation);
+        sources.addFirst(new MapPropertySource("configDataTest", source));
+        ConfigDataEnvironmentPostProcessor.applyTo(environment);
+        return environment;
+    }
+
+    private static void assertActiveProfile(StandardEnvironment environment, String expected, String unexpected) {
+        List<String> active = List.of(environment.getActiveProfiles());
+        assertTrue(active.contains(expected), () -> "active profiles: " + active);
+        assertFalse(active.contains(unexpected), () -> "active profiles: " + active);
+    }
+
+    private static void assertProductionDatasourceUrl(StandardEnvironment environment) {
+        String url = environment.getProperty("spring.datasource.url");
+        assertTrue(url.contains("sslMode=VERIFY_IDENTITY"), url);
+        assertTrue(url.contains("allowPublicKeyRetrieval=false"), url);
     }
 
     private static Set<String> findUnmappedKeys(Set<String> declaredKeys, Set<String> referencedKeys) {

@@ -140,6 +140,7 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
     db_password = existing.get("DB_PASSWORD") or generate_local_secret(20)
     redis_password = existing.get("REDIS_PASSWORD") or generate_local_secret(20)
     values = {
+        "SPRING_PROFILES_ACTIVE": existing.get("SPRING_PROFILES_ACTIVE") or "local",
         "DEV_MYSQL_ROOT_PASSWORD": existing.get("DEV_MYSQL_ROOT_PASSWORD") or generate_local_secret(20),
         "DB_HOST": existing.get("DB_HOST") or "127.0.0.1",
         "DB_PORT": existing.get("DB_PORT") or "3306",

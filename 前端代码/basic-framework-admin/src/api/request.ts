@@ -2,6 +2,7 @@
  * Axios 请求封装：统一 Bearer 鉴权、401 单飞刷新令牌队列、CommonResult 解包、Blob 错误解析与文件下载。
  */
 import axios, {
+  CanceledError,
   type AxiosError,
   type AxiosInstance,
   type AxiosProgressEvent,
@@ -11,11 +12,14 @@ import axios, {
 } from 'axios';
 import { ElMessage } from 'element-plus';
 
+import type { OpenApiSchemas } from '@/api/generated/api-types';
+
 import { getAppConfig } from '@/config/app';
 import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
+  getSessionId,
   setTokens,
 } from '@/utils/token';
 
@@ -39,6 +43,14 @@ export interface PageResult<T> {
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
   _retried?: boolean;
   _silent?: boolean;
+  /** Login bound when the request was invoked; null means signed out. */
+  _sessionId?: string | null;
+  /** Access token actually sent on this attempt. */
+  _bearer?: string;
+}
+
+interface SessionBoundConfig extends AxiosRequestConfig {
+  _sessionId?: string | null;
 }
 
 const { apiBaseUrl } = getAppConfig();
@@ -55,39 +67,78 @@ const service: AxiosInstance = axios.create({
   timeout: 30_000,
 });
 
-let isRefreshing = false;
-let refreshQueue: Array<(token: string | null) => void> = [];
-
-function flushRefreshQueue(newToken: string | null): void {
-  const pending = refreshQueue;
-  refreshQueue = [];
-  for (const resolve of pending) {
-    resolve(newToken);
+/** Rejects with a CanceledError when the bound login was replaced or signed out. */
+function assertCurrent(config: RetryableRequestConfig): void {
+  if (getSessionId() !== (config._sessionId ?? null)) {
+    throw new CanceledError('登录会话已切换');
   }
 }
 
-async function performRefreshToken(): Promise<string | null> {
+/** Binds the current login at invocation; the interceptor may run later. */
+function bindSession(config?: AxiosRequestConfig): AxiosRequestConfig {
+  const bound: SessionBoundConfig = { ...config, _sessionId: getSessionId() };
+  return bound;
+}
+
+/** One pending rotation per login; waiters share it. */
+const refreshes = new Map<string, Promise<string | null>>();
+
+function refreshFor(sessionId: string): Promise<string | null> {
+  const existing = refreshes.get(sessionId);
+  if (existing) {
+    return existing;
+  }
+  const pending = performRefreshToken(sessionId).finally(() => {
+    if (refreshes.get(sessionId) === pending) {
+      refreshes.delete(sessionId);
+    }
+  });
+  refreshes.set(sessionId, pending);
+  return pending;
+}
+
+async function performRefreshToken(sessionId: string): Promise<string | null> {
+  if (getSessionId() !== sessionId) {
+    return null;
+  }
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return null;
   }
+  const previousAccessToken = getAccessToken();
+  let body: CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>> | undefined;
   try {
-    const resp = await rawHttp.post<
-      CommonResult<{ accessToken: string; refreshToken: string }>
-    >('/system/auth/refresh-token', { refreshToken });
-    const body = resp.data;
-    if (body?.code === 0 && body.data?.accessToken) {
-      setTokens(body.data.accessToken, body.data.refreshToken || refreshToken);
-      return body.data.accessToken;
-    }
-    return null;
+    const resp = await rawHttp.post<CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>>>(
+      '/system/auth/refresh-token',
+      { refreshToken },
+    );
+    body = resp.data;
   } catch {
+    // A failed rotation is handled below after checking for an updated session.
+  }
+  if (getSessionId() !== sessionId) {
     return null;
   }
+  const currentAccessToken = getAccessToken();
+  if (currentAccessToken !== previousAccessToken || getRefreshToken() !== refreshToken) {
+    return currentAccessToken || null;
+  }
+  if (body?.code !== 0 || !body.data?.accessToken) {
+    return null;
+  }
+  const installed = setTokens(
+    body.data.accessToken,
+    body.data.refreshToken || refreshToken,
+    body.data.passwordChangeRequired,
+    sessionId,
+  );
+  return installed ? body.data.accessToken : null;
 }
 
-function redirectToLogin(): void {
-  clearTokens();
+function redirectToLogin(sessionId: string | null): void {
+  if (!clearTokens(sessionId)) {
+    throw new CanceledError('登录会话已切换');
+  }
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   const loginUrl = `${base}/login`;
   if (!window.location.pathname.endsWith('/login')) {
@@ -147,7 +198,10 @@ export function resolveErrorMessage(error: unknown, fallback = '请求失败，�
 }
 
 service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const bound = config as RetryableRequestConfig;
+  assertCurrent(bound);
   const token = getAccessToken();
+  bound._bearer = token;
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
@@ -158,45 +212,34 @@ service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 async function handleUnauthorized(
   originalConfig: RetryableRequestConfig,
 ): Promise<AxiosResponse> {
+  assertCurrent(originalConfig);
+  const sessionId = originalConfig._sessionId ?? null;
   if (originalConfig._retried) {
-    redirectToLogin();
+    if (getAccessToken() === originalConfig._bearer) redirectToLogin(sessionId);
     return Promise.reject(new Error('登录状态已过期，请重新登录'));
   }
   originalConfig._retried = true;
 
-  if (isRefreshing) {
-    return new Promise((resolve, reject) => {
-      refreshQueue.push((newToken) => {
-        if (!newToken) {
-          reject(new Error('登录状态已过期，请重新登录'));
-          return;
-        }
-        originalConfig.headers.Authorization = `Bearer ${newToken}`;
-        resolve(service(originalConfig));
-      });
-    });
+  // A late 401 for the previous bearer reuses the already rotated token without refreshing.
+  let newToken: string | null = getAccessToken() || null;
+  if (!newToken || newToken === originalConfig._bearer) {
+    newToken = sessionId ? await refreshFor(sessionId) : null;
+    assertCurrent(originalConfig);
   }
-
-  isRefreshing = true;
-  try {
-    const newToken = await performRefreshToken();
-    flushRefreshQueue(newToken);
-    if (!newToken) {
-      redirectToLogin();
-      return Promise.reject(new Error('登录状态已过期，请重新登录'));
-    }
-    originalConfig.headers.Authorization = `Bearer ${newToken}`;
-    return service(originalConfig);
-  } finally {
-    isRefreshing = false;
+  if (!newToken) {
+    redirectToLogin(sessionId);
+    return Promise.reject(new Error('登录状态已过期，请重新登录'));
   }
+  return service(originalConfig);
 }
 
 service.interceptors.response.use(
   async (response: AxiosResponse) => {
     const config = response.config as RetryableRequestConfig;
+    assertCurrent(config);
     if (config.responseType === 'blob') {
       const jsonErr = await unwrapBlobJsonError(response);
+      assertCurrent(config);
       if (jsonErr && jsonErr.code !== 0) {
         if (jsonErr.code === 401) {
           return handleUnauthorized(config);
@@ -223,7 +266,13 @@ service.interceptors.response.use(
     return response.data;
   },
   async (error: AxiosError<CommonResult>) => {
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
     const config = error.config as RetryableRequestConfig | undefined;
+    if (config) {
+      assertCurrent(config);
+    }
     if (error.response?.status === 401 && config) {
       return handleUnauthorized(config);
     }
@@ -237,33 +286,33 @@ service.interceptors.response.use(
 
 export const request = {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return service.get(url, config) as unknown as Promise<T>;
+    return service.get(url, bindSession(config)) as unknown as Promise<T>;
   },
   post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    return service.post(url, data, config) as unknown as Promise<T>;
+    return service.post(url, data, bindSession(config)) as unknown as Promise<T>;
   },
   put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    return service.put(url, data, config) as unknown as Promise<T>;
+    return service.put(url, data, bindSession(config)) as unknown as Promise<T>;
   },
   delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return service.delete(url, config) as unknown as Promise<T>;
+    return service.delete(url, bindSession(config)) as unknown as Promise<T>;
   },
   download(url: string, config?: AxiosRequestConfig): Promise<Blob> {
-    return service.get(url, {
+    return service.get(url, bindSession({
       timeout: 120_000,
       ...config,
       responseType: 'blob',
-    }) as unknown as Promise<Blob>;
+    })) as unknown as Promise<Blob>;
   },
   upload<T = any>(
     url: string,
     formData: FormData,
     onUploadProgress?: (e: AxiosProgressEvent) => void,
   ): Promise<T> {
-    return service.post(url, formData, {
+    return service.post(url, formData, bindSession({
       timeout: 120_000,
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
-    }) as unknown as Promise<T>;
+    })) as unknown as Promise<T>;
   },
 };

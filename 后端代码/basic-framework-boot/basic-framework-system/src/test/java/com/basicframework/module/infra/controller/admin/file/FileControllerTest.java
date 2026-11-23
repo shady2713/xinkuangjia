@@ -2,6 +2,9 @@ package com.basicframework.module.infra.controller.admin.file;
 
 import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.framework.common.pojo.CommonResult;
+import com.basicframework.framework.common.pojo.PageResult;
+import com.basicframework.module.infra.controller.admin.file.vo.file.FilePageReqVO;
+import com.basicframework.module.infra.controller.admin.file.vo.file.FileRespVO;
 import com.basicframework.module.infra.controller.admin.file.vo.file.FileUploadReqVO;
 import com.basicframework.module.infra.dal.dataobject.file.FileDO;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
@@ -17,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_TOO_LARGE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -208,6 +212,41 @@ class FileControllerTest {
         when(emptyReq.getRequestURI()).thenReturn("/admin-api/infra/file/content/");
         controller.getFileContent(emptyReq, emptyResp);
         assertThat(emptyResp.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+    }
+
+    /** Visibility is server-derived: private legacy rows get a blank url, public rows keep theirs. */
+    @Test
+    void getFileAndPageDeriveVisibilityFromService() {
+        FileService fileService = mock(FileService.class);
+        FileController controller = new FileController();
+        ReflectionTestUtils.setField(controller, "fileService", fileService);
+
+        FileDO legacyPrivate = new FileDO();
+        legacyPrivate.setId(11L);
+        legacyPrivate.setPath("legacy-report.txt");
+        legacyPrivate.setName("report.txt");
+        legacyPrivate.setUrl("http://files.example.test/legacy-report.txt");
+        FileDO publicFile = new FileDO();
+        publicFile.setId(12L);
+        publicFile.setPath("2026/logo.png");
+        publicFile.setName("logo.png");
+        publicFile.setUrl("http://files.example.test/2026/logo.png");
+        when(fileService.isPrivateObject("legacy-report.txt")).thenReturn(true);
+        when(fileService.isPrivateObject("2026/logo.png")).thenReturn(false);
+
+        when(fileService.getFile(11L)).thenReturn(legacyPrivate);
+        FileRespVO detail = controller.getFile(11L).getData();
+        assertThat(detail.isPrivateFile()).isTrue();
+        assertThat(detail.getUrl()).isEmpty();
+        assertThat(detail.getName()).isEqualTo("report.txt");
+
+        FilePageReqVO pageReq = new FilePageReqVO();
+        when(fileService.getFilePage(pageReq)).thenReturn(new PageResult<>(List.of(legacyPrivate, publicFile), 2L));
+        List<FileRespVO> rows = controller.getFilePage(pageReq).getData().getList();
+        assertThat(rows).extracting(FileRespVO::isPrivateFile).containsExactly(true, false);
+        assertThat(rows.get(0).getUrl()).isEmpty();
+        assertThat(rows.get(1).getUrl()).isEqualTo("http://files.example.test/2026/logo.png");
+        assertThat(legacyPrivate.getUrl()).isEqualTo("http://files.example.test/legacy-report.txt");
     }
 
 }

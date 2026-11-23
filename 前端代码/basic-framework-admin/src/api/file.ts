@@ -32,6 +32,12 @@ export function getPrivateFileSignedUrlApi(
   });
 }
 
+export function getPrivateFileContentApi(id: number | string) {
+  return request.download('/infra/file/private/content', {
+    params: { id },
+  });
+}
+
 export function getFilePageApi(params: PageParam) {
   return request.get<PageResult<FileRecord>>('/infra/file/page', { params });
 }

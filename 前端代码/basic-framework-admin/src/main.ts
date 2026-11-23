@@ -5,11 +5,13 @@ import { createApp } from 'vue';
 
 import App from '@/App.vue';
 import { registerPermissionDirective } from '@/directives/permission';
-import { router } from '@/router';
+import { router, syncSessionRoutes } from '@/router';
 import '@/styles/index.css';
 
 const app = createApp(App);
-app.use(createPinia());
+const pinia = createPinia();
+app.use(pinia);
+syncSessionRoutes(pinia);
 app.use(router);
 app.use(ElementPlus);
 registerPermissionDirective(app);

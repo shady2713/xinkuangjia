@@ -29,7 +29,7 @@ spring:
     redis:
       time-to-live: 1h
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local}
+    active: ${SPRING_PROFILES_ACTIVE:prod}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME}?sslMode=${DB_SSL_MODE:VERIFY_IDENTITY}&allowPublicKeyRetrieval=${DB_ALLOW_PUBLIC_KEY_RETRIEVAL:false}&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true

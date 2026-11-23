@@ -5,6 +5,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 import { type DictDataSimple, getSimpleDictDataListApi } from '@/api/system/dict';
+import { getSessionId } from '@/utils/token';
 
 export const useDictStore = defineStore('dict', () => {
   const dictMap = ref<Record<string, DictDataSimple[]>>({});
@@ -14,8 +15,10 @@ export const useDictStore = defineStore('dict', () => {
   async function ensureLoaded(force = false): Promise<void> {
     if (loaded.value && !force) return;
     if (loadingPromise && !force) return loadingPromise;
-    loadingPromise = (async () => {
+    const owner = getSessionId();
+    const pending = (async () => {
       const list = await getSimpleDictDataListApi();
+      if (getSessionId() !== owner) return;
       const grouped: Record<string, DictDataSimple[]> = {};
       for (const item of list) {
         const type = item.dictType;
@@ -25,9 +28,10 @@ export const useDictStore = defineStore('dict', () => {
       dictMap.value = grouped;
       loaded.value = true;
     })().finally(() => {
-      loadingPromise = null;
+      if (loadingPromise === pending) loadingPromise = null;
     });
-    return loadingPromise;
+    loadingPromise = pending;
+    return pending;
   }
 
   function getDictOptions(dictType: string): DictDataSimple[] {
@@ -44,6 +48,7 @@ export const useDictStore = defineStore('dict', () => {
   }
 
   function reset() {
+    loadingPromise = null;
     dictMap.value = {};
     loaded.value = false;
   }

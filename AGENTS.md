@@ -1,6 +1,6 @@
 # basic-framework Engineering Guide
 
-[中文版](AGENTS.zh.md)
+This file is the single authoritative engineering navigation for the repository. [中文版](AGENTS.zh.md) only points back here.
 
 Repository-wide engineering rules for the ultra-lean enterprise & government management framework (Spring Boot 3.5 3-module backend + single-package Vue 3 & Element Plus frontend).
 
@@ -30,6 +30,8 @@ docs/                        Architecture, standard CRUD workflow, and deploymen
 - Preserve dual-platform isolation (`super_admin` vs `business_admin`), fail-closed authorization when operator context is absent, and `@Transactional(rollbackFor = Exception.class)` on write methods.
 - Whenever backend controller routes or VO fields change, update the OpenAPI snapshot (`mvn -B -ntp verify -Pquality-gate -Dopenapi.update=true`) and regenerate frontend types (`pnpm api:gen`) in the same change set.
 - Exclude `docs/需求卡/**` from general repository discovery unless explicitly requested by the user.
+- Follow [docs/review.md](docs/review.md) for code owner review prerequisites and secret scanning; `.github/CODEOWNERS` is declared-only.
+- Keep relative Markdown links and anchors valid. Run `python3 scripts/check-doc-links.py`, which the CI `frontend` job also runs.
 
 ## Skill Routing
 
