@@ -5,6 +5,7 @@ import com.basicframework.framework.common.exception.ServiceException;
 import com.basicframework.module.infra.framework.file.core.client.AbstractFileClient;
 import com.basicframework.module.infra.framework.file.core.client.FileContentStream;
 import com.basicframework.module.infra.framework.file.core.client.FileObjectStat;
+import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_METADATA_INVALID;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIVATE_SIGNING_UNSUPPORTED;
 
 /**
@@ -43,12 +45,16 @@ public class LocalFileClient extends AbstractFileClient<LocalFileClientConfig> {
     @Override
     public String upload(byte[] content, String path, String type) throws Exception {
         Path target = resolveSafePath(path);
+        String url = formatFileUrl(StrUtil.removeSuffix(config.getDomain(), "/"), path);
+        if (config.isPublicAccess() && !FilePathUtils.isPrivateObjectPath(path) && !FilePathUtils.isFileUrlValid(url)) {
+            throw new ServiceException(FILE_METADATA_INVALID);
+        }
         Path parent = target.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
         Files.write(target, content, StandardOpenOption.CREATE_NEW);
-        return formatFileUrl(StrUtil.removeSuffix(config.getDomain(), "/"), path);
+        return url;
     }
 
     @Override

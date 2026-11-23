@@ -7,7 +7,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
+import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_METADATA_INVALID;
 import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIVATE_SIGNING_UNSUPPORTED;
+import static com.basicframework.module.infra.framework.file.core.utils.FilePathUtils.MAX_FILE_URL_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -69,7 +71,7 @@ class LocalFileClientTest {
     }
 
     @Test
-    void upload_encodesPathSegmentsOnceAndKeepsRawKey() throws Exception {
+    void upload_preservesUnicodeAndQuotesPathSyntaxOnce() throws Exception {
         LocalFileClientConfig config = new LocalFileClientConfig();
         config.setBasePath(tempDir.toString());
         config.setDomain("/admin-api/infra/file/content");
@@ -77,10 +79,33 @@ class LocalFileClientTest {
         client.init();
 
         byte[] data = "segment".getBytes(StandardCharsets.UTF_8);
-        String url = client.upload(data, "20261122/a b#1+c.txt", "text/plain");
+        String path = "合同📄/a b%#1+c.txt";
+        String url = client.upload(data, path, "text/plain");
 
-        assertEquals("/admin-api/infra/file/content/20261122/a%20b%231+c.txt", url);
-        assertArrayEquals(data, client.getContent("20261122/a b#1+c.txt"));
+        assertEquals("/admin-api/infra/file/content/合同📄/a%20b%25%231+c.txt", url);
+        assertArrayEquals(data, client.getContent(path));
+    }
+
+    @Test
+    void upload_checksPublicUrlBudgetIncludingPrefixBeforeWriting() throws Exception {
+        String origin = "https://files.example.com/";
+        String suffix = "/admin-api/infra/file/content/合同/first%20draft.txt";
+        String path = "合同/first draft.txt";
+        String tooLong = "合同/first draft2.txt";
+        LocalFileClientConfig config = new LocalFileClientConfig();
+        config.setBasePath(tempDir.toString());
+        config.setDomain(origin + "a".repeat(MAX_FILE_URL_LENGTH - origin.length() - suffix.length()));
+        LocalFileClient client = new LocalFileClient(1L, config);
+        client.init();
+
+        byte[] data = "budget boundary".getBytes(StandardCharsets.UTF_8);
+        assertEquals(MAX_FILE_URL_LENGTH, client.upload(data, path, "text/plain").length());
+        assertArrayEquals(data, client.getContent(path));
+
+        ServiceException ex = assertThrows(ServiceException.class,
+                () -> client.upload(data, tooLong, "text/plain"));
+        assertEquals(FILE_METADATA_INVALID.getCode(), ex.getCode());
+        assertNull(client.getContent(tooLong));
     }
 
     @Test

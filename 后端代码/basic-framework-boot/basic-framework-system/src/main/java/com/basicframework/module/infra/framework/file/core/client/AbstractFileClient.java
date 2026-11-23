@@ -1,8 +1,10 @@
 package com.basicframework.module.infra.framework.file.core.client;
 
 import cn.hutool.core.util.StrUtil;
-import com.basicframework.module.infra.framework.file.core.utils.FilePathUtils;
 import lombok.extern.slf4j.Slf4j;
+
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * 文件客户端的抽象类，提供模板方法，减少子类的冗余代码
@@ -90,8 +92,7 @@ public abstract class AbstractFileClient<Config extends FileClientConfig> implem
     private static final String FILE_CONTENT_PATH = "/admin-api/infra/file/content";
 
     /**
-     * 格式化文件的 URL 访问地址
-     * 使用场景：local、ftp、db，通过 FileController 的 getFile 来获取文件内容
+     * 格式化由 FileController 提供内容的本地文件访问地址。
      *
      * @param domain 自定义域名或已包含内容前缀的公开访问路径
      * @param path   文件路径
@@ -99,13 +100,15 @@ public abstract class AbstractFileClient<Config extends FileClientConfig> implem
      */
     protected String formatFileUrl(String domain, String path) {
         String normalizedDomain = StrUtil.removeSuffix(StrUtil.blankToDefault(domain, "").trim(), "/");
-        // 与 OSS 公开地址共用分段编码；入参为原始对象键，内容入口只解码一次，避免二次编码。
-        String normalizedPath = FilePathUtils.encodeObjectPath(
-                StrUtil.removePrefix(StrUtil.blankToDefault(path, "").trim(), "/"));
-        if (normalizedDomain.endsWith(FILE_CONTENT_PATH)) {
-            return normalizedDomain + "/" + normalizedPath;
+        String contentPrefix = normalizedDomain.endsWith(FILE_CONTENT_PATH)
+                ? normalizedDomain : normalizedDomain + FILE_CONTENT_PATH;
+        String objectPath = "/" + StrUtil.removePrefix(StrUtil.nullToEmpty(path), "/");
+        // 只转义路径语法字符，保留 Unicode 以适应 url 列。浏览器在发送时编码，读取入口解码一次。
+        try {
+            return contentPrefix + new URI(null, null, objectPath, null).getRawPath();
+        } catch (URISyntaxException ex) {
+            throw new IllegalArgumentException("无法构造本地文件访问路径", ex);
         }
-        return normalizedDomain + FILE_CONTENT_PATH + "/" + normalizedPath;
     }
 
     /**

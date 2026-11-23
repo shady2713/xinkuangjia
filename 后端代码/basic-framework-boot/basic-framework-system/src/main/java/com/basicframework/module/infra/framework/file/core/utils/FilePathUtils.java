@@ -151,7 +151,7 @@ public final class FilePathUtils {
     }
 
     /**
-     * 按斜杠分段执行 RFC 3986 路径段编码，供本地与 OSS 公开 URL 共用。
+     * 按斜杠分段执行 RFC 3986 路径段编码，供 OSS 公开 URL 使用。
      *
      * <p>入参必须是原始对象键，禁止传入已编码地址，避免二次编码。</p>
      *
