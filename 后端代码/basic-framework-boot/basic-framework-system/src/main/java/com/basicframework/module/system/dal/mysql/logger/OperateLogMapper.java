@@ -44,16 +44,23 @@ public interface OperateLogMapper extends BaseMapperX<OperateLogDO> {
      *
      * @param userIds 允许查看的日志归属用户编号集合
      * @param startTime 起始创建时间（含）
+     * @param includeDetails 是否允许读取日志明细
      * @return 查询结果
      */
-    default List<OperateLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime) {
+    default List<OperateLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime,
+                                                         boolean includeDetails) {
         if (CollUtil.isEmpty(userIds)) {
             return List.of();
         }
-        return selectList(new LambdaQueryWrapperX<OperateLogDO>()
+        LambdaQueryWrapperX<OperateLogDO> query = new LambdaQueryWrapperX<OperateLogDO>()
                 .in(OperateLogDO::getUserId, userIds)
-                .ge(OperateLogDO::getCreateTime, startTime)
-                .orderByDesc(OperateLogDO::getId));
+                .ge(OperateLogDO::getCreateTime, startTime);
+        if (includeDetails) {
+            query.orderByDesc(OperateLogDO::getId);
+        } else {
+            query.select(OperateLogDO::getCreateTime);
+        }
+        return selectList(query);
     }
 
 }

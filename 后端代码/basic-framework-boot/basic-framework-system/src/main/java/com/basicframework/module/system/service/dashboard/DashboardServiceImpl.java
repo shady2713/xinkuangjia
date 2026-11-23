@@ -1,8 +1,6 @@
 package com.basicframework.module.system.service.dashboard;
 
-import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
-import com.basicframework.framework.common.util.collection.CollectionUtils;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
 import com.basicframework.module.system.controller.admin.dashboard.vo.DashboardSummaryRespVO;
 import com.basicframework.module.system.dal.dataobject.dept.DeptDO;
@@ -18,6 +16,7 @@ import com.basicframework.module.system.dal.mysql.permission.RoleMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.service.permission.PermissionService;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
@@ -28,7 +27,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * 首页概览统计 Service 实现类。
@@ -61,11 +59,12 @@ public class DashboardServiceImpl implements DashboardService {
     @Resource
     private OperateLogMapper operateLogMapper;
     @Resource
-    private PermissionCommonApi permissionApi;
+    private PermissionService permissionService;
 
     @Override
     public DashboardSummaryRespVO getDashboardSummary(Long operatorUserId) {
-        String platformType = resolvePlatformType(operatorUserId);
+        AdminUserDO operator = operatorUserId == null ? null : adminUserMapper.selectById(operatorUserId);
+        String platformType = AdminPlatformTypeEnum.defaultType(operator == null ? null : operator.getUserType());
 
         long userTotal = countOrZero(adminUserMapper.selectCount(
                 new LambdaQueryWrapperX<AdminUserDO>().eq(AdminUserDO::getUserType, platformType)));
@@ -85,12 +84,15 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 日志表不保存平台字段，按日志归属用户所在平台过滤（沿用老账号空平台归业务平台的兼容规则）；
         // 无法归属平台的历史日志（userId=0、账号已删除）不进入任何平台概览，仍可在有权限的日志页面查询。
-        Set<Long> platformUserIds = CollectionUtils.convertSet(
-                adminUserMapper.selectListByStatusAndUserType(null, platformType), AdminUserDO::getId);
+        List<Long> platformUserIds = operator == null ? List.of() : adminUserMapper.selectIdsByPlatform(platformType);
+        boolean includeLoginDetails = operator != null
+                && permissionService.hasAnyPermissions(operatorUserId, LOGIN_LOG_QUERY_PERMISSION);
+        boolean includeOperateDetails = operator != null
+                && permissionService.hasAnyPermissions(operatorUserId, OPERATE_LOG_QUERY_PERMISSION);
         List<LoginLogDO> sevenDayLoginLogs = loginLogMapper.selectListByUserIdsAndCreateTimeGe(
-                platformUserIds, startDateTime);
+                platformUserIds, startDateTime, includeLoginDetails);
         List<OperateLogDO> sevenDayOperateLogs = operateLogMapper.selectListByUserIdsAndCreateTimeGe(
-                platformUserIds, startDateTime);
+                platformUserIds, startDateTime, includeOperateDetails);
 
         Map<LocalDate, Long> loginDailyMap = new HashMap<>();
         long todayLoginCount = 0L;
@@ -136,7 +138,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // 最近明细包含账号、IP 与操作内容，需具备与日志页面相同的查询权限；计数与趋势仍对已登录用户开放。
         List<DashboardSummaryRespVO.RecentLoginItem> recentLogins = sevenDayLoginLogs.stream()
-                .limit(hasPermission(operatorUserId, LOGIN_LOG_QUERY_PERMISSION) ? RECENT_LIMIT : 0)
+                .limit(includeLoginDetails ? RECENT_LIMIT : 0)
                 .map(item -> DashboardSummaryRespVO.RecentLoginItem.builder()
                         .id(item.getId())
                         .username(item.getUsername())
@@ -147,7 +149,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .toList();
 
         List<DashboardSummaryRespVO.RecentOperateItem> recentOperates = sevenDayOperateLogs.stream()
-                .limit(hasPermission(operatorUserId, OPERATE_LOG_QUERY_PERMISSION) ? RECENT_LIMIT : 0)
+                .limit(includeOperateDetails ? RECENT_LIMIT : 0)
                 .map(item -> DashboardSummaryRespVO.RecentOperateItem.builder()
                         .id(item.getId())
                         .type(item.getType())
@@ -173,21 +175,6 @@ public class DashboardServiceImpl implements DashboardService {
                 .recentLogins(recentLogins)
                 .recentOperates(recentOperates)
                 .build();
-    }
-
-    private String resolvePlatformType(Long operatorUserId) {
-        if (operatorUserId == null) {
-            return AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
-        }
-        AdminUserDO operator = adminUserMapper.selectById(operatorUserId);
-        if (operator == null) {
-            return AdminPlatformTypeEnum.BUSINESS_ADMIN.getType();
-        }
-        return AdminPlatformTypeEnum.defaultType(operator.getUserType());
-    }
-
-    private boolean hasPermission(Long operatorUserId, String permission) {
-        return operatorUserId != null && permissionApi.hasAnyPermissions(operatorUserId, permission);
     }
 
     private long countOrZero(Long value) {

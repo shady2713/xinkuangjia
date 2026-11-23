@@ -1,6 +1,5 @@
 package com.basicframework.module.system.service.dashboard;
 
-import com.basicframework.framework.common.biz.system.permission.PermissionCommonApi;
 import com.basicframework.module.system.controller.admin.dashboard.vo.DashboardSummaryRespVO;
 import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.dal.dataobject.logger.OperateLogDO;
@@ -13,6 +12,7 @@ import com.basicframework.module.system.dal.mysql.permission.RoleMapper;
 import com.basicframework.module.system.dal.mysql.user.AdminUserMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import com.basicframework.module.system.service.permission.PermissionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,7 +50,7 @@ class DashboardServiceImplTest {
     @Mock
     private OperateLogMapper operateLogMapper;
     @Mock
-    private PermissionCommonApi permissionApi;
+    private PermissionService permissionService;
 
     @InjectMocks
     private DashboardServiceImpl dashboardService;
@@ -62,12 +61,10 @@ class DashboardServiceImplTest {
         operator.setId(1L);
         operator.setUserType(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
         when(adminUserMapper.selectById(1L)).thenReturn(operator);
-        AdminUserDO peer = new AdminUserDO();
-        peer.setId(2L);
-        when(adminUserMapper.selectListByStatusAndUserType(null, AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
-                .thenReturn(List.of(operator, peer));
-        when(permissionApi.hasAnyPermissions(1L, "system:login-log:query")).thenReturn(true);
-        when(permissionApi.hasAnyPermissions(1L, "system:operate-log:query")).thenReturn(true);
+        when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
+                .thenReturn(List.of(1L, 2L));
+        when(permissionService.hasAnyPermissions(1L, "system:login-log:query")).thenReturn(true);
+        when(permissionService.hasAnyPermissions(1L, "system:operate-log:query")).thenReturn(true);
         when(adminUserMapper.selectCount(any())).thenReturn(8L, 6L);
         when(deptMapper.selectCount(any())).thenReturn(5L);
         when(roleMapper.selectCount(any())).thenReturn(2L);
@@ -87,7 +84,7 @@ class DashboardServiceImplTest {
         failLog.setUserIp("127.0.0.1");
         failLog.setResult(LoginResultEnum.BAD_CREDENTIALS.getResult());
         failLog.setCreateTime(now.minusDays(1));
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.of(1L, 2L)), any()))
+        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(1L, 2L)), any(), eq(true)))
                 .thenReturn(List.of(okLog, failLog));
 
         OperateLogDO operateLog = new OperateLogDO();
@@ -96,7 +93,7 @@ class DashboardServiceImplTest {
         operateLog.setSubType("新增用户");
         operateLog.setAction("创建了用户【demo】");
         operateLog.setCreateTime(now);
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.of(1L, 2L)), any()))
+        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(1L, 2L)), any(), eq(true)))
                 .thenReturn(List.of(operateLog));
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(1L);
@@ -123,15 +120,15 @@ class DashboardServiceImplTest {
         when(deptMapper.selectCount(any())).thenReturn(0L);
         when(roleMapper.selectCount(any())).thenReturn(0L);
         when(dictTypeMapper.selectCount()).thenReturn(0L);
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.<Long>of()), any())).thenReturn(List.of());
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.<Long>of()), any())).thenReturn(List.of());
+        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.<Long>of()), any(), eq(false))).thenReturn(List.of());
+        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.<Long>of()), any(), eq(false))).thenReturn(List.of());
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(null);
 
         assertEquals(0L, summary.getUserTotal());
         assertEquals(0L, summary.getSevenDayLoginCount());
         assertEquals(7, summary.getDailyTrend().size());
-        verifyNoInteractions(permissionApi);
+        verifyNoInteractions(permissionService);
     }
 
     @Test
@@ -140,8 +137,8 @@ class DashboardServiceImplTest {
         operator.setId(2L);
         operator.setUserType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         when(adminUserMapper.selectById(2L)).thenReturn(operator);
-        when(adminUserMapper.selectListByStatusAndUserType(null, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
-                .thenReturn(List.of(operator));
+        when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+                .thenReturn(List.of(2L));
 
         LocalDateTime now = LocalDateTime.now();
         LoginLogDO loginLog = new LoginLogDO();
@@ -150,7 +147,7 @@ class DashboardServiceImplTest {
         loginLog.setUsername("biz-user");
         loginLog.setResult(LoginResultEnum.SUCCESS.getResult());
         loginLog.setCreateTime(now);
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.of(2L)), any()))
+        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(2L)), any(), eq(false)))
                 .thenReturn(List.of(loginLog));
 
         OperateLogDO operateLog = new OperateLogDO();
@@ -159,7 +156,7 @@ class DashboardServiceImplTest {
         operateLog.setType("系统用户");
         operateLog.setSubType("修改用户");
         operateLog.setCreateTime(now);
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(Set.of(2L)), any()))
+        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(2L)), any(), eq(false)))
                 .thenReturn(List.of(operateLog));
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(2L);

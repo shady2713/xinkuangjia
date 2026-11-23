@@ -111,9 +111,22 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
      * @return 查询结果
      */
     default List<AdminUserDO> selectListByStatusAndUserType(Integer status, String userType) {
-        LambdaQueryWrapperX<AdminUserDO> query = new LambdaQueryWrapperX<AdminUserDO>()
-                // 允许 status 为空时查询全部状态账号，避免生成 status = NULL 条件。
-                .eqIfPresent(AdminUserDO::getStatus, status);
+        return selectList(platformUsers(userType).eqIfPresent(AdminUserDO::getStatus, status));
+    }
+
+    /**
+     * 首页日志按用户归属限定查询，只读取用户编号。
+     */
+    default List<Long> selectIdsByPlatform(String userType) {
+        return selectList(platformUsers(userType).select(AdminUserDO::getId))
+                .stream().map(AdminUserDO::getId).toList();
+    }
+
+    /**
+     * 平台用户查询统一兼容归属业务平台的历史空值。
+     */
+    private static LambdaQueryWrapperX<AdminUserDO> platformUsers(String userType) {
+        LambdaQueryWrapperX<AdminUserDO> query = new LambdaQueryWrapperX<>();
         if (AdminPlatformTypeEnum.BUSINESS_ADMIN.getType().equals(userType)) {
             // 老账号的平台字段可能为空；只允许业务管理平台兼容读取，不能扩大到其他平台。
             query.and(item -> item.eq(AdminUserDO::getUserType, userType)
@@ -122,7 +135,7 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
         } else {
             query.eq(AdminUserDO::getUserType, userType);
         }
-        return selectList(query);
+        return query;
     }
 
     /**

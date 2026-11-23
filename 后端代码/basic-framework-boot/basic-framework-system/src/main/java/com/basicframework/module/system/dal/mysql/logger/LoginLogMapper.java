@@ -48,17 +48,23 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
      *
      * @param userIds 允许查看的日志归属用户编号集合
      * @param startTime 起始创建时间（含）
-     * @return 查询
-结果
+     * @param includeDetails 是否允许读取日志明细
+     * @return 查询结果
      */
-    default List<LoginLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime) {
+    default List<LoginLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime,
+                                                         boolean includeDetails) {
         if (CollUtil.isEmpty(userIds)) {
             return List.of();
         }
-        return selectList(new LambdaQueryWrapperX<LoginLogDO>()
+        LambdaQueryWrapperX<LoginLogDO> query = new LambdaQueryWrapperX<LoginLogDO>()
                 .in(LoginLogDO::getUserId, userIds)
-                .ge(LoginLogDO::getCreateTime, startTime)
-                .orderByDesc(LoginLogDO::getId));
+                .ge(LoginLogDO::getCreateTime, startTime);
+        if (includeDetails) {
+            query.orderByDesc(LoginLogDO::getId);
+        } else {
+            query.select(LoginLogDO::getCreateTime, LoginLogDO::getResult);
+        }
+        return selectList(query);
     }
 
 }
