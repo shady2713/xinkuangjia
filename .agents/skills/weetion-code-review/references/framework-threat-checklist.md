@@ -11,7 +11,7 @@
 ## 2. 密码、凭据与审计日志脱敏
 
 - **SM2 密文传输**：所有接收用户密码的管理端入口必须经过 SM2 私钥解密与时间戳/nonce 防重放校验，禁止新增明文或前端哈希直传接口。
-- **敏感返回与日志裁剪**：VO、操作日志（`@LogRecord`）与异常消息严禁输出密码哈希、SM2 私钥、OAuth2 `clientSecret`、短信渠道 `apiSecret`、对象存储 `secretKey` 或完整 Bearer/Refresh Token。
+- **敏感返回与日志裁剪**：VO、操作日志（`@OperateLog`）与异常消息严禁输出密码哈希、SM2 私钥、OAuth2 `clientSecret`、短信渠道 `apiSecret`、对象存储 `secretKey` 或完整 Bearer/Refresh Token。
 - **回调与文件边界**：外部回调接口必须默认失败关闭（未配置签名密钥或签名/时间戳不合法时返回 403）；上传/导出文件名须过滤控制字符与路径穿越，公开对象网关须保持 `Content-Security-Policy: sandbox` 与 `X-Content-Type-Options: nosniff`。
 
 ## 3. 持久化、软删除唯一约束与全栈契约
@@ -24,4 +24,4 @@
 
 - **外链安全**: Parse untrusted or configured URLs with `const parsed = new URL(value, window.location.origin)`. Allow only the `http:` and `https:` protocols and reject everything else. Open the result with `window.open(parsed.href, '_blank', 'noopener,noreferrer')`. Give every `target="_blank"` anchor `rel="noopener noreferrer"`.
 - **富文本与动态节点**：禁止将未净化的用户输入传入 `v-html` 或 `ElMessageBox(..., { dangerouslyUseHTMLString: true })`；高亮确认弹窗优先使用 Vue `h(...)` VNode 构造。
-- **浏览器配置边界**：`docker/app.config.js` 与 `VITE_GLOB_*` 对所有浏览器访客可见，严禁写入任何服务端密钥或测试口令。
+- **浏览器配置边界**：`public/_app.config.js` 与 `VITE_GLOB_*` 对所有浏览器访客可见，严禁写入任何服务端密钥或测试口令。

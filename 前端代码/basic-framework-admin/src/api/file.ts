@@ -1,5 +1,5 @@
 /**
- * 文件上传、私有签名预览与文件记录管理接口。
+ * 文件上传、私有文件鉴权下载与文件记录管理接口。
  */
 import type { AxiosProgressEvent } from 'axios';
 
@@ -21,15 +21,6 @@ export function uploadFileApi(
     formData.append('directory', directory);
   }
   return request.upload<string>('/infra/file/upload', formData, onProgress);
-}
-
-export function getPrivateFileSignedUrlApi(
-  id: number | string,
-  expirationSeconds = 300,
-) {
-  return request.get<string>('/infra/file/private/presigned-get-url', {
-    params: { id, expirationSeconds },
-  });
 }
 
 export function getPrivateFileContentApi(id: number | string) {

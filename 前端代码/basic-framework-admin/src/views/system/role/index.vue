@@ -50,8 +50,9 @@ import {
   maxLenRule,
   requiredRule,
 } from '@/constants/validation';
-import { confirmAction } from '@/utils/confirm';
+import { confirmCurrentSession } from '@/utils/confirm';
 import { formatDateTime } from '@/utils/format';
+import { getSessionId } from '@/utils/token';
 import { handleTree } from '@/utils/tree';
 
 defineOptions({ name: 'SystemRole' });
@@ -90,6 +91,11 @@ const formRules: FormRules = {
 // 菜单权限弹窗
 const menuDialogVisible = ref(false);
 const menuSubmitting = ref(false);
+const menuReady = ref(false);
+let menuLoad = 0;
+let menuOwner: string | null = null;
+let menuSelection = new Map<string, number | string>();
+let displayedMenuIds = new Set<string>();
 const menuTreeRef = ref<InstanceType<typeof ElTree>>();
 const menuTreeData = ref<Record<string, unknown>[]>([]);
 const currentRole = ref<RoleItem | null>(null);
@@ -192,42 +198,79 @@ async function handleDelete(row: RoleItem) {
 }
 
 async function handleBatchDelete() {
-  if (selectedIds.value.length === 0) return;
-  await confirmAction(
-    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个角色？删除后无法恢复。`,
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  const confirmed = await confirmCurrentSession(
+    `是否确认批量删除已勾选的 ${ids.length} 个角色？删除后无法恢复。`,
     { title: '批量删除确认', confirmText: '确认删除' },
   );
-  await deleteRoleListApi(selectedIds.value);
+  if (!confirmed) return;
+  await deleteRoleListApi(ids);
   ElMessage.success('批量删除成功');
   selectedIds.value = [];
   await loadList();
 }
 
 async function openMenuDialog(row: RoleItem) {
+  if (menuSubmitting.value) return;
+  const load = ++menuLoad;
+  const owner = getSessionId();
+  menuReady.value = false;
+  menuTreeData.value = [];
   currentRole.value = row;
   menuDialogVisible.value = true;
   const [menus, checkedIds] = await Promise.all([
     getSimpleMenuListApi(),
     getRoleMenuListApi(row.id),
   ]);
+  if (load !== menuLoad || !menuDialogVisible.value || !owner || getSessionId() !== owner) return;
   const parentIds = new Set(menus.map((m: MenuSimple) => String(m.parentId)));
   menuTreeData.value = handleTree(
     menus as { id: number | string; parentId?: number | string }[],
   );
   await nextTick();
+  if (load !== menuLoad || !menuDialogVisible.value || !menuTreeRef.value || getSessionId() !== owner) return;
   const leafIds = checkedIds.filter((id) => !parentIds.has(String(id)));
-  menuTreeRef.value?.setCheckedKeys(leafIds as (number | string)[]);
+  menuTreeRef.value.setCheckedKeys(leafIds);
+  menuSelection = new Map(checkedIds.map((id) => [String(id), id]));
+  displayedMenuIds = new Set(treeMenuSelection().map(String));
+  menuOwner = owner;
+  menuReady.value = true;
+}
+
+function treeMenuSelection(): (number | string)[] {
+  const tree = menuTreeRef.value;
+  if (!tree) return [];
+  return [...tree.getCheckedKeys(), ...tree.getHalfCheckedKeys()];
+}
+
+function updateMenuSelection() {
+  if (!menuReady.value) return;
+  const selected = treeMenuSelection();
+  const next = new Set(selected.map(String));
+  // 只保存本次树上的变化，保留未展示授权和独立父菜单的原始值。
+  for (const id of displayedMenuIds) {
+    if (!next.has(id)) menuSelection.delete(id);
+  }
+  for (const id of selected) {
+    if (!displayedMenuIds.has(String(id))) menuSelection.set(String(id), id);
+  }
+  displayedMenuIds = next;
+}
+
+function clearMenuSelection() {
+  menuTreeRef.value?.setCheckedKeys([]);
+  displayedMenuIds.clear();
+  menuSelection.clear();
 }
 
 async function submitAssignMenu() {
-  if (!currentRole.value || !menuTreeRef.value) return;
+  if (!menuReady.value || menuSubmitting.value || !currentRole.value || getSessionId() !== menuOwner) return;
   menuSubmitting.value = true;
   try {
-    const checked = menuTreeRef.value.getCheckedKeys() as (number | string)[];
-    const halfChecked = menuTreeRef.value.getHalfCheckedKeys() as (number | string)[];
     await assignRoleMenuApi({
       roleId: currentRole.value.id,
-      menuIds: [...checked, ...halfChecked],
+      menuIds: [...menuSelection.values()],
     });
     ElMessage.success('菜单权限已更新');
     menuDialogVisible.value = false;
@@ -465,12 +508,17 @@ onMounted(() => {
       width="540px"
       confirm-text="保存"
       :confirm-loading="menuSubmitting"
+      :confirm-disabled="!menuReady"
       @confirm="submitAssignMenu"
     >
-      <div class="max-h-[420px] overflow-auto rounded-md border border-[#e4e4e7] p-3">
+      <el-button link :disabled="!menuReady || menuSubmitting" @click="clearMenuSelection">
+        清空全部授权
+      </el-button>
+      <div v-loading="!menuReady" class="max-h-[420px] overflow-auto rounded-md border border-[#e4e4e7] p-3">
         <el-tree
           ref="menuTreeRef"
           :data="menuTreeData"
+          @check="updateMenuSelection"
           :props="{ label: 'name', children: 'children' }"
           node-key="id"
           show-checkbox

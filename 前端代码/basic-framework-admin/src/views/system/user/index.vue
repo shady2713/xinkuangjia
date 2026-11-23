@@ -54,10 +54,12 @@ import {
   REGEX_PATTERNS,
   requiredRule,
 } from '@/constants/validation';
-import { confirmAction } from '@/utils/confirm';
+import { confirmCurrentSession } from '@/utils/confirm';
 import { downloadBlob, formatDateTime } from '@/utils/format';
 import { encryptPassword } from '@/utils/sm2';
+import { getSessionId } from '@/utils/token';
 import { handleTree } from '@/utils/tree';
+import { hasPermission } from '@/directives/permission';
 
 defineOptions({ name: 'SystemUser' });
 
@@ -126,6 +128,10 @@ const formRules: FormRules = {
 // 分配角色弹窗
 const roleDialogVisible = ref(false);
 const roleSubmitting = ref(false);
+const roleReady = ref(false);
+let roleLoad = 0;
+let roleOwner: string | null = null;
+const statusUpdating = reactive(new Set<string>());
 const roleOptions = ref<RoleItem[]>([]);
 const assignRoleForm = reactive({
   userId: undefined as number | string | undefined,
@@ -255,12 +261,18 @@ async function submitForm() {
 }
 
 async function handleStatusChange(row: UserItem, val: string | number | boolean) {
+  const key = String(row.id);
+  if (statusUpdating.has(key) || !hasPermission('system:user:update')) return;
+  statusUpdating.add(key);
   const nextStatus = Number(val);
   try {
     await updateUserStatusApi(row.id, nextStatus);
+    row.status = nextStatus;
     ElMessage.success('状态已更新');
   } catch {
     await loadList();
+  } finally {
+    statusUpdating.delete(key);
   }
 }
 
@@ -271,31 +283,42 @@ async function handleDelete(row: UserItem) {
 }
 
 async function handleBatchDelete() {
-  if (selectedIds.value.length === 0) return;
-  await confirmAction(
-    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个用户？删除后无法恢复。`,
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  const confirmed = await confirmCurrentSession(
+    `是否确认批量删除已勾选的 ${ids.length} 个用户？删除后无法恢复。`,
     { title: '批量删除确认', confirmText: '确认删除' },
   );
-  await deleteUserListApi(selectedIds.value);
+  if (!confirmed) return;
+  await deleteUserListApi(ids);
   ElMessage.success('批量删除成功');
   selectedIds.value = [];
   await loadList();
 }
 
 async function openAssignRole(row: UserItem) {
+  if (roleSubmitting.value) return;
+  const load = ++roleLoad;
+  const owner = getSessionId();
+  roleReady.value = false;
   assignRoleForm.userId = row.id;
   assignRoleForm.username = row.username;
+  assignRoleForm.roleIds = [];
+  roleOptions.value = [];
   roleDialogVisible.value = true;
   const [roles, checked] = await Promise.all([
     getSimpleRoleListApi(),
     getUserRoleListApi(row.id),
   ]);
+  if (load !== roleLoad || !roleDialogVisible.value || !owner || getSessionId() !== owner) return;
   roleOptions.value = roles;
   assignRoleForm.roleIds = checked;
+  roleOwner = owner;
+  roleReady.value = true;
 }
 
 async function submitAssignRole() {
-  if (!assignRoleForm.userId) return;
+  if (!roleReady.value || roleSubmitting.value || !assignRoleForm.userId || getSessionId() !== roleOwner) return;
   roleSubmitting.value = true;
   try {
     await assignUserRoleApi({
@@ -510,6 +533,7 @@ onMounted(() => {
               <template #default="{ row }">
                 <el-switch
                   :model-value="row.status"
+                  :disabled="!hasPermission('system:user:update') || statusUpdating.has(String(row.id))"
                   :active-value="CommonStatusEnum.ENABLE"
                   :inactive-value="CommonStatusEnum.DISABLE"
                   @change="(v: string | number | boolean) => handleStatusChange(row, v)"
@@ -646,6 +670,7 @@ onMounted(() => {
       width="480px"
       confirm-text="保存"
       :confirm-loading="roleSubmitting"
+      :confirm-disabled="!roleReady"
       :show-fullscreen="false"
       @confirm="submitAssignRole"
     >
@@ -656,6 +681,7 @@ onMounted(() => {
         <el-form-item label="角色列表">
           <el-select
             v-model="assignRoleForm.roleIds"
+            :disabled="!roleReady || roleSubmitting"
             multiple
             class="w-full"
             placeholder="请选择要分配的角色"

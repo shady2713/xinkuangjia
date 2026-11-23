@@ -12,28 +12,7 @@
 
 ## 快速开始
 
-```bash
-# 终端 A（仓库根目录）
-# 1. 初始化本地配置（生成被 Git 忽略的 .env.dev 与后端 .env，新生成文件含 SPRING_PROFILES_ACTIVE=local）
-python -B -X utf8 scripts/runtime/init_local_dev.py --apply
-
-# 2. 启动本地 MySQL + Redis
-sh scripts/runtime/start_dev_stack.sh
-
-# 3. 启动后端（48080）：干净 Maven 缓存须先聚合打包（server 依赖 system 与 core），再在后端目录运行 JAR
-cd 后端代码/basic-framework-boot
-mvn -B -ntp clean package -DskipTests
-java -jar basic-framework-server/target/<server 可执行 JAR>
-```
-
-```bash
-# 终端 B（仓库根目录）
-# 4. 启动前端（5175）
-cd 前端代码/basic-framework-admin
-pnpm install && pnpm dev
-```
-
-Windows：后端可在仓库根目录执行 `scripts/runtime/start_java.ps1 -Build`（保持其仅回环的 `local` profile）。
+从 [本地开发启动](docs/开发与标准CRUD范例.md#1-本地一键启动) 初始化回环数据库并启动前后端。
 
 ## 文档导航
 

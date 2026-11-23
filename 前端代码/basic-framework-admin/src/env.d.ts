@@ -4,7 +4,6 @@ interface RuntimeAppConfig {
   VITE_APP_TITLE?: string;
   VITE_GLOB_API_URL?: string;
   VITE_APP_CAPTCHA_ENABLE?: string;
-  VITE_UPLOAD_TYPE?: 'client' | 'server' | string;
 }
 
 interface Window {

@@ -1,6 +1,7 @@
 import { ElMessageBox } from 'element-plus';
 
 import { deleteConfirmMessage } from '@/constants/validation';
+import { getSessionId } from '@/utils/token';
 
 export interface ConfirmOptions {
   title?: string;
@@ -34,4 +35,20 @@ export async function confirmDelete(targetName?: string | number | null): Promis
     cancelText: '取消',
     type: 'warning',
   });
+}
+
+/** 确认结束后校验仍是发起操作的登录会话。 */
+export async function confirmCurrentSession(
+  message: string,
+  options: ConfirmOptions = {},
+): Promise<boolean> {
+  const owner = getSessionId();
+  if (!owner) return false;
+  try {
+    await confirmAction(message, options);
+  } catch (action) {
+    if (action === 'cancel' || action === 'close') return false;
+    throw action;
+  }
+  return getSessionId() === owner;
 }

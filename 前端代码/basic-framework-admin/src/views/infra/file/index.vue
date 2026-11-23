@@ -17,7 +17,7 @@ import FormDialog from '@/components/FormDialog.vue';
 import ProTable from '@/components/ProTable.vue';
 import TableAction from '@/components/TableAction.vue';
 import { deleteConfirmMessage, FIELD_LIMITS } from '@/constants/validation';
-import { confirmAction } from '@/utils/confirm';
+import { confirmCurrentSession } from '@/utils/confirm';
 import { downloadBlob, formatDateTime, formatFileSize } from '@/utils/format';
 import UploadField from '@/components/UploadField.vue';
 
@@ -86,12 +86,14 @@ async function handleDelete(row: FileRecord) {
 }
 
 async function handleBatchDelete() {
-  if (selectedIds.value.length === 0) return;
-  await confirmAction(
-    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个文件？删除后无法恢复。`,
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  const confirmed = await confirmCurrentSession(
+    `是否确认批量删除已勾选的 ${ids.length} 个文件？删除后无法恢复。`,
     { title: '批量删除确认', confirmText: '确认删除' },
   );
-  await deleteFileListApi(selectedIds.value);
+  if (!confirmed) return;
+  await deleteFileListApi(ids);
   ElMessage.success('批量删除成功');
   selectedIds.value = [];
   await loadList();
@@ -192,7 +194,7 @@ onMounted(() => {
               <TableAction
                 :actions="[
                   {
-                    label: '查看',
+                    label: row.privateFile ? '下载' : '查看',
                     icon: View,
                     onClick: () => handlePreview(row),
                   },

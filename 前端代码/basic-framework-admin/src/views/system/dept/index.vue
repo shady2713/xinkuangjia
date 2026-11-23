@@ -67,7 +67,6 @@ const form = reactive({
   phone: '',
   email: '',
   status: CommonStatusEnum.ENABLE as number,
-  roleType: 'super_admin',
 });
 
 const formRules: FormRules = {
@@ -105,7 +104,6 @@ async function openForm(row?: DeptItem, parentId: number | string = 0) {
     phone: '',
     email: '',
     status: CommonStatusEnum.ENABLE,
-    roleType: 'super_admin',
   });
   formVisible.value = true;
   if (row?.id) {

@@ -60,7 +60,6 @@ const form = reactive({
   parentId: 0 as number | string,
   name: '',
   type: SystemMenuTypeEnum.DIR as number,
-  menuType: 'super_admin',
   icon: '',
   path: '',
   component: '',
@@ -107,7 +106,6 @@ async function openForm(row?: MenuItem, parentId: number | string = 0) {
     parentId,
     name: '',
     type: parentId === 0 ? SystemMenuTypeEnum.DIR : SystemMenuTypeEnum.MENU,
-    menuType: row?.menuType || 'super_admin',
     icon: '',
     path: '',
     component: '',
@@ -127,7 +125,6 @@ async function openForm(row?: MenuItem, parentId: number | string = 0) {
       parentId: detail.parentId ?? 0,
       name: detail.name,
       type: detail.type,
-      menuType: detail.menuType || 'super_admin',
       icon: detail.icon || '',
       path: detail.path || '',
       component: detail.component || '',
@@ -305,12 +302,6 @@ onMounted(() => {
             <el-radio-button :value="SystemMenuTypeEnum.MENU">菜单</el-radio-button>
             <el-radio-button :value="SystemMenuTypeEnum.BUTTON">按钮</el-radio-button>
           </el-radio-group>
-        </el-form-item>
-        <el-form-item label="所属平台">
-          <el-select v-model="form.menuType" class="w-full">
-            <el-option label="超管平台 (super_admin)" value="super_admin" />
-            <el-option label="业务平台 (business_admin)" value="business_admin" />
-          </el-select>
         </el-form-item>
         <el-form-item label="菜单名称" prop="name">
           <el-input

@@ -12,11 +12,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import secrets
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,19 +106,47 @@ def check_tools() -> tuple[tuple[str, ...], tuple[str, ...]]:
     return missing_required, missing_optional
 
 
-def current_hooks_path(root: Path) -> str:
+def write_local_env(path: Path, content: str, *, force: bool) -> bool:
+    """以当前用户独占权限创建本地凭据，强制更新时原子替换旧文件。"""
+    if not force:
+        try:
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            return False
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as output:
+                output.write(content)
+        except OSError:
+            path.unlink(missing_ok=True)
+            raise
+        return True
+
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                         dir=path.parent, delete=False) as output:
+            temporary = Path(output.name)
+            output.write(content)
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return True
+
+
+def current_hooks_path(root: Path) -> str | None:
     """读取当前仓库的 core.hooksPath 配置值。"""
     if not (root / ".git").exists():
-        return ""
+        return None
     completed = subprocess.run(
-        ["git", "-C", str(root), "config", "--local", "--get", "core.hooksPath"],
+        ["git", "-C", str(root), "config", "--get", "core.hooksPath"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=False,
         timeout=10,
     )
-    return completed.stdout.strip() if completed.returncode == 0 else ""
+    return completed.stdout.strip() if completed.returncode == 0 else None
 
 
 def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> BootstrapPlan:
@@ -156,8 +186,8 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
     if not compose_env_path.exists() or force:
         verb = "写入" if apply else "将写入"
         actions.append(f"{verb} .env.dev（本地 MySQL/Redis 凭据，已脱敏）")
-        if apply:
-            compose_env_path.write_text(render_compose_env(values), encoding="utf-8", newline="\n")
+        if apply and not write_local_env(compose_env_path, render_compose_env(values), force=force):
+            actions[-1] = "保留同时创建的 .env.dev"
     else:
         actions.append("保留已有 .env.dev（未传 --force 不覆盖）")
 
@@ -166,12 +196,14 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
         actions.append(f"{verb} 后端代码/basic-framework-boot/.env（含随机 SM2 私钥与本地连接配置）")
         if apply:
             template_text = template_path.read_text(encoding="utf-8")
-            backend_env_path.write_text(render_backend_env(template_text, values), encoding="utf-8", newline="\n")
+            if not write_local_env(backend_env_path, render_backend_env(template_text, values), force=force):
+                actions[-1] = "保留同时创建的后端 .env"
     else:
         actions.append("保留已有 后端代码/basic-framework-boot/.env（未传 --force 不覆盖）")
 
     if (resolved_root / ".git").exists():
-        if current_hooks_path(resolved_root) != ".githooks":
+        hooks_path = current_hooks_path(resolved_root)
+        if hooks_path is None:
             verb = "配置" if apply else "将配置"
             actions.append(f"{verb} git core.hooksPath = .githooks")
             if apply:
@@ -181,8 +213,10 @@ def bootstrap(root: Path, *, apply: bool = False, force: bool = False) -> Bootst
                     capture_output=True,
                     timeout=10,
                 )
-        else:
+        elif hooks_path == ".githooks":
             actions.append("git core.hooksPath 已指向 .githooks")
+        else:
+            actions.append("保留已有自定义 Git 钩子路径")
 
     return BootstrapPlan(
         missing_required_tools=missing_required,

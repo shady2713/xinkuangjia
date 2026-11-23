@@ -15,6 +15,7 @@ const props = withDefaults(
     confirmText?: string;
     cancelText?: string;
     confirmLoading?: boolean;
+    confirmDisabled?: boolean;
     showFooter?: boolean;
     showFullscreen?: boolean;
     destroyOnClose?: boolean;
@@ -104,6 +105,7 @@ function handleClose() {
           <el-button
             type="primary"
             :loading="confirmLoading"
+            :disabled="confirmDisabled"
             @click="emit('confirm')"
           >
             {{ confirmText }}

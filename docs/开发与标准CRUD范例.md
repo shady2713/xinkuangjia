@@ -18,7 +18,7 @@ python -B -X utf8 scripts/runtime/seed_local_dev.py --apply
   ```bash
   cd 后端代码/basic-framework-boot
   mvn -B -ntp clean package -DskipTests
-  java -jar basic-framework-server/target/<server 可执行 JAR>
+  java -jar basic-framework-server/target/basic-framework-server.jar
   ```
   Windows：在仓库根目录执行 `scripts/runtime/start_java.ps1 -Build`（保持其仅回环的 `local` profile）。
 - 前端（端口 `5175`，终端 B）：`cd 前端代码/basic-framework-admin && pnpm install && pnpm dev`，或运行 `scripts/runtime/start_frontend.ps1`。
@@ -51,10 +51,6 @@ Role CRUD change example: [role change task card](需求卡/role-platform.md).
    - `src/api/system/<biz>.ts`：引用 `OpenApiSchemas` 类型并封装 `request.get/post/put/delete`。
    - `src/views/system/<biz>/index.vue`：使用 `<ProTable>` + `el-table` + `el-dialog` + `v-has-permi`，文件/图片上传使用 `<UploadField :cropper="true|false" />`。
 
-## 3. 质量门禁命令（与 CI 一致）
+## 3. 质量门禁
 
-| 范围 | 命令 | 校验内容 |
-| --- | --- | --- |
-| 后端 | `cd 后端代码/basic-framework-boot && mvn -B -ntp -Pquality-gate verify` | 编译、单元测试、H2 集成测试、ArchUnit 架构门禁、Schema-DO-RBAC 校验、OpenAPI 零漂移校验、JaCoCo、PMD |
-| 前端 | `cd 前端代码/basic-framework-admin && pnpm run quality:gates` | OpenAPI 类型同步校验、`vue-tsc --noEmit`、ESLint、Vitest 单测、Vite 生产构建 |
-| 密钥 | GitHub Actions `secrets`（Gitleaks） | 全仓零豁免密钥扫描 |
+从 [仓库质量门禁](../AGENTS.md#required-validation) 执行适用检查。提交评审时附运行结果与所验 SHA，托管扫描范围见 [评审指南](review.md)。
