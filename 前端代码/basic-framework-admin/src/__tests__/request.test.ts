@@ -10,7 +10,7 @@ import {
   getRefreshToken,
   getSessionId,
   isPasswordChangeRequired,
-  loginPlatform,
+  loginSession,
   passwordChangeRequiredFlag,
   setLoginTokens,
   setTokens,
@@ -186,7 +186,7 @@ it('keeps the platform of an active login through access token renewal', () => {
     expect(setLoginTokens('initial-access', 'session-refresh', false, null, 'business')).toBe(true);
     const owner = getSessionId()!;
     expect(setTokens('renewed-access', 'session-refresh', undefined, owner)).toBe(true);
-    expect(loginPlatform.value).toBe('business');
+    expect(loginSession.value.platform).toBe('business');
     expect(persistedSession()).toMatchObject({ loginPlatform: 'business' });
   } finally {
     clearTokens();

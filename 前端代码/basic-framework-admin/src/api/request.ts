@@ -20,7 +20,7 @@ import {
   getAccessToken,
   getRefreshToken,
   getSessionId,
-  loginPlatform,
+  loginSession,
   loginPlatformQuery,
   setTokens,
 } from '@/utils/token';
@@ -146,7 +146,7 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
 }
 
 function redirectToLogin(sessionId: string | null): void {
-  const query = loginPlatformQuery(loginPlatform.value);
+  const query = loginPlatformQuery(loginSession.value.platform);
   if (!clearTokens(sessionId)) {
     throw new CanceledError('登录会话已切换');
   }

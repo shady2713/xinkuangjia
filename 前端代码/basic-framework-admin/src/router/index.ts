@@ -19,7 +19,7 @@ import { getAppConfig } from '@/config/app';
 import { useDictStore } from '@/stores/dict';
 import { useTabsStore } from '@/stores/tabs';
 import { useUserStore } from '@/stores/user';
-import { getAccessToken, getSessionId, isSessionFromStorage, loginPlatform, loginPlatformQuery, sessionId } from '@/utils/token';
+import { getAccessToken, getSessionId, isSessionFromStorage, loginPlatformQuery, loginSession } from '@/utils/token';
 
 NProgress.configure({ showSpinner: false });
 
@@ -117,19 +117,20 @@ export function clearDynamicRoutes(): void {
 export function syncSessionRoutes(pinia: Pinia): void {
   const tabs = useTabsStore(pinia);
   const dict = useDictStore(pinia);
-  watch([sessionId, loginPlatform], ([next], [previous, previousPlatform]) => {
-    if (next === previous) return;
+  watch(loginSession, (current, previous) => {
+    const next = current.id;
+    if (next === previous.id) return;
     // Capture before resets: a local fresh login is left to LoginView; storage-driven ones redirect.
     const fromStorage = isSessionFromStorage();
     clearDynamicRoutes();
     tabs.reset();
     dict.reset();
-    if (!previous && !fromStorage) return;
+    if (!previous.id && !fromStorage) return;
     queueMicrotask(() => {
       if (getSessionId() !== next) return;
       const to = next ? '/dashboard' : '/login';
       if (next || router.currentRoute.value.path !== to) {
-        const query = next ? {} : loginPlatformQuery(previousPlatform);
+        const query = next ? {} : loginPlatformQuery(previous.platform);
         void router.replace({ path: to, query, force: true });
       }
     });

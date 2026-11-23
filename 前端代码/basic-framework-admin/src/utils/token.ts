@@ -155,9 +155,13 @@ window.addEventListener('storage', (event: StorageEvent) => {
 /** Single in-memory source of the flag, exposed read-only. */
 export const passwordChangeRequiredFlag = computed(() => session.value.passwordChangeRequired);
 
-/** Reactive login ID, exposed read-only. */
-export const sessionId = computed(() => session.value.sessionId);
-export const loginPlatform = computed(() => session.value.loginPlatform);
+/** Route consumers receive the login identifier and its platform from the same snapshot. */
+export const loginSession = computed(() => ({
+  id: session.value.sessionId,
+  platform: session.value.loginPlatform,
+}));
+
+export const sessionId = computed(() => loginSession.value.id);
 
 /** 仅业务登录需要在地址中明确标识平台。 */
 export function loginPlatformQuery(platform: LoginPlatform | undefined): { platform?: 'business' } {
