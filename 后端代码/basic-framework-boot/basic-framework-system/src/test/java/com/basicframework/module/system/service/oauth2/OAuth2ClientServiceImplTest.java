@@ -100,6 +100,18 @@ class OAuth2ClientServiceImplTest {
         verify(oauth2ClientMapper).updateById(any(OAuth2ClientDO.class));
     }
 
+    /** 验证历史客户端可切换为开放入口支持的授权方式。 */
+    @Test
+    void updateMigratesHistoricalGrantTypesToClientCredentials() {
+        OAuth2ClientDO existing = buildClient("stored-format");
+        existing.setAuthorizedGrantTypes(List.of("password"));
+        when(oauth2ClientMapper.selectById(1L)).thenReturn(existing);
+
+        oauth2ClientService.updateOAuth2Client(buildSaveReq(1L, List.of("client_credentials")));
+
+        verify(oauth2ClientMapper).updateById(any(OAuth2ClientDO.class));
+    }
+
     /** 验证更新时新增的不支持授权类型被拒绝。 */
     @Test
     void updateRejectsNewlyAddedUnsupportedGrantType() {

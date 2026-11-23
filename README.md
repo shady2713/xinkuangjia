@@ -8,7 +8,7 @@
 - **前端单包极简重建**：标准单包 Vite + Vue 3 + TypeScript + Element Plus + Pinia + Vue Router + Tailwind CSS（手写源码约 6,900 行），保留经典浅色蓝主题视觉、统一 `<ProTable>` 与内置图片裁剪开关的 `<UploadField>`。
 - **政企安全合规基线**：SM2（C1C3C2）密码传输加密、anji-plus 滑块验证码、双平台（`super_admin` / `business_admin`）硬隔离、5 档部门数据权限、30 分钟会话超时、登录审计日志与原生 Spring AOP `@OperateLog` 操作审计日志。
 - **14 张干净基线表**：覆盖用户、部门、角色、菜单、字典、OAuth2 开放应用与令牌、登录/操作日志及统一文件记录（支持本地磁盘与阿里云 OSS 一键切换）。
-- **确定性质量门禁**：后端 ArchUnit + Schema-DO-RBAC 一致性 + OpenAPI 零漂移快照 + JaCoCo + PMD；前端 OpenAPI 类型校验 + `vue-tsc` + ESLint + Vitest + Vite 构建；全仓零豁免 Gitleaks 密钥扫描。
+- **质量门禁**见 [仓库工程规范](AGENTS.md#required-validation)。
 
 ## 快速开始
 

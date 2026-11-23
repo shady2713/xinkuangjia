@@ -371,6 +371,14 @@ onMounted(() => {
               disabled
             />
           </el-select>
+          <el-button
+            v-if="form.authorizedGrantTypes.some((type) => type !== OPEN_GRANT_TYPE)"
+            link
+            type="primary"
+            @click="form.authorizedGrantTypes = [OPEN_GRANT_TYPE]"
+          >
+            改用客户端模式
+          </el-button>
         </el-form-item>
         <el-form-item label="授权范围">
           <el-input

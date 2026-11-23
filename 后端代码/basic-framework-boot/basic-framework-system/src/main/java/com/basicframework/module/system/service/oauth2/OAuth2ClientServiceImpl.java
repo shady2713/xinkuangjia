@@ -29,7 +29,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
@@ -341,13 +343,12 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
      * @param grantTypes 请求授权类型
      */
     private void validateAuthorizedGrantTypes(List<String> existingGrantTypes, List<String> grantTypes) {
-        for (String grantType : CollUtil.emptyIfNull(grantTypes)) {
-            if (CollUtil.contains(existingGrantTypes, grantType)) {
-                continue;
-            }
-            if (!OAuth2GrantTypeEnum.CLIENT_CREDENTIALS.getGrantType().equals(grantType)) {
-                throw exception(OAUTH2_CLIENT_AUTHORIZED_GRANT_TYPE_NOT_EXISTS);
-            }
+        Set<String> requested = new HashSet<>(CollUtil.emptyIfNull(grantTypes));
+        if (existingGrantTypes != null && requested.equals(new HashSet<>(existingGrantTypes))) {
+            return;
+        }
+        if (!requested.equals(Set.of(OAuth2GrantTypeEnum.CLIENT_CREDENTIALS.getGrantType()))) {
+            throw exception(OAUTH2_CLIENT_AUTHORIZED_GRANT_TYPE_NOT_EXISTS);
         }
     }
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 文件管理：列表查询、统一上传（含图片裁剪开关）、私有短时签名预览与删除。
+ * 文件管理：列表查询、统一上传（含图片裁剪开关）、私有文件鉴权下载与删除。
  */
-import { CopyDocument, Delete, Plus, Search, View } from '@element-plus/icons-vue';
+import { CopyDocument, Delete, Download, Plus, Search, View } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
@@ -195,7 +195,7 @@ onMounted(() => {
                 :actions="[
                   {
                     label: row.privateFile ? '下载' : '查看',
-                    icon: View,
+                    icon: row.privateFile ? Download : View,
                     onClick: () => handlePreview(row),
                   },
                   {
