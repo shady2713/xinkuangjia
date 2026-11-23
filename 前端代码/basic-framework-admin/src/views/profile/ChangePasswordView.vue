@@ -4,14 +4,12 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { updateUserPasswordApi } from '@/api/system/profile';
 import {
   FIELD_LIMITS,
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
-import { encryptPassword } from '@/utils/sm2';
 import { getSessionId } from '@/utils/token';
 
 const router = useRouter();
@@ -47,11 +45,7 @@ async function handleSubmit() {
   if (!valid || getSessionId() !== owner) return;
   loading.value = true;
   try {
-    const oldPassword = await encryptPassword(form.oldPassword);
-    if (getSessionId() !== owner) return;
-    const newPassword = await encryptPassword(form.newPassword);
-    if (getSessionId() !== owner) return;
-    await updateUserPasswordApi({ oldPassword, newPassword });
+    if (!(await userStore.changeOwnPassword(owner, form.oldPassword, form.newPassword))) return;
     if (!userStore.resetState(owner)) return;
     ElMessage.success('密码修改成功，请重新登录');
     await router.replace('/login');

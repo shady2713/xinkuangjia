@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
 import {
   getUserProfileApi,
-  updateUserPasswordApi,
   updateUserProfileApi,
   type UserProfileResp,
 } from '@/api/system/profile';
@@ -19,7 +19,7 @@ import {
 } from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
 import { formatDateTime } from '@/utils/format';
-import { encryptPassword } from '@/utils/sm2';
+import { getSessionId } from '@/utils/token';
 
 const userStore = useUserStore();
 const loading = ref(false);
@@ -95,13 +95,15 @@ async function handleSaveBasic() {
     });
     ElMessage.success('个人资料已更新');
     await loadProfile();
-    await userStore.fetchPermissionInfo();
+    await userStore.refreshUserInfo();
   } finally {
     savingBasic.value = false;
   }
 }
 
 async function handleAvatarUploaded(url: string) {
+  // A private upload has no public URL; never replace or clear the saved avatar with it.
+  if (!url) return;
   basicForm.avatar = url;
   await updateUserProfileApi({
     nickname: basicForm.nickname.trim() || profile.value?.nickname || '',
@@ -109,21 +111,23 @@ async function handleAvatarUploaded(url: string) {
   });
   ElMessage.success('头像已更新');
   await loadProfile();
-  await userStore.fetchPermissionInfo();
+  await userStore.refreshUserInfo();
 }
 
 async function handleSavePassword() {
+  const owner = getSessionId();
+  if (!owner) return;
   const valid = await pwdFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
+  if (!valid || getSessionId() !== owner) return;
   savingPwd.value = true;
   try {
-    const oldPassword = await encryptPassword(pwdForm.oldPassword);
-    const newPassword = await encryptPassword(pwdForm.newPassword);
-    await updateUserPasswordApi({ oldPassword, newPassword });
+    if (!(await userStore.changeOwnPassword(owner, pwdForm.oldPassword, pwdForm.newPassword))) return;
     ElMessage.success('密码修改成功');
     pwdForm.oldPassword = '';
     pwdForm.newPassword = '';
     pwdForm.confirmPassword = '';
+  } catch (error) {
+    if (!axios.isCancel(error)) throw error;
   } finally {
     savingPwd.value = false;
   }

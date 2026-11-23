@@ -173,7 +173,7 @@ export function registerMenuRoutes(menus: MenuRouteItem[]): void {
   }
 }
 
-router.beforeEach(async (to) => {
+router.beforeEach(async (to, from) => {
   NProgress.start();
   const { appTitle } = getAppConfig();
   document.title = to.meta?.title ? `${String(to.meta.title)} - ${appTitle}` : appTitle;
@@ -214,8 +214,11 @@ router.beforeEach(async (to) => {
       });
       return { path: to.path, query: to.query, hash: to.hash, replace: true };
     } catch {
-      if (!userStore.resetState(owner)) return false;
-      return { path: '/login', query: { redirect: to.fullPath } };
+      // An explicitly invalid or replaced login was already cleared by the transport or another tab.
+      if (getSessionId() !== owner) return false;
+      // Transient transport/bootstrap failure: keep the login; the next navigation retries.
+      if (from.matched.length) return false;
+      return to.matched.length ? true : '/dashboard';
     }
   }
 

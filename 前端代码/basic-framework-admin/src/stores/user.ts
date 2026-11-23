@@ -15,6 +15,8 @@ import {
   smsLoginApi,
   type SmsLoginReq,
 } from '@/api/auth';
+import { updateUserPasswordApi } from '@/api/system/profile';
+import { encryptPassword } from '@/utils/sm2';
 import {
   clearTokens,
   getAccessToken,
@@ -78,6 +80,29 @@ export const useUserStore = defineStore('user', () => {
     return info;
   }
 
+  /** Refreshes only the displayed identity; roles, permissions and menus stay aligned with registered routes. */
+  async function refreshUserInfo() {
+    const startId = getSessionId();
+    const info = await getPermissionInfoApi();
+    assertSession(startId);
+    if (info.user) userInfo.value = info.user;
+  }
+
+  /** Self-service password change bound to owner; false when that login is no longer current. */
+  async function changeOwnPassword(
+    owner: string | null,
+    oldPlain: string,
+    newPlain: string,
+  ): Promise<boolean> {
+    if (!owner || getSessionId() !== owner) return false;
+    const oldPassword = await encryptPassword(oldPlain);
+    if (getSessionId() !== owner) return false;
+    const newPassword = await encryptPassword(newPlain);
+    if (getSessionId() !== owner) return false;
+    await updateUserPasswordApi({ oldPassword, newPassword });
+    return getSessionId() === owner;
+  }
+
   function markRoutesLoaded(loaded: boolean) {
     routesLoaded.value = loaded;
   }
@@ -112,6 +137,8 @@ export const useUserStore = defineStore('user', () => {
     loginByPassword,
     loginBySms,
     fetchPermissionInfo,
+    refreshUserInfo,
+    changeOwnPassword,
     markRoutesLoaded,
     resetState,
     logout,
