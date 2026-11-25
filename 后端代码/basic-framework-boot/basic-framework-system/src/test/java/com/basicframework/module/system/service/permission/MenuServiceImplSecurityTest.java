@@ -8,6 +8,7 @@ import com.basicframework.module.system.dal.mysql.permission.MenuMapper;
 import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.permission.MenuTypeEnum;
 import com.basicframework.module.system.enums.permission.RoleCodeEnum;
+import com.basicframework.module.system.service.user.AdminUserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,10 +19,13 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.Set;
+
 import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,6 +44,10 @@ class MenuServiceImplSecurityTest {
     private ObjectProvider<PermissionService> permissionServiceProvider;
     @Mock
     private PermissionService permissionService;
+    @Mock
+    private ObjectProvider<AdminUserService> adminUserServiceProvider;
+    @Mock
+    private AdminUserService adminUserService;
 
     @InjectMocks
     private MenuServiceImpl menuService;
@@ -54,8 +62,7 @@ class MenuServiceImplSecurityTest {
     @Test
     void updateMenuRejectsPermissionMutationByNonSuperAdmin() {
         setLoginUser(20L);
-        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
-        when(permissionService.hasAnyRoles(20L, RoleCodeEnum.SUPER_ADMIN.getCode())).thenReturn(false);
+        stubNonSuperAdminPlatform(20L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
 
         MenuDO oldMenu = new MenuDO();
         oldMenu.setId(100L);
@@ -81,9 +88,7 @@ class MenuServiceImplSecurityTest {
     @Test
     void createMenuRejectsUnownedPermissionByNonSuperAdmin() {
         setLoginUser(20L);
-        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
-        when(permissionServiceProvider.getObject()).thenReturn(permissionService);
-        when(permissionService.hasAnyRoles(20L, RoleCodeEnum.SUPER_ADMIN.getCode())).thenReturn(false);
+        stubNonSuperAdminPlatform(20L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
         when(permissionService.hasAnyPermissions(20L, "system:role:delete")).thenReturn(false);
 
         MenuSaveVO createReqVO = new MenuSaveVO();
@@ -103,9 +108,9 @@ class MenuServiceImplSecurityTest {
     @Test
     void updateMenuRejectsStatusOrParentMutationByNonSuperAdmin() {
         setLoginUser(20L);
-        when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
-        when(permissionServiceProvider.getObject()).thenReturn(permissionService);
-        when(permissionService.hasAnyRoles(20L, RoleCodeEnum.SUPER_ADMIN.getCode())).thenReturn(false);
+        stubNonSuperAdminPlatform(20L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        when(permissionService.getUserRoleIdListByUserIdFromCache(20L)).thenReturn(Set.of(5L));
+        when(permissionService.getRoleMenuListByRoleId(Set.of(5L))).thenReturn(Set.of(100L));
         when(permissionService.hasAnyPermissions(20L, "system:user:query")).thenReturn(true);
 
         MenuDO oldMenu = new MenuDO();
@@ -131,9 +136,9 @@ class MenuServiceImplSecurityTest {
         verify(menuMapper, never()).updateById(any(MenuDO.class));
     }
 
-    /** 验证无登录上下文时写操作 fail-closed 拒绝。 */
+    /** 验证无登录上下文时更新与删除菜单均 fail-closed 拒绝。 */
     @Test
-    void updateMenuRejectsWhenNoOperatorLoginContext() {
+    void updateAndDeleteMenuRejectWhenNoOperatorLoginContext() {
         MenuDO oldMenu = new MenuDO();
         oldMenu.setId(100L);
         when(menuMapper.selectById(100L)).thenReturn(oldMenu);
@@ -146,6 +151,57 @@ class MenuServiceImplSecurityTest {
                 .isInstanceOfSatisfying(ServiceException.class,
                         ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
         verify(menuMapper, never()).updateById(any(MenuDO.class));
+
+        when(menuMapper.selectCountByParentId(100L)).thenReturn(0L);
+        assertThatThrownBy(() -> menuService.deleteMenu(100L))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(menuMapper, never()).deleteById(any(Long.class));
+    }
+
+    /** 验证非超管对 permission 为空但自身角色未授权的目录/页面菜单不得编辑或删除。 */
+    @Test
+    void nonSuperAdminCannotEditOrDeleteUnownedDirectoryWithEmptyPermission() {
+        setLoginUser(20L);
+        stubNonSuperAdminPlatform(20L, AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        when(permissionService.getUserRoleIdListByUserIdFromCache(20L)).thenReturn(Set.of(5L));
+        when(permissionService.getRoleMenuListByRoleId(Set.of(5L))).thenReturn(Set.of(200L));
+
+        MenuDO unownedDir = new MenuDO();
+        unownedDir.setId(100L);
+        unownedDir.setParentId(MenuDO.ID_ROOT);
+        unownedDir.setStatus(0);
+        unownedDir.setMenuType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        unownedDir.setPermission("");
+        when(menuMapper.selectById(100L)).thenReturn(unownedDir);
+
+        MenuSaveVO updateReqVO = new MenuSaveVO();
+        updateReqVO.setId(100L);
+        updateReqVO.setParentId(MenuDO.ID_ROOT);
+        updateReqVO.setStatus(0);
+        updateReqVO.setName("篡改目录");
+        updateReqVO.setType(MenuTypeEnum.DIR.getType());
+        updateReqVO.setMenuType(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType());
+        updateReqVO.setPermission("");
+
+        assertThatThrownBy(() -> menuService.updateMenu(updateReqVO))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(menuMapper, never()).updateById(any(MenuDO.class));
+
+        when(menuMapper.selectCountByParentId(100L)).thenReturn(0L);
+        assertThatThrownBy(() -> menuService.deleteMenu(100L))
+                .isInstanceOfSatisfying(ServiceException.class,
+                        ex -> assertThat(ex.getCode()).isEqualTo(SYSTEM_PLATFORM_ACCESS_DENIED.getCode()));
+        verify(menuMapper, never()).deleteById(any(Long.class));
+    }
+
+    private void stubNonSuperAdminPlatform(Long userId, String platformType) {
+        lenient().when(permissionServiceProvider.getIfAvailable()).thenReturn(permissionService);
+        lenient().when(permissionServiceProvider.getObject()).thenReturn(permissionService);
+        lenient().when(permissionService.hasAnyRoles(userId, RoleCodeEnum.SUPER_ADMIN.getCode())).thenReturn(false);
+        lenient().when(adminUserServiceProvider.getIfAvailable()).thenReturn(adminUserService);
+        lenient().when(adminUserService.getLoginUserTypeOrDefault()).thenReturn(platformType);
     }
 
     /** 设置当前线程登录用户。 */

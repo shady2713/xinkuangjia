@@ -57,15 +57,20 @@ public class LoginLogServiceImpl implements LoginLogService {
      *
      * @param reqDTO 登录日志创建参数
      */
+    private static final int TRACE_ID_MAX_LEN = 64;
+    private static final int USERNAME_MAX_LEN = 50;
+    private static final int USER_IP_MAX_LEN = 50;
+    private static final int USER_AGENT_MAX_LEN = 512;
+
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void createLoginLog(LoginLogCreateReqDTO reqDTO) {
         LoginLogDO loginLog = BeanUtils.toBean(reqDTO, LoginLogDO.class);
-        // 兜底非空列默认空串或 0，确保无 HTTP 请求或未识别账号时失败审计仍可独立落库。
-        loginLog.setTraceId(StrUtil.nullToEmpty(loginLog.getTraceId()));
-        loginLog.setUsername(StrUtil.nullToEmpty(loginLog.getUsername()));
-        loginLog.setUserIp(StrUtil.nullToEmpty(loginLog.getUserIp()));
-        loginLog.setUserAgent(StrUtil.nullToEmpty(loginLog.getUserAgent()));
+        // 兜底非空列并按数据库列宽安全截断，防止超长 User-Agent/Header 触发 MySQL 严格模式截断异常导致审计丢失或 500。
+        loginLog.setTraceId(truncateColumn(loginLog.getTraceId(), TRACE_ID_MAX_LEN));
+        loginLog.setUsername(truncateColumn(loginLog.getUsername(), USERNAME_MAX_LEN));
+        loginLog.setUserIp(truncateColumn(loginLog.getUserIp(), USER_IP_MAX_LEN));
+        loginLog.setUserAgent(truncateColumn(loginLog.getUserAgent(), USER_AGENT_MAX_LEN));
         if (loginLog.getUserId() == null) {
             loginLog.setUserId(0L);
         }
@@ -73,6 +78,18 @@ public class LoginLogServiceImpl implements LoginLogService {
             loginLog.setUserType(0);
         }
         loginLogMapper.insert(loginLog);
+    }
+
+    private static String truncateColumn(String value, int maxLength) {
+        String safe = StrUtil.nullToEmpty(value);
+        if (safe.length() <= maxLength) {
+            return safe;
+        }
+        int end = maxLength;
+        if (end > 0 && Character.isHighSurrogate(safe.charAt(end - 1))) {
+            end--;
+        }
+        return safe.substring(0, end);
     }
 
 }

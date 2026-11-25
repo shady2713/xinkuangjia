@@ -77,11 +77,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="操作日志"
       :loading="loading"
       :total="total"
+      :columns="[
+        { key: 'id', label: '日志编号' },
+        { key: 'userName', label: '操作人' },
+        { key: 'type', label: '操作模块' },
+        { key: 'subType', label: '操作名' },
+        { key: 'action', label: '操作内容' },
+        { key: 'userIp', label: '操作 IP' },
+        { key: 'createTime', label: '操作时间' },
+      ]"
       v-model:page-no="query.pageNo"
       v-model:page-size="query.pageSize"
       @refresh="loadList"
@@ -94,7 +103,6 @@ onMounted(() => {
               placeholder="请输入操作模块"
               :maxlength="FIELD_LIMITS.MENU_NAME"
               clearable
-              style="width: 160px"
             />
           </el-form-item>
           <el-form-item label="操作名">
@@ -103,7 +111,6 @@ onMounted(() => {
               placeholder="请输入操作名"
               :maxlength="FIELD_LIMITS.MENU_NAME"
               clearable
-              style="width: 160px"
             />
           </el-form-item>
           <el-form-item label="操作内容">
@@ -112,14 +119,13 @@ onMounted(() => {
               placeholder="请输入操作内容关键字"
               :maxlength="FIELD_LIMITS.SEARCH_KEYWORD"
               clearable
-              style="width: 180px"
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
-              搜索
-            </el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
+              查询
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -128,22 +134,21 @@ onMounted(() => {
         <el-button
           v-has-permi="'system:operate-log:export'"
           :icon="Download"
-          size="small"
           @click="handleExport"
         >
           导出
         </el-button>
       </template>
 
-      <template #default="{ size }">
-        <el-table :data="list" :size="size" border stripe>
-          <el-table-column prop="id" label="日志编号" width="88" align="center" />
-          <el-table-column prop="userName" label="操作人" width="110" show-overflow-tooltip />
-          <el-table-column prop="type" label="操作模块" width="126" show-overflow-tooltip />
-          <el-table-column prop="subType" label="操作名" width="126" show-overflow-tooltip />
-          <el-table-column prop="action" label="操作内容" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="userIp" label="操作 IP" width="130" show-overflow-tooltip />
-          <el-table-column label="操作时间" width="164" show-overflow-tooltip>
+      <template #default="{ size, tableHeight, isColVisible }">
+        <el-table :data="list" :size="size" :height="tableHeight" border stripe>
+          <el-table-column v-if="isColVisible('id')" prop="id" label="日志编号" width="88" align="center" />
+          <el-table-column v-if="isColVisible('userName')" prop="userName" label="操作人" width="110" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('type')" prop="type" label="操作模块" width="126" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('subType')" prop="subType" label="操作名" width="126" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('action')" prop="action" label="操作内容" min-width="220" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('userIp')" prop="userIp" label="操作 IP" width="130" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('createTime')" label="操作时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="88" align="center" fixed="right">

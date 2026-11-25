@@ -72,6 +72,9 @@ const query = reactive({
 
 const formVisible = ref(false);
 const formSubmitting = ref(false);
+const formReady = ref(false);
+let formLoad = 0;
+let formOwner: string | null = null;
 const formRef = ref<FormInstance>();
 const form = reactive({
   id: undefined as number | string | undefined,
@@ -104,6 +107,9 @@ const currentRole = ref<RoleItem | null>(null);
 // 数据权限弹窗
 const scopeDialogVisible = ref(false);
 const scopeSubmitting = ref(false);
+const scopeReady = ref(false);
+let scopeLoad = 0;
+let scopeOwner: string | null = null;
 const deptTreeRef = ref<InstanceType<typeof ElTree>>();
 const deptTreeData = ref<Record<string, unknown>[]>([]);
 const scopeForm = reactive({
@@ -144,8 +150,13 @@ function handleReset() {
 }
 
 async function openForm(row?: RoleItem) {
+  if (formSubmitting.value) return;
+  const load = ++formLoad;
+  const owner = getSessionId();
+  formOwner = owner;
+  formReady.value = !row?.id;
   Object.assign(form, {
-    id: undefined,
+    id: row?.id,
     name: '',
     code: '',
     sort: 0,
@@ -155,6 +166,7 @@ async function openForm(row?: RoleItem) {
   formVisible.value = true;
   if (row?.id) {
     const detail = await getRoleApi(row.id);
+    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(form, {
       id: detail.id,
       name: detail.name,
@@ -163,10 +175,12 @@ async function openForm(row?: RoleItem) {
       status: detail.status ?? CommonStatusEnum.ENABLE,
       remark: detail.remark || '',
     });
+    formReady.value = true;
   }
 }
 
 async function submitForm() {
+  if (!formReady.value || formSubmitting.value || getSessionId() !== formOwner) return;
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   formSubmitting.value = true;
@@ -278,21 +292,30 @@ async function submitAssignMenu() {
 }
 
 async function openScopeDialog(row: RoleItem) {
+  if (scopeSubmitting.value) return;
+  const load = ++scopeLoad;
+  const owner = getSessionId();
+  scopeReady.value = false;
+  deptTreeData.value = [];
   scopeForm.roleId = row.id;
   scopeForm.name = row.name;
   scopeForm.dataScope = row.dataScope ?? SystemDataScopeEnum.ALL;
-  scopeForm.dataScopeDeptIds = row.dataScopeDeptIds ?? [];
+  scopeForm.dataScopeDeptIds = [...(row.dataScopeDeptIds ?? [])];
   scopeDialogVisible.value = true;
   const depts: DeptSimple[] = await getSimpleDeptListApi();
+  if (load !== scopeLoad || !scopeDialogVisible.value || !owner || getSessionId() !== owner) return;
   deptTreeData.value = handleTree(
     depts as { id: number | string; parentId?: number | string }[],
   );
   await nextTick();
-  deptTreeRef.value?.setCheckedKeys(scopeForm.dataScopeDeptIds as (number | string)[]);
+  if (load !== scopeLoad || !scopeDialogVisible.value || !deptTreeRef.value || getSessionId() !== owner) return;
+  deptTreeRef.value.setCheckedKeys(scopeForm.dataScopeDeptIds as (number | string)[]);
+  scopeOwner = owner;
+  scopeReady.value = true;
 }
 
 async function submitDataScope() {
-  if (!scopeForm.roleId) return;
+  if (!scopeReady.value || scopeSubmitting.value || !scopeForm.roleId || getSessionId() !== scopeOwner) return;
   scopeSubmitting.value = true;
   try {
     const deptIds =
@@ -318,11 +341,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="角色列表"
       :loading="loading"
       :total="total"
+      :columns="[
+        { key: 'id', label: '编号' },
+        { key: 'name', label: '角色名称' },
+        { key: 'code', label: '角色标识' },
+        { key: 'roleType', label: '所属平台' },
+        { key: 'sort', label: '排序' },
+        { key: 'status', label: '状态' },
+        { key: 'remark', label: '备注' },
+        { key: 'createTime', label: '创建时间' },
+      ]"
       v-model:page-no="query.pageNo"
       v-model:page-size="query.pageSize"
       @refresh="loadList"
@@ -335,7 +368,6 @@ onMounted(() => {
               placeholder="请输入角色名称"
               :maxlength="FIELD_LIMITS.ROLE_NAME"
               clearable
-              style="width: 170px"
             />
           </el-form-item>
           <el-form-item label="角色标识">
@@ -344,18 +376,17 @@ onMounted(() => {
               placeholder="请输入角色标识"
               :maxlength="FIELD_LIMITS.ROLE_CODE"
               clearable
-              style="width: 170px"
             />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+            <el-select v-model="query.status" placeholder="全部" clearable>
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -365,7 +396,6 @@ onMounted(() => {
           v-has-permi="'system:role:create'"
           type="primary"
           :icon="Plus"
-          size="small"
           @click="openForm()"
         >
           新增
@@ -375,7 +405,6 @@ onMounted(() => {
           type="danger"
           plain
           :icon="Delete"
-          size="small"
           :disabled="selectedIds.length === 0"
           @click="handleBatchDelete"
         >
@@ -383,33 +412,34 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <template #default="{ size }">
+      <template #default="{ size, tableHeight, isColVisible }">
         <el-table
           :data="list"
           :size="size"
+          :height="tableHeight"
           border
           stripe
           @selection-change="(rows: RoleItem[]) => (selectedIds = rows.map((r) => r.id))"
         >
           <el-table-column type="selection" width="44" align="center" />
-          <el-table-column prop="id" label="编号" width="76" align="center" />
-          <el-table-column prop="name" label="角色名称" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="code" label="角色标识" min-width="150" show-overflow-tooltip />
-          <el-table-column prop="roleType" label="所属平台" width="120" align="center">
+          <el-table-column v-if="isColVisible('id')" prop="id" label="编号" width="76" align="center" />
+          <el-table-column v-if="isColVisible('name')" prop="name" label="角色名称" min-width="140" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('code')" prop="code" label="角色标识" min-width="150" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('roleType')" prop="roleType" label="所属平台" width="120" align="center">
             <template #default="{ row }">
               <el-tag size="small" :type="row.roleType === 'super_admin' ? 'danger' : 'primary'">
                 {{ row.roleType === 'super_admin' ? '超管平台' : '业务平台' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="sort" label="排序" width="76" align="center" />
-          <el-table-column label="状态" width="84" align="center">
+          <el-table-column v-if="isColVisible('sort')" prop="sort" label="排序" width="76" align="center" />
+          <el-table-column v-if="isColVisible('status')" label="状态" width="84" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
             </template>
           </el-table-column>
-          <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip />
-          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('remark')" prop="remark" label="备注" min-width="160" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('createTime')" label="创建时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="192" align="center" fixed="right">
@@ -460,9 +490,10 @@ onMounted(() => {
       :title="form.id ? '编辑角色' : '新增角色'"
       width="540px"
       :confirm-loading="formSubmitting"
+      :confirm-disabled="!formReady"
       @confirm="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
+      <el-form ref="formRef" v-loading="!formReady" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="角色名称" prop="name">
           <el-input
             v-model="form.name"
@@ -531,9 +562,10 @@ onMounted(() => {
       width="540px"
       confirm-text="保存"
       :confirm-loading="scopeSubmitting"
+      :confirm-disabled="!scopeReady"
       @confirm="submitDataScope"
     >
-      <el-form label-width="90px">
+      <el-form v-loading="!scopeReady" label-width="90px">
         <el-form-item label="权限范围">
           <el-select v-model="scopeForm.dataScope" class="w-full" placeholder="请选择数据权限范围">
             <el-option label="全部数据权限" :value="SystemDataScopeEnum.ALL" />
@@ -544,7 +576,7 @@ onMounted(() => {
           </el-select>
         </el-form-item>
         <el-form-item
-          v-if="scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM"
+          v-show="scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM"
           label="指定部门"
         >
           <div class="max-h-[300px] w-full overflow-auto rounded-md border border-[#e4e4e7] p-3">

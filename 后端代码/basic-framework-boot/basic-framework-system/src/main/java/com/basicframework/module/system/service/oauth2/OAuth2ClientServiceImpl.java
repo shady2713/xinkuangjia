@@ -223,18 +223,15 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
     /**
      * 校验 OAuth2 客户端及本次授权请求。
      *
-     * <p>回调地址必须与登记值完全一致，禁止使用前缀匹配，避免相似域名或路径绕过。</p>
-     *
      * @param clientId 客户端编号
      * @param clientSecret 客户端密钥，为空时不校验
      * @param authorizedGrantType 授权方式，为空时不校验
      * @param scopes 授权范围，为空时不校验
-     * @param redirectUri 回调地址，为空时不校验
      * @return 校验通过的客户端
      */
     @Override
     public OAuth2ClientDO validOAuthClientFromCache(String clientId, String clientSecret, String authorizedGrantType,
-                                                    Collection<String> scopes, String redirectUri) {
+                                                    Collection<String> scopes) {
         // 校验客户端存在、且开启
         OAuth2ClientDO client = requireEnabledClient(getSelf().getOAuth2ClientFromCache(clientId));
 

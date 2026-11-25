@@ -68,13 +68,11 @@ public class DashboardServiceImpl implements DashboardService {
         AdminUserDO operator = operatorUserId == null ? null
                 : DataPermissionUtils.executeIgnore(() -> adminUserMapper.selectPlatformById(operatorUserId));
         String platformType = AdminPlatformTypeEnum.defaultType(operator == null ? null : operator.getUserType());
+        boolean businessPlatform = AdminPlatformTypeEnum.BUSINESS_ADMIN.getType().equals(platformType);
 
-        long userTotal = countOrZero(adminUserMapper.selectCount(
-                new LambdaQueryWrapperX<AdminUserDO>().eq(AdminUserDO::getUserType, platformType)));
-        long userEnabledCount = countOrZero(adminUserMapper.selectCount(
-                new LambdaQueryWrapperX<AdminUserDO>()
-                        .eq(AdminUserDO::getUserType, platformType)
-                        .eq(AdminUserDO::getStatus, CommonStatusEnum.ENABLE.getStatus())));
+        long userTotal = countOrZero(adminUserMapper.selectCountByPlatform(platformType, null));
+        long userEnabledCount = countOrZero(adminUserMapper.selectCountByPlatform(
+                platformType, CommonStatusEnum.ENABLE.getStatus()));
         long deptTotal = countOrZero(deptMapper.selectCount(
                 new LambdaQueryWrapperX<DeptDO>().eq(DeptDO::getRoleType, platformType)));
         long roleTotal = countOrZero(roleMapper.selectCount(
@@ -85,46 +83,49 @@ public class DashboardServiceImpl implements DashboardService {
         LocalDate startDate = today.minusDays(TREND_DAYS - 1L);
         LocalDateTime startDateTime = startDate.atStartOfDay();
 
-        // 日志表不保存平台字段，按日志归属用户所在平台过滤（沿用老账号空平台归业务平台的兼容规则）；
-        // 无法归属平台的历史日志（userId=0、账号已删除）不进入任何平台概览，仍可在有权限的日志页面查询。
-        List<Long> platformUserIds = operator == null ? List.of() : adminUserMapper.selectIdsByPlatform(platformType);
+        // 日志表不保存平台字段，通过数据库侧关联归属用户平台过滤（沿用老账号空平台归业务平台的兼容规则），
+        // 仅拉取 7 天按日聚合统计和最多 RECENT_LIMIT 条明细，避免全量加载日志与用户 ID 列表。
         boolean includeLoginDetails = operator != null
                 && permissionService.hasAnyPermissions(operatorUserId, LOGIN_LOG_QUERY_PERMISSION);
         boolean includeOperateDetails = operator != null
                 && permissionService.hasAnyPermissions(operatorUserId, OPERATE_LOG_QUERY_PERMISSION);
-        List<LoginLogDO> sevenDayLoginLogs = loginLogMapper.selectListByUserIdsAndCreateTimeGe(
-                platformUserIds, startDateTime, includeLoginDetails);
-        List<OperateLogDO> sevenDayOperateLogs = operateLogMapper.selectListByUserIdsAndCreateTimeGe(
-                platformUserIds, startDateTime, includeOperateDetails);
+
+        List<LoginLogMapper.DailyLoginStat> loginDailyStats = operator == null ? List.of()
+                : loginLogMapper.selectDailyStatsByPlatform(
+                        platformType, businessPlatform, startDateTime, LoginResultEnum.SUCCESS.getResult());
+        List<OperateLogMapper.DailyOperateStat> operateDailyStats = operator == null ? List.of()
+                : operateLogMapper.selectDailyStatsByPlatform(platformType, businessPlatform, startDateTime);
 
         Map<LocalDate, Long> loginDailyMap = new HashMap<>();
         long todayLoginCount = 0L;
+        long sevenDayLoginCount = 0L;
         long sevenDayLoginSuccessCount = 0L;
         long sevenDayLoginFailCount = 0L;
-        for (LoginLogDO logItem : sevenDayLoginLogs) {
-            LocalDate createDate = logItem.getCreateTime() != null ? logItem.getCreateTime().toLocalDate() : null;
-            if (createDate != null) {
-                loginDailyMap.merge(createDate, 1L, Long::sum);
-                if (today.equals(createDate)) {
-                    todayLoginCount++;
+        for (LoginLogMapper.DailyLoginStat stat : loginDailyStats) {
+            long total = countOrZero(stat.getTotalCount());
+            long success = countOrZero(stat.getSuccessCount());
+            long fail = countOrZero(stat.getFailCount());
+            sevenDayLoginCount += total;
+            sevenDayLoginSuccessCount += success;
+            sevenDayLoginFailCount += fail;
+            if (stat.getStatDate() != null) {
+                loginDailyMap.merge(stat.getStatDate(), total, Long::sum);
+                if (today.equals(stat.getStatDate())) {
+                    todayLoginCount += total;
                 }
-            }
-            if (LoginResultEnum.SUCCESS.getResult().equals(logItem.getResult())) {
-                sevenDayLoginSuccessCount++;
-            } else {
-                sevenDayLoginFailCount++;
             }
         }
 
         Map<LocalDate, Long> operateDailyMap = new HashMap<>();
         long todayOperateCount = 0L;
-        for (OperateLogDO operateItem : sevenDayOperateLogs) {
-            LocalDate createDate = operateItem.getCreateTime() != null
-                    ? operateItem.getCreateTime().toLocalDate() : null;
-            if (createDate != null) {
-                operateDailyMap.merge(createDate, 1L, Long::sum);
-                if (today.equals(createDate)) {
-                    todayOperateCount++;
+        long sevenDayOperateCount = 0L;
+        for (OperateLogMapper.DailyOperateStat stat : operateDailyStats) {
+            long total = countOrZero(stat.getTotalCount());
+            sevenDayOperateCount += total;
+            if (stat.getStatDate() != null) {
+                operateDailyMap.merge(stat.getStatDate(), total, Long::sum);
+                if (today.equals(stat.getStatDate())) {
+                    todayOperateCount += total;
                 }
             }
         }
@@ -140,8 +141,10 @@ public class DashboardServiceImpl implements DashboardService {
         }
 
         // 最近明细包含账号、IP 与操作内容，需具备与日志页面相同的查询权限；计数与趋势仍对已登录用户开放。
-        List<DashboardSummaryRespVO.RecentLoginItem> recentLogins = sevenDayLoginLogs.stream()
-                .limit(includeLoginDetails ? RECENT_LIMIT : 0)
+        List<LoginLogDO> recentLoginLogs = includeLoginDetails
+                ? loginLogMapper.selectRecentByPlatform(platformType, businessPlatform, startDateTime, RECENT_LIMIT)
+                : List.of();
+        List<DashboardSummaryRespVO.RecentLoginItem> recentLogins = recentLoginLogs.stream()
                 .map(item -> DashboardSummaryRespVO.RecentLoginItem.builder()
                         .id(item.getId())
                         .username(item.getUsername())
@@ -151,8 +154,10 @@ public class DashboardServiceImpl implements DashboardService {
                         .build())
                 .toList();
 
-        List<DashboardSummaryRespVO.RecentOperateItem> recentOperates = sevenDayOperateLogs.stream()
-                .limit(includeOperateDetails ? RECENT_LIMIT : 0)
+        List<OperateLogDO> recentOperateLogs = includeOperateDetails
+                ? operateLogMapper.selectRecentByPlatform(platformType, businessPlatform, startDateTime, RECENT_LIMIT)
+                : List.of();
+        List<DashboardSummaryRespVO.RecentOperateItem> recentOperates = recentOperateLogs.stream()
                 .map(item -> DashboardSummaryRespVO.RecentOperateItem.builder()
                         .id(item.getId())
                         .type(item.getType())
@@ -169,11 +174,11 @@ public class DashboardServiceImpl implements DashboardService {
                 .roleTotal(roleTotal)
                 .dictTypeTotal(dictTypeTotal)
                 .todayLoginCount(todayLoginCount)
-                .sevenDayLoginCount((long) sevenDayLoginLogs.size())
+                .sevenDayLoginCount(sevenDayLoginCount)
                 .sevenDayLoginSuccessCount(sevenDayLoginSuccessCount)
                 .sevenDayLoginFailCount(sevenDayLoginFailCount)
                 .todayOperateCount(todayOperateCount)
-                .sevenDayOperateCount((long) sevenDayOperateLogs.size())
+                .sevenDayOperateCount(sevenDayOperateCount)
                 .dailyTrend(dailyTrend)
                 .recentLogins(recentLogins)
                 .recentOperates(recentOperates)

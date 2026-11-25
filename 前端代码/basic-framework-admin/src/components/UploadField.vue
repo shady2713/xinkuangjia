@@ -8,9 +8,10 @@ import { Delete, Plus, UploadFilled } from '@element-plus/icons-vue';
 import Cropper from 'cropperjs';
 import 'cropperjs/dist/cropper.css';
 import { ElMessage } from 'element-plus';
-import { nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 
 import { uploadFileApi } from '@/api/file';
+import { resolveSafeHttpUrl } from '@/utils/format';
 
 const props = withDefaults(
   defineProps<{
@@ -43,6 +44,7 @@ const emit = defineEmits<{
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
+const safeFileHref = computed(() => resolveSafeHttpUrl(props.modelValue));
 const cropVisible = ref(false);
 const cropImageSrc = ref('');
 const cropImgEl = ref<HTMLImageElement | null>(null);
@@ -194,14 +196,21 @@ onBeforeUnmount(() => {
           {{ uploading ? '上传中...' : '选择文件上传' }}
         </el-button>
         <a
-          v-if="modelValue"
-          :href="modelValue"
+          v-if="safeFileHref"
+          :href="safeFileHref"
           target="_blank"
           rel="noopener noreferrer"
           class="max-w-xs truncate text-xs text-[#006be6] hover:underline"
         >
           {{ modelValue }}
         </a>
+        <span
+          v-else-if="modelValue"
+          class="max-w-xs truncate text-xs text-[#64748b]"
+          title="非 HTTP/HTTPS 协议地址已禁用直接跳转"
+        >
+          {{ modelValue }}
+        </span>
         <el-button
           v-if="modelValue"
           link

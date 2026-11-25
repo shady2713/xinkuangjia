@@ -7,6 +7,7 @@ import type { PageParam, PageResult } from '@/api/request';
 import { request } from '@/api/request';
 
 export type RoleItem = OpenApiSchemas.RoleRespVO;
+export type RoleSimpleItem = OpenApiSchemas.RoleSimpleRespVO;
 export type RoleSaveReq = OpenApiSchemas.RoleSaveReqVO;
 
 export function getRolePageApi(params: PageParam) {
@@ -14,7 +15,7 @@ export function getRolePageApi(params: PageParam) {
 }
 
 export function getSimpleRoleListApi() {
-  return request.get<RoleItem[]>('/system/role/simple-list');
+  return request.get<RoleSimpleItem[]>('/system/role/simple-list');
 }
 
 export function getRoleApi(id: number | string) {

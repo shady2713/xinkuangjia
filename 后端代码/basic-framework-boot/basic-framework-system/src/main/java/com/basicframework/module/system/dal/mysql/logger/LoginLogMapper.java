@@ -1,16 +1,18 @@
 package com.basicframework.module.system.dal.mysql.logger;
 
-import cn.hutool.core.collection.CollUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.mybatis.core.mapper.BaseMapperX;
 import com.basicframework.framework.mybatis.core.query.LambdaQueryWrapperX;
 import com.basicframework.module.system.controller.admin.logger.vo.loginlog.LoginLogPageReqVO;
 import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.enums.logger.LoginResultEnum;
+import lombok.Data;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -42,29 +44,82 @@ public interface LoginLogMapper extends BaseMapperX<LoginLogDO> {
     }
 
     /**
-     * 按日志归属用户查询指定时间之后的登录日志，明细按编号降序。
+     * 按日聚合指定平台用户在起始时间之后的登录统计（数据库侧 GROUP BY，避免全量加载明细）。
      *
-     * <p>归属用户集合为空时直接返回空列表（fail-closed），避免退化为无归属过滤的全表查询。</p>
-     *
-     * @param userIds 允许查看的日志归属用户编号集合
+     * @param platformType 目标平台类型
+     * @param businessPlatform 是否为业务管理平台（兼容历史空平台用户）
      * @param startTime 起始创建时间（含）
-     * @param includeDetails 是否允许读取日志明细
-     * @return 查询结果
+     * @param successResult 登录成功结果码
+     * @return 按日聚合统计列表
      */
-    default List<LoginLogDO> selectListByUserIdsAndCreateTimeGe(Collection<Long> userIds, LocalDateTime startTime,
-                                                         boolean includeDetails) {
-        if (CollUtil.isEmpty(userIds)) {
-            return List.of();
-        }
-        var query = new LambdaQueryWrapperX<LoginLogDO>()
-                .in(LoginLogDO::getUserId, userIds)
-                .ge(LoginLogDO::getCreateTime, startTime);
-        if (includeDetails) {
-            query.orderByDesc(LoginLogDO::getId);
-        } else {
-            query.select(LoginLogDO::getCreateTime, LoginLogDO::getResult);
-        }
-        return selectList(query);
+    @Select("""
+            <script>
+            SELECT CAST(l.create_time AS DATE) AS stat_date,
+                   COUNT(1) AS total_count,
+                   SUM(CASE WHEN l.result = #{successResult} THEN 1 ELSE 0 END) AS success_count,
+                   SUM(CASE WHEN l.result = #{successResult} THEN 0 ELSE 1 END) AS fail_count
+            FROM system_login_log l
+            INNER JOIN system_users u ON u.id = l.user_id AND u.deleted = 0
+            WHERE l.deleted = 0
+              AND l.create_time &gt;= #{startTime}
+              <choose>
+                <when test="businessPlatform">
+                  AND (u.user_type = #{platformType} OR u.user_type IS NULL OR u.user_type = '')
+                </when>
+                <otherwise>
+                  AND u.user_type = #{platformType}
+                </otherwise>
+              </choose>
+            GROUP BY CAST(l.create_time AS DATE)
+            </script>
+            """)
+    List<DailyLoginStat> selectDailyStatsByPlatform(@Param("platformType") String platformType,
+                                                    @Param("businessPlatform") boolean businessPlatform,
+                                                    @Param("startTime") LocalDateTime startTime,
+                                                    @Param("successResult") Integer successResult);
+
+    /**
+     * 查询指定平台用户在起始时间之后的最近登录明细（限制条数）。
+     *
+     * @param platformType 目标平台类型
+     * @param businessPlatform 是否为业务管理平台（兼容历史空平台用户）
+     * @param startTime 起始创建时间（含）
+     * @param limit 最大返回条数
+     * @return 最近登录日志列表
+     */
+    @Select("""
+            <script>
+            SELECT l.id, l.username, l.user_ip, l.result, l.create_time
+            FROM system_login_log l
+            INNER JOIN system_users u ON u.id = l.user_id AND u.deleted = 0
+            WHERE l.deleted = 0
+              AND l.create_time &gt;= #{startTime}
+              <choose>
+                <when test="businessPlatform">
+                  AND (u.user_type = #{platformType} OR u.user_type IS NULL OR u.user_type = '')
+                </when>
+                <otherwise>
+                  AND u.user_type = #{platformType}
+                </otherwise>
+              </choose>
+            ORDER BY l.id DESC
+            LIMIT #{limit}
+            </script>
+            """)
+    List<LoginLogDO> selectRecentByPlatform(@Param("platformType") String platformType,
+                                            @Param("businessPlatform") boolean businessPlatform,
+                                            @Param("startTime") LocalDateTime startTime,
+                                            @Param("limit") int limit);
+
+    /**
+     * 登录日志按日聚合统计投影。
+     */
+    @Data
+    class DailyLoginStat {
+        private LocalDate statDate;
+        private Long totalCount;
+        private Long successCount;
+        private Long failCount;
     }
 
 }

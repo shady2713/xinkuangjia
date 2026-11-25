@@ -68,7 +68,7 @@ public interface OAuth2ClientService {
      *
      * <p>内部客户端不持久化，不校验密钥和授权类型，只提供访问令牌与刷新令牌的有效期。
      * 该配置只应由管理后台登录和刷新令牌流程使用，开放接口必须继续走
-     * {@link #validOAuthClientFromCache(String, String, String, Collection, String)}。</p>
+     * {@link #validOAuthClientFromCache(String, String, String, Collection)}。</p>
      *
      * @return 内部会话客户端配置
      */
@@ -89,22 +89,21 @@ public interface OAuth2ClientService {
      * @return 校验通过的客户端
      */
     default OAuth2ClientDO validOAuthClientFromCache(String clientId) {
-        return validOAuthClientFromCache(clientId, null, null, null, null);
+        return validOAuthClientFromCache(clientId, null, null, null);
     }
 
     /**
      * 从缓存中校验客户端授权参数是否合法。
      * <p>
-     * 传入参数非空时会逐项校验客户端密钥、授权方式、授权范围和回调地址。
+     * 传入参数非空时会逐项校验客户端密钥、授权方式和授权范围。
      *
      * @param clientId            客户端标识
      * @param clientSecret        客户端密钥
      * @param authorizedGrantType 授权类型
      * @param scopes              授权范围
-     * @param redirectUri         回调地址
      * @return 校验通过的客户端
      */
     OAuth2ClientDO validOAuthClientFromCache(String clientId, String clientSecret, String authorizedGrantType,
-                                             Collection<String> scopes, String redirectUri);
+                                             Collection<String> scopes);
 
 }

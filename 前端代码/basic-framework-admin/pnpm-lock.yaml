@@ -11,6 +11,9 @@ importers:
       '@element-plus/icons-vue':
         specifier: ^2.3.1
         version: 2.3.2(vue@3.5.46(typescript@5.9.3))
+      '@lucide/vue':
+        specifier: ^1.79.0
+        version: 1.79.0(vue@3.5.46(typescript@5.9.3))
       axios:
         specifier: ^1.8.4
         version: 1.21.1
@@ -366,6 +369,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@lucide/vue@1.79.0':
+    resolution: {integrity: sha512-Qe9DrDeNmIPbClkaOzUC9gW0czx1J3YFmk8ua7CDEByY/JZ7CB4v1s9Ps6lLbuxOSQVLnC8LBei+lS9qI5X0iw==}
+    peerDependencies:
+      vue: '>=3.0.1'
 
   '@one-ini/wasm@0.2.1':
     resolution: {integrity: sha512-TUqERXGNTifZ9y2g3wPxQrw3HpHv/02DsW3D90T9x0hhonrL1ZqpSmNrU2XkoIq0fP1N6gZfVQzy2Fw1ZvGBNg==}
@@ -2006,6 +2014,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.3
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@lucide/vue@1.79.0(vue@3.5.46(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.46(typescript@5.9.3)
 
   '@one-ini/wasm@0.2.1': {}
 

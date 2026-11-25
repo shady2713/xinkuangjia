@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -43,6 +43,8 @@ jobs:
           cache-dependency-path: 后端代码/basic-framework-boot/**/pom.xml
       - name: Maven verify
         run: mvn -B -ntp -Pquality-gate verify
+      - name: Verify backend container image build
+        run: docker build --no-cache -t basic-framework-server:ci basic-framework-server
 
   frontend:
     name: frontend
@@ -77,6 +79,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Frontend quality gates
         run: pnpm run quality:gates
+      - name: Verify frontend container image and Nginx config
+        run: |
+          docker build --no-cache -t basic-framework-admin:ci .
+          docker run --rm --add-host=basic-framework-backend:127.0.0.1 basic-framework-admin:ci nginx -t
 
   secrets:
     name: secrets

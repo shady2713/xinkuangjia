@@ -128,6 +128,13 @@ public interface AdminUserMapper extends BaseMapperX<AdminUserDO> {
     }
 
     /**
+     * 按管理平台统计账号总数（业务平台自动兼容历史空 user_type 记录）。
+     */
+    default Long selectCountByPlatform(String userType, Integer status) {
+        return selectCount(platformUsers(userType).eqIfPresent(AdminUserDO::getStatus, status));
+    }
+
+    /**
      * 首页日志按用户归属限定查询，只读取用户编号。
      */
     default List<Long> selectIdsByPlatform(String userType) {

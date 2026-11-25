@@ -292,18 +292,45 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     /**
-     * 清理数据库中的访问令牌与刷新令牌，并在事务提交后移除对应 Redis 缓存与活动标记。
+     * 清理数据库中的访问令牌、同刷新令牌下可能存在的兄弟访问令牌与刷新令牌，并在事务提交后移除全部 Redis 缓存与活动标记。
      */
     private void revokeAccessTokenRecord(OAuth2AccessTokenDO accessTokenDO) {
-        oauth2AccessTokenMapper.deleteById(accessTokenDO.getId());
+        Set<Long> accessTokenIds = new java.util.LinkedHashSet<>();
+        Set<String> tokenValues = new java.util.LinkedHashSet<>();
+        if (accessTokenDO.getId() != null) {
+            accessTokenIds.add(accessTokenDO.getId());
+        }
+        if (cn.hutool.core.util.StrUtil.isNotBlank(accessTokenDO.getAccessToken())) {
+            tokenValues.add(accessTokenDO.getAccessToken());
+        }
         if (cn.hutool.core.util.StrUtil.isNotBlank(accessTokenDO.getRefreshToken())) {
+            List<OAuth2AccessTokenDO> siblings = oauth2AccessTokenMapper.selectListByRefreshToken(accessTokenDO.getRefreshToken());
+            if (CollUtil.isNotEmpty(siblings)) {
+                for (OAuth2AccessTokenDO sibling : siblings) {
+                    if (sibling.getId() != null) {
+                        accessTokenIds.add(sibling.getId());
+                    }
+                    if (cn.hutool.core.util.StrUtil.isNotBlank(sibling.getAccessToken())) {
+                        tokenValues.add(sibling.getAccessToken());
+                    }
+                }
+            }
             oauth2RefreshTokenMapper.deleteByRefreshToken(accessTokenDO.getRefreshToken());
         }
-        String tokenValue = accessTokenDO.getAccessToken();
-        runAfterCommitOrNow(() -> {
-            oauth2AccessTokenRedisDAO.delete(tokenValue);
-            oauth2AccessTokenRedisDAO.deleteActive(tokenValue);
-        });
+        if (accessTokenIds.size() == 1) {
+            oauth2AccessTokenMapper.deleteById(accessTokenIds.iterator().next());
+        } else if (!accessTokenIds.isEmpty()) {
+            oauth2AccessTokenMapper.deleteByIds(accessTokenIds);
+        }
+        if (tokenValues.size() == 1) {
+            String singleToken = tokenValues.iterator().next();
+            runAfterCommitOrNow(() -> {
+                oauth2AccessTokenRedisDAO.delete(singleToken);
+                oauth2AccessTokenRedisDAO.deleteActive(singleToken);
+            });
+        } else if (!tokenValues.isEmpty()) {
+            runAfterCommitOrNow(() -> oauth2AccessTokenRedisDAO.deleteList(tokenValues));
+        }
     }
 
     /**

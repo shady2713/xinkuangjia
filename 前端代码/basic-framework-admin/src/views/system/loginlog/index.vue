@@ -79,11 +79,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="登录日志"
       :loading="loading"
       :total="total"
+      :columns="[
+        { key: 'id', label: '日志编号' },
+        { key: 'logType', label: '操作类型' },
+        { key: 'username', label: '用户账号' },
+        { key: 'userIp', label: '登录 IP' },
+        { key: 'userAgent', label: '客户端 UA' },
+        { key: 'result', label: '登录结果' },
+        { key: 'createTime', label: '登录时间' },
+      ]"
       v-model:page-no="query.pageNo"
       v-model:page-size="query.pageSize"
       @refresh="loadList"
@@ -96,7 +105,6 @@ onMounted(() => {
               placeholder="请输入用户账号"
               :maxlength="FIELD_LIMITS.USERNAME"
               clearable
-              style="width: 170px"
             />
           </el-form-item>
           <el-form-item label="登录地址">
@@ -105,20 +113,19 @@ onMounted(() => {
               placeholder="请输入登录 IP"
               :maxlength="FIELD_LIMITS.EMAIL"
               clearable
-              style="width: 160px"
             />
           </el-form-item>
           <el-form-item label="登录状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+            <el-select v-model="query.status" placeholder="全部" clearable>
               <el-option label="成功" :value="true" />
               <el-option label="失败" :value="false" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
-              搜索
-            </el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
+              查询
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -127,30 +134,29 @@ onMounted(() => {
         <el-button
           v-has-permi="'system:login-log:export'"
           :icon="Download"
-          size="small"
           @click="handleExport"
         >
           导出
         </el-button>
       </template>
 
-      <template #default="{ size }">
-        <el-table :data="list" :size="size" border stripe>
-          <el-table-column prop="id" label="日志编号" width="88" align="center" />
-          <el-table-column label="操作类型" width="116" align="center">
+      <template #default="{ size, tableHeight, isColVisible }">
+        <el-table :data="list" :size="size" :height="tableHeight" border stripe>
+          <el-table-column v-if="isColVisible('id')" prop="id" label="日志编号" width="88" align="center" />
+          <el-table-column v-if="isColVisible('logType')" label="操作类型" width="116" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.SYSTEM_LOGIN_TYPE" :value="row.logType" />
             </template>
           </el-table-column>
-          <el-table-column prop="username" label="用户账号" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="userIp" label="登录 IP" width="136" show-overflow-tooltip />
-          <el-table-column prop="userAgent" label="客户端 UA" min-width="220" show-overflow-tooltip />
-          <el-table-column label="登录结果" width="110" align="center">
+          <el-table-column v-if="isColVisible('username')" prop="username" label="用户账号" min-width="110" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('userIp')" prop="userIp" label="登录 IP" width="136" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('userAgent')" prop="userAgent" label="客户端 UA" min-width="220" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('result')" label="登录结果" width="110" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.SYSTEM_LOGIN_RESULT" :value="row.result" />
             </template>
           </el-table-column>
-          <el-table-column label="登录时间" width="164" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('createTime')" label="登录时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="88" align="center" fixed="right">

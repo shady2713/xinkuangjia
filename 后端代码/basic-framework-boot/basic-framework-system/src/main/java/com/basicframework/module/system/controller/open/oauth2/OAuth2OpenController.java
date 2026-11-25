@@ -79,7 +79,7 @@ public class OAuth2OpenController {
 
         List<String> scopes = splitScope(scope);
         // 先校验密钥、授权方式和 scope，再创建令牌，避免无权限客户端拿到 token。
-        oauth2ClientService.validOAuthClientFromCache(clientId, clientSecret, grantType, scopes, null);
+        oauth2ClientService.validOAuthClientFromCache(clientId, clientSecret, grantType, scopes);
         OAuth2AccessTokenDO accessToken = oauth2GrantService.grantClientCredentials(clientId, scopes);
 
         long expiresIn = Math.max(0, ChronoUnit.SECONDS.between(LocalDateTime.now(), accessToken.getExpiresTime()));

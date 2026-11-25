@@ -6,25 +6,13 @@
 /.vscode/
 .claude/
 /前端代码/basic-framework-admin/node_modules/
-/前端代码/basic-framework-admin/.turbo/
-/前端代码/basic-framework-admin/packages/**/node_modules/
-/前端代码/basic-framework-admin/packages/**/dist/
-/前端代码/basic-framework-admin/packages/**/.vite/
-/前端代码/basic-framework-admin/apps/**/node_modules/
-/前端代码/basic-framework-admin/apps/**/dist/
-/前端代码/basic-framework-admin/apps/**/.vite/
-/前端代码/basic-framework-admin/internal/**/node_modules/
-/前端代码/basic-framework-admin/internal/**/dist/
-/前端代码/basic-framework-admin/scripts/**/node_modules/
-/前端代码/basic-framework-admin/scripts/**/dist/
-!/前端代码/basic-framework-admin/scripts/turbo-run/dist/
+/前端代码/basic-framework-admin/dist/
+/前端代码/basic-framework-admin/.vite/
 .playwright-mcp/
 
 /后端代码/basic-framework-boot/.vscode
-/部署/.env
-/部署/.env.*
-!/部署/.env.example
 /.env.dev
+/后端代码/basic-framework-boot/.env
 /后端代码/basic-framework-boot/LOG_FILE_IS_UNDEFINED
 
 # Local Python environments and generated quality-check caches.
@@ -38,7 +26,3 @@ LOG_FILE_IS_UNDEFINED
 
 # Isolated local e2e runtime (databases, object storage, env files with secrets).
 /.e2e-env/
-
-# Playwright local artifacts
-/前端代码/basic-framework-admin/apps/**/test-results/
-/前端代码/basic-framework-admin/apps/**/playwright-report/

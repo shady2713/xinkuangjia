@@ -17,5 +17,8 @@ ENV ARGS=""
 USER appuser
 EXPOSE 48080
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:48080/actuator/health >/dev/null 2>&1 || exit 1
+
 # 使用 exec 形式确保 PID 1 直接接收 SIGTERM，支持 Spring Boot 优雅停机
 ENTRYPOINT ["sh", "-c", "exec java ${JAVA_OPTS} -jar app.jar ${ARGS}"]

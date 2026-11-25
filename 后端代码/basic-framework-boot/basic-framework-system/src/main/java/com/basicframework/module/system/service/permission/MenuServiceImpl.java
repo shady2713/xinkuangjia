@@ -61,7 +61,7 @@ public class MenuServiceImpl implements MenuService {
     @CacheEvict(value = RedisKeyConstants.PERMISSION_MENU_ID_LIST, key = "#createReqVO.permission",
             condition = "#createReqVO.permission != null")
     public Long createMenu(MenuSaveVO createReqVO) {
-        validateOperatorMenuPermissionChange(null, createReqVO.getPermission());
+        validateOperatorMenuCreateAuthority(createReqVO);
         // 校验父菜单存在
         validateParentMenu(createReqVO.getParentId(), null);
         validateParentMenuType(createReqVO.getParentId(), createReqVO.getMenuType());
@@ -75,6 +75,23 @@ public class MenuServiceImpl implements MenuService {
         menuMapper.insert(menu);
         // 返回
         return menu.getId();
+    }
+
+    /**
+     * 校验创建菜单时的操作员上下文、平台归属与权限持有边界（无登录上下文时 fail-closed）。
+     *
+     * @param createReqVO 目标创建请求
+     */
+    private void validateOperatorMenuCreateAuthority(MenuSaveVO createReqVO) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        if (isOperatorSuperAdmin()) {
+            return;
+        }
+        validateOperatorMenuPlatform(createReqVO.getMenuType());
+        validateOperatorMenuPermissionChange(null, createReqVO.getPermission());
     }
 
     /**
@@ -135,6 +152,7 @@ public class MenuServiceImpl implements MenuService {
                 && !getPermissionService().hasAnyPermissions(operatorId, normalizedOld)) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
+        validateOperatorOwnsMenu(operatorId, oldMenu);
         if (!Objects.equals(oldMenu.getStatus(), updateReqVO.getStatus())
                 || !Objects.equals(oldMenu.getParentId(), updateReqVO.getParentId())) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
@@ -212,24 +230,53 @@ public class MenuServiceImpl implements MenuService {
     }
 
     /**
-     * 校验非超管操作员仅可删除同管理平台且自身已持有权限的菜单节点。
+     * 校验非超管操作员仅可删除同管理平台且自身已持有权限/菜单归属的菜单节点（无上下文时 fail-closed）。
      *
      * @param existing 待删除菜单记录
      */
     private void validateOperatorMenuDeleteAuthority(MenuDO existing) {
         Long operatorId = SecurityFrameworkUtils.getLoginUserId();
-        if (operatorId == null || isOperatorSuperAdmin()) {
-            return;
-        }
-        com.basicframework.module.system.service.user.AdminUserService userService =
-                adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
-        if (userService != null
-                && !AdminPlatformTypeEnum.isSame(existing.getMenuType(), userService.getLoginUserTypeOrDefault())) {
+        if (operatorId == null) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
+        if (isOperatorSuperAdmin()) {
+            return;
+        }
+        validateOperatorMenuPlatform(existing.getMenuType());
         String permission = StrUtil.nullToEmpty(existing.getPermission()).trim();
         if (StrUtil.isNotBlank(permission)
                 && !getPermissionService().hasAnyPermissions(operatorId, permission)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        validateOperatorOwnsMenu(operatorId, existing);
+    }
+
+    /**
+     * 校验非超管操作员目标菜单的平台类型与其所属平台一致，用户服务缺失时 fail-closed 拒绝。
+     */
+    private void validateOperatorMenuPlatform(String targetMenuType) {
+        com.basicframework.module.system.service.user.AdminUserService userService =
+                adminUserServiceProvider != null ? adminUserServiceProvider.getIfAvailable() : null;
+        if (userService == null
+                || !AdminPlatformTypeEnum.isSame(targetMenuType, userService.getLoginUserTypeOrDefault())) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+    }
+
+    /**
+     * 校验非超管操作员自身角色确实持有目标菜单编号，覆盖 permission 为空串的目录与页面节点。
+     */
+    private void validateOperatorOwnsMenu(Long operatorId, MenuDO menu) {
+        if (menu == null || menu.getId() == null) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        PermissionService permissionService = getPermissionService();
+        Set<Long> roleIds = permissionService.getUserRoleIdListByUserIdFromCache(operatorId);
+        if (CollUtil.isEmpty(roleIds)) {
+            throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        Set<Long> ownedMenuIds = permissionService.getRoleMenuListByRoleId(roleIds);
+        if (CollUtil.isEmpty(ownedMenuIds) || !ownedMenuIds.contains(menu.getId())) {
             throw exception(ErrorCodeConstants.SYSTEM_PLATFORM_ACCESS_DENIED);
         }
     }

@@ -4,7 +4,7 @@
  * - 默认强制禁止误点遮罩关闭（close-on-click-modal=false）与关闭销毁内部表单状态（destroy-on-close）
  * - 统一头部（标题 + 可选全屏切换 + 关闭）与底部（取消 + 确定带 loading）按钮位置
  */
-import { Close, FullScreen } from '@element-plus/icons-vue';
+import { Maximize2, Minimize2, X } from '@lucide/vue';
 import { ref, watch } from 'vue';
 
 const props = withDefaults(
@@ -18,6 +18,7 @@ const props = withDefaults(
     confirmDisabled?: boolean;
     showFooter?: boolean;
     showFullscreen?: boolean;
+    draggable?: boolean;
     destroyOnClose?: boolean;
   }>(),
   {
@@ -27,6 +28,7 @@ const props = withDefaults(
     confirmLoading: false,
     showFooter: true,
     showFullscreen: true,
+    draggable: true,
     destroyOnClose: true,
   },
 );
@@ -60,11 +62,13 @@ function handleClose() {
     :model-value="modelValue"
     :width="width"
     :fullscreen="isFullscreen"
+    :draggable="draggable && !isFullscreen"
     :close-on-click-modal="false"
     :destroy-on-close="destroyOnClose"
     :show-close="false"
     align-center
     append-to-body
+    modal-class="bf-dialog-overlay"
     class="bf-dialog"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="emit('closed')"
@@ -82,7 +86,8 @@ function handleClose() {
             :title="isFullscreen ? '还原窗口' : '全屏显示'"
             @click="isFullscreen = !isFullscreen"
           >
-            <el-icon :size="15"><FullScreen /></el-icon>
+            <Minimize2 v-if="isFullscreen" class="h-4 w-4" :stroke-width="1.75" />
+            <Maximize2 v-else class="h-4 w-4" :stroke-width="1.75" />
           </button>
           <button
             type="button"
@@ -90,7 +95,7 @@ function handleClose() {
             title="关闭"
             @click="handleClose"
           >
-            <el-icon :size="16"><Close /></el-icon>
+            <X class="h-4 w-4" :stroke-width="1.75" />
           </button>
         </div>
       </div>

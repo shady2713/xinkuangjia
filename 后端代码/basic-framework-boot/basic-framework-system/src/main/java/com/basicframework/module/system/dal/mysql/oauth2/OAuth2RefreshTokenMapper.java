@@ -41,13 +41,15 @@ public interface OAuth2RefreshTokenMapper extends BaseMapperX<OAuth2RefreshToken
     }
 
     /**
-     * 查询By刷新令牌。
+     * 按刷新令牌加行锁查询，串行化同一会话的并发令牌刷新，避免生成多个并存访问令牌。
      *
      * @param refreshToken 刷新令牌参数
      * @return 查询结果
      */
     default OAuth2RefreshTokenDO selectByRefreshToken(String refreshToken) {
-        return selectOne(OAuth2RefreshTokenDO::getRefreshToken, refreshToken);
+        return selectOne(new LambdaQueryWrapperX<OAuth2RefreshTokenDO>()
+                .eq(OAuth2RefreshTokenDO::getRefreshToken, refreshToken)
+                .last("FOR UPDATE"));
     }
 
 }

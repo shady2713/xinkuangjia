@@ -295,7 +295,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = UncheckedExecutionException.class)
     public CommonResult<?> uncheckedExecutionExceptionHandler(HttpServletRequest req, UncheckedExecutionException ex) {
-        return allExceptionHandler(req, ex.getCause());
+        return allExceptionHandler(req, ex.getCause() != null ? ex.getCause() : ex);
     }
 
     /**
@@ -344,14 +344,21 @@ public class GlobalExceptionHandler {
         return CommonResult.error(INTERNAL_SERVER_ERROR.getCode(), INTERNAL_SERVER_ERROR.getMsg());
     }
 
+    private static final int MYSQL_DUPLICATE_KEY_ERROR_CODE = 1062;
+
     /**
-     * 处理数据库唯一索引冲突异常
+     * 仅将明确的唯一索引冲突（DuplicateKeyException 或 MySQL 1062）转为 400 友好提示；
+     * 非唯一约束冲突（如 NOT NULL 1048、外键 1451/1452）留交默认异常处理器记错并返回 500。
      */
     private CommonResult<?> handleSqlException(Throwable ex) {
         Throwable cause = ex;
         while (cause != null) {
-            if (cause instanceof java.sql.SQLIntegrityConstraintViolationException) {
+            boolean isDuplicateKey = cause instanceof org.springframework.dao.DuplicateKeyException
+                    || (cause instanceof java.sql.SQLIntegrityConstraintViolationException sqlEx
+                            && sqlEx.getErrorCode() == MYSQL_DUPLICATE_KEY_ERROR_CODE);
+            if (isDuplicateKey) {
                 String message = cause.getMessage();
+                log.warn("[handleSqlException][数据库唯一约束冲突: {}]", message);
                 if (message != null && message.contains("uk_code")) {
                     return CommonResult.error(BAD_REQUEST.getCode(), "编码已存在，请更换后重试");
                 }

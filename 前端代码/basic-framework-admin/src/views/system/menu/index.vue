@@ -34,6 +34,7 @@ import {
   maxLenRule,
   requiredRule,
 } from '@/constants/validation';
+import { getSessionId } from '@/utils/token';
 import { handleTree } from '@/utils/tree';
 
 defineOptions({ name: 'SystemMenu' });
@@ -54,6 +55,9 @@ const query = reactive({
 
 const formVisible = ref(false);
 const formSubmitting = ref(false);
+const formReady = ref(false);
+let formLoad = 0;
+let formOwner: string | null = null;
 const formRef = ref<FormInstance>();
 const form = reactive({
   id: undefined as number | string | undefined,
@@ -101,8 +105,13 @@ function handleReset() {
 }
 
 async function openForm(row?: MenuItem, parentId: number | string = 0) {
+  if (formSubmitting.value) return;
+  const load = ++formLoad;
+  const owner = getSessionId();
+  formOwner = owner;
+  formReady.value = !row?.id;
   Object.assign(form, {
-    id: undefined,
+    id: row?.id,
     parentId,
     name: '',
     type: parentId === 0 ? SystemMenuTypeEnum.DIR : SystemMenuTypeEnum.MENU,
@@ -120,6 +129,7 @@ async function openForm(row?: MenuItem, parentId: number | string = 0) {
   formVisible.value = true;
   if (row?.id) {
     const detail = await getMenuApi(row.id);
+    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(form, {
       id: detail.id,
       parentId: detail.parentId ?? 0,
@@ -136,10 +146,12 @@ async function openForm(row?: MenuItem, parentId: number | string = 0) {
       keepAlive: detail.keepAlive !== false,
       alwaysShow: detail.alwaysShow !== false,
     });
+    formReady.value = true;
   }
 }
 
 async function submitForm() {
+  if (!formReady.value || formSubmitting.value || getSessionId() !== formOwner) return;
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   formSubmitting.value = true;
@@ -178,11 +190,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="菜单列表"
       :loading="loading"
       :show-pagination="false"
+      :columns="[
+        { key: 'name', label: '菜单名称' },
+        { key: 'type', label: '类型' },
+        { key: 'sort', label: '排序' },
+        { key: 'permission', label: '权限标识' },
+        { key: 'component', label: '组件路径' },
+        { key: 'status', label: '状态' },
+      ]"
       @refresh="loadList"
     >
       <template #search>
@@ -193,18 +213,17 @@ onMounted(() => {
               placeholder="请输入菜单名称"
               :maxlength="FIELD_LIMITS.MENU_NAME"
               clearable
-              style="width: 180px"
             />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+            <el-select v-model="query.status" placeholder="全部" clearable>
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="loadList">搜索</el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="loadList">查询</el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -214,16 +233,15 @@ onMounted(() => {
           v-has-permi="'system:menu:create'"
           type="primary"
           :icon="Plus"
-          size="small"
           @click="openForm()"
         >
           新增
         </el-button>
       </template>
 
-      <template #default="{ size }">
-        <el-table :data="treeList" :size="size" row-key="id" border default-expand-all>
-          <el-table-column prop="name" label="菜单名称" min-width="200" show-overflow-tooltip>
+      <template #default="{ size, tableHeight, isColVisible }">
+        <el-table :data="treeList" :size="size" :height="tableHeight" row-key="id" border default-expand-all>
+          <el-table-column v-if="isColVisible('name')" prop="name" label="菜单名称" min-width="200" show-overflow-tooltip>
             <template #default="{ row }">
               <span class="inline-flex items-center gap-1.5">
                 <MenuIcon v-if="row.icon && row.icon !== '#'" :name="row.icon" />
@@ -231,15 +249,15 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
-          <el-table-column prop="type" label="类型" width="84" align="center">
+          <el-table-column v-if="isColVisible('type')" prop="type" label="类型" width="84" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.SYSTEM_MENU_TYPE" :value="row.type" />
             </template>
           </el-table-column>
-          <el-table-column prop="sort" label="排序" width="70" align="center" />
-          <el-table-column prop="permission" label="权限标识" min-width="240" show-overflow-tooltip />
-          <el-table-column prop="component" label="组件路径" min-width="190" show-overflow-tooltip />
-          <el-table-column label="状态" width="82" align="center">
+          <el-table-column v-if="isColVisible('sort')" prop="sort" label="排序" width="70" align="center" />
+          <el-table-column v-if="isColVisible('permission')" prop="permission" label="权限标识" min-width="240" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('component')" prop="component" label="组件路径" min-width="190" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('status')" label="状态" width="82" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
             </template>
@@ -283,9 +301,10 @@ onMounted(() => {
       :title="form.id ? '编辑菜单' : '新增菜单'"
       width="580px"
       :confirm-loading="formSubmitting"
+      :confirm-disabled="!formReady"
       @confirm="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="95px">
+      <el-form ref="formRef" v-loading="!formReady" :model="form" :rules="formRules" label-width="95px">
         <el-form-item label="上级菜单">
           <el-tree-select
             v-model="form.parentId"

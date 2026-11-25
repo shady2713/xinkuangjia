@@ -78,7 +78,7 @@ public class SecurityProperties {
     private Session session = new Session();
 
     /**
-     * Redis 不可用时的安全降级策略，作用于登录失败锁定、短信登录限流和令牌空闲校验。
+     * Redis 不可用时的安全降级策略，作用于登录失败锁定与短信登录限流。
      *
      * <p>默认使用本地内存计数兜底，避免 Redis 故障直接阻断全部登录；需要严格失败关闭的部署
      * 可显式改为 {@link RedisUnavailableStrategy#FAIL_CLOSED}。</p>

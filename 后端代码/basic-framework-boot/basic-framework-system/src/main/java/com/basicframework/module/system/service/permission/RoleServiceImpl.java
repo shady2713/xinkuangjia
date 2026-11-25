@@ -9,6 +9,7 @@ import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.util.collection.CollectionUtils;
 import com.basicframework.framework.common.util.object.BeanUtils;
+import com.basicframework.framework.security.core.util.SecurityFrameworkUtils;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RolePageReqVO;
 import com.basicframework.module.system.controller.admin.permission.vo.role.RoleSaveReqVO;
 import com.basicframework.module.system.dal.dataobject.permission.RoleDO;
@@ -19,6 +20,7 @@ import com.basicframework.module.system.enums.common.AdminPlatformTypeEnum;
 import com.basicframework.module.system.enums.permission.DataScopeEnum;
 import com.basicframework.module.system.enums.permission.RoleCodeEnum;
 import com.basicframework.module.system.enums.permission.RoleTypeEnum;
+import com.basicframework.module.system.service.user.AdminUserService;
 import com.basicframework.framework.operatelog.core.annotation.OperateLog;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
@@ -50,6 +52,9 @@ public class RoleServiceImpl implements RoleService {
     private ObjectProvider<PermissionService> permissionServiceProvider;
 
     @Resource
+    private ObjectProvider<AdminUserService> adminUserServiceProvider;
+
+    @Resource
     private RoleMapper roleMapper;
 
     @Resource
@@ -67,13 +72,17 @@ public class RoleServiceImpl implements RoleService {
     @OperateLog(type = SYSTEM_ROLE_TYPE, subType = SYSTEM_ROLE_CREATE_SUB_TYPE, bizId = "#result",
             action = SYSTEM_ROLE_CREATE_SUCCESS)
     public Long createRole(RoleSaveReqVO createReqVO, Integer type) {
+        // 0. 校验操作者平台边界（服务层 fail-closed）
+        String targetRoleType = AdminPlatformTypeEnum.defaultType(createReqVO.getRoleType());
+        validateOperatorRolePlatform(targetRoleType);
+
         // 1. 校验角色
         validateRoleDuplicate(createReqVO.getName(), createReqVO.getCode(), null);
 
         // 2. 插入到数据库
         RoleDO role = BeanUtils.toBean(createReqVO, RoleDO.class);
         // 角色平台类型是授权隔离边界，缺省按历史业务平台处理。
-        role.setRoleType(AdminPlatformTypeEnum.defaultType(createReqVO.getRoleType()));
+        role.setRoleType(targetRoleType);
         role.setType(ObjectUtil.defaultIfNull(type, RoleTypeEnum.CUSTOM.getType()));
         role.setStatus(ObjUtil.defaultIfNull(createReqVO.getStatus(), CommonStatusEnum.ENABLE.getStatus()));
         // 默认最小权限原则，新建角色仅可查看本人数据，需更大范围时由管理员显式授权。
@@ -103,8 +112,9 @@ public class RoleServiceImpl implements RoleService {
             validateRoleNotReferenced(role);
         }
 
-        // 2. 更新到数据库
+        // 2. 更新到数据库（禁止跨平台篡改角色平台类型）
         RoleDO updateObj = BeanUtils.toBean(updateReqVO, RoleDO.class);
+        updateObj.setRoleType(role.getRoleType());
         roleMapper.updateById(updateObj);
     }
 
@@ -222,15 +232,40 @@ public class RoleServiceImpl implements RoleService {
      */
     @VisibleForTesting
     RoleDO validateRoleForUpdate(Long id) {
+        if (id == null) {
+            throw exception(ROLE_NOT_EXISTS);
+        }
         RoleDO role = roleMapper.selectById(id);
         if (role == null) {
             throw exception(ROLE_NOT_EXISTS);
         }
+        // 服务层强制校验操作者平台边界，避免绕过 Controller 或缺失登录态时越权修改角色。
+        validateOperatorRolePlatform(role.getRoleType());
         // 内置角色，不允许删除
         if (RoleTypeEnum.SYSTEM.getType().equals(role.getType())) {
             throw exception(ROLE_CAN_NOT_UPDATE_SYSTEM_TYPE_ROLE);
         }
         return role;
+    }
+
+    /**
+     * 校验当前操作者具备目标角色所属平台的写权限；缺失登录上下文或平台不匹配时 fail-closed 拒绝。
+     *
+     * @param targetRoleType 目标角色所属平台类型
+     */
+    private void validateOperatorRolePlatform(String targetRoleType) {
+        Long operatorId = SecurityFrameworkUtils.getLoginUserId();
+        if (operatorId == null) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        AdminUserService userService = adminUserServiceProvider.getIfAvailable();
+        if (userService == null) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
+        String operatorPlatform = userService.getLoginUserTypeOrDefault();
+        if (!AdminPlatformTypeEnum.isSame(targetRoleType, operatorPlatform)) {
+            throw exception(SYSTEM_PLATFORM_ACCESS_DENIED);
+        }
     }
 
     /**

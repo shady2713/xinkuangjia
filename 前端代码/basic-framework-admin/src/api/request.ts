@@ -85,12 +85,12 @@ function bindSession(config?: AxiosRequestConfig): AxiosRequestConfig {
 /** One pending rotation per login; waiters share it. */
 const refreshes = new Map<string, Promise<string | null>>();
 
-function refreshFor(sessionId: string): Promise<string | null> {
+function refreshFor(sessionId: string, staleBearer?: string): Promise<string | null> {
   const existing = refreshes.get(sessionId);
   if (existing) {
     return existing;
   }
-  const pending = performRefreshToken(sessionId).finally(() => {
+  const pending = performRefreshTokenWithLock(sessionId, staleBearer).finally(() => {
     if (refreshes.get(sessionId) === pending) {
       refreshes.delete(sessionId);
     }
@@ -99,15 +99,37 @@ function refreshFor(sessionId: string): Promise<string | null> {
   return pending;
 }
 
-async function performRefreshToken(sessionId: string): Promise<string | null> {
+/**
+ * 跨标签页串行化同一会话的令牌刷新：浏览器支持 Web Locks API 时先取锁再复查 token，
+ * 避免多标签页并发用同一 refreshToken 刷新互相作废新令牌。
+ */
+async function performRefreshTokenWithLock(
+  sessionId: string,
+  staleBearer?: string,
+): Promise<string | null> {
+  const run = () => performRefreshToken(sessionId, staleBearer);
+  if (typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function') {
+    return navigator.locks.request(`bf_token_refresh:${sessionId}`, run);
+  }
+  return run();
+}
+
+async function performRefreshToken(
+  sessionId: string,
+  staleBearer?: string,
+): Promise<string | null> {
   if (getSessionId() !== sessionId) {
     return null;
+  }
+  const latestAccessToken = getAccessToken();
+  if (staleBearer && latestAccessToken && latestAccessToken !== staleBearer) {
+    return latestAccessToken;
   }
   const refreshToken = getRefreshToken();
   if (!refreshToken) {
     return null;
   }
-  const previousAccessToken = getAccessToken();
+  const previousAccessToken = latestAccessToken;
   let body: CommonResult<Partial<OpenApiSchemas.AuthLoginRespVO>> | undefined;
   let transportFailure: unknown;
   try {
@@ -123,6 +145,17 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
   if (getSessionId() !== sessionId) {
     return null;
   }
+  // 本次刷新若已成功签发新令牌，服务端已同步吊销旧/并发令牌，必须优先落盘本次新令牌。
+  if (!transportFailure && body?.code === 0 && body.data?.accessToken) {
+    const installed = setTokens(
+      body.data.accessToken,
+      body.data.refreshToken || refreshToken,
+      body.data.passwordChangeRequired,
+      sessionId,
+    );
+    return installed ? body.data.accessToken : null;
+  }
+  // 仅当本次刷新失败时，检查对端标签页是否已在并发窗口内写入更新后的有效令牌。
   const currentAccessToken = getAccessToken();
   if (currentAccessToken !== previousAccessToken || getRefreshToken() !== refreshToken) {
     return currentAccessToken || null;
@@ -133,16 +166,7 @@ async function performRefreshToken(sessionId: string): Promise<string | null> {
     throw transportFailure;
   }
   if (body?.code === 400 || body?.code === 401 || body?.code === 403) return null;
-  if (body?.code !== 0 || !body.data?.accessToken) {
-    throw new Error(body?.msg || '暂时无法刷新会话，请稍后重试');
-  }
-  const installed = setTokens(
-    body.data.accessToken,
-    body.data.refreshToken || refreshToken,
-    body.data.passwordChangeRequired,
-    sessionId,
-  );
-  return installed ? body.data.accessToken : null;
+  throw new Error(body?.msg || '暂时无法刷新会话，请稍后重试');
 }
 
 function redirectToLogin(sessionId: string): void {
@@ -234,7 +258,7 @@ async function handleUnauthorized(
   // A late 401 for the previous bearer reuses the already rotated token without refreshing.
   let newToken: string | null = getAccessToken() || null;
   if (!newToken || newToken === originalConfig._bearer) {
-    newToken = await refreshFor(sessionId);
+    newToken = await refreshFor(sessionId, originalConfig._bearer);
     assertCurrent(originalConfig);
   }
   if (!newToken) {

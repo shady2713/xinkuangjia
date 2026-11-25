@@ -5,7 +5,7 @@
  * - 次要操作统一收进「更多」下拉菜单，避免操作列过宽遮挡数据列
  * - 内置权限码过滤（auth），无权限时自动隐藏按钮或更多菜单
  */
-import { ArrowDown } from '@element-plus/icons-vue';
+import { ChevronDown } from '@lucide/vue';
 import { type Component, computed } from 'vue';
 
 import { hasPermission } from '@/directives/permission';
@@ -94,7 +94,7 @@ function handleDropdownCommand(index: number) {
     >
       <el-button link type="primary" class="ml-0.5">
         更多
-        <el-icon class="ml-0.5"><ArrowDown /></el-icon>
+        <ChevronDown class="ml-0.5 h-3.5 w-3.5" :stroke-width="1.75" />
       </el-button>
       <template #dropdown>
         <el-dropdown-menu>

@@ -398,6 +398,23 @@ class OAuth2TokenServiceImplTest {
         return client;
     }
 
+    /** 验证吊销访问令牌时会同步吊销同一刷新令牌关联的兄弟访问令牌。 */
+    @Test
+    void removeAccessTokenAlsoRevokesSiblingAccessTokens() {
+        OAuth2AccessTokenDO token1 = buildAccessToken("access-1");
+        token1.setId(1L);
+        OAuth2AccessTokenDO token2 = buildAccessToken("access-2");
+        token2.setId(2L);
+        when(oauth2AccessTokenMapper.selectByAccessToken("access-1")).thenReturn(token1);
+        when(oauth2AccessTokenMapper.selectListByRefreshToken("refresh-token")).thenReturn(List.of(token1, token2));
+
+        tokenService.removeAccessToken("access-1");
+
+        verify(oauth2AccessTokenMapper).deleteByIds(java.util.Set.of(1L, 2L));
+        verify(oauth2AccessTokenRedisDAO).deleteList(java.util.Set.of("access-1", "access-2"));
+        verify(oauth2RefreshTokenMapper).deleteByRefreshToken("refresh-token");
+    }
+
     /**
      * 构造启用状态的管理员用户。
      *
