@@ -82,7 +82,7 @@ jobs:
       - name: Verify frontend container image and Nginx config
         run: |
           docker build --no-cache -t basic-framework-admin:ci .
-          docker run --rm basic-framework-admin:ci nginx -t
+          docker run --rm --add-host=basic-framework-backend:127.0.0.1 basic-framework-admin:ci nginx -t
 
   secrets:
     name: secrets

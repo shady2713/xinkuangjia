@@ -265,34 +265,50 @@ async function handleCaptchaSuccess({
             class="enter-x"
             @keyup.enter="handlePasswordSubmit"
           >
-            <!-- 轻量 shadcn 分段切换（保留双平台隔离能力） -->
-            <div class="mb-5 grid grid-cols-2 rounded-lg bg-[#f4f4f5] p-1">
-              <button
-                type="button"
-                class="h-8 cursor-pointer rounded-md text-[13px] font-medium transition-all"
-                :class="
+            <!-- 轻量 shadcn 分段切换（原生 radio 语义，保留双平台隔离与键盘切换） -->
+            <div
+              role="radiogroup"
+              aria-label="登录平台"
+              class="mb-5 grid grid-cols-2 rounded-lg bg-[#f4f4f5] p-1"
+            >
+              <label
+                class="flex h-8 cursor-pointer items-center justify-center rounded-md text-[13px] font-medium transition-all focus-within:ring-2 focus-within:ring-[#006be6]/30"
+                :class="[
                   platform === 'super'
                     ? 'bg-white text-[#18181b] shadow-xs'
-                    : 'text-[#71717a] hover:text-[#18181b]'
-                "
-                :disabled="loading"
-                @click="platform = 'super'"
+                    : 'text-[#71717a] hover:text-[#18181b]',
+                  loading ? 'pointer-events-none opacity-60' : '',
+                ]"
               >
-                平台管理员
-              </button>
-              <button
-                type="button"
-                class="h-8 cursor-pointer rounded-md text-[13px] font-medium transition-all"
-                :class="
+                <input
+                  v-model="platform"
+                  type="radio"
+                  name="login-platform"
+                  value="super"
+                  class="sr-only"
+                  :disabled="loading"
+                />
+                <span>平台管理员</span>
+              </label>
+              <label
+                class="flex h-8 cursor-pointer items-center justify-center rounded-md text-[13px] font-medium transition-all focus-within:ring-2 focus-within:ring-[#006be6]/30"
+                :class="[
                   platform === 'business'
                     ? 'bg-white text-[#18181b] shadow-xs'
-                    : 'text-[#71717a] hover:text-[#18181b]'
-                "
-                :disabled="loading"
-                @click="platform = 'business'"
+                    : 'text-[#71717a] hover:text-[#18181b]',
+                  loading ? 'pointer-events-none opacity-60' : '',
+                ]"
               >
-                业务账号
-              </button>
+                <input
+                  v-model="platform"
+                  type="radio"
+                  name="login-platform"
+                  value="business"
+                  class="sr-only"
+                  :disabled="loading"
+                />
+                <span>业务账号</span>
+              </label>
             </div>
 
             <el-form-item prop="username">
