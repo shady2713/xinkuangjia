@@ -45,7 +45,7 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
 /**
  * 权限 Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Slf4j

@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 管理后台文件上传请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 上传文件 Request VO")
 @Data

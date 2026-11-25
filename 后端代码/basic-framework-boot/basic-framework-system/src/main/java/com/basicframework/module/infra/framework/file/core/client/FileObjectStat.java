@@ -6,7 +6,7 @@ package com.basicframework.module.infra.framework.file.core.client;
  *
  * @param size        对象实际字节大小
  * @param contentType 对象在存储端记录的 Content-Type，可能为 {@code null}
- * @author shady2713
+ * @author shady
  */
 public record FileObjectStat(long size, String contentType) {
 }

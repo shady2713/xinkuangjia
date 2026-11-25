@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Size;
 /**
  * 管理后台字典类型创建或修改请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 字典类型创建/修改 Request VO")
 @Data

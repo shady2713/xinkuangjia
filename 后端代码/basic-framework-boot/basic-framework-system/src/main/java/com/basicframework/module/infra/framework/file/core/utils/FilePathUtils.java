@@ -11,7 +11,7 @@ import java.util.Locale;
  *
  * <p>统一管理管理端和模块内部调用的路径边界，避免各入口重复实现安全校验。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public final class FilePathUtils {
 

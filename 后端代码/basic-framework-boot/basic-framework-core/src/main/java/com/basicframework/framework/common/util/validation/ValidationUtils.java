@@ -19,14 +19,14 @@ import java.util.regex.Pattern;
 /**
  * 通用参数格式校验工具类。
  *
- * @author 李杰
+ * @author shady
  */
 public class ValidationUtils {
 
     private static final Pattern PATTERN_MOBILE = Pattern.compile("^1\\d{10}$");
     private static final Pattern PATTERN_URL = Pattern.compile("^(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]");
     private static final Pattern PATTERN_XML_NCNAME = Pattern.compile("[a-zA-Z_][\\-_.0-9_a-zA-Z$]*");
-    private static final Pattern PATTERN_USERNAME = Pattern.compile("^[A-Za-z0-9]{4,30}$");
+    private static final Pattern PATTERN_USERNAME = Pattern.compile("^[A-Za-z0-9_]{4,30}$");
     /** 密码最小长度，对齐等保二级身份鉴别要求。 */
     private static final int PASSWORD_MIN_LENGTH = 8;
     /** 密码最大长度，限制异常长输入占用的校验和存储开销。 */
@@ -76,7 +76,7 @@ public class ValidationUtils {
     }
 
     /**
-     * 校验用户名是否为 4-30 位字母或数字。
+     * 校验用户名是否为 4-30 位字母、数字或下划线。
      *
      * @param username 用户名
      * @return 是否格式正确

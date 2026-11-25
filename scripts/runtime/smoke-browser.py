@@ -29,7 +29,7 @@ SESSION_JS = """f => { const v = localStorage.getItem('bf_session'); if (v === n
 TOKENS_JS = """async () => { const t = await import('/src/utils/token.ts');
   return [t.getAccessToken() || null, t.getRefreshToken() || null, t.isPasswordChangeRequired()]; }"""
 SUBMIT = ".el-form button.el-button--primary"
-CHANGE_FIELDS = ("请输入当前密码", "请输入 8~32 位含大小写字母及数字的新密码",
+CHANGE_FIELDS = ("请输入当前密码", "请输入 8~32 位密码（大小写/数字/特殊字符至少 3 类）",
                  "请再次输入新密码")
 
 

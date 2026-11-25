@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 /**
  * 登录密码复杂度校验注解。
  *
- * @author 李杰
+ * @author shady
  */
 @Target({
         ElementType.METHOD,

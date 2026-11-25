@@ -9,7 +9,7 @@ import java.lang.annotation.*;
  *
  * <p>可声明在类或方法上，用于控制当前调用链使用哪些数据权限规则，也可以临时关闭数据权限过滤。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)

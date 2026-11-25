@@ -12,7 +12,7 @@ import java.util.*;
  * <p>
  * 提供部门管理的增删改查、树形查询和基础校验能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface DeptService {
 

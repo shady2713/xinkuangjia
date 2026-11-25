@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 /**
  * 邮箱格式校验注解。
  *
- * @author 李杰
+ * @author shady
  */
 @Target({
         ElementType.METHOD,

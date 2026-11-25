@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证管理后台内部会话客户端不依赖持久化默认客户端。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class OAuth2ClientServiceImplTest {

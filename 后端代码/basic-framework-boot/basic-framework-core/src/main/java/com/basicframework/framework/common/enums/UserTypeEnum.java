@@ -10,7 +10,7 @@ import java.util.Arrays;
 /**
  * 全局用户类型枚举
  *
- * @author 李杰
+ * @author shady
  */
 @AllArgsConstructor
 @Getter

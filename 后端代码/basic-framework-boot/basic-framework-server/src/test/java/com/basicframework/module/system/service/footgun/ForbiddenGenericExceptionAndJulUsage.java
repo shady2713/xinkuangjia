@@ -5,7 +5,7 @@ import java.util.logging.Logger;
 /**
  * 反向失败夹具：业务模块直接抛出裸 {@link RuntimeException} 并使用 {@code java.util.logging}。
  *
- * @author shady2713
+ * @author shady
  */
 public class ForbiddenGenericExceptionAndJulUsage {
 

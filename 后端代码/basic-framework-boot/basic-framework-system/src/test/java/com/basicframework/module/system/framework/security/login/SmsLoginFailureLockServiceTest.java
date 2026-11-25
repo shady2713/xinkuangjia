@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证短信登录手机号与 IP 两个维度的原子失败计数、锁定、清零和 Redis 降级。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class SmsLoginFailureLockServiceTest {

@@ -717,9 +717,9 @@ export namespace OpenApiSchemas {
     sortingFields?: OpenApiSchemas.SortingField[];
     /** 操作状态 */
     status?: boolean;
-    /** 用户 IP，模拟匹配 */
+    /** 用户 IP，模糊匹配 */
     userIp?: string;
-    /** 用户账号，模拟匹配 */
+    /** 用户账号，模糊匹配 */
     username?: string;
   }
 
@@ -840,7 +840,7 @@ export namespace OpenApiSchemas {
   /** 管理后台 - 访问令牌分页 Request VO */
   export interface OAuth2AccessTokenPageReqVO {
     /** 客户端编号 */
-    clientId: string;
+    clientId?: string;
     /** 页码，从 1 开始 */
     pageNo: number;
     /** 每页条数，最大值为 200 */
@@ -848,9 +848,9 @@ export namespace OpenApiSchemas {
     /** 排序字段 */
     sortingFields?: OpenApiSchemas.SortingField[];
     /** 用户编号 */
-    userId: number | string;
+    userId?: number | string;
     /** 用户类型，参见 UserTypeEnum 枚举 */
-    userType: number;
+    userType?: number;
   }
 
   /** 管理后台 - 访问令牌 Response VO */
@@ -947,7 +947,7 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - 操作日志分页列表 Request VO */
   export interface OperateLogPageReqVO {
-    /** 操作明细，模拟匹配 */
+    /** 操作明细，模糊匹配 */
     action?: string;
     /** 操作模块业务编号 */
     bizId?: number | string;
@@ -959,9 +959,9 @@ export namespace OpenApiSchemas {
     pageSize: number;
     /** 排序字段 */
     sortingFields?: OpenApiSchemas.SortingField[];
-    /** 操作名，模拟匹配 */
+    /** 操作名，模糊匹配 */
     subType?: string;
-    /** 操作模块，模拟匹配 */
+    /** 操作模块，模糊匹配 */
     type?: string;
     /** 用户编号 */
     userId?: number | string;
@@ -1162,7 +1162,7 @@ export namespace OpenApiSchemas {
 
   /** 管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation. */
   export interface RoleSaveReqVO {
-    /** 角色标志 */
+    /** 角色标识 */
     code: string;
     /** 角色编号 */
     id?: number | string;
@@ -1195,8 +1195,8 @@ export namespace OpenApiSchemas {
   }
 
   export interface SortingField {
-    field?: string;
-    order?: string;
+    field: string;
+    order: string;
   }
 
   /** 管理后台 - 用户导入 Response VO */
@@ -1550,7 +1550,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/login-log/get": {
     /** 获得登录日志 */
-    get: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_LoginLogRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_LoginLogRespVO };
   };
   "/admin-api/system/login-log/page": {
     /** 获得登录日志分页列表 */
@@ -1570,7 +1570,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/menu/get": {
     /** 获取菜单信息 */
-    get: { body: never; query: { id?: number | string }; response: OpenApiSchemas.CommonResult_MenuRespVO };
+    get: { body: never; query: { id: number | string }; response: OpenApiSchemas.CommonResult_MenuRespVO };
   };
   "/admin-api/system/menu/list": {
     /** 获取菜单列表 */
@@ -1618,7 +1618,7 @@ export interface OpenApiPaths {
   };
   "/admin-api/system/oauth2-token/page": {
     /** 获得访问令牌分页 */
-    get: { body: never; query: { clientId: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; userId: number | string; userType: number }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2AccessTokenRespVO };
+    get: { body: never; query: { clientId?: string; pageNo: number; pageSize: number; sortingFields?: OpenApiSchemas.SortingField[]; userId?: number | string; userType?: number }; response: OpenApiSchemas.CommonResult_PageResult_OAuth2AccessTokenRespVO };
   };
   "/admin-api/system/operate-log/export-excel": {
     /** 导出操作日志 */

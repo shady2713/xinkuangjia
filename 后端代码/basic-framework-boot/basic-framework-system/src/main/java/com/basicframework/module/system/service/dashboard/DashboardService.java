@@ -5,7 +5,7 @@ import com.basicframework.module.system.controller.admin.dashboard.vo.DashboardS
 /**
  * 首页概览统计 Service 接口。
  *
- * @author shady2713
+ * @author shady
  */
 public interface DashboardService {
 

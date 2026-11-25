@@ -45,7 +45,7 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
  *
  * <p>统一处理对象路径、上传类型、稳定访问 URL 与文件元数据写入。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 public class FileServiceImpl implements FileService {

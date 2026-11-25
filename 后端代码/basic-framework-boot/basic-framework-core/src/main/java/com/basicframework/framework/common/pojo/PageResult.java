@@ -11,7 +11,7 @@ import java.util.List;
  * 分页查询结果。
  *
  * @param <T> 数据项类型
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "分页结果")
 @Data

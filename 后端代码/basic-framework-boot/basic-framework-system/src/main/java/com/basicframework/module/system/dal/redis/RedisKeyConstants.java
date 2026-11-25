@@ -5,7 +5,7 @@ import com.basicframework.module.system.dal.dataobject.oauth2.OAuth2AccessTokenD
 /**
  * System Redis Key 枚举类
  *
- * @author 李杰
+ * @author shady
  */
 public interface RedisKeyConstants {
 

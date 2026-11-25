@@ -45,7 +45,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link PermissionServiceImpl} 的反提权与超管角色保护边界。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class PermissionServiceImplSecurityTest {

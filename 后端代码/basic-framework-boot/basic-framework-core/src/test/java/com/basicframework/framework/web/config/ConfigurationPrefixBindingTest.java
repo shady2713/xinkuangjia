@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 Web 配置属性使用统一前缀完成绑定。
  *
- * @author 李杰
+ * @author shady
  */
 class ConfigurationPrefixBindingTest {
 

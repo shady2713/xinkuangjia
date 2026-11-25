@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 /**
  * DictTypeRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 字典类型信息 Response VO")
 @Data

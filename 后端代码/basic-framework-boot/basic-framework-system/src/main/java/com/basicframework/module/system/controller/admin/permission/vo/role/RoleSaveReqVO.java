@@ -3,6 +3,7 @@ package com.basicframework.module.system.controller.admin.permission.vo.role;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.validation.InEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -11,7 +12,7 @@ import lombok.Data;
 /**
  * RoleSaveReqVO 请求对象，承载接口输入参数。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation.")
 @Data
@@ -25,9 +26,9 @@ public class RoleSaveReqVO {
     @Size(max = 30, message = "角色名称长度不能超过 30 个字符")
     private String name;
 
-    @NotBlank(message = "角色标志不能为空")
-    @Size(max = 100, message = "角色标志长度不能超过 100 个字符")
-    @Schema(description = "角色标志", requiredMode = Schema.RequiredMode.REQUIRED, example = "ADMIN")
+    @NotBlank(message = "角色标识不能为空")
+    @Size(max = 100, message = "角色标识长度不能超过 100 个字符")
+    @Schema(description = "角色标识", requiredMode = Schema.RequiredMode.REQUIRED, example = "ADMIN")
     private String code;
 
     @Schema(description = "所属后台类型，后端按当前登录用户自动填充", hidden = true)
@@ -35,6 +36,7 @@ public class RoleSaveReqVO {
 
     @Schema(description = "显示顺序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     @NotNull(message = "显示顺序不能为空")
+    @Min(value = 0, message = "显示顺序不能小于 0")
     private Integer sort;
 
     @Schema(description = "状态", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")

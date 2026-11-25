@@ -22,7 +22,7 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
  *
  * 补充：Spring Security 通过 {@link ExceptionTranslationFilter#handleAccessDeniedException(HttpServletRequest, HttpServletResponse, FilterChain, AccessDeniedException)} 方法，调用当前类
  *
- * @author 李杰
+ * @author shady
  *
  */
 @Slf4j

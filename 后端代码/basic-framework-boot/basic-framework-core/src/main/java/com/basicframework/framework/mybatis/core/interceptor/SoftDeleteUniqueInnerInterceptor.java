@@ -35,7 +35,7 @@ import java.util.List;
  * 自动在 SET 子句追加 {@code deleted_tag = id}。这样无论调用 {@code deleteById}、{@code deleteByIds}
  * 还是条件 {@code delete(wrapper)}，多条历史软删除记录都能按各自主键区分，不阻塞同编码记录重新创建。</p>
  *
- * @author shady2713
+ * @author shady
  */
 public class SoftDeleteUniqueInnerInterceptor extends JsqlParserSupport implements InnerInterceptor {
 

@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param objects 当前页对象，最多 1000 条
  * @param nextToken 下一页不透明游标；为 null 表示已完成
- * @author 吴晓群
+ * @author shady
  */
 public record FileObjectPage(List<Entry> objects, String nextToken) {
 
@@ -17,7 +17,7 @@ public record FileObjectPage(List<Entry> objects, String nextToken) {
      *
      * @param path 对象键，大小写敏感
      * @param size 当前对象的字节数，必须非负
-     * @author 吴晓群
+     * @author shady
      */
     public record Entry(String path, long size) {
     }

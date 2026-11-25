@@ -1698,11 +1698,11 @@
             "type" : "boolean"
           },
           "userIp" : {
-            "description" : "用户 IP，模拟匹配",
+            "description" : "用户 IP，模糊匹配",
             "type" : "string"
           },
           "username" : {
-            "description" : "用户账号，模拟匹配",
+            "description" : "用户账号，模糊匹配",
             "type" : "string"
           }
         },
@@ -1989,7 +1989,7 @@
             "type" : "integer"
           }
         },
-        "required" : [ "clientId", "pageNo", "pageSize", "userId", "userType" ],
+        "required" : [ "pageNo", "pageSize" ],
         "type" : "object"
       },
       "OAuth2AccessTokenRespVO" : {
@@ -2211,7 +2211,7 @@
         "description" : "管理后台 - 操作日志分页列表 Request VO",
         "properties" : {
           "action" : {
-            "description" : "操作明细，模拟匹配",
+            "description" : "操作明细，模糊匹配",
             "type" : "string"
           },
           "bizId" : {
@@ -2246,11 +2246,11 @@
             "type" : "array"
           },
           "subType" : {
-            "description" : "操作名，模拟匹配",
+            "description" : "操作名，模糊匹配",
             "type" : "string"
           },
           "type" : {
-            "description" : "操作模块，模拟匹配",
+            "description" : "操作模块，模糊匹配",
             "type" : "string"
           },
           "userId" : {
@@ -2728,7 +2728,7 @@
         "description" : "管理后台 - 角色创建/更新 Request VO. Role type is not client-selectable: the server sets it from the authenticated operator, ignores any client value, and applies platform isolation.",
         "properties" : {
           "code" : {
-            "description" : "角色标志",
+            "description" : "角色标识",
             "type" : "string"
           },
           "id" : {
@@ -2804,6 +2804,7 @@
             "type" : "string"
           }
         },
+        "required" : [ "field", "order" ],
         "type" : "object"
       },
       "UserImportRespVO" : {
@@ -4590,7 +4591,7 @@
         "parameters" : [ {
           "in" : "query",
           "name" : "id",
-          "required" : false,
+          "required" : true,
           "schema" : {
             "format" : "int64",
             "type" : "integer"
@@ -4785,7 +4786,7 @@
         "parameters" : [ {
           "in" : "query",
           "name" : "id",
-          "required" : false,
+          "required" : true,
           "schema" : {
             "format" : "int64",
             "type" : "integer"
@@ -5161,7 +5162,7 @@
         "parameters" : [ {
           "in" : "query",
           "name" : "clientId",
-          "required" : true,
+          "required" : false,
           "schema" : {
             "type" : "string"
           }
@@ -5194,7 +5195,7 @@
         }, {
           "in" : "query",
           "name" : "userId",
-          "required" : true,
+          "required" : false,
           "schema" : {
             "format" : "int64",
             "type" : "integer"
@@ -5202,7 +5203,7 @@
         }, {
           "in" : "query",
           "name" : "userType",
-          "required" : true,
+          "required" : false,
           "schema" : {
             "format" : "int32",
             "type" : "integer"

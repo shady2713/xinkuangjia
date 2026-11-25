@@ -11,7 +11,7 @@ import jakarta.validation.Valid;
 /**
  * 管理后台的认证 Service 接口，提供登录、登出、令牌刷新与受控密码重置能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface AdminAuthService {
 

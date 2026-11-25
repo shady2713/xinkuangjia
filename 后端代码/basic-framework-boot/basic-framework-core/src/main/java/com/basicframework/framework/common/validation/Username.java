@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 /**
  * 用户名格式校验注解。
  *
- * @author 李杰
+ * @author shady
  */
 @Target({
         ElementType.METHOD,
@@ -30,7 +30,7 @@ public @interface Username {
     /**
      * @return 校验失败时的提示信息
      */
-    String message() default "用户名必须为 4-30 位字母或数字";
+    String message() default "用户名必须为 4-30 位字母、数字或下划线";
 
     /**
      * @return 分组校验标识

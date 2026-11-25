@@ -11,7 +11,7 @@ import java.util.Objects;
  * 管理后台账号所属平台类型。
  *
  * <p>当前服务同时支撑业务管理平台和新管理平台，用户、角色、菜单都需要按该类型隔离，避免两个平台账号串用。</p>
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * OAuth2 授予 Service 实现类（当前仅保留 {@code client_credentials} 客户端凭据模式）。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 public class OAuth2GrantServiceImpl implements OAuth2GrantService {

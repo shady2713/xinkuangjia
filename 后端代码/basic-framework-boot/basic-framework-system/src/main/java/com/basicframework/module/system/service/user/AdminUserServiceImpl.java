@@ -58,7 +58,7 @@ import static com.basicframework.module.system.enums.LogRecordConstants.*;
 /**
  * 后台用户 Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service("adminUserService")
 @Slf4j
@@ -103,8 +103,9 @@ public class AdminUserServiceImpl implements AdminUserService {
         validateUserForCreateOrUpdate(null, createReqVO.getUsername(),
                 createReqVO.getMobile(), createReqVO.getEmail(), createReqVO.getDeptId(),
                 resolvedUserType);
-        // 2.1 插入用户
+        // 2.1 插入用户（强制置空 id，防止客户端伪造主键）
         AdminUserDO user = BeanUtils.toBean(createReqVO, AdminUserDO.class);
+        user.setId(null);
         // 用户归属必须以可信的登录平台为准，不能使用 HTTP 请求体中的平台字段。
         user.setUserType(resolvedUserType);
         user.setStatus(ObjUtil.defaultIfNull(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())); // 默认开启

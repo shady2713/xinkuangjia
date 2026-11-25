@@ -22,7 +22,7 @@ import java.util.List;
 /**
  * 在 MyBatis Plus 的 {@link BaseMapper} 基础上拓展常用分页、条件查询与批量操作方法。
  *
- * @author 李杰
+ * @author shady
  */
 public interface BaseMapperX<T> extends BaseMapper<T> {
 

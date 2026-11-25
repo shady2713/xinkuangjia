@@ -11,7 +11,7 @@ import jakarta.validation.constraints.NotNull;
 /**
  * 短信验证码的使用 Request DTO
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class SmsCodeUseReqDTO {
@@ -31,7 +31,7 @@ public class SmsCodeUseReqDTO {
     /**
      * 验证码
      */
-    @NotEmpty(message = "验证码")
+    @NotEmpty(message = "验证码不能为空")
     private String code;
     /**
      * 使用 IP

@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * 线程安全的进程内文件客户端工厂。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class FileClientFactoryImpl implements FileClientFactory {

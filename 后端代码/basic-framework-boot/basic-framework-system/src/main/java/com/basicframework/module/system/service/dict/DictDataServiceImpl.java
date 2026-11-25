@@ -28,7 +28,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
  * <p>
  * 负责字典数据维护、按类型查询和字典值有效性校验。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Slf4j
@@ -91,10 +91,17 @@ public class DictDataServiceImpl implements DictDataService {
      */
     @Override
     public Long createDictData(DictDataSaveReqVO createReqVO) {
-        validateDictTypeExists(createReqVO.getDictType());
-        validateDictDataValueUnique(null, createReqVO.getDictType(), createReqVO.getValue());
+        String normalizedDictType = cn.hutool.core.util.StrUtil.trim(createReqVO.getDictType());
+        String normalizedLabel = cn.hutool.core.util.StrUtil.trim(createReqVO.getLabel());
+        String normalizedValue = cn.hutool.core.util.StrUtil.trim(createReqVO.getValue());
+        validateDictTypeExists(normalizedDictType);
+        validateDictDataValueUnique(null, normalizedDictType, normalizedValue);
 
         DictDataDO dictData = BeanUtils.toBean(createReqVO, DictDataDO.class);
+        dictData.setId(null);
+        dictData.setDictType(normalizedDictType);
+        dictData.setLabel(normalizedLabel);
+        dictData.setValue(normalizedValue);
         dictDataMapper.insert(dictData);
         return dictData.getId();
     }
@@ -109,11 +116,17 @@ public class DictDataServiceImpl implements DictDataService {
         if (updateReqVO.getId() == null) {
             throw exception(DICT_DATA_NOT_EXISTS);
         }
+        String normalizedDictType = cn.hutool.core.util.StrUtil.trim(updateReqVO.getDictType());
+        String normalizedLabel = cn.hutool.core.util.StrUtil.trim(updateReqVO.getLabel());
+        String normalizedValue = cn.hutool.core.util.StrUtil.trim(updateReqVO.getValue());
         validateDictDataExists(updateReqVO.getId());
-        validateDictTypeExists(updateReqVO.getDictType());
-        validateDictDataValueUnique(updateReqVO.getId(), updateReqVO.getDictType(), updateReqVO.getValue());
+        validateDictTypeExists(normalizedDictType);
+        validateDictDataValueUnique(updateReqVO.getId(), normalizedDictType, normalizedValue);
 
         DictDataDO updateObj = BeanUtils.toBean(updateReqVO, DictDataDO.class);
+        updateObj.setDictType(normalizedDictType);
+        updateObj.setLabel(normalizedLabel);
+        updateObj.setValue(normalizedValue);
         dictDataMapper.updateById(updateObj);
     }
 

@@ -19,7 +19,7 @@ import java.io.IOException;
  * <p>为防止未认证请求利用大体积 JSON 或无 Content-Length 分块流放大堆内存，
  * 本过滤器强制限制单次缓存上限为 {@link #MAX_CACHE_BODY_BYTES}。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public class CacheRequestBodyFilter extends OncePerRequestFilter {
 

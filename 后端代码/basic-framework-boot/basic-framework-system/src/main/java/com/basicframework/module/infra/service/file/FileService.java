@@ -15,7 +15,7 @@ import java.util.List;
  *
  * 定义文件上传、预签名访问、元数据登记和文件删除等基础能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface FileService {
 

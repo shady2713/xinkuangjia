@@ -35,7 +35,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
  *
  * <p>严格按登录管理员所属平台隔离查询与吊销范围，并按令牌主键而非明文令牌字符串执行强制下线。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - OAuth2.0 令牌")
 @RestController

@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证文件上传的流式读取上限和接口早拒绝行为。
  *
- * @author shady2713
+ * @author shady
  */
 class FileControllerTest {
 

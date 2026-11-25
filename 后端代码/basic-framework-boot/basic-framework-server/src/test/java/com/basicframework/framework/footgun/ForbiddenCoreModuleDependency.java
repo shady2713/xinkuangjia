@@ -5,7 +5,7 @@ import com.basicframework.module.system.dal.mysql.footgun.ForbiddenFootgunMapper
 /**
  * 反向失败夹具：公共基础层违规引用业务模块类型。
  *
- * @author shady2713
+ * @author shady
  */
 public class ForbiddenCoreModuleDependency {
 

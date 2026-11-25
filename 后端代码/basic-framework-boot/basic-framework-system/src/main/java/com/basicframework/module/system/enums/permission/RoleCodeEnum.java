@@ -6,7 +6,7 @@ import lombok.Getter;
 
 /**
  * 角色标识枚举
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

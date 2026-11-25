@@ -2,6 +2,7 @@ package com.basicframework.framework.common.pojo;
 
 import java.io.Serializable;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +13,7 @@ import lombok.NoArgsConstructor;
  *
  * 类名加了 ing 的原因是，避免和 ES SortField 重名。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 @NoArgsConstructor
@@ -36,11 +37,13 @@ public class SortingField implements Serializable {
     /**
      * 字段（仅允许字母、数字、下划线，防止 SQL 注入）
      */
+    @NotBlank(message = "排序字段名不能为空")
     @Pattern(regexp = "^[a-zA-Z0-9_]{1,64}$", message = "排序字段名不合法")
     private String field;
     /**
      * 顺序（仅允许 asc 或 desc）
      */
+    @NotBlank(message = "排序方向不能为空")
     @Pattern(regexp = "^(asc|desc)$", message = "排序方向只能为 asc 或 desc")
     private String order;
 

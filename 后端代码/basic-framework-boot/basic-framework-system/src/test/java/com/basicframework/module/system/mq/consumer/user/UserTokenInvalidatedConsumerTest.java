@@ -15,7 +15,7 @@ import static org.mockito.Mockito.verify;
 /**
  * 验证令牌失效事件会同步撤销事件对应用户的全部令牌。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class UserTokenInvalidatedConsumerTest {

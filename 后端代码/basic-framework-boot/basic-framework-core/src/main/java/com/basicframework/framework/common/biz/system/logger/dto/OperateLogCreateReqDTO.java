@@ -8,7 +8,7 @@ import lombok.Data;
 /**
  * 系统操作日志 Create Request DTO
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class OperateLogCreateReqDTO {

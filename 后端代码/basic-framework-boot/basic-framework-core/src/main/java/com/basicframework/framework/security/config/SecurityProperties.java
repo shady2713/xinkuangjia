@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * 安全框架的配置属性类
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.security")
 @Validated

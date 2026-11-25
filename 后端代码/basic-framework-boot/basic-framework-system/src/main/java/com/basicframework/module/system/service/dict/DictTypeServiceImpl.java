@@ -22,7 +22,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 /**
  * 字典类型 Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 public class DictTypeServiceImpl implements DictTypeService {
@@ -74,13 +74,18 @@ public class DictTypeServiceImpl implements DictTypeService {
      */
     @Override
     public Long createDictType(DictTypeSaveReqVO createReqVO) {
+        String normalizedName = StrUtil.trim(createReqVO.getName());
+        String normalizedType = StrUtil.trim(createReqVO.getType());
         // 校验字典类型的名字的唯一性
-        validateDictTypeNameUnique(null, createReqVO.getName());
+        validateDictTypeNameUnique(null, normalizedName);
         // 校验字典类型的类型的唯一性
-        validateDictTypeUnique(null, createReqVO.getType());
+        validateDictTypeUnique(null, normalizedType);
 
         // 插入字典类型
         DictTypeDO dictType = BeanUtils.toBean(createReqVO, DictTypeDO.class);
+        dictType.setId(null);
+        dictType.setName(normalizedName);
+        dictType.setType(normalizedType);
         dictTypeMapper.insert(dictType);
         return dictType.getId();
     }
@@ -94,18 +99,22 @@ public class DictTypeServiceImpl implements DictTypeService {
     public void updateDictType(DictTypeSaveReqVO updateReqVO) {
         // 校验自己存在
         DictTypeDO existing = validateDictTypeExists(updateReqVO.getId());
+        String normalizedName = StrUtil.trim(updateReqVO.getName());
+        String normalizedType = StrUtil.trim(updateReqVO.getType());
         // 已存在字典数据时禁止修改字典类型编码，避免子字典数据成为孤儿记录。
-        if (!Objects.equals(existing.getType(), updateReqVO.getType())
+        if (!Objects.equals(existing.getType(), normalizedType)
                 && getDictDataService().getDictDataCountByDictType(existing.getType()) > 0) {
             throw exception(DICT_TYPE_HAS_CHILDREN);
         }
         // 校验字典类型的名字的唯一性
-        validateDictTypeNameUnique(updateReqVO.getId(), updateReqVO.getName());
+        validateDictTypeNameUnique(updateReqVO.getId(), normalizedName);
         // 校验字典类型的类型的唯一性
-        validateDictTypeUnique(updateReqVO.getId(), updateReqVO.getType());
+        validateDictTypeUnique(updateReqVO.getId(), normalizedType);
 
         // 更新字典类型
         DictTypeDO updateObj = BeanUtils.toBean(updateReqVO, DictTypeDO.class);
+        updateObj.setName(normalizedName);
+        updateObj.setType(normalizedType);
         dictTypeMapper.updateById(updateObj);
     }
 

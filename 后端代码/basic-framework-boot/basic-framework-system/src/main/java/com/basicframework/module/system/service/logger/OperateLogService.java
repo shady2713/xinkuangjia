@@ -10,7 +10,7 @@ import com.basicframework.module.system.dal.dataobject.logger.OperateLogDO;
  * <p>
  * 提供操作日志记录、详情查询和分页查询能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface OperateLogService {
 

@@ -6,6 +6,8 @@ import { LockKeyhole, LogOut } from '@lucide/vue';
 import { ElMessage } from 'element-plus';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { FIELD_LIMITS } from '@/constants/validation';
+
 defineProps<{
   avatar?: string;
   username: string;
@@ -30,11 +32,12 @@ const dateText = computed(() => {
 });
 
 function handleSubmitUnlock() {
-  if (!unlockPassword.value.trim()) {
+  const pwd = unlockPassword.value.trim();
+  if (!pwd) {
     ElMessage.warning('请输入锁屏密码');
     return;
   }
-  emit('unlock', unlockPassword.value, (ok) => {
+  emit('unlock', pwd, (ok) => {
     if (!ok) {
       ElMessage.error('锁屏密码错误');
     } else {
@@ -126,6 +129,7 @@ onBeforeUnmount(() => {
           type="password"
           show-password
           size="large"
+          :maxlength="FIELD_LIMITS.PASSWORD_MAX"
           placeholder="请输入锁屏密码"
           class="enter-x mb-3 w-full"
           @keyup.enter="handleSubmitUnlock"

@@ -24,7 +24,7 @@ import java.util.Properties;
 /**
  * 验证码 Controller，提供图形验证码的生成能力
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 验证码")
 @RestController("adminCaptchaController")

@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 管理后台 OAuth2 客户端响应（不返回密钥明文或哈希）。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - OAuth2 客户端 Response VO")
 @Data

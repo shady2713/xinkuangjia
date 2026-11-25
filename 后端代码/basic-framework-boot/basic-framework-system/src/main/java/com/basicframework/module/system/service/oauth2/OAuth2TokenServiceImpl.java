@@ -49,7 +49,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_P
 /**
  * OAuth2.0 Token Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Slf4j
@@ -418,7 +418,7 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
             // 注意：目前 Member 暂时不读取，可以按需实现
             return Collections.emptyMap();
         }
-        throw new IllegalArgumentException("未知用户类型：" + userType);
+        throw exception0(GlobalErrorCodeConstants.BAD_REQUEST.getCode(), "用户类型不正确");
     }
 
     /**

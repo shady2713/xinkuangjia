@@ -101,7 +101,7 @@ import static org.mockito.Mockito.when;
  * 基于 H2 MySQL 兼容模式的真实 SQL 与 Spring 事务边界集成测试。
  * 验证可选状态查询、令牌分页平台与部门数据权限 SQL 下推，以及重置密码失败审计的独立事务提交。
  *
- * @author shady2713
+ * @author shady
  */
 @SpringJUnitConfig(OAuth2TokenAndAuditH2Test.TestConfig.class)
 class OAuth2TokenAndAuditH2Test {

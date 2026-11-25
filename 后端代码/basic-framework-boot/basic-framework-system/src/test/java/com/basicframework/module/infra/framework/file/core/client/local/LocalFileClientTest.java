@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * {@link LocalFileClient} 单元测试，覆盖 URL 前缀防重复拼接、读写删除与目录穿越防护。
  *
- * @author shady2713
+ * @author shady
  */
 class LocalFileClientTest {
 

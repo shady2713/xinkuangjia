@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证权限控制器在数据权限过滤导致用户/角色不可见时的 fail-closed 行为。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class PermissionControllerTest {

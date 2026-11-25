@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Bean;
  *
  * 在应用启动后注册 BannerApplicationRunner 打印启动提示。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 public class BasicFrameworkBannerAutoConfiguration {

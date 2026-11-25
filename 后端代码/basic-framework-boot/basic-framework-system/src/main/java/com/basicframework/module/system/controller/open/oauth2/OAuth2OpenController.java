@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,7 +34,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
  *
  * <p>提供标准 OAuth2 {@code client_credentials} 令牌签发与查询能力。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "开放接口 - OAuth2 令牌")
 @RestController
@@ -60,10 +61,10 @@ public class OAuth2OpenController {
     @PermitAll
     @Operation(summary = "第三方客户端模式获取访问令牌")
     public CommonResult<OAuth2OpenTokenRespVO> token(
-            @RequestParam("grant_type") String grantType,
-            @RequestParam(value = "client_id", required = false) String clientId,
-            @RequestParam(value = "client_secret", required = false) String clientSecret,
-            @RequestParam("scope") String scope,
+            @RequestParam("grant_type") @Size(max = 64, message = "授权类型长度不能超过 64 个字符") String grantType,
+            @RequestParam(value = "client_id", required = false) @Size(max = 255, message = "客户端编号长度不能超过 255 个字符") String clientId,
+            @RequestParam(value = "client_secret", required = false) @Size(max = 72, message = "客户端密钥长度不能超过 72 个字符") String clientSecret,
+            @RequestParam("scope") @Size(max = 255, message = "授权范围长度不能超过 255 个字符") String scope,
             HttpServletRequest request) {
         String[] basicAuth = HttpUtils.obtainBasicAuthorization(request);
         if (basicAuth != null) {
@@ -71,10 +72,10 @@ public class OAuth2OpenController {
             clientSecret = basicAuth[1];
         }
         if (!OAuth2GrantTypeEnum.CLIENT_CREDENTIALS.getGrantType().equals(grantType)) {
-            throw exception0(BAD_REQUEST.getCode(), "grant_type 仅支持 client_credentials");
+            throw exception0(BAD_REQUEST.getCode(), "授权类型仅支持 client_credentials");
         }
         if (StrUtil.isBlank(clientId) || StrUtil.isBlank(clientSecret)) {
-            throw exception0(BAD_REQUEST.getCode(), "client_id 和 client_secret 不能为空");
+            throw exception0(BAD_REQUEST.getCode(), "客户端编号和密钥不能为空");
         }
 
         List<String> scopes = splitScope(scope);
@@ -97,7 +98,7 @@ public class OAuth2OpenController {
      */
     private List<String> splitScope(String scope) {
         if (StrUtil.isBlank(scope)) {
-            throw exception0(BAD_REQUEST.getCode(), "scope 不能为空");
+            throw exception0(BAD_REQUEST.getCode(), "授权范围不能为空");
         }
         return Arrays.stream(scope.trim().split("\\s+"))
                 .filter(StrUtil::isNotBlank)

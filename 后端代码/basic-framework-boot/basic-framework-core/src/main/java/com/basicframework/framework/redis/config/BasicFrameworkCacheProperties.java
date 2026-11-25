@@ -7,7 +7,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * 缓存扩展配置项（与 {@code basic-framework.cache} 命名空间绑定）。
  *
- * @author 李杰
+ * @author shady
  *
  */
 @ConfigurationProperties("basic-framework.cache")

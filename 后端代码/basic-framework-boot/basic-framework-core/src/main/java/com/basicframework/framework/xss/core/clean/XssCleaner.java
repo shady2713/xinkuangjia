@@ -2,7 +2,7 @@ package com.basicframework.framework.xss.core.clean;
 
 /**
  * 对 html 文本中的有 Xss 风险的数据进行清理
- * @author 李杰
+ * @author shady
  */
 public interface XssCleaner {
 

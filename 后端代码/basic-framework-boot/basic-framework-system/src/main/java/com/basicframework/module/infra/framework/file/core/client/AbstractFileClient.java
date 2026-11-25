@@ -12,7 +12,7 @@ import static com.basicframework.module.infra.framework.file.core.utils.FilePath
  * 文件客户端的抽象类，提供模板方法，减少子类的冗余代码
  *
  * @param <Config> 客户端配置类型
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public abstract class AbstractFileClient<Config extends FileClientConfig> implements FileClient {

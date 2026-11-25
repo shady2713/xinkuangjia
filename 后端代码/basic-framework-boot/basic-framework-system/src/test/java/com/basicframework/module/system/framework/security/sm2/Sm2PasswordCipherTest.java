@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>固定密钥和密文只用于测试，不得用于任何部署环境。</p>
  *
- * @author shady2713
+ * @author shady
  */
 class Sm2PasswordCipherTest {
 

@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.Async;
 /**
  * 操作日志 API 接口
  *
- * @author 李杰
+ * @author shady
  */
 public interface OperateLogCommonApi {
 

@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * 本地磁盘文件客户端配置（用于本地开发、CI 及政务断网内网环境）。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class LocalFileClientConfig implements FileClientConfig {

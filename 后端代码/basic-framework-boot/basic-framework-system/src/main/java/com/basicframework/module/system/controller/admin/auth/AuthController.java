@@ -54,7 +54,7 @@ import static com.basicframework.framework.security.core.util.SecurityFrameworkU
 /**
  * 管理后台认证接口，提供登录、登出、令牌刷新、受控密码重置和当前用户权限查询能力。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 认证")
 @RestController

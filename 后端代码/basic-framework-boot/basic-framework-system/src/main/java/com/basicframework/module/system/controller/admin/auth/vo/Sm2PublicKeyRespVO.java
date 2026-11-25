@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 /**
  * 管理后台 SM2 公钥响应。
  *
- * @author shady2713
+ * @author shady
  */
 @Schema(description = "管理后台 - SM2 密码传输公钥 Response VO")
 @Data

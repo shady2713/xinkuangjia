@@ -20,7 +20,7 @@ import java.util.Objects;
 /**
  * 环境变量驱动的统一文件存储服务（支持阿里云 OSS 与本地磁盘一键切换）。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @RequiredArgsConstructor

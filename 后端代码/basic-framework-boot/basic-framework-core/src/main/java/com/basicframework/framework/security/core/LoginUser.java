@@ -14,7 +14,7 @@ import java.util.Map;
  * 登录用户信息
  * <p>承载鉴权上下文常见字段，避免在各层重复解析 Token 结果。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class LoginUser {

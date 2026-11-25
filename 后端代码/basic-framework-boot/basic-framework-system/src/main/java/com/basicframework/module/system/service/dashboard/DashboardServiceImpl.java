@@ -34,7 +34,7 @@ import java.util.Map;
  *
  * <p>按当前登录用户的平台边界隔离用户、部门与角色规模，并聚合近 7 日登录与操作审计真实数据。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Service
 public class DashboardServiceImpl implements DashboardService {

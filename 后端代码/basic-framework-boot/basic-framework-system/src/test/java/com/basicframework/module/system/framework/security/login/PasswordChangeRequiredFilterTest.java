@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证首次改密后端拦截器只放行必要入口。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class PasswordChangeRequiredFilterTest {

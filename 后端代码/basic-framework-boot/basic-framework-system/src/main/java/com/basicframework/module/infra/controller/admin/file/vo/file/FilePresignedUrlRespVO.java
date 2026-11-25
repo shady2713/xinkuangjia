@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 /**
  * 文件预签名上传信息。
  *
- * @author 李杰
+ * @author shady
  */
 @AllArgsConstructor
 @NoArgsConstructor

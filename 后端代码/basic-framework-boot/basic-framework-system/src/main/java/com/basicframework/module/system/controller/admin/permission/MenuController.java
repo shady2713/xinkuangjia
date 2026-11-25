@@ -32,7 +32,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.SYSTEM_P
 /**
  * MenuController HTTP 接口，负责请求校验和响应组装。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 菜单")
 @RestController
@@ -125,7 +125,7 @@ public class MenuController {
     @GetMapping("/list")
     @Operation(summary = "获取菜单列表", description = "用于【菜单管理】界面")
     @PreAuthorize("@ss.hasPermission('system:menu:query')")
-    public CommonResult<List<MenuRespVO>> getMenuList(MenuListReqVO reqVO) {
+    public CommonResult<List<MenuRespVO>> getMenuList(@Valid MenuListReqVO reqVO) {
         reqVO.setMenuType(getLoginUserType());
         List<MenuDO> list = menuService.getMenuList(reqVO);
         list.sort(Comparator.comparing(MenuDO::getSort));
@@ -159,8 +159,9 @@ public class MenuController {
      */
     @GetMapping("/get")
     @Operation(summary = "获取菜单信息")
+    @Parameter(name = "id", description = "菜单编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('system:menu:query')")
-    public CommonResult<MenuRespVO> getMenu(Long id) {
+    public CommonResult<MenuRespVO> getMenu(@RequestParam("id") Long id) {
         MenuDO menu = menuService.getMenu(id);
         validateMenuPlatform(menu);
         return success(BeanUtils.toBean(menu, MenuRespVO.class));

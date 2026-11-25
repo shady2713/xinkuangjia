@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 /**
  * 字典组件自动配置，初始化 Excel 字典转换和字典校验依赖的工具类。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 public class BasicFrameworkDictAutoConfiguration {

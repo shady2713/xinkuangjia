@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证内部会话客户端、令牌空闲超时校验与按用户统一吊销。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class OAuth2TokenServiceImplTest {

@@ -24,6 +24,7 @@ const props = withDefaults(
     accept?: string;
     tip?: string;
     requirePublicUrl?: boolean;
+    showSuccessToast?: boolean;
   }>(),
   {
     modelValue: '',
@@ -34,6 +35,7 @@ const props = withDefaults(
     maxSizeMb: 50,
     accept: '',
     tip: '',
+    showSuccessToast: true,
   },
 );
 
@@ -77,7 +79,11 @@ async function doUpload(file: File) {
     }
     emit('update:modelValue', url);
     emit('uploaded', url);
-    ElMessage.success('上传成功');
+    if (props.showSuccessToast) {
+      ElMessage.success('上传成功');
+    }
+  } catch {
+    // 业务与网络错误已由请求拦截器统一提示，避免未捕获 Promise rejection
   } finally {
     uploading.value = false;
   }

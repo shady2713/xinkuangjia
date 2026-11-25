@@ -15,7 +15,7 @@ import java.util.Objects;
  * 通用返回
  *
  * @param <T> 数据泛型
- * @author 李杰
+ * @author shady
  */
 @Data
 public class CommonResult<T> implements Serializable {

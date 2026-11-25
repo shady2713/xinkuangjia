@@ -18,7 +18,7 @@ import java.util.List;
  * <p>
  * 统一管理 API 前缀、Controller 包扫描策略、UI 配置与跨域白名单。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.web")
 @Validated
@@ -53,7 +53,7 @@ public class WebProperties {
 
     /**
      * API 路径映射配置
-     * @author 李杰
+     * @author shady
      */
     @Data
     @AllArgsConstructor
@@ -85,7 +85,7 @@ public class WebProperties {
 
     /**
      * 管理后台 UI 配置
-     * @author 李杰
+     * @author shady
      */
     @Data
     @Valid

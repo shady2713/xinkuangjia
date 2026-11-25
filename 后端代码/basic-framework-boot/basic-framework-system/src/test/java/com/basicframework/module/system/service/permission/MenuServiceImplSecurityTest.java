@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link MenuServiceImpl} 禁止非超管通过修改或新增菜单权限标识实现越权提权。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class MenuServiceImplSecurityTest {

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 SM2 私钥缺失或格式错误时配置校验会拒绝启动。
  *
- * @author shady2713
+ * @author shady
  */
 class SecurityPropertiesValidationTest {
 

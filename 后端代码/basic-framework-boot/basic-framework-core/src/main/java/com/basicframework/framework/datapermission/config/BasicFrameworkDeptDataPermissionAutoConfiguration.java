@@ -17,7 +17,7 @@ import java.util.List;
  * <p>当业务侧提供 {@link DeptDataPermissionRuleCustomizer} 后，自动创建 {@link DeptDataPermissionRule}
  * 并应用所有自定义的表字段映射配置。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @ConditionalOnClass(LoginUser.class)

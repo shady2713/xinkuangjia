@@ -9,7 +9,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * 阿里云短信配置属性（环境变量驱动，取代数据库渠道与模板表）。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.sms.aliyun")
 @Validated

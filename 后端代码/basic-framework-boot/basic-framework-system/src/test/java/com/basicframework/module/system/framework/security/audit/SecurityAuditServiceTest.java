@@ -21,7 +21,7 @@ import static org.mockito.Mockito.verify;
 /**
  * 验证安全审计记录的用户、请求元数据和结果字段，确保不依赖调用方拼装。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class SecurityAuditServiceTest {

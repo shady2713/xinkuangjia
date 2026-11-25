@@ -11,7 +11,7 @@ import lombok.*;
  *
  * <p>每次文件上传，都会记录一条记录到该表中。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @TableName("infra_file")
 @KeySequence("infra_file_seq") // 用于 Oracle、PostgreSQL、Kingbase、DB2、H2 数据库的主键自增。如果是 MySQL 等数据库，可不写。

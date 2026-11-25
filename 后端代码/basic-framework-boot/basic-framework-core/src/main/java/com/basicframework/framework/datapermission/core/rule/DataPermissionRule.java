@@ -11,7 +11,7 @@ import java.util.Set;
  *
  * <p>实现类负责声明自己影响的表，并为命中的表生成对应的数据权限 SQL 表达式。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public interface DataPermissionRule {
 

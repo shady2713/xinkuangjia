@@ -11,7 +11,7 @@ import org.springframework.security.config.annotation.web.configurers.AuthorizeH
  *
  * 注册 infra 模块需要额外放行的接口路径。
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false, value = "infraSecurityConfiguration")
 public class SecurityConfiguration {

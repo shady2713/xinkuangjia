@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * Enhances OpenAPI extension support.
  *
  * @since 4.1.0
- * @author 李杰
+ * @author shady
  */
 @Primary
 @Configuration

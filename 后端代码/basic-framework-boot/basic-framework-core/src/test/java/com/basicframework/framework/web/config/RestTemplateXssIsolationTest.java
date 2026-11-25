@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link BasicFrameworkWebAutoConfiguration#restTemplate} 与 MVC 全局 XSS 反序列化器的隔离性。
  *
- * @author shady2713
+ * @author shady
  */
 class RestTemplateXssIsolationTest {
 

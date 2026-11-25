@@ -171,7 +171,7 @@ basic-framework:
   swagger:
     title: ${SWAGGER_TITLE:basic-framework API}
     description: ${SWAGGER_DESCRIPTION:Admin and app API documentation}
-    author: ${SWAGGER_AUTHOR:李杰}
+    author: ${SWAGGER_AUTHOR:shady}
     version: ${basic-framework.info.version}
     url: ${basic-framework.web.admin-ui.url}
     email: ${SWAGGER_EMAIL:opensource@example.com}

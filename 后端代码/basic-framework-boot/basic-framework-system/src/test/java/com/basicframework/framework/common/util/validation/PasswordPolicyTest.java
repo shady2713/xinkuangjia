@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证等保二级密码复杂度的正常、边界和失败输入。
  *
- * @author shady2713
+ * @author shady
  */
 class PasswordPolicyTest {
 

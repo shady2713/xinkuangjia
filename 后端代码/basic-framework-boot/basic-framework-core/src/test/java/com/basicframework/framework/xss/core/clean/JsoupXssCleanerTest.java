@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 HTML 清理移除可执行样式并保留允许的属性。
  *
- * @author 李杰
+ * @author shady
  */
 class JsoupXssCleanerTest {
 

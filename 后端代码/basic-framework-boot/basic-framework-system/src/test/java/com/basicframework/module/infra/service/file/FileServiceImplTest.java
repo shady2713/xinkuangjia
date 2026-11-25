@@ -59,7 +59,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link FileServiceImpl} 的预签名一次性凭证、服务端 HEAD 实际大小校验与超限清理逻辑。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class FileServiceImplTest {

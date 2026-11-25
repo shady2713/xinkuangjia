@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@link CacheUtils} 异步刷新资源边界测试。
  *
- * @author 李杰
+ * @author shady
  */
 class CacheUtilsTest {
 

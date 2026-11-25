@@ -6,7 +6,7 @@ import lombok.Getter;
 /**
  * 系统角色类型枚举，用于区分内置角色与普通业务角色。
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

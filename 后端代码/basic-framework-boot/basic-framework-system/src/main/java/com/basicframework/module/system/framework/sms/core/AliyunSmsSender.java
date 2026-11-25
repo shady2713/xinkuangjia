@@ -30,7 +30,7 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
 /**
  * 极简阿里云短信发送器（ACS3-HMAC-SHA256 签名，无重型云 SDK 依赖）。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -61,7 +61,8 @@ public class AliyunSmsSender {
         }
         String templateCode = resolveTemplateCode(scene);
         if (StrUtil.isBlank(templateCode)) {
-            throw exception0(INTERNAL_SERVER_ERROR.getCode(), "未配置该短信场景对应的阿里云模板编码");
+            log.error("[sendCode][sms template code missing for scene={}]", scene.getScene());
+            throw exception0(INTERNAL_SERVER_ERROR.getCode(), "短信服务配置异常，请联系管理员");
         }
         TreeMap<String, Object> queryParam = new TreeMap<>();
         queryParam.put("PhoneNumbers", mobile);

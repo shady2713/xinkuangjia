@@ -37,7 +37,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.LOG_EXPO
 /**
  * 操作日志 Controller，提供操作日志的分页查询与导出能力。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 操作日志")
 @RestController

@@ -5,6 +5,7 @@
 import { Download, Search, View } from '@element-plus/icons-vue';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   exportOperateLogApi,
   getOperateLogPageApi,
@@ -44,6 +45,8 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -58,12 +61,16 @@ function handleReset() {
 }
 
 async function handleExport() {
-  const blob = await exportOperateLogApi({
-    type: query.type.trim() || undefined,
-    subType: query.subType.trim() || undefined,
-    action: query.action.trim() || undefined,
-  });
-  downloadBlob(blob, '操作审计日志.xlsx');
+  try {
+    const blob = await exportOperateLogApi({
+      type: query.type.trim() || undefined,
+      subType: query.subType.trim() || undefined,
+      action: query.action.trim() || undefined,
+    });
+    downloadBlob(blob, '操作审计日志.xlsx');
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 function openDetail(row: OperateLogItem) {
@@ -101,7 +108,7 @@ onMounted(() => {
             <el-input
               v-model="query.type"
               placeholder="请输入操作模块"
-              :maxlength="FIELD_LIMITS.MENU_NAME"
+              :maxlength="FIELD_LIMITS.LOG_MODULE"
               clearable
             />
           </el-form-item>
@@ -109,7 +116,7 @@ onMounted(() => {
             <el-input
               v-model="query.subType"
               placeholder="请输入操作名"
-              :maxlength="FIELD_LIMITS.MENU_NAME"
+              :maxlength="FIELD_LIMITS.LOG_MODULE"
               clearable
             />
           </el-form-item>

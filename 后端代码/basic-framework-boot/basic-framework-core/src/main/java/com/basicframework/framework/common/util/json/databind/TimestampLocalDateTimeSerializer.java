@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 基于时间戳的 LocalDateTime 序列化器
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class TimestampLocalDateTimeSerializer extends JsonSerializer<LocalDateTime> {

@@ -5,7 +5,7 @@ import com.basicframework.framework.common.biz.system.permission.dto.DeptDataPer
 /**
  * 权限 API 接口
  *
- * @author 李杰
+ * @author shady
  */
 public interface PermissionCommonApi {
 

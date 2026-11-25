@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 架构门禁反向夹具：故意放在 {@code ..controller..} 包之外并尝试用 {@code @PreAuthorize("permitAll()")} 绕过鉴权检查的控制器。
  *
- * @author shady2713
+ * @author shady
  */
 @RestController
 public class ForbiddenNonControllerPkgEndpoint {

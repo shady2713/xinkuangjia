@@ -35,7 +35,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 /**
  * 部门 Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Validated
@@ -68,11 +68,14 @@ public class DeptServiceImpl implements DeptService {
         validateRootDeptCreationAuthority(createReqVO.getParentId());
         // 校验父部门的有效性
         validateParentDept(null, createReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(null, createReqVO.getParentId(), createReqVO.getName());
+        // 校验部门名的唯一性（去除首尾空白防止前导空格绕过唯一性检查）
+        String normalizedName = StrUtil.trim(createReqVO.getName());
+        validateDeptNameUnique(null, createReqVO.getParentId(), normalizedName);
 
         // 插入部门；优先继承父部门平台归属，根部门则跟随当前登录管理员平台类型（无上下文时默认 super_admin）。
         DeptDO dept = BeanUtils.toBean(createReqVO, DeptDO.class);
+        dept.setId(null);
+        dept.setName(normalizedName);
         dept.setRoleType(resolveDeptRoleType(createReqVO.getParentId()));
         deptMapper.insert(dept);
         return dept.getId();
@@ -126,11 +129,13 @@ public class DeptServiceImpl implements DeptService {
         }
         // 校验父部门的有效性
         validateParentDept(updateReqVO.getId(), updateReqVO.getParentId());
-        // 校验部门名的唯一性
-        validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), updateReqVO.getName());
+        // 校验部门名的唯一性（去除首尾空白防止前导空格绕过唯一性检查）
+        String normalizedName = StrUtil.trim(updateReqVO.getName());
+        validateDeptNameUnique(updateReqVO.getId(), updateReqVO.getParentId(), normalizedName);
 
         // 更新部门（禁止篡改平台归属 roleType）
         DeptDO updateObj = BeanUtils.toBean(updateReqVO, DeptDO.class);
+        updateObj.setName(normalizedName);
         updateObj.setRoleType(existing != null ? existing.getRoleType() : null);
         deptMapper.updateById(updateObj);
     }

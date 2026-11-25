@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 {@link ExcelUtils} 的内存导出与导入往返一致性（含超 JS 安全整数精度的 Long 字段）。
  *
- * @author shady2713
+ * @author shady
  */
 class ExcelUtilsTest {
 
@@ -75,7 +75,7 @@ class ExcelUtilsTest {
     /**
      * 测试用 Excel 行模型。
      *
-     * @author shady2713
+     * @author shady
      */
     @Data
     @NoArgsConstructor

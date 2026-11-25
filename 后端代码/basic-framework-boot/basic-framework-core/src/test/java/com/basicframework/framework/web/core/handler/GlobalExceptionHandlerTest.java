@@ -8,22 +8,29 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
+import org.springframework.http.MediaType;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLIntegrityConstraintViolationException;
 
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST;
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.INTERNAL_SERVER_ERROR;
+import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.METHOD_NOT_ALLOWED;
+import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.UNAUTHORIZED;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 验证全局异常处理器的稳定错误语义。
  *
- * @author 李杰
+ * @author shady
  */
 class GlobalExceptionHandlerTest {
 
@@ -129,6 +136,42 @@ class GlobalExceptionHandlerTest {
         CommonResult<?> result = handler.uncheckedExecutionExceptionHandler(
                 request, new UncheckedExecutionException((Throwable) null));
         assertThat(result.getCode()).isEqualTo(INTERNAL_SERVER_ERROR.getCode());
+    }
+
+    @Test
+    void bindFailureAndProtocolExceptionsShouldReturnSanitizedChineseMessages() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("test-application");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/system/user/page");
+
+        BindException bindEx = new BindException(new Object(), "req");
+        bindEx.addError(new FieldError("req", "status", "bad_input", true, null, null,
+                "Failed to convert property value of type 'java.lang.String' to required type 'java.lang.Integer'"));
+        CommonResult<?> bindResult = handler.bindExceptionHandler(bindEx);
+        assertThat(bindResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(bindResult.getMsg())
+                .isEqualTo("请求参数类型错误：status")
+                .doesNotContain("java.lang")
+                .doesNotContain("bad_input");
+
+        CommonResult<?> methodResult = handler.httpRequestMethodNotSupportedExceptionHandler(
+                new HttpRequestMethodNotSupportedException("DELETE"));
+        assertThat(methodResult.getCode()).isEqualTo(METHOD_NOT_ALLOWED.getCode());
+        assertThat(methodResult.getMsg()).isEqualTo(METHOD_NOT_ALLOWED.getMsg());
+
+        CommonResult<?> mediaResult = handler.httpMediaTypeNotSupportedExceptionHandler(
+                new HttpMediaTypeNotSupportedException(MediaType.TEXT_PLAIN, java.util.List.of(MediaType.APPLICATION_JSON)));
+        assertThat(mediaResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(mediaResult.getMsg()).isEqualTo("请求内容类型不支持");
+
+        CommonResult<?> partResult = handler.allExceptionHandler(
+                request, new MissingServletRequestPartException("file"));
+        assertThat(partResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(partResult.getMsg()).isEqualTo("请求参数缺失：file");
+
+        CommonResult<?> authResult = handler.allExceptionHandler(
+                request, new BadCredentialsException("raw"));
+        assertThat(authResult.getCode()).isEqualTo(UNAUTHORIZED.getCode());
+        assertThat(authResult.getMsg()).isEqualTo(UNAUTHORIZED.getMsg());
     }
 
 }

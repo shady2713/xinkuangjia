@@ -5,7 +5,7 @@ import lombok.Getter;
 
 /**
  * 登录日志的类型枚举
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

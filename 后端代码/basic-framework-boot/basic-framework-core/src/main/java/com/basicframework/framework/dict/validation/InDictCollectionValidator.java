@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 集合字典范围校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class InDictCollectionValidator implements ConstraintValidator<InDict, Collection<?>> {
 

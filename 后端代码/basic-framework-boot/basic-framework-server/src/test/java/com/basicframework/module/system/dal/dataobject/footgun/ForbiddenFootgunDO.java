@@ -3,7 +3,7 @@ package com.basicframework.module.system.dal.dataobject.footgun;
 /**
  * 反向失败夹具：模拟持久化层的数据对象 DO。
  *
- * @author shady2713
+ * @author shady
  */
 public class ForbiddenFootgunDO {
 

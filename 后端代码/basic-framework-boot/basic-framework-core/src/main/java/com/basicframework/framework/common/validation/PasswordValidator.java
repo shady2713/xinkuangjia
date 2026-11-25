@@ -9,7 +9,7 @@ import jakarta.validation.ConstraintValidatorContext;
 /**
  * 登录密码复杂度校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class PasswordValidator implements ConstraintValidator<Password, String> {
 

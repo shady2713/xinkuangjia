@@ -14,7 +14,7 @@ import java.util.List;
  * <p>
  * 提供字典数据维护、查询、解析和有效性校验能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface DictDataService {
 

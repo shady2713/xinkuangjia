@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link TokenAuthenticationFilter} 的令牌认证、用户类型边界校验与异常降级行为。
  *
- * @author shady2713
+ * @author shady
  */
 class TokenAuthenticationFilterTest {
 

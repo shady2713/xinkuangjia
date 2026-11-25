@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Bean;
 /**
  * 原生 Spring AOP 操作审计日志自动配置类。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 public class BasicFrameworkOperateLogConfiguration {

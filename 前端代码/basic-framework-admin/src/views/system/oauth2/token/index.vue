@@ -6,6 +6,7 @@ import { Search, SwitchButton } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   deleteOAuth2TokenApi,
   getOAuth2TokenPageApi,
@@ -15,7 +16,7 @@ import DictTag from '@/components/DictTag.vue';
 import ProTable from '@/components/ProTable.vue';
 import TableAction from '@/components/TableAction.vue';
 import { DICT_TYPE } from '@/constants/enums';
-import { FIELD_LIMITS } from '@/constants/validation';
+import { FIELD_LIMITS, REGEX_PATTERNS } from '@/constants/validation';
 import { formatDateTime } from '@/utils/format';
 
 defineOptions({ name: 'SystemOAuth2Token' });
@@ -32,16 +33,23 @@ const query = reactive({
 });
 
 async function loadList() {
+  const userIdText = query.userId.trim();
+  if (userIdText && !REGEX_PATTERNS.NUMERIC_ID.test(userIdText)) {
+    ElMessage.warning('用户编号必须为数字');
+    return;
+  }
   loading.value = true;
   try {
     const res = await getOAuth2TokenPageApi({
       pageNo: query.pageNo,
       pageSize: query.pageSize,
-      userId: query.userId.trim() || undefined,
+      userId: userIdText || undefined,
       clientId: query.clientId.trim() || undefined,
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -55,9 +63,13 @@ function handleReset() {
 }
 
 async function handleForceLogout(row: OAuth2TokenItem) {
-  await deleteOAuth2TokenApi(row.id);
-  ElMessage.success('已强制下线');
-  await loadList();
+  try {
+    await deleteOAuth2TokenApi(row.id);
+    ElMessage.success('已强制下线');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 onMounted(() => {
@@ -88,8 +100,8 @@ onMounted(() => {
           <el-form-item label="用户编号">
             <el-input
               v-model="query.userId"
-              placeholder="请输入用户编号"
-              :maxlength="FIELD_LIMITS.USERNAME"
+              placeholder="请输入数字用户编号"
+              :maxlength="FIELD_LIMITS.NUMERIC_ID"
               clearable
             />
           </el-form-item>

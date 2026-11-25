@@ -21,7 +21,7 @@ import static com.basicframework.module.infra.enums.ErrorCodeConstants.FILE_PRIV
  *
  * <p>所有对象路径均强制规范化并校验必须落在 {@code basePath} 目录内，严防目录穿越。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public class LocalFileClient extends AbstractFileClient<LocalFileClientConfig> {
 

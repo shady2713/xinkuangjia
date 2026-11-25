@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * 集合枚举取值范围校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class InEnumCollectionValidator implements ConstraintValidator<InEnum, Collection<?>> {
 
@@ -50,10 +50,11 @@ public class InEnumCollectionValidator implements ConstraintValidator<InEnum, Co
         if (CollUtil.containsAll(values, list)) {
             return true;
         }
-        // 校验不通过，自定义提示语句
-        context.disableDefaultConstraintViolation(); // 禁用默认的 message 的值
-        context.buildConstraintViolationWithTemplate(context.getDefaultConstraintMessageTemplate()
-                .replaceAll("\\{value}", CollUtil.join(list, ","))).addConstraintViolation(); // 重新添加错误提示语句
+        // 校验不通过，使用枚举允许范围而非调用方输入替换模板占位符，避免 EL 注入与异常
+        context.disableDefaultConstraintViolation();
+        String message = context.getDefaultConstraintMessageTemplate()
+                .replace("{value}", values.toString());
+        context.buildConstraintViolationWithTemplate(message).addConstraintViolation();
         return false;
     }
 

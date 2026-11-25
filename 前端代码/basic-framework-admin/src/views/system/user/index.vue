@@ -14,11 +14,13 @@ import {
 } from '@element-plus/icons-vue';
 import {
   ElMessage,
+  ElMessageBox,
   type FormInstance,
   type FormRules,
 } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import { type DeptSimple, getSimpleDeptListApi } from '@/api/system/dept';
 import {
   assignUserRoleApi,
@@ -49,6 +51,7 @@ import {
   FIELD_LIMITS,
   maxLenRule,
   mobileRule,
+  PASSWORD_PLACEHOLDER,
   passwordComplexityRule,
   rangeLenRule,
   REGEX_PATTERNS,
@@ -178,13 +181,19 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
 }
 
 async function loadDeptTree() {
-  deptList.value = await getSimpleDeptListApi();
+  try {
+    deptList.value = await getSimpleDeptListApi();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 function handleSearch() {
@@ -226,20 +235,27 @@ async function openForm(row?: UserItem) {
   });
   formVisible.value = true;
   if (row?.id) {
-    const detail = await getUserApi(row.id);
-    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(form, {
-      id: detail.id,
-      username: detail.username,
-      nickname: detail.nickname,
-      password: '',
-      deptId: detail.deptId,
-      mobile: detail.mobile || '',
-      email: detail.email || '',
-      sex: detail.sex ?? 1,
-      remark: detail.remark || '',
-    });
-    formReady.value = true;
+    try {
+      const detail = await getUserApi(row.id);
+      if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(form, {
+        id: detail.id,
+        username: detail.username,
+        nickname: detail.nickname,
+        password: '',
+        deptId: detail.deptId,
+        mobile: detail.mobile || '',
+        email: detail.email || '',
+        sex: detail.sex ?? 1,
+        remark: detail.remark || '',
+      });
+      formReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === formLoad) {
+        formVisible.value = false;
+      }
+    }
   }
 }
 
@@ -269,6 +285,8 @@ async function submitForm() {
     ElMessage.success(form.id ? '修改成功' : '新增成功');
     formVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     formSubmitting.value = false;
   }
@@ -284,16 +302,20 @@ async function handleStatusChange(row: UserItem, val: string | number | boolean)
     row.status = nextStatus;
     ElMessage.success('状态已更新');
   } catch {
-    await loadList();
+    void loadList();
   } finally {
     statusUpdating.delete(key);
   }
 }
 
 async function handleDelete(row: UserItem) {
-  await deleteUserApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteUserApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleBatchDelete() {
@@ -304,10 +326,14 @@ async function handleBatchDelete() {
     { title: '批量删除确认', confirmText: '确认删除' },
   );
   if (!confirmed) return;
-  await deleteUserListApi(ids);
-  ElMessage.success('批量删除成功');
-  selectedIds.value = [];
-  await loadList();
+  try {
+    await deleteUserListApi(ids);
+    ElMessage.success('批量删除成功');
+    selectedIds.value = [];
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function openAssignRole(row: UserItem) {
@@ -320,15 +346,22 @@ async function openAssignRole(row: UserItem) {
   assignRoleForm.roleIds = [];
   roleOptions.value = [];
   roleDialogVisible.value = true;
-  const [roles, checked] = await Promise.all([
-    getSimpleRoleListApi(),
-    getUserRoleListApi(row.id),
-  ]);
-  if (load !== roleLoad || !roleDialogVisible.value || !owner || getSessionId() !== owner) return;
-  roleOptions.value = roles;
-  assignRoleForm.roleIds = checked;
-  roleOwner = owner;
-  roleReady.value = true;
+  try {
+    const [roles, checked] = await Promise.all([
+      getSimpleRoleListApi(),
+      getUserRoleListApi(row.id),
+    ]);
+    if (load !== roleLoad || !roleDialogVisible.value || !owner || getSessionId() !== owner) return;
+    roleOptions.value = roles;
+    assignRoleForm.roleIds = checked;
+    roleOwner = owner;
+    roleReady.value = true;
+  } catch (error) {
+    notifyUnhandledError(error);
+    if (load === roleLoad) {
+      roleDialogVisible.value = false;
+    }
+  }
 }
 
 async function submitAssignRole() {
@@ -341,6 +374,8 @@ async function submitAssignRole() {
     });
     ElMessage.success('角色分配成功');
     roleDialogVisible.value = false;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     roleSubmitting.value = false;
   }
@@ -362,24 +397,34 @@ async function submitResetPwd() {
     await resetUserPasswordApi(pwdForm.userId, encrypted);
     ElMessage.success('密码重置成功');
     pwdDialogVisible.value = false;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     pwdSubmitting.value = false;
   }
 }
 
 async function handleExport() {
-  const blob = await exportUserApi({
-    username: query.username.trim() || undefined,
-    mobile: query.mobile.trim() || undefined,
-    status: query.status,
-    deptId: query.deptId,
-  });
-  downloadBlob(blob, '用户列表.xlsx');
+  try {
+    const blob = await exportUserApi({
+      username: query.username.trim() || undefined,
+      mobile: query.mobile.trim() || undefined,
+      status: query.status,
+      deptId: query.deptId,
+    });
+    downloadBlob(blob, '用户列表.xlsx');
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleDownloadTemplate() {
-  const blob = await getImportUserTemplateApi();
-  downloadBlob(blob, '用户导入模板.xlsx');
+  try {
+    const blob = await getImportUserTemplateApi();
+    downloadBlob(blob, '用户导入模板.xlsx');
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 function openImportDialog() {
@@ -390,8 +435,23 @@ function openImportDialog() {
 
 function handleImportFileChange(e: Event) {
   const input = e.target as HTMLInputElement;
-  importFile.value = input.files?.[0] ?? null;
+  const file = input.files?.[0] ?? null;
   input.value = '';
+  if (!file) {
+    importFile.value = null;
+    return;
+  }
+  if (!/\.(xlsx|xls)$/i.test(file.name)) {
+    ElMessage.warning('仅支持 .xlsx 或 .xls 格式的 Excel 文件');
+    importFile.value = null;
+    return;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('导入文件大小不能超过 50MB');
+    importFile.value = null;
+    return;
+  }
+  importFile.value = file;
 }
 
 async function submitImport() {
@@ -404,11 +464,27 @@ async function submitImport() {
     const res = await importUserApi(importFile.value, importUpdateSupport.value);
     const created = res.createUsernames?.length ?? 0;
     const updated = res.updateUsernames?.length ?? 0;
-    const failed = Object.keys(res.failureUsernames ?? {}).length;
-    ElMessage.success(`导入完成：新增 ${created} 条，更新 ${updated} 条，失败 ${failed} 条`);
+    const failures = Object.entries(res.failureUsernames ?? {});
+    const failed = failures.length;
     importDialogVisible.value = false;
     importFile.value = null;
     await loadList();
+    if (failed > 0) {
+      const preview = failures
+        .slice(0, 10)
+        .map(([name, reason]) => `${name}：${reason}`)
+        .join('\n');
+      const more = failed > 10 ? `\n……共 ${failed} 条失败` : '';
+      void ElMessageBox.alert(
+        `新增 ${created} 条，更新 ${updated} 条，失败 ${failed} 条：\n${preview}${more}`,
+        '导入结果',
+        { type: 'warning', confirmButtonText: '我知道了' },
+      ).catch(() => {});
+    } else {
+      ElMessage.success(`导入完成：新增 ${created} 条，更新 ${updated} 条`);
+    }
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     importing.value = false;
   }
@@ -642,7 +718,7 @@ onMounted(() => {
             type="password"
             show-password
             :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-            placeholder="请输入 8~32 位含大小写字母及数字的密码"
+            :placeholder="PASSWORD_PLACEHOLDER"
           />
         </el-form-item>
         <el-form-item label="归属部门">
@@ -700,7 +776,7 @@ onMounted(() => {
       :show-fullscreen="false"
       @confirm="submitAssignRole"
     >
-      <el-form label-width="85px">
+      <el-form v-loading="!roleReady" label-width="85px">
         <el-form-item label="用户账号">
           <el-input :model-value="assignRoleForm.username" disabled />
         </el-form-item>
@@ -743,7 +819,7 @@ onMounted(() => {
             type="password"
             show-password
             :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-            placeholder="请输入 8~32 位含大小写字母及数字的新密码"
+            :placeholder="PASSWORD_PLACEHOLDER"
           />
         </el-form-item>
       </el-form>

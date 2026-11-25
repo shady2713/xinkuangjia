@@ -15,7 +15,7 @@ import java.util.List;
 /**
  * 字典数据访问接口。
  *
- * @author 李杰
+ * @author shady
  */
 @Mapper
 public interface DictDataMapper extends BaseMapperX<DictDataDO> {

@@ -10,7 +10,7 @@ import java.util.Objects;
  *
  * @param inputStream   文件内容输入流（非空，由调用方关闭）
  * @param contentLength 文件总字节数，未知时为 {@code null}
- * @author shady2713
+ * @author shady
  */
 public record FileContentStream(InputStream inputStream, Long contentLength) implements AutoCloseable {
 

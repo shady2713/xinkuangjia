@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
 /**
  * {@link DashboardServiceImpl} 单元测试。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class DashboardServiceImplTest {

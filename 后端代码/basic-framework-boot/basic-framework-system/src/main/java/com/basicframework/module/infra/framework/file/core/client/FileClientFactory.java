@@ -5,7 +5,7 @@ import com.basicframework.module.infra.framework.file.core.enums.FileStorageEnum
 /**
  * 文件客户端工厂，用于按进程内标识获取和创建客户端。
  *
- * @author 李杰
+ * @author shady
  */
 public interface FileClientFactory {
 

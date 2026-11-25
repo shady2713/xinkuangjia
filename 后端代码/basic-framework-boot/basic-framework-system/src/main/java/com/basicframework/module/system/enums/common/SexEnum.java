@@ -1,16 +1,19 @@
 package com.basicframework.module.system.enums.common;
 
+import com.basicframework.framework.common.core.ArrayValuable;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+
+import java.util.Arrays;
 
 /**
  * 性别的枚举值
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor
-public enum SexEnum {
+public enum SexEnum implements ArrayValuable<Integer> {
 
     /** 男 */
     MALE(1),
@@ -19,9 +22,16 @@ public enum SexEnum {
     /** 未知 */
     UNKNOWN(0);
 
+    public static final Integer[] ARRAYS = Arrays.stream(values()).map(SexEnum::getSex).toArray(Integer[]::new);
+
     /**
      * 性别
      */
     private final Integer sex;
+
+    @Override
+    public Integer[] array() {
+        return ARRAYS;
+    }
 
 }

@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 2. 所有控制器 {@code @PreAuthorize} 声明的权限码均已在 {@code system_menu} 定义并绑定超级管理员角色；
  * 3. 所有业务模块错误码唯一且严格落在 {@link ServiceErrorCodeRange} 声明的模块区间内。</p>
  *
- * @author shady2713
+ * @author shady
  */
 class SchemaDoRbacParityTest {
 

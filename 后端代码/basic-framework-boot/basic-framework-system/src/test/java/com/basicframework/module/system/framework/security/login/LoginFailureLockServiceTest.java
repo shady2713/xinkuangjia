@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证登录失败原子计数、锁定、解锁、关闭开关以及 Redis 不可用时的隔离本地降级策略。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class LoginFailureLockServiceTest {

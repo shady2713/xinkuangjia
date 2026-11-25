@@ -20,7 +20,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOG
  * 两个维度都使用摘要键和带 TTL 的计数，成功登录后清零。锁定提示只返回剩余分钟数，
  * 不区分手机号是否已注册。Redis 不可用时的行为复用 {@link LoginAttemptStore} 的统一降级策略。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Slf4j
 @Service

@@ -6,6 +6,7 @@ import { CopyDocument, Delete, Download, Plus, Search, View } from '@element-plu
 import { ElMessage } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   deleteFileApi,
   deleteFileListApi,
@@ -51,6 +52,8 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -74,8 +77,12 @@ async function handlePreview(row: FileRecord) {
     return;
   }
   if (!row.id) return;
-  const blob = await getPrivateFileContentApi(row.id);
-  downloadBlob(blob, row.name || row.path?.split('/').pop() || `file-${row.id}`);
+  try {
+    const blob = await getPrivateFileContentApi(row.id);
+    downloadBlob(blob, row.name || row.path?.split('/').pop() || `file-${row.id}`);
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleCopyUrl(row: FileRecord) {
@@ -93,9 +100,13 @@ async function handleCopyUrl(row: FileRecord) {
 }
 
 async function handleDelete(row: FileRecord) {
-  await deleteFileApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteFileApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleBatchDelete() {
@@ -106,10 +117,14 @@ async function handleBatchDelete() {
     { title: '批量删除确认', confirmText: '确认删除' },
   );
   if (!confirmed) return;
-  await deleteFileListApi(ids);
-  ElMessage.success('批量删除成功');
-  selectedIds.value = [];
-  await loadList();
+  try {
+    await deleteFileListApi(ids);
+    ElMessage.success('批量删除成功');
+    selectedIds.value = [];
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 function onUploaded() {
@@ -154,7 +169,7 @@ onMounted(() => {
             <el-input
               v-model="query.type"
               placeholder="例如 image/png"
-              :maxlength="FIELD_LIMITS.SEARCH_KEYWORD"
+              :maxlength="FIELD_LIMITS.FILE_TYPE"
               clearable
             />
           </el-form-item>

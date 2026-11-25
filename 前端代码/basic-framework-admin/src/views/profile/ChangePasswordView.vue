@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   FIELD_LIMITS,
+  PASSWORD_PLACEHOLDER,
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
@@ -50,7 +51,7 @@ async function handleSubmit() {
     if (!changed) return;
     ElMessage.success('密码修改成功，请重新登录');
   } catch (error) {
-    if (!axios.isCancel(error)) throw error;
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -85,7 +86,7 @@ async function handleSubmit() {
             type="password"
             show-password
             :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-            placeholder="请输入 8~32 位含大小写字母及数字的新密码"
+            :placeholder="PASSWORD_PLACEHOLDER"
           />
         </el-form-item>
         <el-form-item label="确认新密码" prop="confirmPassword">

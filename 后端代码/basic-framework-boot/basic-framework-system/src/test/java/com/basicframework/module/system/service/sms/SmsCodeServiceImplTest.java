@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证极简 Redis/内存短信验证码服务的频控、单次原子消费及阿里云发送器委托。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class SmsCodeServiceImplTest {

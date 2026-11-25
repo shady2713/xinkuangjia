@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * 验证码的配置类
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false)
 @ImportAutoConfiguration(AjCaptchaAutoConfiguration.class) // 目的：解决 aj-captcha 针对 SpringBoot 3.X 自动配置不生效的问题

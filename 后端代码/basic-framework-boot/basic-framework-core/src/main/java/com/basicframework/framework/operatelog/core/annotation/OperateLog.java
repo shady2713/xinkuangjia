@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 /**
  * 操作审计日志注解，基于原生 Spring AOP 在业务方法成功返回后异步写入操作日志。
  *
- * @author 李杰
+ * @author shady
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)

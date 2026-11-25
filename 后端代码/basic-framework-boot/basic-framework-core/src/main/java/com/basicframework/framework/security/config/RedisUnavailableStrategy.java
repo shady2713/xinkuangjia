@@ -6,7 +6,7 @@ package com.basicframework.framework.security.config;
  * <p>登录失败锁定、短信登录限流和访问令牌空闲校验都依赖 Redis。策略只决定
  * Redis 读写异常时的行为，不改变正常情况下基于 Redis 的共享状态。</p>
  *
- * @author shady2713
+ * @author shady
  */
 public enum RedisUnavailableStrategy {
 

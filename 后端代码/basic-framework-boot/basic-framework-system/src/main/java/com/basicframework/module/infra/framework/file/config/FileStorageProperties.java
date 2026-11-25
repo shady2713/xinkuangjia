@@ -14,7 +14,7 @@ import java.util.Locale;
 /**
  * 统一文件存储配置属性，支持阿里云 OSS（生产推荐）与本地磁盘（开发/CI/断网内网兜底）一键切换。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.file")
 @Validated

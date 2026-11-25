@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 架构门禁反向夹具：跨业务模块直接依赖其他模块内部 Mapper 且使用无 {@code rollbackFor} 的 {@code @Transactional}。
  *
- * @author shady2713
+ * @author shady
  */
 public class ForbiddenCrossModuleAndUnqualifiedTxService {
 

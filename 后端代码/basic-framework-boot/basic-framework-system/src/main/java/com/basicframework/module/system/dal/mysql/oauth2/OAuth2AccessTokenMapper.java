@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * OAuth2AccessTokenMapper 数据访问接口，负责持久化查询与写入。
  *
- * @author 李杰
+ * @author shady
  */
 @Mapper
 public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO> {

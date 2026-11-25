@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 /**
  * 针对 MyBatis Plus 的 {@link DbType} 增强，维护 JDBC 产品名到方言枚举的映射。
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

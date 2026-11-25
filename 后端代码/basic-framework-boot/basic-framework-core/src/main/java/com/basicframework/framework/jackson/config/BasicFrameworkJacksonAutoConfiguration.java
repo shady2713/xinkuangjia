@@ -28,7 +28,7 @@ import java.time.LocalTime;
  * 2. 统一 LocalDate / LocalTime / LocalDateTime 的时间格式策略
  * 3. 初始化 JsonUtils，复用工程内统一的对象映射能力
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration(after = JacksonAutoConfiguration.class)
 @Slf4j

@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 {@link SoftDeleteUniqueInnerInterceptor} 对逻辑删除 UPDATE 语句追加主键消歧赋值的准确性。
  *
- * @author shady2713
+ * @author shady
  */
 class SoftDeleteUniqueInnerInterceptorTest {
 

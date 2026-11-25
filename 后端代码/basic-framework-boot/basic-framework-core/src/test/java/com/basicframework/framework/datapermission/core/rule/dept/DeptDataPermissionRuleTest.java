@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link DeptDataPermissionRule} 在全部权限、指定部门、仅本人及无权限四种边界下的 SQL 条件生成。
  *
- * @author shady2713
+ * @author shady
  */
 class DeptDataPermissionRuleTest {
 

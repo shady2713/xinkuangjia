@@ -14,7 +14,7 @@ import java.util.List;
  *
  * <p>业务层只依赖本接口，不感知文件客户端编号、数据库配置或具体存储实现。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public interface FileStorageService {
 

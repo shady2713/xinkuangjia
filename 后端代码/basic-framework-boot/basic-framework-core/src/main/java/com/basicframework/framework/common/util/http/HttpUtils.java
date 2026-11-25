@@ -22,7 +22,7 @@ import java.util.Map;
 /**
  * HTTP 工具类
  *
- * @author 李杰
+ * @author shady
  */
 public class HttpUtils {
 

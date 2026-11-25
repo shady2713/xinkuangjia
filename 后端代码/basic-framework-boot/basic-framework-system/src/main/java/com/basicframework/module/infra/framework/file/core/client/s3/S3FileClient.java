@@ -49,7 +49,7 @@ import java.util.List;
  *
  * <p>客户端初始化和刷新会替换 SDK 连接资源，应用关闭时必须调用 {@link #close()}。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public class S3FileClient extends AbstractFileClient<S3FileClientConfig> {
 

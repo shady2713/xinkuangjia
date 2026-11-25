@@ -5,7 +5,7 @@ import lombok.Getter;
 
 /**
  * 登录结果的枚举类
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

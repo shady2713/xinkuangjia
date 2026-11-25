@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 架构门禁反向夹具：漏写 {@code @PreAuthorize} 与 {@code @PermitAll} 的控制器端点。
  *
- * @author shady2713
+ * @author shady
  */
 @RestController
 public class ForbiddenUnprotectedEndpointController {

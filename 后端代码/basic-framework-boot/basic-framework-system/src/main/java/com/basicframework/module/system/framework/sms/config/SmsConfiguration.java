@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 极简短信配置类：仅绑定验证码频控与阿里云短信配置。
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({SmsCodeProperties.class, AliyunSmsProperties.class})

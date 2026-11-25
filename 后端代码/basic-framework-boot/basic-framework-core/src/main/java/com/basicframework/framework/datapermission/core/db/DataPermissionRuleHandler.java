@@ -18,7 +18,7 @@ import java.util.List;
  * <p>底层基于 MyBatis Plus 数据权限插件，在 SQL 执行前根据当前用户的数据权限动态追加过滤条件，
  * 确保查询结果只包含当前用户允许访问的数据。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @RequiredArgsConstructor
 public class DataPermissionRuleHandler implements MultiDataPermissionHandler {

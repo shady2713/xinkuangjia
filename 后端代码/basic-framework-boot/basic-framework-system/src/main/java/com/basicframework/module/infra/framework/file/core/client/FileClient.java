@@ -10,7 +10,7 @@ import java.util.List;
  *
  * 抽象不同存储实现的文件上传、删除、读取和预签名访问能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface FileClient extends AutoCloseable {
 

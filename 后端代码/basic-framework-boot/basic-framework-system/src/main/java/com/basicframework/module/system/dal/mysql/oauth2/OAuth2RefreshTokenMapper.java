@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Mapper;
 /**
  * OAuth2RefreshTokenMapper 数据访问接口，负责持久化查询与写入。
  *
- * @author 李杰
+ * @author shady
  */
 @Mapper
 public interface OAuth2RefreshTokenMapper extends BaseMapperX<OAuth2RefreshTokenDO> {

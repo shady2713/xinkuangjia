@@ -14,7 +14,7 @@ import java.util.List;
  * <p>
  * 提供客户端配置维护、分页查询和授权参数校验能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface OAuth2ClientService {
 

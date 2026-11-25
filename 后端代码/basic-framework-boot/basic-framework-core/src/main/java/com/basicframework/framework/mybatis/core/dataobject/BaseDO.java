@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 /**
  * MyBatis 基础实体对象，提供审计字段与软删除标记。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public abstract class BaseDO implements Serializable {

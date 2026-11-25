@@ -9,7 +9,7 @@ import jakarta.validation.ConstraintValidatorContext;
 /**
  * 邮箱格式校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class EmailExValidator implements ConstraintValidator<EmailEx, String> {
 

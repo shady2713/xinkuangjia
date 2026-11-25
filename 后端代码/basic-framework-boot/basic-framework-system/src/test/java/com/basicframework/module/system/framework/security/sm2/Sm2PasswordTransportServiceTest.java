@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 SM2 密码载荷的时间窗和 nonce 防重放规则。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class Sm2PasswordTransportServiceTest {

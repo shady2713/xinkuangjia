@@ -18,7 +18,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * 管理后台 - 概览统计控制器。
  *
- * @author shady2713
+ * @author shady
  */
 @Tag(name = "管理后台 - 概览统计")
 @RestController

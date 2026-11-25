@@ -7,7 +7,7 @@ import org.slf4j.MDC;
  *
  * <p>基于 SLF4J {@link MDC} 读取当前线程的 {@code traceId}，未设置时返回空串。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public final class TracerUtils {
 

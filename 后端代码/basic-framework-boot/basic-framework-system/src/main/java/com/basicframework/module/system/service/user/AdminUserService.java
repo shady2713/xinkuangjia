@@ -20,7 +20,7 @@ import java.util.Map;
 /**
  * 后台用户 Service 接口
  *
- * @author 李杰
+ * @author shady
  */
 public interface AdminUserService {
 

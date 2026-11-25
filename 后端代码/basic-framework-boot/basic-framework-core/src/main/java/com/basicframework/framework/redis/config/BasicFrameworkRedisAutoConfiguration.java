@@ -16,7 +16,7 @@ import org.springframework.data.redis.serializer.RedisSerializer;
  * <p>该配置创建项目内统一使用的 {@link RedisTemplate}，并统一采用 JSON 序列化规则，
  * 避免不同模块手工配置导致的序列化格式不一致。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration(before = RedisAutoConfiguration.class)
 public class BasicFrameworkRedisAutoConfiguration {

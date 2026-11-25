@@ -4,15 +4,18 @@ import { onBeforeUnmount, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { resetPasswordBySmsApi, sendSmsCodeApi } from '@/api/auth';
+import { notifyUnhandledError } from '@/api/request';
 import CaptchaVerify from '@/components/CaptchaVerify.vue';
 import { getAppConfig } from '@/config/app';
 import { SmsSceneEnum } from '@/constants/enums';
 import {
   FIELD_LIMITS,
   mobileRule,
+  PASSWORD_PLACEHOLDER,
   passwordComplexityRule,
   REGEX_PATTERNS,
   requiredRule,
+  smsCodeRule,
 } from '@/constants/validation';
 import { encryptPassword } from '@/utils/sm2';
 
@@ -36,7 +39,7 @@ const form = reactive({
 
 const rules: FormRules = {
   mobile: [requiredRule('手机号'), mobileRule()],
-  code: [requiredRule('短信验证码')],
+  code: [requiredRule('短信验证码'), smsCodeRule()],
   password: [requiredRule('新密码'), passwordComplexityRule()],
   confirmPassword: [
     requiredRule('确认新密码'),
@@ -82,6 +85,8 @@ async function doSendCode(captchaVerification?: string) {
     });
     ElMessage.success('验证码已发送');
     startCountdown();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     sendingSms.value = false;
   }
@@ -113,6 +118,8 @@ async function handleSubmit() {
     });
     ElMessage.success('密码重置成功，请重新登录');
     await router.replace({ path: '/login', query: { platform: 'business' } });
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -164,7 +171,7 @@ async function handleSubmit() {
                 class="flex-1"
               />
               <el-button :disabled="countdown > 0 || sendingSms" @click="handleSendCode">
-                {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+                {{ countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
               </el-button>
             </div>
           </el-form-item>
@@ -174,7 +181,7 @@ async function handleSubmit() {
               type="password"
               show-password
               :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-              placeholder="请输入 8~32 位含大小写字母及数字的新密码"
+              :placeholder="PASSWORD_PLACEHOLDER"
             />
           </el-form-item>
           <el-form-item prop="confirmPassword">
@@ -183,7 +190,7 @@ async function handleSubmit() {
               type="password"
               show-password
               :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-              placeholder="请再次确认新密码"
+              placeholder="请再次输入新密码"
             />
           </el-form-item>
           <el-button type="primary" class="w-full !font-medium" size="large" :loading="loading" @click="handleSubmit">

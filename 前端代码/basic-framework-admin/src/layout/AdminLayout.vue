@@ -254,9 +254,9 @@ function syncFullscreenState() {
 
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
-    void document.documentElement.requestFullscreen?.();
+    void document.documentElement.requestFullscreen?.().catch(() => {});
   } else {
-    void document.exitFullscreen?.();
+    void document.exitFullscreen?.().catch(() => {});
   }
 }
 
@@ -676,6 +676,7 @@ onBeforeUnmount(() => {
           type="password"
           show-password
           size="large"
+          :maxlength="32"
           placeholder="请输入本次锁屏密码"
           @keyup.enter="submitLockScreen"
         />

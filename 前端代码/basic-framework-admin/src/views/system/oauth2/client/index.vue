@@ -10,6 +10,7 @@ import {
 } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   createOAuth2ClientApi,
   deleteOAuth2ClientApi,
@@ -28,6 +29,7 @@ import {
   deleteConfirmMessage,
   FIELD_LIMITS,
   maxLenRule,
+  requiredNumberRule,
   requiredRule,
 } from '@/constants/validation';
 import { confirmCurrentSession } from '@/utils/confirm';
@@ -92,6 +94,17 @@ const formRules: FormRules = {
     requiredRule('应用名称'),
     maxLenRule('应用名称', FIELD_LIMITS.OAUTH_NAME),
   ],
+  accessTokenValiditySeconds: [requiredNumberRule('访问令牌有效期')],
+  refreshTokenValiditySeconds: [requiredNumberRule('刷新令牌有效期')],
+  authorizedGrantTypes: [
+    {
+      required: true,
+      type: 'array',
+      min: 1,
+      message: '请至少选择一个授权类型',
+      trigger: 'change',
+    },
+  ],
   description: [maxLenRule('应用描述', FIELD_LIMITS.OAUTH_DESCRIPTION)],
 };
 
@@ -106,6 +119,8 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -139,22 +154,29 @@ async function openForm(row?: OAuth2ClientItem) {
   historicalGrantTypes.value = [];
   formVisible.value = true;
   if (row?.id) {
-    const detail = await getOAuth2ClientApi(row.id);
-    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
-    historicalGrantTypes.value = (detail.authorizedGrantTypes ?? []).filter((type) => type !== OPEN_GRANT_TYPE);
-    Object.assign(form, {
-      id: detail.id,
-      clientId: detail.clientId,
-      secret: '',
-      name: detail.name,
-      description: detail.description || '',
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-      accessTokenValiditySeconds: detail.accessTokenValiditySeconds ?? 1800,
-      refreshTokenValiditySeconds: detail.refreshTokenValiditySeconds ?? 2592000,
-      authorizedGrantTypes: detail.authorizedGrantTypes ?? [OPEN_GRANT_TYPE],
-      scopesText: (detail.scopes ?? []).join(','),
-    });
-    formReady.value = true;
+    try {
+      const detail = await getOAuth2ClientApi(row.id);
+      if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
+      historicalGrantTypes.value = (detail.authorizedGrantTypes ?? []).filter((type) => type !== OPEN_GRANT_TYPE);
+      Object.assign(form, {
+        id: detail.id,
+        clientId: detail.clientId,
+        secret: '',
+        name: detail.name,
+        description: detail.description || '',
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+        accessTokenValiditySeconds: detail.accessTokenValiditySeconds ?? 1800,
+        refreshTokenValiditySeconds: detail.refreshTokenValiditySeconds ?? 2592000,
+        authorizedGrantTypes: detail.authorizedGrantTypes ?? [OPEN_GRANT_TYPE],
+        scopesText: (detail.scopes ?? []).join(','),
+      });
+      formReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === formLoad) {
+        formVisible.value = false;
+      }
+    }
   }
 }
 
@@ -188,15 +210,21 @@ async function submitForm() {
     ElMessage.success(form.id ? '修改成功' : '新增成功');
     formVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     formSubmitting.value = false;
   }
 }
 
 async function handleDelete(row: OAuth2ClientItem) {
-  await deleteOAuth2ClientApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteOAuth2ClientApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleBatchDelete() {
@@ -207,10 +235,14 @@ async function handleBatchDelete() {
     { title: '批量删除确认', confirmText: '确认删除' },
   );
   if (!confirmed) return;
-  await deleteOAuth2ClientListApi(ids);
-  ElMessage.success('批量删除成功');
-  selectedIds.value = [];
-  await loadList();
+  try {
+    await deleteOAuth2ClientListApi(ids);
+    ElMessage.success('批量删除成功');
+    selectedIds.value = [];
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 onMounted(() => {
@@ -376,13 +408,23 @@ onMounted(() => {
             <el-radio :value="CommonStatusEnum.DISABLE">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="访问令牌有效期(秒)">
-          <el-input-number v-model="form.accessTokenValiditySeconds" :min="60" class="w-full" />
+        <el-form-item label="访问令牌有效期(秒)" prop="accessTokenValiditySeconds">
+          <el-input-number
+            v-model="form.accessTokenValiditySeconds"
+            :min="FIELD_LIMITS.OAUTH_TOKEN_VALIDITY_MIN"
+            :max="FIELD_LIMITS.OAUTH_TOKEN_VALIDITY_MAX"
+            class="w-full"
+          />
         </el-form-item>
-        <el-form-item label="刷新令牌有效期(秒)">
-          <el-input-number v-model="form.refreshTokenValiditySeconds" :min="60" class="w-full" />
+        <el-form-item label="刷新令牌有效期(秒)" prop="refreshTokenValiditySeconds">
+          <el-input-number
+            v-model="form.refreshTokenValiditySeconds"
+            :min="FIELD_LIMITS.OAUTH_TOKEN_VALIDITY_MIN"
+            :max="FIELD_LIMITS.OAUTH_TOKEN_VALIDITY_MAX"
+            class="w-full"
+          />
         </el-form-item>
-        <el-form-item label="授权类型">
+        <el-form-item label="授权类型" prop="authorizedGrantTypes">
           <el-select v-model="form.authorizedGrantTypes" multiple class="w-full" placeholder="请选择授权类型">
             <el-option label="客户端模式 (client_credentials)" :value="OPEN_GRANT_TYPE" />
             <el-option
@@ -405,7 +447,7 @@ onMounted(() => {
         <el-form-item label="授权范围">
           <el-input
             v-model="form.scopesText"
-            :maxlength="FIELD_LIMITS.OAUTH_DESCRIPTION"
+            :maxlength="FIELD_LIMITS.OAUTH_SCOPES"
             placeholder="多个范围以逗号分隔，例如 user_info,read"
           />
         </el-form-item>

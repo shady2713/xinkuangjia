@@ -32,7 +32,7 @@ import static com.basicframework.framework.common.exception.util.ServiceExceptio
 /**
  * 极简短信验证码服务：基于 Redis TTL（无 Redis 时单机内存兜底）+ 阿里云短信发送，不再依赖 4 张短信数据库表。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Validated

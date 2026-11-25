@@ -5,7 +5,7 @@ import com.basicframework.framework.common.exception.ErrorCode;
 /**
  * Infra 错误码枚举类（1-001-000-000 段）。
  *
- * @author 李杰
+ * @author shady
  */
 public interface ErrorCodeConstants {
 
@@ -20,6 +20,6 @@ public interface ErrorCodeConstants {
     ErrorCode FILE_PRESIGN_TICKET_INVALID = new ErrorCode(1_001_003_007, "上传凭证无效或已过期，请重新获取上传地址");
     ErrorCode FILE_ACCESS_DENIED = new ErrorCode(1_001_003_008, "无权访问该私有文件");
     ErrorCode FILE_PRESIGN_EXPIRATION_INVALID = new ErrorCode(1_001_003_009, "临时访问地址有效期必须在 60 至 3600 秒之间");
-    ErrorCode FILE_PRIVATE_SIGNING_UNSUPPORTED = new ErrorCode(1_001_003_010, "Local file storage cannot sign private GET URLs; use /infra/file/private/content");
+    ErrorCode FILE_PRIVATE_SIGNING_UNSUPPORTED = new ErrorCode(1_001_003_010, "当前存储模式不支持生成私有文件临时签名链接");
 
 }

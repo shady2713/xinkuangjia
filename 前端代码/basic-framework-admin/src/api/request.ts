@@ -53,6 +53,51 @@ interface RetryableRequestConfig extends InternalAxiosRequestConfig {
 
 interface SessionBoundConfig extends AxiosRequestConfig {
   _sessionId?: string | null;
+  _silent?: boolean;
+}
+
+interface HandledError extends Error {
+  _handled?: boolean;
+}
+
+const HTTP_STATUS_MESSAGES: Record<number, string> = {
+  400: '请求参数不正确',
+  401: '登录状态已过期，请重新登录',
+  403: '没有该操作权限',
+  404: '请求的资源不存在',
+  405: '请求方法不正确',
+  408: '请求超时，请稍后重试',
+  413: '上传文件或请求内容过大',
+  429: '请求过于频繁，请稍后重试',
+  500: '系统异常，请稍后重试',
+  502: '服务网关异常，请稍后重试',
+  503: '服务暂不可用，请稍后重试',
+  504: '服务响应超时，请稍后重试',
+};
+
+function showErrorToast(message: string): void {
+  ElMessage.error({ message, grouping: true });
+}
+
+function createHandledError(message: string, handled = true): HandledError {
+  const err: HandledError = new Error(message);
+  if (handled) {
+    err._handled = true;
+  }
+  return err;
+}
+
+/**
+ * 对尚未由拦截器弹出提示的非取消异常（如本地 SM2 加密失败）补充统一中文错误提示。
+ */
+export function notifyUnhandledError(error: unknown, fallback = '操作失败，请稍后重试'): void {
+  if (axios.isCancel(error)) {
+    return;
+  }
+  if (error && typeof error === 'object' && (error as HandledError)._handled) {
+    return;
+  }
+  showErrorToast(resolveErrorMessage(error, fallback));
 }
 
 const { apiBaseUrl } = getAppConfig();
@@ -221,9 +266,16 @@ export function resolveErrorMessage(error: unknown, fallback = '请求失败，�
     if (typeof serverMsg === 'string' && serverMsg.trim()) {
       return serverMsg;
     }
+    const status = err.response?.status;
+    if (typeof status === 'number' && HTTP_STATUS_MESSAGES[status]) {
+      return HTTP_STATUS_MESSAGES[status];
+    }
     if (typeof err.message === 'string' && err.message.trim()) {
       if (err.message.includes('timeout')) return '请求超时，请稍后重试';
       if (err.message.includes('Network Error')) return '网络连接异常，请检查后端服务';
+      if (/^Request failed with status code \d+$/i.test(err.message.trim())) {
+        return fallback;
+      }
       return err.message;
     }
   }
@@ -248,22 +300,36 @@ async function handleUnauthorized(
   assertCurrent(originalConfig);
   const sessionId = originalConfig._sessionId;
   // A request made while signed out does not own a session or its login navigation.
-  if (!sessionId) throw new Error('请先登录');
+  if (!sessionId) {
+    const msg = '请先登录';
+    if (!originalConfig._silent) showErrorToast(msg);
+    throw createHandledError(msg, !originalConfig._silent);
+  }
   if (originalConfig._retried) {
     if (getAccessToken() === originalConfig._bearer) redirectToLogin(sessionId);
-    return Promise.reject(new Error('登录状态已过期，请重新登录'));
+    const msg = '登录状态已过期，请重新登录';
+    if (!originalConfig._silent) showErrorToast(msg);
+    return Promise.reject(createHandledError(msg, !originalConfig._silent));
   }
   originalConfig._retried = true;
 
   // A late 401 for the previous bearer reuses the already rotated token without refreshing.
   let newToken: string | null = getAccessToken() || null;
   if (!newToken || newToken === originalConfig._bearer) {
-    newToken = await refreshFor(sessionId, originalConfig._bearer);
+    try {
+      newToken = await refreshFor(sessionId, originalConfig._bearer);
+    } catch (error) {
+      const msg = resolveErrorMessage(error, '暂时无法刷新会话，请稍后重试');
+      if (!originalConfig._silent) showErrorToast(msg);
+      return Promise.reject(createHandledError(msg, !originalConfig._silent));
+    }
     assertCurrent(originalConfig);
   }
   if (!newToken) {
     redirectToLogin(sessionId);
-    return Promise.reject(new Error('登录状态已过期，请重新登录'));
+    const msg = '登录状态已过期，请重新登录';
+    if (!originalConfig._silent) showErrorToast(msg);
+    return Promise.reject(createHandledError(msg, !originalConfig._silent));
   }
   return service(originalConfig);
 }
@@ -280,8 +346,8 @@ service.interceptors.response.use(
           return handleUnauthorized(config);
         }
         const msg = jsonErr.msg || '导出失败';
-        if (!config._silent) ElMessage.error(msg);
-        return Promise.reject(new Error(msg));
+        if (!config._silent) showErrorToast(msg);
+        return Promise.reject(createHandledError(msg, !config._silent));
       }
       return response.data;
     }
@@ -295,8 +361,8 @@ service.interceptors.response.use(
         return handleUnauthorized(config);
       }
       const msg = body.msg || '操作失败';
-      if (!config._silent) ElMessage.error(msg);
-      return Promise.reject(new Error(msg));
+      if (!config._silent) showErrorToast(msg);
+      return Promise.reject(createHandledError(msg, !config._silent));
     }
     return response.data;
   },
@@ -311,11 +377,25 @@ service.interceptors.response.use(
     if (error.response?.status === 401 && config) {
       return handleUnauthorized(config);
     }
+    if (error.response?.data instanceof Blob) {
+      const blobErr = await unwrapBlobJsonError(error.response);
+      if (config) {
+        assertCurrent(config);
+      }
+      if (blobErr && blobErr.code !== 0) {
+        if (blobErr.code === 401 && config) {
+          return handleUnauthorized(config);
+        }
+        const blobMsg = blobErr.msg || resolveErrorMessage(error, '导出失败');
+        if (!config?._silent) showErrorToast(blobMsg);
+        return Promise.reject(createHandledError(blobMsg, !config?._silent));
+      }
+    }
     const msg = resolveErrorMessage(error);
     if (!config?._silent) {
-      ElMessage.error(msg);
+      showErrorToast(msg);
     }
-    return Promise.reject(new Error(msg));
+    return Promise.reject(createHandledError(msg, !config?._silent));
   },
 );
 
