@@ -17,7 +17,7 @@ import static com.basicframework.module.system.dal.redis.RedisKeyConstants.OAUTH
 /**
  * {@link OAuth2AccessTokenDO} 会话空闲活动标记的 RedisDAO；鉴权以数据库令牌记录为准，不缓存令牌实体。
  *
- * @author 李杰
+ * @author shady
  */
 @Repository
 public class OAuth2AccessTokenRedisDAO {

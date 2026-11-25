@@ -2,7 +2,7 @@ package com.basicframework.module.system.enums;
 
 /**
  * System 字典类型枚举类
- * @author 李杰
+ * @author shady
  */
 public interface DictTypeConstants {
 

@@ -13,7 +13,7 @@ import static com.basicframework.framework.security.core.util.SecurityFrameworkU
 /**
  * 默认的 {@link SecurityFrameworkService} 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @AllArgsConstructor
 public class SecurityFrameworkServiceImpl implements SecurityFrameworkService {

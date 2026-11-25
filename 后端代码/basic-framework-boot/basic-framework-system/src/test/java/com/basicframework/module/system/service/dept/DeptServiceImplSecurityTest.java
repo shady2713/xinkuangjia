@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link DeptServiceImpl} 的根部门创建权限、平台隔离与活跃用户删除阻断逻辑。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class DeptServiceImplSecurityTest {

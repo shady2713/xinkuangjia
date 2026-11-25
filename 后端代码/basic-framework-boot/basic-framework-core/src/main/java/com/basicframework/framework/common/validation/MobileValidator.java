@@ -9,7 +9,7 @@ import jakarta.validation.ConstraintValidatorContext;
 /**
  * 手机号格式校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class MobileValidator implements ConstraintValidator<Mobile, String> {
 

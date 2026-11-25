@@ -71,15 +71,45 @@ describe('request error helpers', () => {
     expect(await unwrapBlobJsonError(resp)).toBeNull();
   });
 
-  it('resolves user-facing error messages from server response or network error', () => {
+  it('resolves user-facing error messages from server response, HTTP status, or network error', () => {
     expect(
       resolveErrorMessage({ response: { data: { msg: '账号已锁定' } } }),
     ).toBe('账号已锁定');
+    expect(
+      resolveErrorMessage({ response: { status: 413 }, message: 'Request failed with status code 413' }),
+    ).toBe('上传文件或请求内容过大');
+    expect(
+      resolveErrorMessage({ response: { status: 502 }, message: 'Request failed with status code 502' }),
+    ).toBe('服务网关异常，请稍后重试');
     expect(resolveErrorMessage({ message: 'timeout of 30000ms exceeded' })).toBe(
       '请求超时，请稍后重试',
     );
     expect(resolveErrorMessage({ message: 'Network Error' })).toBe(
       '网络连接异常，请检查后端服务',
+    );
+  });
+
+  it('unwraps JSON error returned inside a non-2xx Blob response', async () => {
+    const payload = JSON.stringify({ code: 403, data: null, msg: '无权下载该私有文件' });
+    const adapter: AxiosAdapter = async (config) => {
+      const response: AxiosResponse = {
+        data: new Blob([payload], { type: 'application/json' }),
+        status: 403,
+        statusText: 'Forbidden',
+        headers: { 'content-type': 'application/json;charset=UTF-8' },
+        config,
+      };
+      return Promise.reject(
+        Object.assign(new Error('Request failed with status code 403'), {
+          isAxiosError: true,
+          config,
+          response,
+        }),
+      );
+    };
+
+    await expect(request.download('/synthetic/private', { adapter })).rejects.toThrow(
+      '无权下载该私有文件',
     );
   });
 });

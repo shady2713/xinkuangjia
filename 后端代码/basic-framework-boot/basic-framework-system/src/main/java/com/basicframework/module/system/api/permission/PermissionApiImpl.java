@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 /**
  * 权限校验核心 SPI 实现，供 core 层安全鉴权与部门数据权限引擎调用。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 public class PermissionApiImpl implements PermissionCommonApi {

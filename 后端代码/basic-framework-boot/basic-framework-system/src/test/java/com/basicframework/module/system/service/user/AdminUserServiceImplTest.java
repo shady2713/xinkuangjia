@@ -58,7 +58,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证密码存储格式迁移、首次改密标志和密码策略落点。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceImplTest {

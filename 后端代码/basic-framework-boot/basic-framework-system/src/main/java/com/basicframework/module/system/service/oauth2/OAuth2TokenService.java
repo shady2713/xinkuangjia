@@ -12,7 +12,7 @@ import java.util.List;
  * <p>
  * 提供访问令牌、刷新令牌的签发、校验、刷新、撤销和分页查询能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface OAuth2TokenService {
 

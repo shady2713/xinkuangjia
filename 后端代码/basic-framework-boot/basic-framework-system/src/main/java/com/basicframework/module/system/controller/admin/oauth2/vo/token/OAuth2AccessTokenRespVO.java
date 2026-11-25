@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
  * <p>仅输出令牌记录编号与归属元数据，禁止在管理端列表暴露明文 {@code accessToken} 或 {@code refreshToken}，
  * 防止管理员直接劫持他人在线会话。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 访问令牌 Response VO")
 @Data

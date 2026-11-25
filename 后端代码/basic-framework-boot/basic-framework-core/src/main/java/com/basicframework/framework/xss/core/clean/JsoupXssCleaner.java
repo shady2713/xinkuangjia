@@ -6,7 +6,7 @@ import org.jsoup.safety.Safelist;
 
 /**
  * 基于 Jsoup 的 XSS 过滤器。
- * @author 李杰
+ * @author shady
  */
 public class JsoupXssCleaner implements XssCleaner {
 

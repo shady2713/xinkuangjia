@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param tokenType 令牌类型
  * @param expiresIn 访问令牌剩余有效秒数
  * @param scope 实际授权范围，使用空格分隔
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "开放接口 - OAuth2 客户端模式令牌 Response VO")
 public record OAuth2OpenTokenRespVO(

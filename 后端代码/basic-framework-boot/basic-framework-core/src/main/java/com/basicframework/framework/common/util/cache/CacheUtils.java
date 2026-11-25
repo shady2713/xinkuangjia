@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Cache 工具类
  *
- * @author 李杰
+ * @author shady
  */
 public final class CacheUtils {
 

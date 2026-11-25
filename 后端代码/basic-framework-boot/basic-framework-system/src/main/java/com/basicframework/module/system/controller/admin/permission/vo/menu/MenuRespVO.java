@@ -3,15 +3,12 @@ package com.basicframework.module.system.controller.admin.permission.vo.menu;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 
 /**
  * MenuRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 菜单信息 Response VO")
 @Data
@@ -27,15 +24,12 @@ public class MenuRespVO {
      * 菜单名称。
      */
     @Schema(description = "菜单名称", requiredMode = Schema.RequiredMode.REQUIRED, example = "系统管理")
-    @NotBlank(message = "菜单名称不能为空")
-    @Size(max = 50, message = "菜单名称长度不能超过50个字符")
     private String name;
 
     /**
      * 权限标识,仅菜单类型为按钮时，才需要传递。
      */
     @Schema(description = "权限标识,仅菜单类型为按钮时，才需要传递", example = "sys:menu:add")
-    @Size(max = 100)
     private String permission;
 
     /**
@@ -48,28 +42,24 @@ public class MenuRespVO {
      * 类型，参见 MenuTypeEnum 枚举类。
      */
     @Schema(description = "类型，参见 MenuTypeEnum 枚举类", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
-    @NotNull(message = "菜单类型不能为空")
     private Integer type;
 
     /**
      * 显示顺序。
      */
     @Schema(description = "显示顺序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
-    @NotNull(message = "显示顺序不能为空")
     private Integer sort;
 
     /**
      * 父菜单 ID。
      */
     @Schema(description = "父菜单 ID", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
-    @NotNull(message = "父菜单 ID 不能为空")
     private Long parentId;
 
     /**
      * 路由地址,仅菜单类型为菜单或者目录时，才需要传。
      */
     @Schema(description = "路由地址,仅菜单类型为菜单或者目录时，才需要传", example = "post")
-    @Size(max = 200, message = "路由地址不能超过200个字符")
     private String path;
 
     /**
@@ -82,7 +72,6 @@ public class MenuRespVO {
      * 组件路径,仅菜单类型为菜单时，才需要传。
      */
     @Schema(description = "组件路径,仅菜单类型为菜单时，才需要传", example = "system/post/index")
-    @Size(max = 200, message = "组件路径不能超过255个字符")
     private String component;
 
     /**
@@ -95,7 +84,6 @@ public class MenuRespVO {
      * 状态,见 CommonStatusEnum 枚举。
      */
     @Schema(description = "状态,见 CommonStatusEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
-    @NotNull(message = "状态不能为空")
     private Integer status;
 
     /**

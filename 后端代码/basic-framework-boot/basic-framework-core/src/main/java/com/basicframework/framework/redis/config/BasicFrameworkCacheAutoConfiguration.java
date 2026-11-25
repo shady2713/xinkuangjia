@@ -23,7 +23,7 @@ import static com.basicframework.framework.redis.config.BasicFrameworkRedisAutoC
 
 /**
  * Cache 配置类，基于 Redis 实现
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @EnableConfigurationProperties({CacheProperties.class, BasicFrameworkCacheProperties.class})

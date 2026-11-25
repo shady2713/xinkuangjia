@@ -14,7 +14,7 @@ import java.util.List;
  *
  * <p>聚合系统用户、部门、角色、字典、近 7 日登录与操作趋势及最新动态，作为通用统计页基座数据结构。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Schema(description = "管理后台 - 概览统计摘要 Response VO")
 @Data

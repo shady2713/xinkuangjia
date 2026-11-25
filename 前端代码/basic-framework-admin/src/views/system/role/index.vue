@@ -18,6 +18,7 @@ import {
 } from 'element-plus';
 import { nextTick, onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import { type DeptSimple, getSimpleDeptListApi } from '@/api/system/dept';
 import { getSimpleMenuListApi, type MenuSimple } from '@/api/system/menu';
 import {
@@ -48,6 +49,7 @@ import {
   deleteConfirmMessage,
   FIELD_LIMITS,
   maxLenRule,
+  requiredNumberRule,
   requiredRule,
 } from '@/constants/validation';
 import { confirmCurrentSession } from '@/utils/confirm';
@@ -88,6 +90,7 @@ const form = reactive({
 const formRules: FormRules = {
   name: [requiredRule('角色名称'), maxLenRule('角色名称', FIELD_LIMITS.ROLE_NAME)],
   code: [requiredRule('角色标识'), maxLenRule('角色标识', FIELD_LIMITS.ROLE_CODE)],
+  sort: [requiredNumberRule('显示顺序')],
   remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
 };
 
@@ -131,6 +134,8 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -165,17 +170,24 @@ async function openForm(row?: RoleItem) {
   });
   formVisible.value = true;
   if (row?.id) {
-    const detail = await getRoleApi(row.id);
-    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(form, {
-      id: detail.id,
-      name: detail.name,
-      code: detail.code,
-      sort: detail.sort ?? 0,
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-      remark: detail.remark || '',
-    });
-    formReady.value = true;
+    try {
+      const detail = await getRoleApi(row.id);
+      if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(form, {
+        id: detail.id,
+        name: detail.name,
+        code: detail.code,
+        sort: detail.sort ?? 0,
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+        remark: detail.remark || '',
+      });
+      formReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === formLoad) {
+        formVisible.value = false;
+      }
+    }
   }
 }
 
@@ -201,15 +213,21 @@ async function submitForm() {
     ElMessage.success(form.id ? '修改成功' : '新增成功');
     formVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     formSubmitting.value = false;
   }
 }
 
 async function handleDelete(row: RoleItem) {
-  await deleteRoleApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteRoleApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleBatchDelete() {
@@ -220,10 +238,14 @@ async function handleBatchDelete() {
     { title: '批量删除确认', confirmText: '确认删除' },
   );
   if (!confirmed) return;
-  await deleteRoleListApi(ids);
-  ElMessage.success('批量删除成功');
-  selectedIds.value = [];
-  await loadList();
+  try {
+    await deleteRoleListApi(ids);
+    ElMessage.success('批量删除成功');
+    selectedIds.value = [];
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 async function openMenuDialog(row: RoleItem) {
@@ -234,24 +256,31 @@ async function openMenuDialog(row: RoleItem) {
   menuTreeData.value = [];
   currentRole.value = row;
   menuDialogVisible.value = true;
-  const [menus, checkedIds] = await Promise.all([
-    getSimpleMenuListApi(),
-    getRoleMenuListApi(row.id),
-  ]);
-  if (load !== menuLoad || !menuDialogVisible.value || !owner || getSessionId() !== owner) return;
-  const parentIds = new Set(menus.map((m: MenuSimple) => String(m.parentId)));
-  menuTreeData.value = handleTree(
-    menus as { id: number | string; parentId?: number | string }[],
-  );
-  await nextTick();
-  if (load !== menuLoad || !menuDialogVisible.value || !menuTreeRef.value || getSessionId() !== owner) return;
-  const leafIds = checkedIds.filter((id) => !parentIds.has(String(id)));
-  menuTreeRef.value.setCheckedKeys(leafIds);
-  originalMenuIds = checkedIds;
-  initialTreeIds = new Set(treeMenuSelection().map(String));
-  clearAllMenus = false;
-  menuOwner = owner;
-  menuReady.value = true;
+  try {
+    const [menus, checkedIds] = await Promise.all([
+      getSimpleMenuListApi(),
+      getRoleMenuListApi(row.id),
+    ]);
+    if (load !== menuLoad || !menuDialogVisible.value || !owner || getSessionId() !== owner) return;
+    const parentIds = new Set(menus.map((m: MenuSimple) => String(m.parentId)));
+    menuTreeData.value = handleTree(
+      menus as { id: number | string; parentId?: number | string }[],
+    );
+    await nextTick();
+    if (load !== menuLoad || !menuDialogVisible.value || !menuTreeRef.value || getSessionId() !== owner) return;
+    const leafIds = checkedIds.filter((id) => !parentIds.has(String(id)));
+    menuTreeRef.value.setCheckedKeys(leafIds);
+    originalMenuIds = checkedIds;
+    initialTreeIds = new Set(treeMenuSelection().map(String));
+    clearAllMenus = false;
+    menuOwner = owner;
+    menuReady.value = true;
+  } catch (error) {
+    notifyUnhandledError(error);
+    if (load === menuLoad) {
+      menuDialogVisible.value = false;
+    }
+  }
 }
 
 function treeMenuSelection(): (number | string)[] {
@@ -286,6 +315,8 @@ async function submitAssignMenu() {
     });
     ElMessage.success('菜单权限已更新');
     menuDialogVisible.value = false;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     menuSubmitting.value = false;
   }
@@ -302,26 +333,37 @@ async function openScopeDialog(row: RoleItem) {
   scopeForm.dataScope = row.dataScope ?? SystemDataScopeEnum.ALL;
   scopeForm.dataScopeDeptIds = [...(row.dataScopeDeptIds ?? [])];
   scopeDialogVisible.value = true;
-  const depts: DeptSimple[] = await getSimpleDeptListApi();
-  if (load !== scopeLoad || !scopeDialogVisible.value || !owner || getSessionId() !== owner) return;
-  deptTreeData.value = handleTree(
-    depts as { id: number | string; parentId?: number | string }[],
-  );
-  await nextTick();
-  if (load !== scopeLoad || !scopeDialogVisible.value || !deptTreeRef.value || getSessionId() !== owner) return;
-  deptTreeRef.value.setCheckedKeys(scopeForm.dataScopeDeptIds as (number | string)[]);
-  scopeOwner = owner;
-  scopeReady.value = true;
+  try {
+    const depts: DeptSimple[] = await getSimpleDeptListApi();
+    if (load !== scopeLoad || !scopeDialogVisible.value || !owner || getSessionId() !== owner) return;
+    deptTreeData.value = handleTree(
+      depts as { id: number | string; parentId?: number | string }[],
+    );
+    await nextTick();
+    if (load !== scopeLoad || !scopeDialogVisible.value || !deptTreeRef.value || getSessionId() !== owner) return;
+    deptTreeRef.value.setCheckedKeys(scopeForm.dataScopeDeptIds as (number | string)[]);
+    scopeOwner = owner;
+    scopeReady.value = true;
+  } catch (error) {
+    notifyUnhandledError(error);
+    if (load === scopeLoad) {
+      scopeDialogVisible.value = false;
+    }
+  }
 }
 
 async function submitDataScope() {
   if (!scopeReady.value || scopeSubmitting.value || !scopeForm.roleId || getSessionId() !== scopeOwner) return;
+  const deptIds =
+    scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM
+      ? ((deptTreeRef.value?.getCheckedKeys() as (number | string)[]) ?? [])
+      : [];
+  if (scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM && deptIds.length === 0) {
+    ElMessage.warning('请至少选择一个指定部门');
+    return;
+  }
   scopeSubmitting.value = true;
   try {
-    const deptIds =
-      scopeForm.dataScope === SystemDataScopeEnum.DEPT_CUSTOM
-        ? ((deptTreeRef.value?.getCheckedKeys() as (number | string)[]) ?? [])
-        : [];
     await assignRoleDataScopeApi({
       roleId: scopeForm.roleId,
       dataScope: scopeForm.dataScope,
@@ -330,6 +372,8 @@ async function submitDataScope() {
     ElMessage.success('数据权限已更新');
     scopeDialogVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     scopeSubmitting.value = false;
   }
@@ -498,7 +542,7 @@ onMounted(() => {
           <el-input
             v-model="form.name"
             :maxlength="FIELD_LIMITS.ROLE_NAME"
-            placeholder="请输入角色名称（最多 30 字符）"
+            placeholder="请输入角色名称"
           />
         </el-form-item>
         <el-form-item label="角色标识" prop="code">
@@ -508,8 +552,8 @@ onMounted(() => {
             placeholder="请输入角色标识，如 business_operator"
           />
         </el-form-item>
-        <el-form-item label="显示顺序">
-          <el-input-number v-model="form.sort" :min="0" :max="99999" />
+        <el-form-item label="显示顺序" prop="sort">
+          <el-input-number v-model="form.sort" :min="FIELD_LIMITS.SORT_MIN" :max="FIELD_LIMITS.SORT_MAX" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">

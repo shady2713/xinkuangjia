@@ -18,7 +18,7 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 /**
  * 字典工具类，提供字典值与字典标签的双向解析能力。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class DictFrameworkUtils {

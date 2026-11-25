@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证 {@link RoleServiceImpl} 删除与批量删除角色时的用户引用一致校验，与停用逻辑保持同步。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class RoleServiceImplTest {

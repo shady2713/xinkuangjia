@@ -11,7 +11,7 @@ import java.util.List;
  *
  * <p>上下文使用栈结构保存数据权限配置，支持方法嵌套调用时正确恢复外层规则。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public class DataPermissionContextHolder {
 

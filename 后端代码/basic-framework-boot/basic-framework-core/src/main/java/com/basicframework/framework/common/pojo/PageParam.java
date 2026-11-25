@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.io.Serializable;
 import java.util.List;
 
@@ -15,7 +16,7 @@ import java.util.List;
  *
  * <p>排序字段可选。未传时查询保持原有顺序；传入后由分页实现按字段白名单排序。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description="分页参数")
 @Data
@@ -46,6 +47,7 @@ public class PageParam implements Serializable {
      * 排序字段。为空表示不追加排序。
      */
     @Schema(description = "排序字段")
+    @Size(max = 5, message = "排序字段最多支持 5 个")
     @Valid
     private List<SortingField> sortingFields;
 

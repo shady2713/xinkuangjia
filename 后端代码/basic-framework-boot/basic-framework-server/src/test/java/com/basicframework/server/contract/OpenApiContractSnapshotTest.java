@@ -71,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 生成确定性 {@code openapi.json}，不依赖数据库或外部中间件即可在 300ms 内完成核验。
  * 当后端接口路径、参数或 VO 字段变更而未同步执行 {@code -Dopenapi.update=true} 与 {@code pnpm api:gen} 时，测试立即失败。</p>
  *
- * @author shady2713
+ * @author shady
  */
 class OpenApiContractSnapshotTest {
 

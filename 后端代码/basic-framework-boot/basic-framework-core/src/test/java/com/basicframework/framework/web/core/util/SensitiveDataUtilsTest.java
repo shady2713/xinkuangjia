@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 Web 日志敏感字段识别及请求、响应负载的统一脱敏契约。
  *
- * @author 李杰
+ * @author shady
  */
 class SensitiveDataUtilsTest {
 

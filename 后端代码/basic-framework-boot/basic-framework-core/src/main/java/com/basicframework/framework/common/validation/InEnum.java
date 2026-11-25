@@ -9,7 +9,7 @@ import java.lang.annotation.*;
 /**
  * 枚举取值范围校验注解。
  *
- * @author 李杰
+ * @author shady
  */
 @Target({
         ElementType.METHOD,

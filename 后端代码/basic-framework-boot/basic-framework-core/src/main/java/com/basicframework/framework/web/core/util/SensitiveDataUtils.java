@@ -17,7 +17,7 @@ import java.util.Set;
 /**
  * Web 日志敏感字段识别与请求、响应负载脱敏工具，统一处理大小写、连接符差异与解析降级契约。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public final class SensitiveDataUtils {

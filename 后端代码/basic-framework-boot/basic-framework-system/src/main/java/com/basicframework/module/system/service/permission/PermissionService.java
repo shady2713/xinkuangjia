@@ -14,7 +14,7 @@ import static java.util.Collections.singleton;
  * <p>
  * 提供用户-角色、角色-菜单、角色-部门数据权限的能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface PermissionService {
 

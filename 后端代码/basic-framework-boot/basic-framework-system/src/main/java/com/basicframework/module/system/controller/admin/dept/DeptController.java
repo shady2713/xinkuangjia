@@ -27,7 +27,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * DeptController HTTP 接口，负责请求校验和响应组装。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 部门")
 @RestController
@@ -113,7 +113,7 @@ public class DeptController {
     @GetMapping("/list")
     @Operation(summary = "获取部门列表")
     @PreAuthorize("@ss.hasPermission('system:dept:query')")
-    public CommonResult<List<DeptRespVO>> getDeptList(DeptListReqVO reqVO) {
+    public CommonResult<List<DeptRespVO>> getDeptList(@Valid DeptListReqVO reqVO) {
         List<DeptDO> list = deptService.getDeptList(reqVO);
         return success(BeanUtils.toBean(list, DeptRespVO.class));
     }

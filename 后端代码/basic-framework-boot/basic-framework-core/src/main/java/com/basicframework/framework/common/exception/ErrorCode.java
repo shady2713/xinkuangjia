@@ -12,7 +12,7 @@ import lombok.Data;
  *
  * 错误码设计成对象，便于后续扩展国际化、文案映射等能力。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class ErrorCode {

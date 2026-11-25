@@ -12,7 +12,7 @@ import jakarta.validation.Valid;
  * <p>
  * 提供登录日志记录、详情查询和分页查询能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface LoginLogService {
 

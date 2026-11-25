@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
  * <p>改密、重置密码和删除用户后发布，由监听器撤销该用户全部访问令牌与刷新令牌。
  * 使用事件解耦用户服务与 OAuth2 令牌服务，避免两者形成循环依赖。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Data
 @NoArgsConstructor

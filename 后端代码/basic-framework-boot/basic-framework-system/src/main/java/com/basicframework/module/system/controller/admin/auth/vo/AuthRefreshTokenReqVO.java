@@ -7,7 +7,7 @@ import lombok.Data;
 /**
  * 管理后台刷新访问令牌请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 刷新访问令牌 Request VO")
 @Data

@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * 单值字典范围校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class InDictValidator implements ConstraintValidator<InDict, Object> {
 

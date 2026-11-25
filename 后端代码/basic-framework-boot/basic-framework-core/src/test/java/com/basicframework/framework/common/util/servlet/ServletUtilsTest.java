@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 验证 {@link ServletUtils} 客户端 IP 提取对非受信直连伪造转发头的防护与环回地址归一化。
  *
- * @author shady2713
+ * @author shady
  */
 class ServletUtilsTest {
 

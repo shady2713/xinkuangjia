@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
 /**
  * 字典类型数据访问接口。
  *
- * @author 李杰
+ * @author shady
  */
 @Mapper
 public interface DictTypeMapper extends BaseMapperX<DictTypeDO> {

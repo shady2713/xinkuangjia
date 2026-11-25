@@ -28,7 +28,7 @@ import cn.hutool.core.util.StrUtil;
 /**
  * MyBatis-Plus 自动配置类。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration(before = MybatisPlusAutoConfiguration.class)
 @MapperScan(value = "${basic-framework.info.base-package}", annotationClass = Mapper.class, lazyInitialization = "${mybatis.lazy-initialization:false}")

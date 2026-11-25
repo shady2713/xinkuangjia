@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  *
  * 当用户被禁用时，同步删除其所有 Token。监听器保持同步执行，保证禁用接口返回前
  * 旧令牌已经失效，避免异步窗口内继续访问。
- * @author 李杰
+ * @author shady
  */
 @Component
 @Slf4j

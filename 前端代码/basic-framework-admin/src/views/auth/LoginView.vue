@@ -9,13 +9,16 @@ import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { sendSmsCodeApi } from '@/api/auth';
+import { notifyUnhandledError } from '@/api/request';
 import CaptchaVerify from '@/components/CaptchaVerify.vue';
 import { getAppConfig } from '@/config/app';
 import { SmsSceneEnum } from '@/constants/enums';
 import {
   FIELD_LIMITS,
   mobileRule,
+  REGEX_PATTERNS,
   requiredRule,
+  smsCodeRule,
 } from '@/constants/validation';
 import { useUserStore } from '@/stores/user';
 import { encryptPassword } from '@/utils/sm2';
@@ -63,7 +66,7 @@ const smsForm = reactive({
 });
 const smsRules: FormRules = {
   mobile: [requiredRule('手机号'), mobileRule()],
-  code: [requiredRule('短信验证码')],
+  code: [requiredRule('短信验证码'), smsCodeRule()],
 };
 
 const countdown = ref(0);
@@ -134,6 +137,8 @@ async function doPasswordLogin(captchaVerification?: string) {
     }, selectedPlatform);
     ElMessage.success('登录成功');
     await navigateAfterLogin();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -161,6 +166,8 @@ async function doSendSmsCode(captchaVerification?: string) {
     });
     ElMessage.success('验证码已发送');
     startCountdown();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     sendingSms.value = false;
   }
@@ -168,7 +175,7 @@ async function doSendSmsCode(captchaVerification?: string) {
 
 async function handleSendSms() {
   if (sendingSms.value || countdown.value > 0) return;
-  if (!/^1\d{10}$/.test(smsForm.mobile.trim())) {
+  if (!REGEX_PATTERNS.MOBILE.test(smsForm.mobile.trim())) {
     ElMessage.warning('请先输入正确的 11 位手机号');
     return;
   }
@@ -191,6 +198,8 @@ async function handleSmsSubmit() {
     });
     ElMessage.success('登录成功');
     await navigateAfterLogin();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }

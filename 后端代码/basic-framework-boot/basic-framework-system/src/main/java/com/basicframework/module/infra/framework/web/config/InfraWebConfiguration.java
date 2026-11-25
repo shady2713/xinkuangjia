@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * 注册 infra 模块的 OpenAPI 分组。
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false)
 public class InfraWebConfiguration {

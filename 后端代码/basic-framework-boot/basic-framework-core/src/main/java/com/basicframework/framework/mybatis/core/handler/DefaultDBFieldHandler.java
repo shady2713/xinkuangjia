@@ -13,7 +13,7 @@ import java.util.Objects;
  *
  * 如果没有显式的对通用参数进行赋值，这里会对通用参数进行填充、赋值
  *
- * @author 李杰
+ * @author shady
  */
 public class DefaultDBFieldHandler implements MetaObjectHandler {
 

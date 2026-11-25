@@ -11,7 +11,7 @@ import java.util.Arrays;
  *
  * 用于实现数据级别的权限
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

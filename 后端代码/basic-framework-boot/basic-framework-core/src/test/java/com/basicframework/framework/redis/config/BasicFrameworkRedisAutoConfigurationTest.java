@@ -16,7 +16,7 @@ import static org.mockito.Mockito.mock;
 /**
  * 验证 {@link BasicFrameworkRedisAutoConfiguration} 的 JSON 序列化与 {@link RedisTemplate} 装配行为。
  *
- * @author shady2713
+ * @author shady
  */
 class BasicFrameworkRedisAutoConfigurationTest {
 
@@ -59,7 +59,7 @@ class BasicFrameworkRedisAutoConfigurationTest {
     /**
      * 用于验证缓存 JSON 往返序列化的示例载荷。
      *
-     * @author shady2713
+     * @author shady
      */
     @Data
     @NoArgsConstructor

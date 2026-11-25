@@ -15,7 +15,7 @@ import lombok.ToString;
 /**
  * 字典类型表。
  *
- * @author 李杰
+ * @author shady
  */
 @TableName("system_dict_type")
 @KeySequence("system_dict_type_seq")

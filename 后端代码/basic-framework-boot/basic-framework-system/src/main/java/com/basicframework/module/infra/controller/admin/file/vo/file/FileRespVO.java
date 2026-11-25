@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 /**
  * 管理后台文件元数据响应，不返回文件二进制内容。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 文件 Response VO,不返回 content 字段，太大")
 @Data

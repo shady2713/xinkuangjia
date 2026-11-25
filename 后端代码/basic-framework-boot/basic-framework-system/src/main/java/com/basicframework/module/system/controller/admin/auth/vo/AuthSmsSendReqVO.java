@@ -5,7 +5,7 @@ import com.basicframework.framework.common.validation.Mobile;
 import com.basicframework.module.system.enums.sms.SmsSceneEnum;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 /**
  * AuthSmsSendReqVO 请求对象，承载接口输入参数。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 发送手机验证码 Request VO")
 @Data
@@ -30,7 +30,7 @@ public class AuthSmsSendReqVO extends CaptchaVerificationReqVO {
      * 手机号。
      */
     @Schema(description = "手机号", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotEmpty(message = "手机号不能为空")
+    @NotBlank(message = "手机号不能为空")
     @Mobile
     private String mobile;
 
@@ -39,7 +39,7 @@ public class AuthSmsSendReqVO extends CaptchaVerificationReqVO {
      */
     @Schema(description = "短信场景", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "发送场景不能为空")
-    @InEnum(SmsSceneEnum.class)
+    @InEnum(value = SmsSceneEnum.class, message = "发送场景必须是 {value}")
     private Integer scene;
 
 }

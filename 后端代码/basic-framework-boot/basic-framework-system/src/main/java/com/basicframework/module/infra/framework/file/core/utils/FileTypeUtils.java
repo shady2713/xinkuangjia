@@ -20,7 +20,7 @@ import java.util.Set;
 /**
  * 文件类型识别、上传白名单和响应输出工具。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public final class FileTypeUtils {

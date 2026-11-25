@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Redis 可用时通过单次 Lua 脚本完成 {@code INCR + PEXPIRE} 原子计数；本地内存兜底将
  * 失败计数池与已触发锁定池物理隔离，防止攻击者在 Redis 故障期间用海量随机不存在账号冲刷淘汰已锁定的高价值账号记录。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Slf4j
 @Component

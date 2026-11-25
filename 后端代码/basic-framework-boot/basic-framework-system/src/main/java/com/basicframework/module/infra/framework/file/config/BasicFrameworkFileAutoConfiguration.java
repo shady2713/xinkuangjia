@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Infra 文件客户端自动配置。
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(FileStorageProperties.class)

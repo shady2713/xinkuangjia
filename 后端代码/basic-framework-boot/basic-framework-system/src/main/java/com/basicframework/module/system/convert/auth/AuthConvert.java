@@ -26,7 +26,7 @@ import static com.basicframework.module.system.dal.dataobject.permission.MenuDO.
 /**
  * AuthConvert 对象转换组件。
  *
- * @author 李杰
+ * @author shady
  */
 @Mapper
 public interface AuthConvert {

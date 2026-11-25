@@ -16,7 +16,7 @@ import lombok.Data;
  *
  * <p>请求中的 URL 只保留兼容性，服务端会根据对象路径重新生成受控公开地址。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 文件创建 Request VO")
 @Data

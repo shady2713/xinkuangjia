@@ -19,7 +19,7 @@ import java.util.List;
  * <p>负责注册数据权限规则工厂、MyBatis Plus 数据权限拦截器和 {@link DataPermissionAnnotationAdvisor}，
  * 让业务代码可以通过 {@code @DataPermission} 控制 SQL 查询范围。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 public class BasicFrameworkDataPermissionAutoConfiguration {

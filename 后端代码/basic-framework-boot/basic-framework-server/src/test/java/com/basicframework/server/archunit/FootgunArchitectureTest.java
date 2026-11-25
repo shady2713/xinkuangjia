@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 在质量门禁中执行全量后端架构规则：分层、授权完备性、模块隔离、事务边界与编码禁令。
  *
- * @author shady2713
+ * @author shady
  */
 @AnalyzeClasses(packages = "com.basicframework", importOptions = ImportOption.DoNotIncludeTests.class)
 class FootgunArchitectureTest {

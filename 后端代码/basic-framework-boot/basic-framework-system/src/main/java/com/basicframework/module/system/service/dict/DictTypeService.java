@@ -12,7 +12,7 @@ import java.util.List;
  * <p>
  * 提供字典类型的维护、分页查询和全量查询能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface DictTypeService {
 

@@ -42,7 +42,7 @@ import static com.basicframework.module.system.enums.LogRecordConstants.*;
 /**
  * 角色 Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Slf4j
@@ -76,11 +76,16 @@ public class RoleServiceImpl implements RoleService {
         String targetRoleType = AdminPlatformTypeEnum.defaultType(createReqVO.getRoleType());
         validateOperatorRolePlatform(targetRoleType);
 
-        // 1. 校验角色
-        validateRoleDuplicate(createReqVO.getName(), createReqVO.getCode(), null);
+        // 1. 规范化首尾空白并校验角色唯一性（防止 " super_admin" 等前导空格绕过校验）
+        String normalizedName = cn.hutool.core.util.StrUtil.trim(createReqVO.getName());
+        String normalizedCode = cn.hutool.core.util.StrUtil.trim(createReqVO.getCode());
+        validateRoleDuplicate(normalizedName, normalizedCode, null);
 
         // 2. 插入到数据库
         RoleDO role = BeanUtils.toBean(createReqVO, RoleDO.class);
+        role.setId(null);
+        role.setName(normalizedName);
+        role.setCode(normalizedCode);
         // 角色平台类型是授权隔离边界，缺省按历史业务平台处理。
         role.setRoleType(targetRoleType);
         role.setType(ObjectUtil.defaultIfNull(type, RoleTypeEnum.CUSTOM.getType()));
@@ -103,8 +108,10 @@ public class RoleServiceImpl implements RoleService {
     public void updateRole(RoleSaveReqVO updateReqVO) {
         // 1.1 校验是否可以更新
         RoleDO role = validateRoleForUpdate(updateReqVO.getId());
-        // 1.2 校验角色的唯一字段是否重复
-        validateRoleDuplicate(updateReqVO.getName(), updateReqVO.getCode(), updateReqVO.getId());
+        // 1.2 规范化首尾空白并校验角色的唯一字段是否重复
+        String normalizedName = cn.hutool.core.util.StrUtil.trim(updateReqVO.getName());
+        String normalizedCode = cn.hutool.core.util.StrUtil.trim(updateReqVO.getCode());
+        validateRoleDuplicate(normalizedName, normalizedCode, updateReqVO.getId());
 
         // 1.3 校验是否被用户引用，不允许禁用
         if (CommonStatusEnum.isEnable(role.getStatus())
@@ -114,6 +121,8 @@ public class RoleServiceImpl implements RoleService {
 
         // 2. 更新到数据库（禁止跨平台篡改角色平台类型）
         RoleDO updateObj = BeanUtils.toBean(updateReqVO, RoleDO.class);
+        updateObj.setName(normalizedName);
+        updateObj.setCode(normalizedCode);
         updateObj.setRoleType(role.getRoleType());
         roleMapper.updateById(updateObj);
     }

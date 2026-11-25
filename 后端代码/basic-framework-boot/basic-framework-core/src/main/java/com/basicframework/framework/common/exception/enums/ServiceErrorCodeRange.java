@@ -9,7 +9,7 @@ import java.util.Map;
  * 第一段 {@code 1} 表示业务异常，第二段 {@code SSS} 表示模块号段（步长 1,000,000），
  * 第三段 {@code MMM} 表示子域，第四段 {@code CCC} 表示具体错误序号。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public final class ServiceErrorCodeRange {
 

@@ -5,6 +5,7 @@
 import { Download, Search, View } from '@element-plus/icons-vue';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   exportLoginLogApi,
   getLoginLogPageApi,
@@ -46,6 +47,8 @@ async function loadList() {
     });
     list.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -60,12 +63,16 @@ function handleReset() {
 }
 
 async function handleExport() {
-  const blob = await exportLoginLogApi({
-    username: query.username.trim() || undefined,
-    userIp: query.userIp.trim() || undefined,
-    status: query.status,
-  });
-  downloadBlob(blob, '登录审计日志.xlsx');
+  try {
+    const blob = await exportLoginLogApi({
+      username: query.username.trim() || undefined,
+      userIp: query.userIp.trim() || undefined,
+      status: query.status,
+    });
+    downloadBlob(blob, '登录审计日志.xlsx');
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 function openDetail(row: LoginLogItem) {
@@ -107,11 +114,11 @@ onMounted(() => {
               clearable
             />
           </el-form-item>
-          <el-form-item label="登录地址">
+          <el-form-item label="登录 IP">
             <el-input
               v-model="query.userIp"
               placeholder="请输入登录 IP"
-              :maxlength="FIELD_LIMITS.EMAIL"
+              :maxlength="FIELD_LIMITS.USER_IP"
               clearable
             />
           </el-form-item>

@@ -6,7 +6,7 @@ import lombok.Getter;
 /**
  * 用户访问令牌失效原因，用于吊销事件和安全日志。
  *
- * @author shady2713
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

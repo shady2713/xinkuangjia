@@ -44,7 +44,7 @@ import jakarta.servlet.Filter;
 /**
  * BasicFrameworkWebAutoConfiguration 自动配置类。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @EnableConfigurationProperties(WebProperties.class)

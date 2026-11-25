@@ -10,6 +10,7 @@ import {
 } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   createDictDataApi,
   createDictTypeApi,
@@ -33,6 +34,7 @@ import {
   deleteConfirmMessage,
   FIELD_LIMITS,
   maxLenRule,
+  requiredNumberRule,
   requiredRule,
 } from '@/constants/validation';
 import { useDictStore } from '@/stores/dict';
@@ -94,6 +96,7 @@ const dataForm = reactive({
 const dataFormRules: FormRules = {
   label: [requiredRule('数据标签'), maxLenRule('数据标签', FIELD_LIMITS.DICT_LABEL)],
   value: [requiredRule('数据键值'), maxLenRule('数据键值', FIELD_LIMITS.DICT_VALUE)],
+  sort: [requiredNumberRule('显示排序')],
   remark: [maxLenRule('备注', FIELD_LIMITS.REMARK)],
 };
 
@@ -111,6 +114,8 @@ async function loadTypes() {
     if (!selectedType.value && typeList.value.length > 0) {
       selectTypeRow(typeList.value[0]);
     }
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     typeLoading.value = false;
   }
@@ -145,6 +150,8 @@ async function loadDataList() {
     });
     dataList.value = res.list ?? [];
     dataTotal.value = res.total ?? 0;
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     dataLoading.value = false;
   }
@@ -171,16 +178,23 @@ async function openTypeForm(row?: DictTypeItem) {
   });
   typeDialogVisible.value = true;
   if (row?.id) {
-    const detail = await getDictTypeApi(row.id);
-    if (load !== typeFormLoad || !typeDialogVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(typeForm, {
-      id: detail.id,
-      name: detail.name,
-      type: detail.type,
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-      remark: detail.remark || '',
-    });
-    typeFormReady.value = true;
+    try {
+      const detail = await getDictTypeApi(row.id);
+      if (load !== typeFormLoad || !typeDialogVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(typeForm, {
+        id: detail.id,
+        name: detail.name,
+        type: detail.type,
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+        remark: detail.remark || '',
+      });
+      typeFormReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === typeFormLoad) {
+        typeDialogVisible.value = false;
+      }
+    }
   }
 }
 
@@ -204,18 +218,24 @@ async function submitTypeForm() {
     ElMessage.success(typeForm.id ? '修改成功' : '新增成功');
     typeDialogVisible.value = false;
     await loadTypes();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     typeSubmitting.value = false;
   }
 }
 
 async function deleteType(row: DictTypeItem) {
-  await deleteDictTypeApi(row.id);
-  ElMessage.success('删除成功');
-  if (selectedType.value?.id === row.id) {
-    selectedType.value = null;
+  try {
+    await deleteDictTypeApi(row.id);
+    ElMessage.success('删除成功');
+    if (selectedType.value?.id === row.id) {
+      selectedType.value = null;
+    }
+    await loadTypes();
+  } catch (error) {
+    notifyUnhandledError(error);
   }
-  await loadTypes();
 }
 
 async function openDataForm(row?: DictDataItem) {
@@ -241,20 +261,27 @@ async function openDataForm(row?: DictDataItem) {
   });
   dataDialogVisible.value = true;
   if (row?.id) {
-    const detail = await getDictDataApi(row.id);
-    if (load !== dataFormLoad || !dataDialogVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(dataForm, {
-      id: detail.id,
-      dictType: detail.dictType,
-      label: detail.label,
-      value: detail.value,
-      sort: detail.sort ?? 0,
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-      colorType: detail.colorType || 'primary',
-      cssClass: detail.cssClass || '',
-      remark: detail.remark || '',
-    });
-    dataFormReady.value = true;
+    try {
+      const detail = await getDictDataApi(row.id);
+      if (load !== dataFormLoad || !dataDialogVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(dataForm, {
+        id: detail.id,
+        dictType: detail.dictType,
+        label: detail.label,
+        value: detail.value,
+        sort: detail.sort ?? 0,
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+        colorType: detail.colorType || 'primary',
+        cssClass: detail.cssClass || '',
+        remark: detail.remark || '',
+      });
+      dataFormReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === dataFormLoad) {
+        dataDialogVisible.value = false;
+      }
+    }
   }
 }
 
@@ -278,15 +305,21 @@ async function submitDataForm() {
     ElMessage.success(dataForm.id ? '修改成功' : '新增成功');
     dataDialogVisible.value = false;
     await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     dataSubmitting.value = false;
   }
 }
 
 async function deleteData(row: DictDataItem) {
-  await deleteDictDataApi(row.id);
-  ElMessage.success('删除成功');
-  await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
+  try {
+    await deleteDictDataApi(row.id);
+    ElMessage.success('删除成功');
+    await Promise.all([loadDataList(), dictStore.ensureLoaded(true)]);
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 onMounted(() => {
@@ -316,7 +349,7 @@ onMounted(() => {
             <el-form-item>
               <el-input
                 v-model="typeQuery.name"
-                placeholder="字典名称"
+                placeholder="请输入字典名称"
                 :maxlength="FIELD_LIMITS.DICT_NAME"
                 clearable
               />
@@ -324,7 +357,7 @@ onMounted(() => {
             <el-form-item>
               <el-input
                 v-model="typeQuery.type"
-                placeholder="字典类型"
+                placeholder="请输入字典类型"
                 :maxlength="FIELD_LIMITS.DICT_TYPE"
                 clearable
               />
@@ -555,8 +588,8 @@ onMounted(() => {
             placeholder="请输入存储键值"
           />
         </el-form-item>
-        <el-form-item label="显示排序">
-          <el-input-number v-model="dataForm.sort" :min="0" :max="99999" />
+        <el-form-item label="显示排序" prop="sort">
+          <el-input-number v-model="dataForm.sort" :min="FIELD_LIMITS.SORT_MIN" :max="FIELD_LIMITS.SORT_MAX" />
         </el-form-item>
         <el-form-item label="标签颜色">
           <el-select v-model="dataForm.colorType" class="w-full">

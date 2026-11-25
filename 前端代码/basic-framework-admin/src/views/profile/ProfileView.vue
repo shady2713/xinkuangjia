@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import axios from 'axios';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   getUserProfileApi,
   updateUserProfileApi,
@@ -14,6 +14,7 @@ import {
   FIELD_LIMITS,
   maxLenRule,
   mobileRule,
+  PASSWORD_PLACEHOLDER,
   passwordComplexityRule,
   requiredRule,
 } from '@/constants/validation';
@@ -53,10 +54,10 @@ const pwdForm = reactive({
   confirmPassword: '',
 });
 const pwdRules: FormRules = {
-  oldPassword: [requiredRule('旧密码')],
+  oldPassword: [requiredRule('当前密码')],
   newPassword: [requiredRule('新密码'), passwordComplexityRule()],
   confirmPassword: [
-    requiredRule('确认密码'),
+    requiredRule('确认新密码'),
     {
       validator: (_r, v, cb) => {
         if (v !== pwdForm.newPassword) cb(new Error('两次输入的密码不一致'));
@@ -77,6 +78,8 @@ async function loadProfile() {
     basicForm.email = res.email || '';
     basicForm.sex = res.sex ?? 1;
     basicForm.avatar = res.avatar || '';
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -97,6 +100,8 @@ async function handleSaveBasic() {
     ElMessage.success('个人资料已更新');
     await loadProfile();
     await userStore.refreshUserInfo();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     savingBasic.value = false;
   }
@@ -105,14 +110,20 @@ async function handleSaveBasic() {
 async function handleAvatarUploaded(url: string) {
   // A private upload has no public URL; never replace or clear the saved avatar with it.
   if (!url) return;
-  basicForm.avatar = url;
-  await updateUserProfileApi({
-    nickname: basicForm.nickname.trim() || profile.value?.nickname || '',
-    avatar: url,
-  });
-  ElMessage.success('头像已更新');
-  await loadProfile();
-  await userStore.refreshUserInfo();
+  const previousAvatar = profile.value?.avatar || '';
+  try {
+    await updateUserProfileApi({
+      nickname: basicForm.nickname.trim() || profile.value?.nickname || '',
+      avatar: url,
+    });
+    basicForm.avatar = url;
+    ElMessage.success('头像已更新');
+    await loadProfile();
+    await userStore.refreshUserInfo();
+  } catch (error) {
+    basicForm.avatar = previousAvatar;
+    notifyUnhandledError(error);
+  }
 }
 
 async function handleSavePassword() {
@@ -126,9 +137,9 @@ async function handleSavePassword() {
       () => userStore.changeOwnPassword(owner, pwdForm.oldPassword, pwdForm.newPassword),
     );
     if (!changed) return;
-    ElMessage.success('密码修改成功');
+    ElMessage.success('密码修改成功，请重新登录');
   } catch (error) {
-    if (!axios.isCancel(error)) throw error;
+    notifyUnhandledError(error);
   } finally {
     savingPwd.value = false;
   }
@@ -150,6 +161,7 @@ onMounted(() => {
           <UploadField
             v-model="basicForm.avatar"
             require-public-url
+            :show-success-toast="false"
             mode="image"
             :cropper="true"
             :aspect-ratio="1"
@@ -241,7 +253,7 @@ onMounted(() => {
               label-width="90px"
               class="mt-3 max-w-[480px]"
             >
-              <el-form-item label="旧密码" prop="oldPassword">
+              <el-form-item label="当前密码" prop="oldPassword">
                 <el-input
                   v-model="pwdForm.oldPassword"
                   type="password"
@@ -256,10 +268,10 @@ onMounted(() => {
                   type="password"
                   show-password
                   :maxlength="FIELD_LIMITS.PASSWORD_MAX"
-                  placeholder="请输入 8~32 位含大小写字母及数字的新密码"
+                  :placeholder="PASSWORD_PLACEHOLDER"
                 />
               </el-form-item>
-              <el-form-item label="确认密码" prop="confirmPassword">
+              <el-form-item label="确认新密码" prop="confirmPassword">
                 <el-input
                   v-model="pwdForm.confirmPassword"
                   type="password"

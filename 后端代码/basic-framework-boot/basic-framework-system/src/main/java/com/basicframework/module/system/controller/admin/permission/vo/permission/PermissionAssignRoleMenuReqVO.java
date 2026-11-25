@@ -1,16 +1,17 @@
 package com.basicframework.module.system.controller.admin.permission.vo.permission;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import jakarta.validation.constraints.NotNull;
 import java.util.Collections;
 import java.util.Set;
 
 /**
  * PermissionAssignRoleMenuReqVO 请求对象，承载接口输入参数。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 赋予角色菜单 Request VO")
 @Data
@@ -27,6 +28,7 @@ public class PermissionAssignRoleMenuReqVO {
      * 菜单编号列表。
      */
     @Schema(description = "菜单编号列表", example = "1,3,5")
-    private Set<Long> menuIds = Collections.emptySet(); // 兜底
+    @Size(max = 500, message = "菜单数量不能超过 500 个")
+    private Set<@NotNull(message = "菜单编号不能为空") Long> menuIds = Collections.emptySet(); // 兜底
 
 }

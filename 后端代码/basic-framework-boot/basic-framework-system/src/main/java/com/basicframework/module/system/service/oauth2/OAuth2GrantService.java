@@ -9,7 +9,7 @@ import java.util.List;
  *
  * <p>向第三方开放客户端提供 {@code client_credentials} 客户端凭据授权能力。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public interface OAuth2GrantService {
 

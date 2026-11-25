@@ -30,7 +30,7 @@ import java.lang.reflect.Method;
 /**
  * 原生 Spring AOP 操作审计日志切面，替代第三方 bizlog-sdk。
  *
- * @author 李杰
+ * @author shady
  */
 @Aspect
 @Slf4j

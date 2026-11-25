@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * DictDataSimpleRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 数据字典精简 Response VO")
 @Data

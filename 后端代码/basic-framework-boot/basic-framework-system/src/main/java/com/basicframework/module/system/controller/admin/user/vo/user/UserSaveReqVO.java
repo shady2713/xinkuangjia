@@ -1,22 +1,25 @@
 package com.basicframework.module.system.controller.admin.user.vo.user;
 
-import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.validation.EmailEx;
 import com.basicframework.framework.common.validation.InEnum;
 import com.basicframework.framework.common.validation.Mobile;
 import com.basicframework.framework.common.validation.Username;
+import com.basicframework.module.system.enums.common.SexEnum;
+import com.basicframework.module.system.framework.security.sm2.Sm2PasswordCipher;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
  * 管理后台用户创建或修改请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 用户创建/修改 Request VO")
 @Data
@@ -55,23 +58,26 @@ public class UserSaveReqVO {
     private String mobile;
 
     @Schema(description = "用户性别，参见 SexEnum 枚举类", example = "1")
+    @InEnum(value = SexEnum.class, message = "用户性别必须是 {value}")
     private Integer sex;
 
     @Schema(description = "用户头像", example = "https://www.example.com/xxx.png")
+    @Pattern(regexp = "^$|^(https?://|/).*", message = "头像地址格式不正确")
     @Size(max = 512, message = "用户头像地址长度不能超过 512 个字符")
     private String avatar;
 
     @Schema(description = "SM2 密码密文（C1C3C2）", requiredMode = Schema.RequiredMode.REQUIRED, example = "")
+    @Size(max = Sm2PasswordCipher.MAX_CIPHERTEXT_HEX_LENGTH, message = "密码密文格式不正确")
     private String password;
 
     @Schema(description = "用户状态，参见 CommonStatusEnum 枚举类", example = "0")
-    @InEnum(value = CommonStatusEnum.class, message = "修改状态必须是 {value}")
+    @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
     @AssertTrue(message = "新增用户时密码不能为空")
     @JsonIgnore
     public boolean isPasswordValid() {
-        return id != null || ObjectUtil.isAllNotEmpty(password);
+        return id != null || StrUtil.isNotBlank(password);
     }
 
 }

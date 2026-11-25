@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 验证本地环境变量到应用配置的绑定及配置完整性契约。
  *
- * @author 李杰
+ * @author shady
  */
 class LocalEnvironmentConfigurationTest {
 

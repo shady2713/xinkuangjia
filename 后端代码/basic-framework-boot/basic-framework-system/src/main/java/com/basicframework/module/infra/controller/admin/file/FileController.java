@@ -54,7 +54,7 @@ import static com.basicframework.module.infra.framework.file.core.utils.FileType
  *
  * <p>上传和登记沿用管理端登录边界，删除操作使用文件删除权限；公开读取只允许按完整对象路径获取单个文件。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 文件存储")
 @RestController

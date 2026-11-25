@@ -12,7 +12,7 @@ import jakarta.validation.Valid;
  * <p>
  * 提供验证码发送、校验和使用标记能力。
  *
- * @author 李杰
+ * @author shady
  */
 public interface SmsCodeService {
 

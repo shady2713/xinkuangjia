@@ -18,7 +18,7 @@ import java.util.Set;
 /**
  * 当 IdType 为 {@link IdType#NONE} 时，根据标准数据源 URL 自动推导主键策略。
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class IdTypeEnvironmentPostProcessor implements EnvironmentPostProcessor {

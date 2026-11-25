@@ -21,7 +21,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.AUTH_LOG
  * 避免从锁定行为推断账号是否存在。Redis 不可用时的降级行为由
  * {@link LoginAttemptStore} 按配置统一处理。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Slf4j
 @Service

@@ -10,7 +10,7 @@ import jakarta.validation.constraints.NotEmpty;
  * <p>
  * 提供文档元信息的默认校验与可见配置入口。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties("basic-framework.swagger")
 @Data

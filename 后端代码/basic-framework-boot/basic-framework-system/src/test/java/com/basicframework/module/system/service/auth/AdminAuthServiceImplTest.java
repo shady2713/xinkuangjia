@@ -56,7 +56,7 @@ import static org.mockito.Mockito.when;
 /**
  * 验证短信登录复用账号状态和平台隔离规则。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class AdminAuthServiceImplTest {

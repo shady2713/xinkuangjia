@@ -17,7 +17,7 @@ import java.net.URISyntaxException;
  *
  * 兼容 MinIO、阿里云 OSS、腾讯云 COS、七牛云、华为云 OBS、火山云等 S3 协议存储。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 public class S3FileClientConfig implements FileClientConfig {

@@ -41,7 +41,7 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 /**
  * 自定义的 Spring Security 配置适配器实现
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @AutoConfigureOrder(-1) // 目的：先于 Spring Security 自动配置，避免一键改包后，org.* 基础包无法生效

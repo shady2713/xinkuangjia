@@ -10,6 +10,7 @@ import {
 } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   createMenuApi,
   deleteMenuApi,
@@ -32,6 +33,7 @@ import {
   deleteConfirmMessage,
   FIELD_LIMITS,
   maxLenRule,
+  requiredNumberRule,
   requiredRule,
 } from '@/constants/validation';
 import { getSessionId } from '@/utils/token';
@@ -78,7 +80,7 @@ const form = reactive({
 
 const formRules: FormRules = {
   name: [requiredRule('菜单名称'), maxLenRule('菜单名称', FIELD_LIMITS.MENU_NAME)],
-  sort: [requiredRule('显示排序', 'change')],
+  sort: [requiredNumberRule('显示排序')],
   icon: [maxLenRule('图标标识', FIELD_LIMITS.MENU_ICON)],
   path: [maxLenRule('路由地址', FIELD_LIMITS.MENU_PATH)],
   component: [maxLenRule('组件路径', FIELD_LIMITS.MENU_COMPONENT)],
@@ -93,6 +95,8 @@ async function loadList() {
       name: query.name.trim() || undefined,
       status: query.status,
     });
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -128,25 +132,32 @@ async function openForm(row?: MenuItem, parentId: number | string = 0) {
   });
   formVisible.value = true;
   if (row?.id) {
-    const detail = await getMenuApi(row.id);
-    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(form, {
-      id: detail.id,
-      parentId: detail.parentId ?? 0,
-      name: detail.name,
-      type: detail.type,
-      icon: detail.icon || '',
-      path: detail.path || '',
-      component: detail.component || '',
-      componentName: detail.componentName || '',
-      permission: detail.permission || '',
-      sort: detail.sort ?? 0,
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-      visible: detail.visible !== false,
-      keepAlive: detail.keepAlive !== false,
-      alwaysShow: detail.alwaysShow !== false,
-    });
-    formReady.value = true;
+    try {
+      const detail = await getMenuApi(row.id);
+      if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(form, {
+        id: detail.id,
+        parentId: detail.parentId ?? 0,
+        name: detail.name,
+        type: detail.type,
+        icon: detail.icon || '',
+        path: detail.path || '',
+        component: detail.component || '',
+        componentName: detail.componentName || '',
+        permission: detail.permission || '',
+        sort: detail.sort ?? 0,
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+        visible: detail.visible !== false,
+        keepAlive: detail.keepAlive !== false,
+        alwaysShow: detail.alwaysShow !== false,
+      });
+      formReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === formLoad) {
+        formVisible.value = false;
+      }
+    }
   }
 }
 
@@ -173,15 +184,21 @@ async function submitForm() {
     ElMessage.success(form.id ? '修改成功' : '新增成功');
     formVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     formSubmitting.value = false;
   }
 }
 
 async function handleDelete(row: MenuItem) {
-  await deleteMenuApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteMenuApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 onMounted(() => {
@@ -326,7 +343,7 @@ onMounted(() => {
           <el-input
             v-model="form.name"
             :maxlength="FIELD_LIMITS.MENU_NAME"
-            placeholder="请输入菜单名称（最多 50 字符）"
+            placeholder="请输入菜单名称"
           />
         </el-form-item>
         <el-form-item v-if="form.type !== SystemMenuTypeEnum.BUTTON" label="图标标识" prop="icon">
@@ -365,7 +382,7 @@ onMounted(() => {
           />
         </el-form-item>
         <el-form-item label="显示排序" prop="sort">
-          <el-input-number v-model="form.sort" :min="0" :max="99999" />
+          <el-input-number v-model="form.sort" :min="FIELD_LIMITS.SORT_MIN" :max="FIELD_LIMITS.SORT_MAX" />
         </el-form-item>
         <el-form-item label="状态">
           <el-radio-group v-model="form.status">

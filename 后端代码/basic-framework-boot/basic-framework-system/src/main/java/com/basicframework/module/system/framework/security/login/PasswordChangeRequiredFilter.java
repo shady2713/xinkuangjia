@@ -28,7 +28,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_PAS
  * 登录、刷新令牌、权限信息、个人中心和修改密码等必要入口放行，其余接口返回 403，
  * 防止前端绕过路由守卫继续调用业务接口。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Component
 @Order(Ordered.LOWEST_PRECEDENCE - 10)

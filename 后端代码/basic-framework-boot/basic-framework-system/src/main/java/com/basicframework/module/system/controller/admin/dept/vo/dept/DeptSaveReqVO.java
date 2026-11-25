@@ -5,6 +5,7 @@ import com.basicframework.framework.common.validation.EmailEx;
 import com.basicframework.framework.common.validation.InEnum;
 import com.basicframework.framework.common.validation.Mobile;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -13,7 +14,7 @@ import lombok.Data;
 /**
  * DeptSaveReqVO 请求对象，承载接口输入参数。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 部门创建/修改 Request VO")
 @Data
@@ -44,6 +45,7 @@ public class DeptSaveReqVO {
      */
     @Schema(description = "显示顺序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "显示顺序不能为空")
+    @Min(value = 0, message = "显示顺序不能小于 0")
     private Integer sort;
 
     /**
@@ -72,7 +74,7 @@ public class DeptSaveReqVO {
      */
     @Schema(description = "状态，参见 CommonStatusEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "状态不能为空")
-    @InEnum(value = CommonStatusEnum.class, message = "修改状态必须是 {value}")
+    @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
 }

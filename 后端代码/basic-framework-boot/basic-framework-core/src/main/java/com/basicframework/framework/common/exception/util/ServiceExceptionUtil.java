@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
  * 目的在于，格式化异常信息提示。
  * 考虑到 String.format 在参数不正确时会报错，因此使用 {} 作为占位符，并使用 {@link #doFormat(int, String, Object...)} 方法来格式化
  *
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class ServiceExceptionUtil {

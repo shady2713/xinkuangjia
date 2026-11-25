@@ -3,7 +3,7 @@ package com.basicframework.module.system.enums;
 /**
  * System 操作审计日志常量（供原生 {@code @OperateLog} 使用）。
  *
- * @author 李杰
+ * @author shady
  */
 public interface LogRecordConstants {
 

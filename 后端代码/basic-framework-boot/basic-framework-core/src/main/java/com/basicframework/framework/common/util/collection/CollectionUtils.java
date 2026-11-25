@@ -12,7 +12,7 @@ import static java.util.Arrays.asList;
 /**
  * Collection 工具类
  *
- * @author 李杰
+ * @author shady
  */
 public class CollectionUtils {
 

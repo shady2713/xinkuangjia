@@ -9,6 +9,7 @@ import com.basicframework.module.system.controller.admin.logger.vo.loginlog.Logi
 import com.basicframework.module.system.dal.dataobject.logger.LoginLogDO;
 import com.basicframework.module.system.service.logger.LoginLogService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
@@ -29,7 +31,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.LOG_EXPO
 /**
  * 登录日志 Controller，提供登录日志的分页查询能力
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 登录日志")
 @RestController
@@ -51,8 +53,9 @@ public class LoginLogController {
      */
     @GetMapping("/get")
     @Operation(summary = "获得登录日志")
+    @Parameter(name = "id", description = "日志编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('system:login-log:query')")
-    public CommonResult<LoginLogRespVO> getLoginLog(Long id) {
+    public CommonResult<LoginLogRespVO> getLoginLog(@RequestParam("id") Long id) {
         LoginLogDO loginLog = loginLogService.getLoginLog(id);
         return success(BeanUtils.toBean(loginLog, LoginLogRespVO.class));
     }

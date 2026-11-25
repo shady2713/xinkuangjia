@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * 反向证明：夹具中的违规架构样本必须被对应 ArchUnit 规则判定为失败。
  *
- * @author shady2713
+ * @author shady
  */
 class FootgunArchitectureFailureTest {
 

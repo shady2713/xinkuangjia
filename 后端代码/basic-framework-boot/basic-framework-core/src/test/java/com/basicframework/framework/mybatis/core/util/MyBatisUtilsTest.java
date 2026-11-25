@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 验证分页排序只接受白名单字段，并转换成下划线列名。
  *
- * @author shady2713
+ * @author shady
  */
 class MyBatisUtilsTest {
 

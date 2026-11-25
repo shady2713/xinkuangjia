@@ -27,7 +27,7 @@ import org.springframework.security.web.access.AccessDeniedHandler;
  *
  * 注意，不能和 {@link BasicFrameworkWebSecurityConfigurerAdapter} 用一个，原因是会导致初始化报错。
 *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @AutoConfigureOrder(-1)

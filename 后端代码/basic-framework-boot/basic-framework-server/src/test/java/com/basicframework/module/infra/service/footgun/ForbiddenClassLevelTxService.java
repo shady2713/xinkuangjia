@@ -5,7 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 架构门禁反向夹具：验证类级未声明 {@code rollbackFor} 的 {@code @Transactional} 会被阻断。
  *
- * @author shady2713
+ * @author shady
  */
 @Transactional
 public class ForbiddenClassLevelTxService {

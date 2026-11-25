@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * UserProfileRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * @author shady
  */
 @Data
 @Schema(description = "管理后台 - 用户个人中心信息 Response VO")

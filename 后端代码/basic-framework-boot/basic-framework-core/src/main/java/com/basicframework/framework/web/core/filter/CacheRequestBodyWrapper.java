@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * 有界 JSON 请求体缓存包装器。
  *
- * @author 李杰
+ * @author shady
  */
 public class CacheRequestBodyWrapper extends HttpServletRequestWrapper {
 
@@ -155,7 +155,7 @@ public class CacheRequestBodyWrapper extends HttpServletRequestWrapper {
     /**
      * 请求体超出缓存上限异常。
      *
-     * @author shady2713
+     * @author shady
      */
     public static final class RequestBodyTooLargeException extends RuntimeException {
         private static final long serialVersionUID = 1L;

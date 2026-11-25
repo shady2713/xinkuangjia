@@ -10,6 +10,7 @@ import {
 } from 'element-plus';
 import { computed, onMounted, reactive, ref } from 'vue';
 
+import { notifyUnhandledError } from '@/api/request';
 import {
   createDeptApi,
   deleteDeptApi,
@@ -30,6 +31,7 @@ import {
   FIELD_LIMITS,
   maxLenRule,
   mobileRule,
+  requiredNumberRule,
   requiredRule,
 } from '@/constants/validation';
 import { formatDateTime } from '@/utils/format';
@@ -75,7 +77,7 @@ const form = reactive({
 
 const formRules: FormRules = {
   name: [requiredRule('部门名称'), maxLenRule('部门名称', FIELD_LIMITS.DEPT_NAME)],
-  sort: [requiredRule('显示排序', 'change')],
+  sort: [requiredNumberRule('显示排序')],
   phone: [mobileRule()],
   email: [emailRule(), maxLenRule('邮箱', FIELD_LIMITS.EMAIL)],
 };
@@ -87,6 +89,8 @@ async function loadList() {
       name: query.name.trim() || undefined,
       status: query.status,
     });
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     loading.value = false;
   }
@@ -116,19 +120,26 @@ async function openForm(row?: DeptItem, parentId: number | string = 0) {
   });
   formVisible.value = true;
   if (row?.id) {
-    const detail = await getDeptApi(row.id);
-    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
-    Object.assign(form, {
-      id: detail.id,
-      parentId: detail.parentId ?? 0,
-      name: detail.name,
-      sort: detail.sort ?? 0,
-      leaderUserId: detail.leaderUserId,
-      phone: detail.phone || '',
-      email: detail.email || '',
-      status: detail.status ?? CommonStatusEnum.ENABLE,
-    });
-    formReady.value = true;
+    try {
+      const detail = await getDeptApi(row.id);
+      if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
+      Object.assign(form, {
+        id: detail.id,
+        parentId: detail.parentId ?? 0,
+        name: detail.name,
+        sort: detail.sort ?? 0,
+        leaderUserId: detail.leaderUserId,
+        phone: detail.phone || '',
+        email: detail.email || '',
+        status: detail.status ?? CommonStatusEnum.ENABLE,
+      });
+      formReady.value = true;
+    } catch (error) {
+      notifyUnhandledError(error);
+      if (load === formLoad) {
+        formVisible.value = false;
+      }
+    }
   }
 }
 
@@ -152,6 +163,8 @@ async function submitForm() {
     ElMessage.success(form.id ? '修改成功' : '新增成功');
     formVisible.value = false;
     await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
   } finally {
     formSubmitting.value = false;
   }
@@ -159,15 +172,21 @@ async function submitForm() {
 
 async function handleDelete(row: DeptItem) {
   if (row.id === undefined) return;
-  await deleteDeptApi(row.id);
-  ElMessage.success('删除成功');
-  await loadList();
+  try {
+    await deleteDeptApi(row.id);
+    ElMessage.success('删除成功');
+    await loadList();
+  } catch (error) {
+    notifyUnhandledError(error);
+  }
 }
 
 onMounted(async () => {
   await Promise.all([
     loadList(),
-    getSimpleUserListApi().then((res) => (users.value = res)),
+    getSimpleUserListApi()
+      .then((res) => (users.value = res))
+      .catch((error) => notifyUnhandledError(error)),
   ]);
 });
 </script>
@@ -297,11 +316,11 @@ onMounted(async () => {
           <el-input
             v-model="form.name"
             :maxlength="FIELD_LIMITS.DEPT_NAME"
-            placeholder="请输入部门名称（最多 30 字符）"
+            placeholder="请输入部门名称"
           />
         </el-form-item>
         <el-form-item label="显示排序" prop="sort">
-          <el-input-number v-model="form.sort" :min="0" :max="99999" />
+          <el-input-number v-model="form.sort" :min="FIELD_LIMITS.SORT_MIN" :max="FIELD_LIMITS.SORT_MAX" />
         </el-form-item>
         <el-form-item label="负责人">
           <el-select
@@ -318,7 +337,7 @@ onMounted(async () => {
           <el-input
             v-model="form.phone"
             :maxlength="FIELD_LIMITS.MOBILE"
-            placeholder="请输入 11 位联系电话"
+            placeholder="请输入 11 位手机号"
           />
         </el-form-item>
         <el-form-item label="邮箱" prop="email">

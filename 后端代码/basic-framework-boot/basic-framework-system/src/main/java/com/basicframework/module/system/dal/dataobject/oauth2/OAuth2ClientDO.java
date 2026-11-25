@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * OAuth2 客户端 DO（面向第三方开放 API {@code client_credentials} 授权接入）。
  *
- * @author 李杰
+ * @author shady
  */
 @TableName(value = "system_oauth2_client", autoResultMap = true)
 @KeySequence("system_oauth2_client_seq")

@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * <p>改密、重置密码和删除用户后同步撤销该用户的全部访问令牌与刷新令牌，同时清理 Redis 缓存。
  * 监听器保持同步执行，保证业务方法返回前旧令牌已经失效，避免异步窗口内继续使用旧令牌。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Component
 @Slf4j

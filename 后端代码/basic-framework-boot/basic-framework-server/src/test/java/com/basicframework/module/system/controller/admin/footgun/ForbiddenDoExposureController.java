@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 反向失败夹具：控制器在 HTTP 泛型返回签名中直接暴露持久化 DO。
  *
- * @author shady2713
+ * @author shady
  */
 @RestController
 public class ForbiddenDoExposureController {

@@ -39,7 +39,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.*;
 /**
  * OAuth2.0 Client Service 实现类
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Validated
@@ -63,9 +63,14 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
      */
     @Override
     public Long createOAuth2Client(OAuth2ClientSaveReqVO createReqVO) {
-        validateClientIdExists(null, createReqVO.getClientId());
+        String normalizedClientId = StrUtil.trim(createReqVO.getClientId());
+        String normalizedName = StrUtil.trim(createReqVO.getName());
+        validateClientIdExists(null, normalizedClientId);
         validateAuthorizedGrantTypes(null, createReqVO.getAuthorizedGrantTypes());
         OAuth2ClientDO client = BeanUtils.toBean(createReqVO, OAuth2ClientDO.class);
+        client.setId(null);
+        client.setClientId(normalizedClientId);
+        client.setName(normalizedName);
         client.setSecret(passwordEncoder.encode(requireClientSecret(createReqVO.getSecret())));
         oauth2ClientMapper.insert(client);
         return client.getId();
@@ -81,10 +86,14 @@ public class OAuth2ClientServiceImpl implements OAuth2ClientService {
             allEntries = true) // allEntries 清空所有缓存，因为可能修改到 clientId 字段，不好清理
     public void updateOAuth2Client(OAuth2ClientSaveReqVO updateReqVO) {
         OAuth2ClientDO existing = validateOAuth2ClientExists(updateReqVO.getId());
-        validateClientIdExists(updateReqVO.getId(), updateReqVO.getClientId());
+        String normalizedClientId = StrUtil.trim(updateReqVO.getClientId());
+        String normalizedName = StrUtil.trim(updateReqVO.getName());
+        validateClientIdExists(updateReqVO.getId(), normalizedClientId);
         validateAuthorizedGrantTypes(existing.getAuthorizedGrantTypes(), updateReqVO.getAuthorizedGrantTypes());
 
         OAuth2ClientDO updateObj = BeanUtils.toBean(updateReqVO, OAuth2ClientDO.class);
+        updateObj.setClientId(normalizedClientId);
+        updateObj.setName(normalizedName);
         updateObj.setSecret(StrUtil.isBlank(updateReqVO.getSecret())
                 ? existing.getSecret() : passwordEncoder.encode(updateReqVO.getSecret()));
         oauth2ClientMapper.updateById(updateObj);

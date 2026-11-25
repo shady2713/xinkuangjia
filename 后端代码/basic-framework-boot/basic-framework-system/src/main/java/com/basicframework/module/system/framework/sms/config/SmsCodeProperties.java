@@ -10,7 +10,7 @@ import java.time.Duration;
 /**
  * SmsCodeProperties 配置属性对象。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.sms-code")
 @Validated

@@ -18,7 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
  * 原因是，GlobalResponseBodyHandler 本质上是 AOP，它不应该改变 Controller 返回的数据结构
  *
  * 目前，GlobalResponseBodyHandler 的主要作用是记录 Controller 的返回结果到请求属性中。
- * @author 李杰
+ * @author shady
  */
 @ControllerAdvice
 public class GlobalResponseBodyHandler implements ResponseBodyAdvice {

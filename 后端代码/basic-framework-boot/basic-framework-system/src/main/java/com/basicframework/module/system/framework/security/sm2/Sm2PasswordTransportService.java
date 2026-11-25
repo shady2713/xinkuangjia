@@ -30,7 +30,7 @@ import static com.basicframework.module.system.enums.ErrorCodeConstants.PASSWORD
  * <p>明文载荷固定为 JSON：{@code {"p":"密码","t":毫秒时间戳,"n":"随机串"}}。
  * 密文、时间戳、重放等校验失败统一转换为通用业务错误，日志不记录明文或密文。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Slf4j
 @Service

@@ -13,7 +13,7 @@ import lombok.Getter;
 /**
  * 文件存储器枚举：支持本地磁盘（LOCAL）与阿里云 OSS（S3 协议）。
  *
- * @author 李杰
+ * @author shady
  */
 @AllArgsConstructor
 @Getter

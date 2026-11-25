@@ -10,7 +10,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * 操作审计日志核心 SPI 实现，供 core 层 {@code @OperateLog} 切面回调落库。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Validated

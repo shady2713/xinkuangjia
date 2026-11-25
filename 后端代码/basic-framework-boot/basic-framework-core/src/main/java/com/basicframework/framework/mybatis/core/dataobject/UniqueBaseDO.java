@@ -12,7 +12,7 @@ import lombok.ToString;
  * 未删除记录固定为 {@code 0}，逻辑删除时由 {@code SoftDeleteUniqueInnerInterceptor} 自动将
  * {@code deleted_tag} 更新为主键 {@code id}，使任意次数的删除与同编码重建在 MySQL 与 H2 下均保持唯一性语义。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Data
 @EqualsAndHashCode(callSuper = true)

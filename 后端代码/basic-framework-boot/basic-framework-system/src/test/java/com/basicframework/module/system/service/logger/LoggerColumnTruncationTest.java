@@ -19,7 +19,7 @@ import static org.mockito.Mockito.verify;
 /**
  * 验证登录日志与操作日志入库前的定长截断保护，避免超长 User-Agent 或请求字段导致 DB 写入异常阻断登录。
  *
- * @author shady2713
+ * @author shady
  */
 @ExtendWith(MockitoExtension.class)
 class LoggerColumnTruncationTest {

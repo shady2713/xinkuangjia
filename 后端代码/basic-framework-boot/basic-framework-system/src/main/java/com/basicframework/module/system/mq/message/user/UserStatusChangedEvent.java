@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
  * 用户状态变更事件
  *
  * 当用户被禁用时，需要清除其所有 Token，通过事件解耦 AdminUserService 与 OAuth2TokenService 的循环依赖
- * @author 李杰
+ * @author shady
  */
 @Data
 @NoArgsConstructor

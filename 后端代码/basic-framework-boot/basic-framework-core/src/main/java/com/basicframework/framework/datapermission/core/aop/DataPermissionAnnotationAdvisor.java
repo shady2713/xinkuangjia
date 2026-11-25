@@ -15,7 +15,7 @@ import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
  * <p>用于匹配类或方法上的 {@link DataPermission} 注解，并委托
  * {@link DataPermissionAnnotationInterceptor} 维护数据权限上下文。</p>
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @EqualsAndHashCode(callSuper = true)

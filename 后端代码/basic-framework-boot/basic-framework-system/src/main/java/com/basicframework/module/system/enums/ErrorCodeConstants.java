@@ -6,23 +6,19 @@ import com.basicframework.framework.common.exception.ErrorCode;
  * System 错误码枚举类
  *
  * system 系统，使用 1-002-000-000 段
- * @author 李杰
+ * @author shady
  */
 public interface ErrorCodeConstants {
 
     // 平台不匹配按账号密码错误统一提示，避免登录页暴露账号归属平台。
     ErrorCode AUTH_LOGIN_PLATFORM_MISMATCH = new ErrorCode(1_002_000_014, "登录失败，账号密码不正确");
     ErrorCode SYSTEM_PLATFORM_ACCESS_DENIED = new ErrorCode(1_002_000_015, "当前账号无权访问该平台数据");
-    /** 系统域同步导出超过单次允许的数据上限。 */
-    ErrorCode SYSTEM_EXPORT_SIZE_EXCEEDED = new ErrorCode(1_002_000_016,
-            "单次最多导出 10000 条数据，请缩小筛选范围");
 
     // ========== AUTH 模块 1-002-000-000 ==========
     ErrorCode AUTH_LOGIN_BAD_CREDENTIALS = new ErrorCode(1_002_000_000, "登录失败，账号密码不正确");
     ErrorCode AUTH_LOGIN_USER_DISABLED = new ErrorCode(1_002_000_001, "登录失败，账号被禁用");
     ErrorCode AUTH_LOGIN_CAPTCHA_CODE_ERROR = new ErrorCode(1_002_000_004, "验证码不正确，原因：{}");
-    ErrorCode AUTH_MOBILE_NOT_EXISTS = new ErrorCode(1_002_000_007, "手机号不存在");
-    ErrorCode AUTH_REFRESH_TOKEN_REQUIRED = new ErrorCode(1_002_000_009, "refreshToken 不能为空");
+    ErrorCode AUTH_REFRESH_TOKEN_REQUIRED = new ErrorCode(1_002_000_009, "刷新令牌不能为空");
     // 锁定提示只说明账号暂时不可登录，不暴露账号是否存在。
     ErrorCode AUTH_LOGIN_ACCOUNT_LOCKED = new ErrorCode(1_002_000_017,
             "登录失败次数过多，账号已临时锁定，请 {} 分钟后重试");
@@ -55,11 +51,10 @@ public interface ErrorCodeConstants {
     ErrorCode USER_MOBILE_EXISTS = new ErrorCode(1_002_003_001, "手机号已经存在");
     ErrorCode USER_EMAIL_EXISTS = new ErrorCode(1_002_003_002, "邮箱已经存在");
     ErrorCode USER_NOT_EXISTS = new ErrorCode(1_002_003_003, "用户不存在");
-    ErrorCode USER_IMPORT_LIST_IS_EMPTY = new ErrorCode(1_002_003_004, "导入用户数据不能为空！");
+    ErrorCode USER_IMPORT_LIST_IS_EMPTY = new ErrorCode(1_002_003_004, "导入用户数据不能为空");
     ErrorCode USER_PASSWORD_FAILED = new ErrorCode(1_002_003_005, "用户密码校验失败");
     ErrorCode USER_IS_DISABLE = new ErrorCode(1_002_003_006, "名字为【{}】的用户已被禁用");
     ErrorCode USER_IMPORT_INIT_PASSWORD = new ErrorCode(1_002_003_009, "初始密码不能为空");
-    ErrorCode USER_MOBILE_NOT_EXISTS = new ErrorCode(1_002_003_010, "该手机号尚未注册");
     ErrorCode USER_EXPORT_SIZE_EXCEEDED = new ErrorCode(1_002_003_012,
             "单次最多导出 10000 条用户，请缩小筛选范围");
     ErrorCode USER_PASSWORD_CHANGE_REQUIRED = new ErrorCode(1_002_003_013,
@@ -72,20 +67,13 @@ public interface ErrorCodeConstants {
 
     // ========== 部门模块 1-002-004-000 ==========
     ErrorCode DEPT_NAME_DUPLICATE = new ErrorCode(1_002_004_000, "已经存在该名字的部门");
-    ErrorCode DEPT_PARENT_NOT_EXITS = new ErrorCode(1_002_004_001,"父级部门不存在");
+    ErrorCode DEPT_PARENT_NOT_EXITS = new ErrorCode(1_002_004_001, "父级部门不存在");
     ErrorCode DEPT_NOT_FOUND = new ErrorCode(1_002_004_002, "当前部门不存在");
     ErrorCode DEPT_EXITS_CHILDREN = new ErrorCode(1_002_004_003, "存在子部门，无法删除");
     ErrorCode DEPT_PARENT_ERROR = new ErrorCode(1_002_004_004, "不能设置自己为父部门");
-    ErrorCode DEPT_NOT_ENABLE = new ErrorCode(1_002_004_006, "部门({})不处于开启状态，不允许选择");
+    ErrorCode DEPT_NOT_ENABLE = new ErrorCode(1_002_004_006, "部门【{}】不处于开启状态，不允许选择");
     ErrorCode DEPT_PARENT_IS_CHILD = new ErrorCode(1_002_004_007, "不能设置自己的子部门为父部门");
     ErrorCode DEPT_EXISTS_USER = new ErrorCode(1_002_004_008, "存在关联用户，无法删除部门");
-
-    // ========== 岗位模块 1-002-005-000 ==========
-    ErrorCode POST_NOT_FOUND = new ErrorCode(1_002_005_000, "当前岗位不存在");
-    ErrorCode POST_NOT_ENABLE = new ErrorCode(1_002_005_001, "岗位({}) 不处于开启状态，不允许选择");
-    ErrorCode POST_NAME_DUPLICATE = new ErrorCode(1_002_005_002, "已经存在该名字的岗位");
-    ErrorCode POST_CODE_DUPLICATE = new ErrorCode(1_002_005_003, "已经存在该标识的岗位");
-    ErrorCode POST_IS_REFERENCED = new ErrorCode(1_002_005_004, "岗位【{}】已被用户引用，不允许禁用");
 
     // ========== 字典类型 1-002-006-000 ==========
     ErrorCode DICT_TYPE_NOT_EXISTS = new ErrorCode(1_002_006_001, "当前字典类型不存在");
@@ -96,31 +84,12 @@ public interface ErrorCodeConstants {
 
     // ========== 字典数据 1-002-007-000 ==========
     ErrorCode DICT_DATA_NOT_EXISTS = new ErrorCode(1_002_007_001, "当前字典数据不存在");
-    ErrorCode DICT_DATA_NOT_ENABLE = new ErrorCode(1_002_007_002, "字典数据({})不处于开启状态，不允许选择");
+    ErrorCode DICT_DATA_NOT_ENABLE = new ErrorCode(1_002_007_002, "字典数据【{}】不处于开启状态，不允许选择");
     ErrorCode DICT_DATA_VALUE_DUPLICATE = new ErrorCode(1_002_007_003, "已经存在该值的字典数据");
 
     // ========== 日志模块 1-002-009-000 ==========
     ErrorCode LOG_EXPORT_SIZE_EXCEEDED = new ErrorCode(1_002_009_000,
             "单次最多导出 10000 条日志，请缩小时间或筛选范围");
-
-    // ========== 短信渠道 1-002-011-000 ==========
-    ErrorCode SMS_CHANNEL_NOT_EXISTS = new ErrorCode(1_002_011_000, "短信渠道不存在");
-    ErrorCode SMS_CHANNEL_DISABLE = new ErrorCode(1_002_011_001, "短信渠道不处于开启状态，不允许选择");
-    ErrorCode SMS_CHANNEL_HAS_CHILDREN = new ErrorCode(1_002_011_002, "无法删除，该短信渠道还有短信模板");
-    ErrorCode SMS_CHANNEL_CODE_DUPLICATE = new ErrorCode(1_002_011_003, "已存在【{}】短信渠道");
-
-    // ========== 短信模板 1-002-012-000 ==========
-    ErrorCode SMS_TEMPLATE_NOT_EXISTS = new ErrorCode(1_002_012_000, "短信模板不存在");
-    ErrorCode SMS_TEMPLATE_CODE_DUPLICATE = new ErrorCode(1_002_012_001, "已经存在编码为【{}】的短信模板");
-    ErrorCode SMS_TEMPLATE_API_ERROR = new ErrorCode(1_002_012_002, "短信 API 模板调用失败，原因是：{}");
-    ErrorCode SMS_TEMPLATE_API_AUDIT_CHECKING = new ErrorCode(1_002_012_003, "短信 API 模版无法使用，原因：审批中");
-    ErrorCode SMS_TEMPLATE_API_AUDIT_FAIL = new ErrorCode(1_002_012_004, "短信 API 模版无法使用，原因：审批不通过，{}");
-    ErrorCode SMS_TEMPLATE_API_NOT_FOUND = new ErrorCode(1_002_012_005, "短信 API 模版无法使用，原因：模版不存在");
-
-    // ========== 短信发送 1-002-013-000 ==========
-    ErrorCode SMS_SEND_MOBILE_NOT_EXISTS = new ErrorCode(1_002_013_000, "手机号不存在");
-    ErrorCode SMS_SEND_MOBILE_TEMPLATE_PARAM_MISS = new ErrorCode(1_002_013_001, "模板参数({})缺失");
-    ErrorCode SMS_SEND_TEMPLATE_NOT_EXISTS = new ErrorCode(1_002_013_002, "短信模板不存在");
 
     // ========== 短信验证码 1-002-014-000 ==========
     ErrorCode SMS_CODE_NOT_FOUND = new ErrorCode(1_002_014_000, "验证码不存在");
@@ -135,13 +104,6 @@ public interface ErrorCodeConstants {
     ErrorCode OAUTH2_CLIENT_DISABLE = new ErrorCode(1_002_020_002, "OAuth2 客户端已禁用");
     ErrorCode OAUTH2_CLIENT_AUTHORIZED_GRANT_TYPE_NOT_EXISTS = new ErrorCode(1_002_020_003, "不支持该授权类型");
     ErrorCode OAUTH2_CLIENT_SCOPE_OVER = new ErrorCode(1_002_020_004, "授权范围过大");
-    ErrorCode OAUTH2_CLIENT_REDIRECT_URI_NOT_MATCH = new ErrorCode(1_002_020_005, "无效 redirect_uri: {}");
-    ErrorCode OAUTH2_CLIENT_CLIENT_SECRET_ERROR = new ErrorCode(1_002_020_006, "无效 client_secret");
-
-    // ========== OAuth2 授权 1-002-021-000 =========
-    ErrorCode OAUTH2_GRANT_CLIENT_ID_MISMATCH = new ErrorCode(1_002_021_000, "client_id 不匹配");
-    ErrorCode OAUTH2_GRANT_REDIRECT_URI_MISMATCH = new ErrorCode(1_002_021_001, "redirect_uri 不匹配");
-    ErrorCode OAUTH2_GRANT_STATE_MISMATCH = new ErrorCode(1_002_021_002, "state 不匹配");
-    ErrorCode OAUTH2_GRANT_REFRESH_TOKEN_INVALID = new ErrorCode(1_002_021_003, "无效的刷新令牌");
+    ErrorCode OAUTH2_CLIENT_CLIENT_SECRET_ERROR = new ErrorCode(1_002_020_006, "客户端密钥不正确");
 
 }

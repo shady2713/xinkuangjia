@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 验证 {@link DataPermissionContextHolder} 在 TTL 异步传递与并发复用场景下的独立快照隔离。
  *
- * @author shady2713
+ * @author shady
  */
 class DataPermissionContextHolderTest {
 

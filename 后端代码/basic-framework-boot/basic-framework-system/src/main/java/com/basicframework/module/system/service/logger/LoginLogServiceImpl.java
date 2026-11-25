@@ -18,7 +18,7 @@ import org.springframework.validation.annotation.Validated;
  * <p>
  * 负责登录日志的持久化和查询。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Validated

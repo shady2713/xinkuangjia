@@ -10,7 +10,7 @@ import java.util.Arrays;
 /**
  * 通用状态枚举
  *
- * @author 李杰
+ * @author shady
  */
 @Getter
 @AllArgsConstructor

@@ -7,7 +7,7 @@ import java.util.List;
  *
  * <p>作为数据权限规则容器，根据当前调用上下文筛选实际需要参与 SQL 重写的规则。</p>
  *
- * @author 李杰
+ * @author shady
  */
 public interface DataPermissionRuleFactory {
 

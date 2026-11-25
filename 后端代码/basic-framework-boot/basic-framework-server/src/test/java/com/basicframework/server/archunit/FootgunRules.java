@@ -27,7 +27,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /**
  * 后端确定性架构门禁规则，供质量门禁测试与反向失败夹具复用。
  *
- * @author shady2713
+ * @author shady
  */
 final class FootgunRules {
 

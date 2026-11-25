@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * 字典数据核心 SPI 实现，供 core 层字典工具与 Excel 字典转换调用。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 public class DictDataApiImpl implements DictDataCommonApi {

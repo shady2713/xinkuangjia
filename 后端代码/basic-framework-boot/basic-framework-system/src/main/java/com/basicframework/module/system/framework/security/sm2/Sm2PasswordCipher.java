@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  * BouncyCastle 需要未压缩点前缀，因此本组件对带/不带前缀的输入都做兼容尝试。
  * 公钥以带 {@code 04} 前缀的未压缩点十六进制下发给前端。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Component
 public class Sm2PasswordCipher {
@@ -34,6 +34,9 @@ public class Sm2PasswordCipher {
 
     /** 十六进制密文格式。 */
     private static final Pattern HEX_PATTERN = Pattern.compile("^[0-9a-fA-F]+$");
+
+    /** 密文十六进制长度上限（限制异常长入参触发 SM2 解密 CPU/内存 DoS）。 */
+    public static final int MAX_CIPHERTEXT_HEX_LENGTH = 1024;
 
     static {
         // 只在缺失时注册，避免覆盖运行环境已安装的 BouncyCastle Provider。
@@ -145,13 +148,16 @@ public class Sm2PasswordCipher {
         if (ciphertextHex == null) {
             throw new IllegalArgumentException("SM2 密文为空");
         }
+        if (ciphertextHex.length() > MAX_CIPHERTEXT_HEX_LENGTH) {
+            throw new IllegalArgumentException("SM2 密文长度超限");
+        }
         String normalized = ciphertextHex.replaceAll("\\s", "").toLowerCase();
         if (normalized.isEmpty() || normalized.length() % 2 != 0
                 || !HEX_PATTERN.matcher(normalized).matches()) {
             throw new IllegalArgumentException("SM2 密文格式非法");
         }
         // C1 至少 64 字节，加 C3 32 字节和最短密文，低于该长度不可能有效。
-        if (normalized.length() < 194) {
+        if (normalized.length() < 194 || normalized.length() > MAX_CIPHERTEXT_HEX_LENGTH) {
             throw new IllegalArgumentException("SM2 密文长度非法");
         }
         return normalized;

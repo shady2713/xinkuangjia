@@ -1,9 +1,12 @@
 package com.basicframework.module.system.controller.admin.oauth2.vo.client;
 
+import com.basicframework.framework.common.enums.CommonStatusEnum;
 import com.basicframework.framework.common.util.json.JsonUtils;
+import com.basicframework.framework.common.validation.InEnum;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,13 +19,14 @@ import java.util.stream.Stream;
 /**
  * 管理后台 OAuth2 客户端创建或修改请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - OAuth2 客户端创建/修改 Request VO")
 @Data
 public class OAuth2ClientSaveReqVO {
 
     private static final int SERIALIZED_LIST_MAX_LENGTH = 255;
+    private static final int MAX_TOKEN_VALIDITY_SECONDS = 31_536_000;
 
     @Schema(description = "编号", example = "1024")
     private Long id;
@@ -33,7 +37,7 @@ public class OAuth2ClientSaveReqVO {
     private String clientId;
 
     @Schema(description = "客户端密钥；创建时必填，更新时留空表示不变", example = "CHANGE_ME_CLIENT_SECRET")
-    @Size(max = 255, message = "客户端密钥长度不能超过 255 个字符")
+    @Size(max = 72, message = "客户端密钥长度不能超过 72 个字符")
     private String secret;
 
     @Schema(description = "应用名", requiredMode = Schema.RequiredMode.REQUIRED, example = "门户客户端")
@@ -47,24 +51,27 @@ public class OAuth2ClientSaveReqVO {
 
     @Schema(description = "状态，参见 CommonStatusEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "0")
     @NotNull(message = "状态不能为空")
+    @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
     @Schema(description = "访问令牌的有效期（秒）", requiredMode = Schema.RequiredMode.REQUIRED, example = "8640")
     @NotNull(message = "访问令牌的有效期不能为空")
     @Min(value = 1, message = "访问令牌有效期必须大于 0 秒")
+    @Max(value = MAX_TOKEN_VALIDITY_SECONDS, message = "访问令牌有效期不能超过 31536000 秒")
     private Integer accessTokenValiditySeconds;
 
     @Schema(description = "刷新令牌的有效期（秒）", requiredMode = Schema.RequiredMode.REQUIRED, example = "8640000")
     @NotNull(message = "刷新令牌的有效期不能为空")
     @Min(value = 1, message = "刷新令牌有效期必须大于 0 秒")
+    @Max(value = MAX_TOKEN_VALIDITY_SECONDS, message = "刷新令牌有效期不能超过 31536000 秒")
     private Integer refreshTokenValiditySeconds;
 
     @Schema(description = "授权类型，参见 OAuth2GrantTypeEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "client_credentials")
     @NotNull(message = "授权类型不能为空")
-    private List<String> authorizedGrantTypes;
+    private List<@NotBlank(message = "授权类型项不能为空") String> authorizedGrantTypes;
 
     @Schema(description = "授权范围", example = "user_info")
-    private List<String> scopes;
+    private List<@NotBlank(message = "授权范围项不能为空") String> scopes;
 
     @AssertTrue(message = "OAuth2 集合配置序列化后长度不能超过 255 个字符")
     @JsonIgnore

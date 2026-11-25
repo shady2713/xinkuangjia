@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  *
  * 不同实现的客户端需要不同配置，通过子类定义并依赖 Jackson 多态信息完成持久化和还原。
  *
- * @author 李杰
+ * @author shady
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
 // @JsonTypeInfo 注解的作用，Jackson 多态

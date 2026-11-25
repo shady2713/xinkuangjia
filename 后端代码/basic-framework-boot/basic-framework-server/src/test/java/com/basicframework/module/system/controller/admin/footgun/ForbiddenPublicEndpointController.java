@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 反向失败夹具：名单外的公开端点，不得出现在产品代码中。
  *
- * @author shady2713
+ * @author shady
  */
 @RestController
 public class ForbiddenPublicEndpointController {

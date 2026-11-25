@@ -1,6 +1,5 @@
 import { ElMessageBox } from 'element-plus';
 
-import { deleteConfirmMessage } from '@/constants/validation';
 import { getSessionId } from '@/utils/token';
 
 export interface ConfirmOptions {
@@ -22,18 +21,6 @@ export async function confirmAction(
     confirmButtonText: options.confirmText ?? '确定',
     cancelButtonText: options.cancelText ?? '取消',
     closeOnClickModal: false,
-  });
-}
-
-/**
- * 统一风格删除确认弹窗。
- */
-export async function confirmDelete(targetName?: string | number | null): Promise<void> {
-  await confirmAction(deleteConfirmMessage(targetName), {
-    title: '删除确认',
-    confirmText: '确认删除',
-    cancelText: '取消',
-    type: 'warning',
   });
 }
 

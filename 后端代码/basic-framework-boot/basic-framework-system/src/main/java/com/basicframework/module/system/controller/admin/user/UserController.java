@@ -48,7 +48,7 @@ import static com.basicframework.framework.common.util.collection.CollectionUtil
 /**
  * 管理后台用户接口，负责用户维护、导入导出及 HTTP 协议适配。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 用户")
 @RestController

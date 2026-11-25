@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * system 模块的 web 组件的 Configuration
  *
- * @author 李杰
+ * @author shady
  */
 @Configuration(proxyBeanMethods = false)
 public class SystemWebConfiguration {

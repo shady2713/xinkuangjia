@@ -21,7 +21,7 @@ import static com.basicframework.framework.web.config.BasicFrameworkWebAutoConfi
 /**
  * BasicFrameworkXssAutoConfiguration 自动配置类。
  *
- * @author 李杰
+ * @author shady
  */
 @AutoConfiguration
 @EnableConfigurationProperties(XssProperties.class)

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
  * 审计记录只包含用户编号、账号、IP、User-Agent、日志类型和结果原因；调用方不得传入密码、
  * 密文、短信验证码或其他凭据内容。</p>
  *
- * @author shady2713
+ * @author shady
  */
 @Service
 @RequiredArgsConstructor

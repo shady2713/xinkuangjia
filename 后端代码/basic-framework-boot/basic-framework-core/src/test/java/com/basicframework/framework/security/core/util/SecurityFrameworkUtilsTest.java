@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 /**
  * 验证 {@link SecurityFrameworkUtils} 令牌提取边界：Header 优先、Bearer 剥离及空白参数禁用 Query 传参。
  *
- * @author shady2713
+ * @author shady
  */
 class SecurityFrameworkUtilsTest {
 

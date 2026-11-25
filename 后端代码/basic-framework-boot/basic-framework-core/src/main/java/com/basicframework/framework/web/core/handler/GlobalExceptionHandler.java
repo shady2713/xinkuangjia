@@ -18,6 +18,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -40,7 +42,7 @@ import static com.basicframework.framework.common.exception.enums.GlobalErrorCod
 /**
  * 全局异常处理器，将 Exception 翻译成 CommonResult + 对应的异常编号
  *
- * @author 李杰
+ * @author shady
  */
 @RestControllerAdvice
 @AllArgsConstructor
@@ -67,8 +69,14 @@ public class GlobalExceptionHandler {
         if (ex instanceof MissingServletRequestParameterException) {
             return missingServletRequestParameterExceptionHandler((MissingServletRequestParameterException) ex);
         }
+        if (ex instanceof MissingServletRequestPartException) {
+            return missingServletRequestPartExceptionHandler((MissingServletRequestPartException) ex);
+        }
         if (ex instanceof MethodArgumentTypeMismatchException) {
             return methodArgumentTypeMismatchExceptionHandler((MethodArgumentTypeMismatchException) ex);
+        }
+        if (ex instanceof HttpMessageNotReadableException) {
+            return methodArgumentTypeInvalidFormatExceptionHandler((HttpMessageNotReadableException) ex);
         }
         if (ex instanceof MethodArgumentNotValidException) {
             return methodArgumentNotValidExceptionExceptionHandler((MethodArgumentNotValidException) ex);
@@ -100,6 +108,9 @@ public class GlobalExceptionHandler {
         if (ex instanceof ServiceException) {
             return serviceExceptionHandler((ServiceException) ex);
         }
+        if (ex instanceof AuthenticationException) {
+            return authenticationExceptionHandler(request, (AuthenticationException) ex);
+        }
         if (ex instanceof AccessDeniedException) {
             return accessDeniedExceptionHandler(request, (AccessDeniedException) ex);
         }
@@ -113,8 +124,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = MissingServletRequestParameterException.class)
     public CommonResult<?> missingServletRequestParameterExceptionHandler(MissingServletRequestParameterException ex) {
-        log.warn("[missingServletRequestParameterExceptionHandler]", ex);
-        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数缺失:%s", ex.getParameterName()));
+        log.warn("[missingServletRequestParameterExceptionHandler][param({})]", ex.getParameterName());
+        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数缺失：%s", ex.getParameterName()));
+    }
+
+    /**
+     * 处理 multipart 请求缺少文件或表单部件
+     */
+    @ExceptionHandler(value = MissingServletRequestPartException.class)
+    public CommonResult<?> missingServletRequestPartExceptionHandler(MissingServletRequestPartException ex) {
+        log.warn("[missingServletRequestPartExceptionHandler][part({})]", ex.getRequestPartName());
+        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数缺失：%s", ex.getRequestPartName()));
     }
 
     /**
@@ -128,7 +148,7 @@ public class GlobalExceptionHandler {
         // 仅记录参数名与目标类型，避免把原始请求值或转换异常消息写入日志
         log.warn("[methodArgumentTypeMismatchExceptionHandler][param({}) requiredType({})]", paramName,
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : null);
-        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", paramName));
+        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误：%s", paramName));
     }
 
     /**
@@ -147,11 +167,14 @@ public class GlobalExceptionHandler {
             if (CollUtil.isNotEmpty(allErrors)) {
                 errorMessage = allErrors.get(0).getDefaultMessage();
             }
+        } else if (fieldError.isBindingFailure()) {
+            String field = StrUtil.blankToDefault(fieldError.getField(), "未知参数");
+            return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误：%s", field));
         } else {
             errorMessage = fieldError.getDefaultMessage();
         }
         // 转换 CommonResult
-        if (StrUtil.isEmpty(errorMessage)) {
+        if (StrUtil.isBlank(errorMessage)) {
             return CommonResult.error(BAD_REQUEST);
         }
         return CommonResult.error(BAD_REQUEST.getCode(), errorMessage);
@@ -168,10 +191,18 @@ public class GlobalExceptionHandler {
         FieldError fieldError = ex.getFieldError();
         logValidationMetadata("handleBindException", fieldError, ex.getErrorCount());
         if (fieldError != null) {
-            return CommonResult.error(BAD_REQUEST.getCode(), fieldError.getDefaultMessage());
+            // 类型转换失败时禁止透出 Spring 原始英文异常消息与用户输入原文
+            if (fieldError.isBindingFailure()) {
+                String field = StrUtil.blankToDefault(fieldError.getField(), "未知参数");
+                return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误：%s", field));
+            }
+            String message = StrUtil.blankToDefault(fieldError.getDefaultMessage(), BAD_REQUEST.getMsg());
+            return CommonResult.error(BAD_REQUEST.getCode(), message);
         }
         ObjectError objectError = CollUtil.getFirst(ex.getAllErrors());
-        String message = objectError != null ? objectError.getDefaultMessage() : "请求参数校验失败";
+        String message = objectError != null
+                ? StrUtil.blankToDefault(objectError.getDefaultMessage(), BAD_REQUEST.getMsg())
+                : BAD_REQUEST.getMsg();
         return CommonResult.error(BAD_REQUEST.getCode(), message);
     }
 
@@ -192,12 +223,12 @@ public class GlobalExceptionHandler {
                     ? invalidFormatException.getPath().get(invalidFormatException.getPath().size() - 1).getFieldName()
                     : null;
             String message = StrUtil.isNotBlank(fieldName)
-                    ? String.format("请求参数类型错误:%s", fieldName)
+                    ? String.format("请求参数类型错误：%s", fieldName)
                     : "请求参数类型错误";
             return CommonResult.error(BAD_REQUEST.getCode(), message);
         }
         if (StrUtil.startWith(ex.getMessage(), "Required request body is missing")) {
-            return CommonResult.error(BAD_REQUEST.getCode(), "请求参数类型错误: request body 缺失");
+            return CommonResult.error(BAD_REQUEST.getCode(), "请求体不能为空");
         }
         return CommonResult.error(BAD_REQUEST.getCode(), "请求参数格式错误");
     }
@@ -207,20 +238,23 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = ConstraintViolationException.class)
     public CommonResult<?> constraintViolationExceptionHandler(ConstraintViolationException ex) {
+        if (CollUtil.isEmpty(ex.getConstraintViolations())) {
+            return CommonResult.error(BAD_REQUEST);
+        }
         ConstraintViolation<?> constraintViolation = ex.getConstraintViolations().iterator().next();
         log.warn("[constraintViolationExceptionHandler][path({}) violationCount({})]",
                 constraintViolation.getPropertyPath(), ex.getConstraintViolations().size());
-        return CommonResult.error(BAD_REQUEST.getCode(), constraintViolation.getMessage());
+        String message = StrUtil.blankToDefault(constraintViolation.getMessage(), BAD_REQUEST.getMsg());
+        return CommonResult.error(BAD_REQUEST.getCode(), message);
     }
 
     /**
-     * 处理 Dubbo Consumer 本地参数校验时，抛出的 ValidationException 异常
+     * 处理本地参数校验时抛出的 ValidationException 异常
      */
     @ExceptionHandler(value = ValidationException.class)
     public CommonResult<?> validationException(ValidationException ex) {
         // ValidationException 的消息为非结构化字符串，可能包含原始入参，仅记录异常类型
-        log.warn("[constraintViolationExceptionHandler][type({})]", ex.getClass().getSimpleName());
-        // 无法拼接明细的错误信息，因为 Dubbo Consumer 抛出 ValidationException 异常时，是直接的字符串信息，且人类不可读
+        log.warn("[validationException][type({})]", ex.getClass().getSimpleName());
         return CommonResult.error(BAD_REQUEST);
     }
 
@@ -234,46 +268,47 @@ public class GlobalExceptionHandler {
 
     /**
      * 处理 SpringMVC 请求地址不存在
-     *
-     * 注意，它需要设置如下两个配置项：
-     * 1. spring.mvc.throw-exception-if-no-handler-found 为 true
-     * 2. spring.mvc.static-path-pattern 为 /statics/**
      */
     @ExceptionHandler(NoHandlerFoundException.class)
     public CommonResult<?> noHandlerFoundExceptionHandler(NoHandlerFoundException ex) {
-        log.warn("[noHandlerFoundExceptionHandler]", ex);
-        return CommonResult.error(NOT_FOUND.getCode(), String.format("请求地址不存在:%s", ex.getRequestURL()));
+        log.warn("[noHandlerFoundExceptionHandler][url({})]", ex.getRequestURL());
+        return CommonResult.error(NOT_FOUND.getCode(), "请求地址不存在");
     }
 
     /**
-     * 处理 SpringMVC 请求地址不存在
+     * 处理 SpringMVC 静态资源或路由不存在
      */
     @ExceptionHandler(NoResourceFoundException.class)
-    private CommonResult<?> noResourceFoundExceptionHandler(NoResourceFoundException ex) {
-        log.warn("[noResourceFoundExceptionHandler]", ex);
-        return CommonResult.error(NOT_FOUND.getCode(), String.format("请求地址不存在:%s", ex.getResourcePath()));
+    public CommonResult<?> noResourceFoundExceptionHandler(NoResourceFoundException ex) {
+        log.warn("[noResourceFoundExceptionHandler][path({})]", ex.getResourcePath());
+        return CommonResult.error(NOT_FOUND.getCode(), "请求地址不存在");
     }
 
     /**
      * 处理 SpringMVC 请求方法不正确
-     *
-     * 例如说，A 接口的方法为 GET 方式，结果请求方法为 POST 方式，导致不匹配
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public CommonResult<?> httpRequestMethodNotSupportedExceptionHandler(HttpRequestMethodNotSupportedException ex) {
-        log.warn("[httpRequestMethodNotSupportedExceptionHandler]", ex);
-        return CommonResult.error(METHOD_NOT_ALLOWED.getCode(), String.format("请求方法不正确:%s", ex.getMessage()));
+        log.warn("[httpRequestMethodNotSupportedExceptionHandler][method({})]", ex.getMethod());
+        return CommonResult.error(METHOD_NOT_ALLOWED);
     }
 
     /**
      * 处理 SpringMVC 请求的 Content-Type 不正确
-     *
-     * 例如说，A 接口的 Content-Type 为 application/json，结果请求的 Content-Type 为 application/octet-stream，导致不匹配
      */
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public CommonResult<?> httpMediaTypeNotSupportedExceptionHandler(HttpMediaTypeNotSupportedException ex) {
-        log.warn("[httpMediaTypeNotSupportedExceptionHandler]", ex);
-        return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求类型不正确:%s", ex.getMessage()));
+        log.warn("[httpMediaTypeNotSupportedExceptionHandler][contentType({})]", ex.getContentType());
+        return CommonResult.error(BAD_REQUEST.getCode(), "请求内容类型不支持");
+    }
+
+    /**
+     * 处理 MVC 层抛出的认证异常
+     */
+    @ExceptionHandler(value = AuthenticationException.class)
+    public CommonResult<?> authenticationExceptionHandler(HttpServletRequest req, AuthenticationException ex) {
+        log.warn("[authenticationExceptionHandler][url({}) type({})]", req.getRequestURI(), ex.getClass().getSimpleName());
+        return CommonResult.error(UNAUTHORIZED);
     }
 
     /**
@@ -328,10 +363,13 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = Exception.class)
     public CommonResult<?> defaultExceptionHandler(HttpServletRequest req, Throwable ex) {
-        // 特殊：如果是 ServiceException 的异常，则直接返回
-        // 例如说：https://example.com/external/basicframework/basic_framework-cloud/issues/ICSSRM、https://example.com/external/basicframework/basic_framework-cloud/issues/ICT6FM
-        if (ex.getCause() != null && ex.getCause() instanceof ServiceException) {
-            return serviceExceptionHandler((ServiceException) ex.getCause());
+        // 沿异常链解包嵌套的业务异常，避免包装层吞掉明确业务提示
+        Throwable cause = ex.getCause();
+        while (cause != null) {
+            if (cause instanceof ServiceException serviceEx) {
+                return serviceExceptionHandler(serviceEx);
+            }
+            cause = cause.getCause();
         }
         // 处理数据库唯一索引冲突
         CommonResult<?> sqlResult = handleSqlException(ex);
@@ -359,11 +397,22 @@ public class GlobalExceptionHandler {
             if (isDuplicateKey) {
                 String message = cause.getMessage();
                 log.warn("[handleSqlException][数据库唯一约束冲突: {}]", message);
-                if (message != null && message.contains("uk_code")) {
-                    return CommonResult.error(BAD_REQUEST.getCode(), "编码已存在，请更换后重试");
-                }
-                if (message != null && message.contains("uk_name")) {
-                    return CommonResult.error(BAD_REQUEST.getCode(), "名称已存在，请更换后重试");
+                if (message != null) {
+                    if (message.contains("uk_username_user_type")) {
+                        return CommonResult.error(BAD_REQUEST.getCode(), "用户账号已存在，请更换后重试");
+                    }
+                    if (message.contains("uk_code")) {
+                        return CommonResult.error(BAD_REQUEST.getCode(), "编码已存在，请更换后重试");
+                    }
+                    if (message.contains("uk_type")) {
+                        return CommonResult.error(BAD_REQUEST.getCode(), "字典类型已存在，请更换后重试");
+                    }
+                    if (message.contains("uk_client_id")) {
+                        return CommonResult.error(BAD_REQUEST.getCode(), "客户端编号已存在，请更换后重试");
+                    }
+                    if (message.contains("uk_path_deleted_tag")) {
+                        return CommonResult.error(BAD_REQUEST.getCode(), "文件路径已存在，请更换后重试");
+                    }
                 }
                 return CommonResult.error(BAD_REQUEST.getCode(), "数据已存在，请检查后重试");
             }

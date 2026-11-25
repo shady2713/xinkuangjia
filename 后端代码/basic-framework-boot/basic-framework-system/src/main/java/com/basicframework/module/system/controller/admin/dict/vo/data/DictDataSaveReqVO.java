@@ -5,6 +5,7 @@ import com.basicframework.framework.common.validation.InEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -12,7 +13,7 @@ import jakarta.validation.constraints.Size;
 /**
  * 管理后台字典数据创建或修改请求。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 字典数据创建/修改 Request VO")
 @Data
@@ -29,6 +30,7 @@ public class DictDataSaveReqVO {
      */
     @Schema(description = "显示顺序", requiredMode = Schema.RequiredMode.REQUIRED, example = "1024")
     @NotNull(message = "显示顺序不能为空")
+    @Min(value = 0, message = "显示顺序不能小于 0")
     private Integer sort;
 
     /**
@@ -36,7 +38,7 @@ public class DictDataSaveReqVO {
      */
     @Schema(description = "字典标签", requiredMode = Schema.RequiredMode.REQUIRED, example = "启用")
     @NotBlank(message = "字典标签不能为空")
-    @Size(max = 100, message = "字典标签长度不能超过100个字符")
+    @Size(max = 100, message = "字典标签长度不能超过 100 个字符")
     private String label;
 
     /**
@@ -44,7 +46,7 @@ public class DictDataSaveReqVO {
      */
     @Schema(description = "字典值", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "字典键值不能为空")
-    @Size(max = 100, message = "字典键值长度不能超过100个字符")
+    @Size(max = 100, message = "字典键值长度不能超过 100 个字符")
     private String value;
 
     /**
@@ -52,7 +54,7 @@ public class DictDataSaveReqVO {
      */
     @Schema(description = "字典类型", requiredMode = Schema.RequiredMode.REQUIRED, example = "sys_common_see")
     @NotBlank(message = "字典类型不能为空")
-    @Size(max = 100, message = "字典类型长度不能超过100个字符")
+    @Size(max = 100, message = "字典类型长度不能超过 100 个字符")
     private String dictType;
 
     /**
@@ -60,7 +62,7 @@ public class DictDataSaveReqVO {
      */
     @Schema(description = "状态,见 CommonStatusEnum 枚举", requiredMode = Schema.RequiredMode.REQUIRED, example = "1")
     @NotNull(message = "状态不能为空")
-    @InEnum(value = CommonStatusEnum.class, message = "修改状态必须是 {value}")
+    @InEnum(value = CommonStatusEnum.class, message = "状态必须是 {value}")
     private Integer status;
 
     /**

@@ -27,7 +27,7 @@ import static com.basicframework.framework.common.pojo.CommonResult.success;
 /**
  * DictTypeController HTTP 接口，负责请求校验和响应组装。
  *
- * @author 李杰
+ * @author shady
  */
 @Tag(name = "管理后台 - 字典类型")
 @RestController

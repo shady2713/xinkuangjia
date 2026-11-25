@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>业务平台继续使用 {@code blockPuzzle} 和项目自定义无人机底图；管理平台使用该类型，
  * 从 aj-captcha 依赖包自带的默认图库读取旧版底图，避免两个平台争用同一个全局图片缓存。</p>
- * @author 李杰
+ * @author shady
  */
 @Slf4j
 public class AdminDefaultBlockPuzzleCaptchaServiceImpl extends BlockPuzzleCaptchaServiceImpl {

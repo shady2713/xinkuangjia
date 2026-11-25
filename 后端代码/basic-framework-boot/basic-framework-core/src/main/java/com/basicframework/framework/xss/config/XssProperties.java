@@ -12,7 +12,7 @@ import java.util.List;
  * <p>
  * 允许在配置中控制是否启用过滤、以及需要忽略的 URL 列表。
  *
- * @author 李杰
+ * @author shady
  */
 @ConfigurationProperties(prefix = "basic-framework.xss")
 @Validated

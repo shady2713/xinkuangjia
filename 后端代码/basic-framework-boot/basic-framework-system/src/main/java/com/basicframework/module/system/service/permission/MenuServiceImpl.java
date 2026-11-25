@@ -37,7 +37,7 @@ import static com.basicframework.module.system.dal.dataobject.permission.MenuDO.
 /**
  * 菜单 Service 实现，负责菜单树维护、层级约束校验和权限缓存失效。
  *
- * @author 李杰
+ * @author shady
  */
 @Service
 @Slf4j
@@ -66,11 +66,16 @@ public class MenuServiceImpl implements MenuService {
         validateParentMenu(createReqVO.getParentId(), null);
         validateParentMenuType(createReqVO.getParentId(), createReqVO.getMenuType());
         // 校验菜单（自己）
-        validateMenuName(createReqVO.getParentId(), createReqVO.getName(), null);
-        validateMenuComponentName(createReqVO.getComponentName(), null);
+        String normalizedName = StrUtil.trim(createReqVO.getName());
+        String normalizedComponentName = StrUtil.trim(createReqVO.getComponentName());
+        validateMenuName(createReqVO.getParentId(), normalizedName, null);
+        validateMenuComponentName(normalizedComponentName, null);
 
         // 插入数据库
         MenuDO menu = BeanUtils.toBean(createReqVO, MenuDO.class);
+        menu.setId(null);
+        menu.setName(normalizedName);
+        menu.setComponentName(normalizedComponentName);
         initMenuProperty(menu);
         menuMapper.insert(menu);
         // 返回
@@ -117,11 +122,15 @@ public class MenuServiceImpl implements MenuService {
         validateParentMenu(updateReqVO.getParentId(), updateReqVO.getId());
         validateParentMenuType(updateReqVO.getParentId(), updateReqVO.getMenuType());
         // 校验菜单（自己）
-        validateMenuName(updateReqVO.getParentId(), updateReqVO.getName(), updateReqVO.getId());
-        validateMenuComponentName(updateReqVO.getComponentName(), updateReqVO.getId());
+        String normalizedName = StrUtil.trim(updateReqVO.getName());
+        String normalizedComponentName = StrUtil.trim(updateReqVO.getComponentName());
+        validateMenuName(updateReqVO.getParentId(), normalizedName, updateReqVO.getId());
+        validateMenuComponentName(normalizedComponentName, updateReqVO.getId());
 
         // 更新到数据库
         MenuDO updateObj = BeanUtils.toBean(updateReqVO, MenuDO.class);
+        updateObj.setName(normalizedName);
+        updateObj.setComponentName(normalizedComponentName);
         initMenuProperty(updateObj);
         menuMapper.updateById(updateObj);
     }

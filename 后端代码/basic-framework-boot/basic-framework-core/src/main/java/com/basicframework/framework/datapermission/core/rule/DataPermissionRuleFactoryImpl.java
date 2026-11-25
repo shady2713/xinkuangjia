@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 /**
  * 默认的 {@link DataPermissionRuleFactory} 实现，通过 {@link DataPermissionContextHolder} 过滤数据权限规则。
  *
- * @author 李杰
+ * @author shady
  */
 @RequiredArgsConstructor
 public class DataPermissionRuleFactoryImpl implements DataPermissionRuleFactory {

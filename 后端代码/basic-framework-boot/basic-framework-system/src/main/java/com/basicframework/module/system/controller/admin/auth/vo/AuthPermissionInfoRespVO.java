@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * AuthPermissionInfoRespVO 响应对象，承载接口输出数据。
  *
- * @author 李杰
+ * @author shady
  */
 @Schema(description = "管理后台 - 登录用户的权限信息 Response VO，额外包括用户信息和角色列表")
 @Data
@@ -48,7 +48,7 @@ public class AuthPermissionInfoRespVO {
     /**
      * UserVO 内部数据模型，用于封装 AuthPermissionInfoRespVO 的组成信息。
      *
-     * @author 李杰
+     * @author shady
      */
     @Schema(description = "用户信息 VO")
     @Data
@@ -110,7 +110,7 @@ public class AuthPermissionInfoRespVO {
     /**
      * MenuVO 内部数据模型，用于封装 AuthPermissionInfoRespVO 的组成信息。
      *
-     * @author 李杰
+     * @author shady
      */
     @Schema(description = "管理后台 - 登录用户的菜单信息 Response VO")
     @Data

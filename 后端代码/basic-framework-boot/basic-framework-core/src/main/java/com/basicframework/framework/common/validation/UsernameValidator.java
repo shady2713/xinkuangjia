@@ -9,7 +9,7 @@ import jakarta.validation.ConstraintValidatorContext;
 /**
  * 用户名格式校验器。
  *
- * @author 李杰
+ * @author shady
  */
 public class UsernameValidator implements ConstraintValidator<Username, String> {
 
