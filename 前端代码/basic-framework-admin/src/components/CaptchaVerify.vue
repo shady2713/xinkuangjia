@@ -88,7 +88,25 @@ function onDragMove(e: MouseEvent | TouchEvent) {
   moveX.value = Math.max(0, Math.min(maxMove, next));
 }
 
+let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearPendingTimer() {
+  if (pendingTimer !== null) {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+  }
+}
+
+function scheduleTimer(callback: () => void, delayMs: number) {
+  clearPendingTimer();
+  pendingTimer = setTimeout(() => {
+    pendingTimer = null;
+    callback();
+  }, delayMs);
+}
+
 function detachListeners() {
+  clearPendingTimer();
   window.removeEventListener('mousemove', onDragMove);
   window.removeEventListener('mouseup', onDragEnd);
   window.removeEventListener('touchmove', onDragMove);
@@ -120,22 +138,22 @@ async function onDragEnd() {
       const captchaVerification = secretKey.value
         ? encryptCaptchaAes(rawVerify, secretKey.value)
         : rawVerify;
-      setTimeout(() => {
+      scheduleTimer(() => {
         visible.value = false;
         emit('success', { captchaVerification });
       }, 450);
     } else {
       status.value = 'fail';
       tipText.value = '验证失败，请重试';
-      setTimeout(() => {
-        void loadChallenge();
+      scheduleTimer(() => {
+        if (visible.value) void loadChallenge();
       }, 700);
     }
   } catch {
     status.value = 'fail';
     tipText.value = '校验请求异常，请重试';
-    setTimeout(() => {
-      void loadChallenge();
+    scheduleTimer(() => {
+      if (visible.value) void loadChallenge();
     }, 700);
   }
 }

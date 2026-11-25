@@ -25,8 +25,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import static com.basicframework.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static com.basicframework.framework.common.pojo.CommonResult.success;
 import static com.basicframework.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
+import static com.basicframework.module.system.enums.ErrorCodeConstants.USER_NOT_EXISTS;
 
 /**
  * UserProfileController HTTP 接口，负责请求校验和响应组装。
@@ -63,6 +65,9 @@ public class UserProfileController {
     public CommonResult<UserProfileRespVO> getUserProfile() {
         // 获得用户基本信息
         AdminUserDO user = userService.getUser(getLoginUserId());
+        if (user == null) {
+            throw exception(USER_NOT_EXISTS);
+        }
         // 获得用户角色
         List<RoleDO> userRoles = roleService.getRoleListFromCache(permissionService.getUserRoleIdListByUserId(user.getId()));
         // 获得部门信息

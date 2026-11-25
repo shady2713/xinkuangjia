@@ -18,7 +18,7 @@ import ProTable from '@/components/ProTable.vue';
 import TableAction from '@/components/TableAction.vue';
 import { deleteConfirmMessage, FIELD_LIMITS } from '@/constants/validation';
 import { confirmCurrentSession } from '@/utils/confirm';
-import { downloadBlob, formatDateTime, formatFileSize } from '@/utils/format';
+import { downloadBlob, formatDateTime, formatFileSize, resolveSafeHttpUrl } from '@/utils/format';
 import UploadField from '@/components/UploadField.vue';
 
 defineOptions({ name: 'InfraFile' });
@@ -65,7 +65,12 @@ function handleReset() {
 
 async function handlePreview(row: FileRecord) {
   if (!row.privateFile && row.url) {
-    window.open(row.url, '_blank', 'noopener,noreferrer');
+    const safeUrl = resolveSafeHttpUrl(row.url);
+    if (!safeUrl) {
+      ElMessage.warning('该文件地址协议不受支持，无法预览');
+      return;
+    }
+    window.open(safeUrl, '_blank', 'noopener,noreferrer');
     return;
   }
   if (!row.id) return;
@@ -75,8 +80,16 @@ async function handlePreview(row: FileRecord) {
 
 async function handleCopyUrl(row: FileRecord) {
   if (row.privateFile || !row.url) return;
-  await navigator.clipboard?.writeText(row.url);
-  ElMessage.success('地址已复制到剪贴板');
+  if (!navigator.clipboard?.writeText) {
+    ElMessage.warning('当前浏览器环境不支持自动复制，请手动复制地址');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(row.url);
+    ElMessage.success('地址已复制到剪贴板');
+  } catch {
+    ElMessage.warning('复制失败，请检查浏览器剪贴板权限');
+  }
 }
 
 async function handleDelete(row: FileRecord) {
@@ -111,11 +124,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="文件列表"
       :loading="loading"
       :total="total"
+      :columns="[
+        { key: 'name', label: '文件名' },
+        { key: 'path', label: '存储路径' },
+        { key: 'type', label: 'MIME 类型' },
+        { key: 'size', label: '大小' },
+        { key: 'createTime', label: '上传时间' },
+      ]"
       v-model:page-no="query.pageNo"
       v-model:page-size="query.pageSize"
       @refresh="loadList"
@@ -128,7 +148,6 @@ onMounted(() => {
               placeholder="请输入文件路径"
               :maxlength="FIELD_LIMITS.FILE_PATH"
               clearable
-              style="width: 190px"
             />
           </el-form-item>
           <el-form-item label="文件类型">
@@ -137,14 +156,13 @@ onMounted(() => {
               placeholder="例如 image/png"
               :maxlength="FIELD_LIMITS.SEARCH_KEYWORD"
               clearable
-              style="width: 160px"
             />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
-              搜索
-            </el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
+              查询
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -153,7 +171,6 @@ onMounted(() => {
         <el-button
           type="primary"
           :icon="Plus"
-          size="small"
           @click="uploadDialogVisible = true"
         >
           上传文件
@@ -163,7 +180,6 @@ onMounted(() => {
           type="danger"
           plain
           :icon="Delete"
-          size="small"
           :disabled="selectedIds.length === 0"
           @click="handleBatchDelete"
         >
@@ -171,22 +187,23 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <template #default="{ size }">
+      <template #default="{ size, tableHeight, isColVisible }">
         <el-table
           :data="list"
           :size="size"
+          :height="tableHeight"
           border
           stripe
           @selection-change="(rows: FileRecord[]) => (selectedIds = rows.map((r) => r.id))"
         >
           <el-table-column type="selection" width="44" align="center" />
-          <el-table-column prop="name" label="文件名" min-width="160" show-overflow-tooltip />
-          <el-table-column prop="path" label="存储路径" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="type" label="MIME 类型" width="145" show-overflow-tooltip />
-          <el-table-column label="大小" width="96" align="right">
+          <el-table-column v-if="isColVisible('name')" prop="name" label="文件名" min-width="160" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('path')" prop="path" label="存储路径" min-width="200" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('type')" prop="type" label="MIME 类型" width="145" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('size')" label="大小" width="96" align="right">
             <template #default="{ row }">{{ formatFileSize(row.size) }}</template>
           </el-table-column>
-          <el-table-column label="上传时间" width="164" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('createTime')" label="上传时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="236" align="center" fixed="right">

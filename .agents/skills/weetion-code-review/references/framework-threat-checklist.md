@@ -6,13 +6,13 @@
 
 - **超级管理员与业务管理员隔离**：非 `super_admin` 账号（如 `business_admin`）严禁通过更新、删除、修改状态、重置密码、分配菜单或分配数据范围等接口操作 `super_admin` 角色及其绑定用户。
 - **数据权限写路径校验**：`@DataPermission` 默认拦截 SQL 查询，单条或批量写操作（`update*`、`delete*`、状态变更、密码重置、角色绑定）必须在 Service 层校验目标 ID 在当前登录者的数据权限可见范围内，防止构造主键直接越权修改他部门数据。
-- **匿名端点白名单**：新增 `@PermitAll` 或 Security `permitAll()` 必须具备明确公开契约（如验证码获取、受 HMAC 验签保护的短信回调），并同步登记在 `FootgunRules.PERMIT_ALL_ALLOWLIST`；禁止类级 `@PermitAll`。
+- **匿名端点白名单**：新增 `@PermitAll` 或 Security `permitAll()` 必须具备明确公开契约（如验证码获取、SM2 公钥下发、登录/找回密码、开放 OAuth2 令牌签发），并同步登记在 `FootgunRules.PERMIT_ALL_ALLOWLIST`；禁止类级 `@PermitAll`。
 
 ## 2. 密码、凭据与审计日志脱敏
 
 - **SM2 密文传输**：所有接收用户密码的管理端入口必须经过 SM2 私钥解密与时间戳/nonce 防重放校验，禁止新增明文或前端哈希直传接口。
-- **敏感返回与日志裁剪**：VO、操作日志（`@OperateLog`）与异常消息严禁输出密码哈希、SM2 私钥、OAuth2 `clientSecret`、短信渠道 `apiSecret`、对象存储 `secretKey` 或完整 Bearer/Refresh Token。
-- **回调与文件边界**：外部回调接口必须默认失败关闭（未配置签名密钥或签名/时间戳不合法时返回 403）；上传/导出文件名须过滤控制字符与路径穿越，公开对象网关须保持 `Content-Security-Policy: sandbox` 与 `X-Content-Type-Options: nosniff`。
+- **敏感返回与日志裁剪**：VO、操作日志（`@OperateLog`）与异常消息严禁输出密码哈希、SM2 私钥、OAuth2 `clientSecret`、阿里云短信 `accessKeySecret`、对象存储 `secretKey` 或完整 Bearer/Refresh Token。
+- **文件边界**：上传/导出文件名须过滤控制字符与路径穿越，公开对象网关须保持 `Content-Security-Policy: sandbox` 与 `X-Content-Type-Options: nosniff`。
 
 ## 3. 持久化、软删除唯一约束与全栈契约
 

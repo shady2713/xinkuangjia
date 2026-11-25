@@ -36,6 +36,7 @@ import {
   requiredRule,
 } from '@/constants/validation';
 import { useDictStore } from '@/stores/dict';
+import { getSessionId } from '@/utils/token';
 
 defineOptions({ name: 'SystemDictType' });
 
@@ -50,6 +51,9 @@ const selectedType = ref<DictTypeItem | null>(null);
 
 const typeDialogVisible = ref(false);
 const typeSubmitting = ref(false);
+const typeFormReady = ref(false);
+let typeFormLoad = 0;
+let typeFormOwner: string | null = null;
 const typeFormRef = ref<FormInstance>();
 const typeForm = reactive({
   id: undefined as number | string | undefined,
@@ -72,6 +76,9 @@ const dataQuery = reactive({ pageNo: 1, pageSize: 10, label: '' });
 
 const dataDialogVisible = ref(false);
 const dataSubmitting = ref(false);
+const dataFormReady = ref(false);
+let dataFormLoad = 0;
+let dataFormOwner: string | null = null;
 const dataFormRef = ref<FormInstance>();
 const dataForm = reactive({
   id: undefined as number | string | undefined,
@@ -150,8 +157,13 @@ function resetDataSearch() {
 }
 
 async function openTypeForm(row?: DictTypeItem) {
+  if (typeSubmitting.value) return;
+  const load = ++typeFormLoad;
+  const owner = getSessionId();
+  typeFormOwner = owner;
+  typeFormReady.value = !row?.id;
   Object.assign(typeForm, {
-    id: undefined,
+    id: row?.id,
     name: '',
     type: '',
     status: CommonStatusEnum.ENABLE,
@@ -160,6 +172,7 @@ async function openTypeForm(row?: DictTypeItem) {
   typeDialogVisible.value = true;
   if (row?.id) {
     const detail = await getDictTypeApi(row.id);
+    if (load !== typeFormLoad || !typeDialogVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(typeForm, {
       id: detail.id,
       name: detail.name,
@@ -167,10 +180,12 @@ async function openTypeForm(row?: DictTypeItem) {
       status: detail.status ?? CommonStatusEnum.ENABLE,
       remark: detail.remark || '',
     });
+    typeFormReady.value = true;
   }
 }
 
 async function submitTypeForm() {
+  if (!typeFormReady.value || typeSubmitting.value || getSessionId() !== typeFormOwner) return;
   const valid = await typeFormRef.value?.validate().catch(() => false);
   if (!valid) return;
   typeSubmitting.value = true;
@@ -208,8 +223,13 @@ async function openDataForm(row?: DictDataItem) {
     ElMessage.warning('请先在左侧选择字典类型');
     return;
   }
+  if (dataSubmitting.value) return;
+  const load = ++dataFormLoad;
+  const owner = getSessionId();
+  dataFormOwner = owner;
+  dataFormReady.value = !row?.id;
   Object.assign(dataForm, {
-    id: undefined,
+    id: row?.id,
     dictType: selectedType.value.type,
     label: '',
     value: '',
@@ -222,6 +242,7 @@ async function openDataForm(row?: DictDataItem) {
   dataDialogVisible.value = true;
   if (row?.id) {
     const detail = await getDictDataApi(row.id);
+    if (load !== dataFormLoad || !dataDialogVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(dataForm, {
       id: detail.id,
       dictType: detail.dictType,
@@ -233,10 +254,12 @@ async function openDataForm(row?: DictDataItem) {
       cssClass: detail.cssClass || '',
       remark: detail.remark || '',
     });
+    dataFormReady.value = true;
   }
 }
 
 async function submitDataForm() {
+  if (!dataFormReady.value || dataSubmitting.value || getSessionId() !== dataFormOwner) return;
   const valid = await dataFormRef.value?.validate().catch(() => false);
   if (!valid) return;
   dataSubmitting.value = true;
@@ -272,13 +295,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-row :gutter="14">
+  <el-row :gutter="14" class="min-h-0 lg:h-full">
     <!-- 左侧：字典类型 -->
-    <el-col :xs="24" :lg="11" class="mb-4 lg:mb-0">
+    <el-col :xs="24" :lg="11" class="mb-4 min-h-0 lg:mb-0 lg:h-full">
       <ProTable
         title="字典类型"
         :loading="typeLoading"
         :total="typeTotal"
+        :columns="[
+          { key: 'name', label: '字典名称' },
+          { key: 'type', label: '字典类型' },
+          { key: 'status', label: '状态' },
+        ]"
         v-model:page-no="typeQuery.pageNo"
         v-model:page-size="typeQuery.pageSize"
         @refresh="loadTypes"
@@ -291,7 +319,6 @@ onMounted(() => {
                 placeholder="字典名称"
                 :maxlength="FIELD_LIMITS.DICT_NAME"
                 clearable
-                style="width: 136px"
               />
             </el-form-item>
             <el-form-item>
@@ -300,14 +327,13 @@ onMounted(() => {
                 placeholder="字典类型"
                 :maxlength="FIELD_LIMITS.DICT_TYPE"
                 clearable
-                style="width: 136px"
               />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :icon="Search" @click="() => ((typeQuery.pageNo = 1), loadTypes())">
-                搜索
-              </el-button>
               <el-button @click="resetTypeSearch">重置</el-button>
+              <el-button type="primary" :icon="Search" @click="() => ((typeQuery.pageNo = 1), loadTypes())">
+                查询
+              </el-button>
             </el-form-item>
           </el-form>
         </template>
@@ -317,24 +343,24 @@ onMounted(() => {
             v-has-permi="'system:dict:create'"
             type="primary"
             :icon="Plus"
-            size="small"
             @click="openTypeForm()"
           >
             新增类型
           </el-button>
         </template>
 
-        <template #default="{ size }">
+        <template #default="{ size, tableHeight, isColVisible }">
           <el-table
             :data="typeList"
             :size="size"
+            :height="tableHeight"
             border
             highlight-current-row
             @row-click="selectTypeRow"
           >
-            <el-table-column prop="name" label="字典名称" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="type" label="字典类型" min-width="135" show-overflow-tooltip />
-            <el-table-column label="状态" width="74" align="center">
+            <el-table-column v-if="isColVisible('name')" prop="name" label="字典名称" min-width="110" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('type')" prop="type" label="字典类型" min-width="135" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('status')" label="状态" width="74" align="center">
               <template #default="{ row }">
                 <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
               </template>
@@ -371,11 +397,18 @@ onMounted(() => {
     </el-col>
 
     <!-- 右侧：字典数据 -->
-    <el-col :xs="24" :lg="13">
+    <el-col :xs="24" :lg="13" class="min-h-0 lg:h-full">
       <ProTable
         :title="selectedType ? `字典数据（${selectedType.name}）` : '字典数据'"
         :loading="dataLoading"
         :total="dataTotal"
+        :columns="[
+          { key: 'label', label: '标签' },
+          { key: 'value', label: '键值' },
+          { key: 'sort', label: '排序' },
+          { key: 'status', label: '状态' },
+          { key: 'remark', label: '备注' },
+        ]"
         v-model:page-no="dataQuery.pageNo"
         v-model:page-size="dataQuery.pageSize"
         @refresh="loadDataList"
@@ -388,14 +421,13 @@ onMounted(() => {
                 placeholder="请输入字典标签"
                 :maxlength="FIELD_LIMITS.DICT_LABEL"
                 clearable
-                style="width: 180px"
               />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :icon="Search" @click="() => ((dataQuery.pageNo = 1), loadDataList())">
-                搜索
-              </el-button>
               <el-button @click="resetDataSearch">重置</el-button>
+              <el-button type="primary" :icon="Search" @click="() => ((dataQuery.pageNo = 1), loadDataList())">
+                查询
+              </el-button>
             </el-form-item>
           </el-form>
         </template>
@@ -405,7 +437,6 @@ onMounted(() => {
             v-has-permi="'system:dict:create'"
             type="primary"
             :icon="Plus"
-            size="small"
             :disabled="!selectedType"
             @click="openDataForm()"
           >
@@ -413,17 +444,17 @@ onMounted(() => {
           </el-button>
         </template>
 
-        <template #default="{ size }">
-          <el-table :data="dataList" :size="size" border stripe>
-            <el-table-column prop="label" label="标签" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="value" label="键值" min-width="96" show-overflow-tooltip />
-            <el-table-column prop="sort" label="排序" width="68" align="center" />
-            <el-table-column label="状态" width="74" align="center">
+        <template #default="{ size, tableHeight, isColVisible }">
+          <el-table :data="dataList" :size="size" :height="tableHeight" border stripe>
+            <el-table-column v-if="isColVisible('label')" prop="label" label="标签" min-width="110" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('value')" prop="value" label="键值" min-width="96" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('sort')" prop="sort" label="排序" width="68" align="center" />
+            <el-table-column v-if="isColVisible('status')" label="状态" width="74" align="center">
               <template #default="{ row }">
                 <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
               </template>
             </el-table-column>
-            <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('remark')" prop="remark" label="备注" min-width="120" show-overflow-tooltip />
             <el-table-column label="操作" width="144" align="center" fixed="right">
               <template #default="{ row }">
                 <TableAction
@@ -459,9 +490,10 @@ onMounted(() => {
       :title="typeForm.id ? '编辑字典类型' : '新增字典类型'"
       width="500px"
       :confirm-loading="typeSubmitting"
+      :confirm-disabled="!typeFormReady"
       @confirm="submitTypeForm"
     >
-      <el-form ref="typeFormRef" :model="typeForm" :rules="typeFormRules" label-width="88px">
+      <el-form ref="typeFormRef" v-loading="!typeFormReady" :model="typeForm" :rules="typeFormRules" label-width="88px">
         <el-form-item label="字典名称" prop="name">
           <el-input
             v-model="typeForm.name"
@@ -502,9 +534,10 @@ onMounted(() => {
       :title="dataForm.id ? '编辑字典数据' : '新增字典数据'"
       width="500px"
       :confirm-loading="dataSubmitting"
+      :confirm-disabled="!dataFormReady"
       @confirm="submitDataForm"
     >
-      <el-form ref="dataFormRef" :model="dataForm" :rules="dataFormRules" label-width="88px">
+      <el-form ref="dataFormRef" v-loading="!dataFormReady" :model="dataForm" :rules="dataFormRules" label-width="88px">
         <el-form-item label="字典类型">
           <el-input :model-value="dataForm.dictType" disabled />
         </el-form-item>

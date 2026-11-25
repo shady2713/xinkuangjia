@@ -172,8 +172,11 @@ public class DeptServiceImpl implements DeptService {
         if (CollUtil.isEmpty(ids)) {
             return;
         }
-        // 校验部门存在并归属当前平台
+        // 校验部门存在并归属当前平台（拒绝空元素）
         for (Long id : ids) {
+            if (id == null) {
+                throw exception(DEPT_NOT_FOUND);
+            }
             validateDeptPlatform(validateDeptExists(id));
         }
         // 忽略数据权限校验是否有未包含在本次删除清单中的子部门，以及是否仍有活跃用户归属。

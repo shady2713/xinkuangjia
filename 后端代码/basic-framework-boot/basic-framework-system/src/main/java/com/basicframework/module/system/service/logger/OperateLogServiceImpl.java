@@ -1,5 +1,6 @@
 package com.basicframework.module.system.service.logger;
 
+import cn.hutool.core.util.StrUtil;
 import com.basicframework.framework.common.pojo.PageResult;
 import com.basicframework.framework.common.enums.UserTypeEnum;
 import com.basicframework.framework.common.util.object.BeanUtils;
@@ -23,6 +24,13 @@ import org.springframework.validation.annotation.Validated;
 public class OperateLogServiceImpl implements OperateLogService {
 
     private static final long SYSTEM_USER_ID = 0L;
+    private static final int TRACE_ID_MAX_LEN = 64;
+    private static final int TYPE_MAX_LEN = 50;
+    private static final int ACTION_MAX_LEN = 2000;
+    private static final int REQUEST_METHOD_MAX_LEN = 16;
+    private static final int REQUEST_URL_MAX_LEN = 255;
+    private static final int USER_IP_MAX_LEN = 50;
+    private static final int USER_AGENT_MAX_LEN = 512;
 
     @Resource
     private OperateLogMapper operateLogMapper;
@@ -36,7 +44,29 @@ public class OperateLogServiceImpl implements OperateLogService {
     public void createOperateLog(OperateLogCreateReqDTO createReqDTO) {
         OperateLogDO log = BeanUtils.toBean(createReqDTO, OperateLogDO.class);
         fillSystemUserIfAbsent(log);
+        // 按数据库列宽安全截断，防止攻击者构造超长 User-Agent/URL 引发截断异常逃逸异步操作审计。
+        log.setTraceId(truncateColumn(log.getTraceId(), TRACE_ID_MAX_LEN));
+        log.setType(truncateColumn(log.getType(), TYPE_MAX_LEN));
+        log.setSubType(truncateColumn(log.getSubType(), TYPE_MAX_LEN));
+        log.setAction(truncateColumn(log.getAction(), ACTION_MAX_LEN));
+        log.setExtra(truncateColumn(log.getExtra(), ACTION_MAX_LEN));
+        log.setRequestMethod(truncateColumn(log.getRequestMethod(), REQUEST_METHOD_MAX_LEN));
+        log.setRequestUrl(truncateColumn(log.getRequestUrl(), REQUEST_URL_MAX_LEN));
+        log.setUserIp(truncateColumn(log.getUserIp(), USER_IP_MAX_LEN));
+        log.setUserAgent(truncateColumn(log.getUserAgent(), USER_AGENT_MAX_LEN));
         operateLogMapper.insert(log);
+    }
+
+    private static String truncateColumn(String value, int maxLength) {
+        String safe = StrUtil.nullToEmpty(value);
+        if (safe.length() <= maxLength) {
+            return safe;
+        }
+        int end = maxLength;
+        if (end > 0 && Character.isHighSurrogate(safe.charAt(end - 1))) {
+            end--;
+        }
+        return safe.substring(0, end);
     }
 
     /**

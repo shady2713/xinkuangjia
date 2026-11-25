@@ -24,7 +24,7 @@ import {
   assignUserRoleApi,
   getUserRoleListApi,
 } from '@/api/system/permission';
-import { getSimpleRoleListApi, type RoleItem } from '@/api/system/role';
+import { getSimpleRoleListApi, type RoleSimpleItem } from '@/api/system/role';
 import {
   createUserApi,
   deleteUserApi,
@@ -80,6 +80,9 @@ const query = reactive({
 // 部门树
 const deptKeyword = ref('');
 const deptList = ref<DeptSimple[]>([]);
+const fullDeptTree = computed(() =>
+  handleTree(deptList.value as { id: number | string; parentId?: number | string }[]),
+);
 const deptTree = computed(() => {
   const filtered = deptKeyword.value.trim()
     ? deptList.value.filter((d) =>
@@ -92,6 +95,9 @@ const deptTree = computed(() => {
 // 新增/编辑弹窗
 const formVisible = ref(false);
 const formSubmitting = ref(false);
+const formReady = ref(false);
+let formLoad = 0;
+let formOwner: string | null = null;
 const formRef = ref<FormInstance>();
 const form = reactive({
   id: undefined as number | string | undefined,
@@ -132,7 +138,7 @@ const roleReady = ref(false);
 let roleLoad = 0;
 let roleOwner: string | null = null;
 const statusUpdating = reactive(new Set<string>());
-const roleOptions = ref<RoleItem[]>([]);
+const roleOptions = ref<RoleSimpleItem[]>([]);
 const assignRoleForm = reactive({
   userId: undefined as number | string | undefined,
   username: '',
@@ -202,8 +208,13 @@ function handleDeptClick(node: DeptSimple) {
 }
 
 async function openForm(row?: UserItem) {
+  if (formSubmitting.value) return;
+  const load = ++formLoad;
+  const owner = getSessionId();
+  formOwner = owner;
+  formReady.value = !row?.id;
   Object.assign(form, {
-    id: undefined,
+    id: row?.id,
     username: '',
     nickname: '',
     password: '',
@@ -216,6 +227,7 @@ async function openForm(row?: UserItem) {
   formVisible.value = true;
   if (row?.id) {
     const detail = await getUserApi(row.id);
+    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(form, {
       id: detail.id,
       username: detail.username,
@@ -227,10 +239,12 @@ async function openForm(row?: UserItem) {
       sex: detail.sex ?? 1,
       remark: detail.remark || '',
     });
+    formReady.value = true;
   }
 }
 
 async function submitForm() {
+  if (!formReady.value || formSubmitting.value || getSessionId() !== formOwner) return;
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   formSubmitting.value = true;
@@ -406,12 +420,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 lg:flex-row">
-    <!-- 左侧部门树 -->
+  <div class="flex min-h-0 flex-col gap-3 lg:h-full lg:flex-row">
+    <!-- 左侧部门树（1:1 对齐原版 Vben 5 等高 1/6 侧栏） -->
     <el-card
       shadow="never"
-      class="w-full shrink-0 lg:w-[230px]"
-      :body-style="{ padding: '14px' }"
+      class="flex max-h-[260px] w-full shrink-0 flex-col lg:h-full lg:max-h-none lg:w-1/6 lg:min-w-[220px] lg:max-w-[260px]"
+      :body-style="{
+        padding: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: '1 1 0%',
+        minHeight: '0',
+      }"
     >
       <el-input
         v-model="deptKeyword"
@@ -419,26 +439,36 @@ onMounted(() => {
         :prefix-icon="Search"
         :maxlength="FIELD_LIMITS.DEPT_NAME"
         clearable
-        size="small"
-        class="mb-3"
+        class="mb-3 shrink-0"
       />
-      <el-tree
-        :data="deptTree"
-        :props="{ label: 'name', children: 'children' }"
-        node-key="id"
-        default-expand-all
-        highlight-current
-        :expand-on-click-node="false"
-        @node-click="handleDeptClick"
-      />
+      <el-scrollbar class="min-h-0 flex-1">
+        <el-tree
+          :data="deptTree"
+          :props="{ label: 'name', children: 'children' }"
+          node-key="id"
+          default-expand-all
+          highlight-current
+          :expand-on-click-node="false"
+          @node-click="handleDeptClick"
+        />
+      </el-scrollbar>
     </el-card>
 
     <!-- 右侧用户列表 -->
-    <div class="min-w-0 flex-1">
+    <div class="h-full min-h-0 min-w-0 flex-1">
       <ProTable
         title="用户列表"
         :loading="loading"
         :total="total"
+        :columns="[
+          { key: 'id', label: '编号' },
+          { key: 'username', label: '用户账号' },
+          { key: 'nickname', label: '用户昵称' },
+          { key: 'deptName', label: '归属部门' },
+          { key: 'mobile', label: '手机号码' },
+          { key: 'status', label: '状态' },
+          { key: 'createTime', label: '创建时间' },
+        ]"
         v-model:page-no="query.pageNo"
         v-model:page-size="query.pageSize"
         @refresh="loadList"
@@ -451,7 +481,6 @@ onMounted(() => {
                 placeholder="请输入用户账号"
                 :maxlength="FIELD_LIMITS.USERNAME"
                 clearable
-                style="width: 170px"
               />
             </el-form-item>
             <el-form-item label="手机号码">
@@ -460,18 +489,17 @@ onMounted(() => {
                 placeholder="请输入手机号"
                 :maxlength="FIELD_LIMITS.MOBILE"
                 clearable
-                style="width: 150px"
               />
             </el-form-item>
             <el-form-item label="状态">
-              <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+              <el-select v-model="query.status" placeholder="全部" clearable>
                 <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
                 <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
               <el-button @click="handleReset">重置</el-button>
+              <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
             </el-form-item>
           </el-form>
         </template>
@@ -481,7 +509,6 @@ onMounted(() => {
             v-has-permi="'system:user:create'"
             type="primary"
             :icon="Plus"
-            size="small"
             @click="openForm()"
           >
             新增
@@ -489,7 +516,6 @@ onMounted(() => {
           <el-button
             v-has-permi="'system:user:import'"
             :icon="Upload"
-            size="small"
             @click="openImportDialog"
           >
             导入
@@ -497,7 +523,6 @@ onMounted(() => {
           <el-button
             v-has-permi="'system:user:export'"
             :icon="Download"
-            size="small"
             @click="handleExport"
           >
             导出
@@ -507,7 +532,6 @@ onMounted(() => {
             type="danger"
             plain
             :icon="Delete"
-            size="small"
             :disabled="selectedIds.length === 0"
             @click="handleBatchDelete"
           >
@@ -515,21 +539,22 @@ onMounted(() => {
           </el-button>
         </template>
 
-        <template #default="{ size }">
+        <template #default="{ size, tableHeight, isColVisible }">
           <el-table
             :data="list"
             :size="size"
+            :height="tableHeight"
             border
             stripe
             @selection-change="(rows: UserItem[]) => (selectedIds = rows.map((r) => r.id))"
           >
             <el-table-column type="selection" width="44" align="center" />
-            <el-table-column prop="id" label="编号" width="72" align="center" />
-            <el-table-column prop="username" label="用户账号" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="nickname" label="用户昵称" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="deptName" label="归属部门" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="mobile" label="手机号码" width="124" show-overflow-tooltip />
-            <el-table-column label="状态" width="78" align="center">
+            <el-table-column v-if="isColVisible('id')" prop="id" label="编号" width="72" align="center" />
+            <el-table-column v-if="isColVisible('username')" prop="username" label="用户账号" min-width="110" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('nickname')" prop="nickname" label="用户昵称" min-width="110" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('deptName')" prop="deptName" label="归属部门" min-width="110" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('mobile')" prop="mobile" label="手机号码" width="124" show-overflow-tooltip />
+            <el-table-column v-if="isColVisible('status')" label="状态" width="78" align="center">
               <template #default="{ row }">
                 <el-switch
                   :model-value="row.status"
@@ -540,7 +565,7 @@ onMounted(() => {
                 />
               </template>
             </el-table-column>
-            <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+            <el-table-column v-if="isColVisible('createTime')" label="创建时间" width="164" show-overflow-tooltip>
               <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="192" align="center" fixed="right">
@@ -592,9 +617,10 @@ onMounted(() => {
       :title="form.id ? '编辑用户' : '新增用户'"
       width="560px"
       :confirm-loading="formSubmitting"
+      :confirm-disabled="!formReady"
       @confirm="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
+      <el-form ref="formRef" v-loading="!formReady" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="用户账号" prop="username">
           <el-input
             v-model="form.username"
@@ -622,7 +648,7 @@ onMounted(() => {
         <el-form-item label="归属部门">
           <el-tree-select
             v-model="form.deptId"
-            :data="deptTree"
+            :data="fullDeptTree"
             :props="{ label: 'name', value: 'id', children: 'children' }"
             check-strictly
             clearable

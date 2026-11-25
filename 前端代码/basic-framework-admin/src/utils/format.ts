@@ -38,3 +38,22 @@ export function downloadBlob(blob: Blob, filename: string): void {
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/**
+ * 校验外部或同源跳转/预览地址，仅放行 http: 与 https: 协议，阻断 javascript:/data:/vbscript: 等危险 scheme。
+ */
+export function resolveSafeHttpUrl(raw?: string | null): string | null {
+  if (!raw || !raw.trim()) {
+    return null;
+  }
+  try {
+    const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    const parsed = new URL(raw.trim(), base);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    // 非法 URL 一律拒绝
+  }
+  return null;
+}

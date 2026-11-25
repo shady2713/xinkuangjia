@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Lock, Phone } from '@element-plus/icons-vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { onBeforeUnmount, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -51,7 +50,13 @@ const rules: FormRules = {
   ],
 };
 
+const sendingSms = ref(false);
+
 function startCountdown() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
   countdown.value = 60;
   timer = setInterval(() => {
     countdown.value -= 1;
@@ -67,16 +72,23 @@ onBeforeUnmount(() => {
 });
 
 async function doSendCode(captchaVerification?: string) {
-  await sendSmsCodeApi({
-    mobile: form.mobile.trim(),
-    scene: SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD,
-    captchaVerification,
-  });
-  ElMessage.success('验证码已发送');
-  startCountdown();
+  if (sendingSms.value || countdown.value > 0) return;
+  sendingSms.value = true;
+  try {
+    await sendSmsCodeApi({
+      mobile: form.mobile.trim(),
+      scene: SmsSceneEnum.ADMIN_MEMBER_RESET_PASSWORD,
+      captchaVerification,
+    });
+    ElMessage.success('验证码已发送');
+    startCountdown();
+  } finally {
+    sendingSms.value = false;
+  }
 }
 
 async function handleSendCode() {
+  if (sendingSms.value || countdown.value > 0) return;
   if (!REGEX_PATTERNS.MOBILE.test(form.mobile.trim())) {
     ElMessage.warning('请先输入正确的 11 位手机号');
     return;
@@ -120,25 +132,27 @@ async function handleSubmit() {
         <img
           :src="sloganUrl"
           :alt="appTitle"
-          class="bf-animate-float h-72 w-auto max-w-[440px]"
+          class="-enter-x bf-animate-float h-72 w-auto max-w-[440px]"
         />
-        <h2 class="mt-6 text-2xl font-medium text-[#1f2937]">重置账号密码</h2>
-        <p class="mt-2 text-sm text-[#64748b]">验证绑定手机号后立即重置安全密码</p>
+        <h2 class="-enter-x mt-6 text-2xl font-medium text-[#1f2937]">重置账号密码</h2>
+        <p class="-enter-x mt-2 text-sm text-[#64748b]">验证绑定手机号后立即重置安全密码</p>
       </div>
     </div>
 
-    <div class="flex w-full flex-col items-center justify-center bg-white px-8 py-12 lg:w-[46%] lg:max-w-[540px]">
-      <div class="w-full max-w-[380px]">
-        <h1 class="text-2xl font-bold text-[#111827]">通过短信重置密码</h1>
-        <p class="mt-1.5 mb-6 text-sm text-[#64748b]">验证绑定手机号后设置新密码</p>
+    <div class="bf-side-enter-right relative flex w-full flex-col items-center justify-center bg-white px-6 py-12 lg:w-2/5 lg:px-8">
+      <div class="w-full max-w-[400px]">
+        <div class="enter-x mb-7">
+          <h1 class="text-3xl font-bold leading-9 tracking-tight text-[#18181b]">忘记密码？</h1>
+          <p class="mt-2.5 text-sm text-[#71717a]">验证绑定手机号后立即设置新密码</p>
+        </div>
 
-        <el-form ref="formRef" :model="form" :rules="rules" size="large">
+        <el-form ref="formRef" :model="form" :rules="rules" size="large" class="enter-x">
           <el-form-item prop="mobile">
             <el-input
               v-model="form.mobile"
               placeholder="请输入 11 位手机号"
               :maxlength="FIELD_LIMITS.MOBILE"
-              :prefix-icon="Phone"
+              clearable
             />
           </el-form-item>
           <el-form-item prop="code">
@@ -149,7 +163,7 @@ async function handleSubmit() {
                 :maxlength="FIELD_LIMITS.SMS_CODE"
                 class="flex-1"
               />
-              <el-button :disabled="countdown > 0" @click="handleSendCode">
+              <el-button :disabled="countdown > 0 || sendingSms" @click="handleSendCode">
                 {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
               </el-button>
             </div>
@@ -161,7 +175,6 @@ async function handleSubmit() {
               show-password
               :maxlength="FIELD_LIMITS.PASSWORD_MAX"
               placeholder="请输入 8~32 位含大小写字母及数字的新密码"
-              :prefix-icon="Lock"
             />
           </el-form-item>
           <el-form-item prop="confirmPassword">
@@ -171,18 +184,21 @@ async function handleSubmit() {
               show-password
               :maxlength="FIELD_LIMITS.PASSWORD_MAX"
               placeholder="请再次确认新密码"
-              :prefix-icon="Lock"
             />
           </el-form-item>
-          <el-button type="primary" class="w-full" size="large" :loading="loading" @click="handleSubmit">
+          <el-button type="primary" class="w-full !font-medium" size="large" :loading="loading" @click="handleSubmit">
             确认重置
           </el-button>
-          <div class="mt-4 text-center">
-            <router-link to="/login" class="text-sm text-[#006be6] hover:underline">
+          <div class="mt-4">
+            <el-button class="w-full" size="large" @click="router.push('/login')">
               返回登录
-            </router-link>
+            </el-button>
           </div>
         </el-form>
+      </div>
+
+      <div class="absolute bottom-4 text-center text-xs text-[#a1a1aa]">
+        Copyright © {{ new Date().getFullYear() }} {{ appTitle }}
       </div>
     </div>
 

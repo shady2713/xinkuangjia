@@ -20,6 +20,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -28,7 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -64,14 +70,29 @@ class DashboardServiceImplTest {
         operator.setId(1L);
         operator.setUserType(AdminPlatformTypeEnum.SUPER_ADMIN.getType());
         when(adminUserMapper.selectPlatformById(1L)).thenReturn(operator);
-        when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.SUPER_ADMIN.getType()))
-                .thenReturn(List.of(1L, 2L));
         when(permissionService.hasAnyPermissions(1L, "system:login-log:query")).thenReturn(true);
         when(permissionService.hasAnyPermissions(1L, "system:operate-log:query")).thenReturn(true);
-        when(adminUserMapper.selectCount(any())).thenReturn(8L, 6L);
+        when(adminUserMapper.selectCountByPlatform(AdminPlatformTypeEnum.SUPER_ADMIN.getType(), null)).thenReturn(8L);
+        when(adminUserMapper.selectCountByPlatform(AdminPlatformTypeEnum.SUPER_ADMIN.getType(), 0)).thenReturn(6L);
         when(deptMapper.selectCount(any())).thenReturn(5L);
         when(roleMapper.selectCount(any())).thenReturn(2L);
         when(dictTypeMapper.selectCount()).thenReturn(23L);
+
+        LocalDate today = LocalDate.now();
+        LoginLogMapper.DailyLoginStat todayStat = new LoginLogMapper.DailyLoginStat();
+        todayStat.setStatDate(today);
+        todayStat.setTotalCount(1L);
+        todayStat.setSuccessCount(1L);
+        todayStat.setFailCount(0L);
+        LoginLogMapper.DailyLoginStat yesterdayStat = new LoginLogMapper.DailyLoginStat();
+        yesterdayStat.setStatDate(today.minusDays(1));
+        yesterdayStat.setTotalCount(1L);
+        yesterdayStat.setSuccessCount(0L);
+        yesterdayStat.setFailCount(1L);
+        when(loginLogMapper.selectDailyStatsByPlatform(
+                eq(AdminPlatformTypeEnum.SUPER_ADMIN.getType()), eq(false), any(),
+                eq(LoginResultEnum.SUCCESS.getResult())))
+                .thenReturn(List.of(todayStat, yesterdayStat));
 
         LocalDateTime now = LocalDateTime.now();
         LoginLogDO okLog = new LoginLogDO();
@@ -87,8 +108,16 @@ class DashboardServiceImplTest {
         failLog.setUserIp("127.0.0.1");
         failLog.setResult(LoginResultEnum.BAD_CREDENTIALS.getResult());
         failLog.setCreateTime(now.minusDays(1));
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(1L, 2L)), any(), eq(true)))
+        when(loginLogMapper.selectRecentByPlatform(
+                eq(AdminPlatformTypeEnum.SUPER_ADMIN.getType()), eq(false), any(), eq(6)))
                 .thenReturn(List.of(okLog, failLog));
+
+        OperateLogMapper.DailyOperateStat operateStat = new OperateLogMapper.DailyOperateStat();
+        operateStat.setStatDate(today);
+        operateStat.setTotalCount(1L);
+        when(operateLogMapper.selectDailyStatsByPlatform(
+                eq(AdminPlatformTypeEnum.SUPER_ADMIN.getType()), eq(false), any()))
+                .thenReturn(List.of(operateStat));
 
         OperateLogDO operateLog = new OperateLogDO();
         operateLog.setId(50L);
@@ -96,7 +125,8 @@ class DashboardServiceImplTest {
         operateLog.setSubType("新增用户");
         operateLog.setAction("创建了用户【demo】");
         operateLog.setCreateTime(now);
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(1L, 2L)), any(), eq(true)))
+        when(operateLogMapper.selectRecentByPlatform(
+                eq(AdminPlatformTypeEnum.SUPER_ADMIN.getType()), eq(false), any(), eq(6)))
                 .thenReturn(List.of(operateLog));
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(1L);
@@ -119,12 +149,10 @@ class DashboardServiceImplTest {
 
     @Test
     void getDashboardSummary_handlesNullOperatorAndEmptyLogs() {
-        when(adminUserMapper.selectCount(any())).thenReturn(null);
+        when(adminUserMapper.selectCountByPlatform(anyString(), any())).thenReturn(null);
         when(deptMapper.selectCount(any())).thenReturn(0L);
         when(roleMapper.selectCount(any())).thenReturn(0L);
         when(dictTypeMapper.selectCount()).thenReturn(0L);
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.<Long>of()), any(), eq(false))).thenReturn(List.of());
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.<Long>of()), any(), eq(false))).thenReturn(List.of());
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(null);
 
@@ -132,6 +160,8 @@ class DashboardServiceImplTest {
         assertEquals(0L, summary.getSevenDayLoginCount());
         assertEquals(7, summary.getDailyTrend().size());
         verifyNoInteractions(permissionService);
+        verifyNoInteractions(loginLogMapper);
+        verifyNoInteractions(operateLogMapper);
     }
 
     @Test
@@ -143,30 +173,27 @@ class DashboardServiceImplTest {
             assertFalse(DataPermissionContextHolder.get().enable());
             return operator;
         });
-        when(adminUserMapper.selectIdsByPlatform(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()))
+
+        LocalDate today = LocalDate.now();
+        LoginLogMapper.DailyLoginStat loginStat = new LoginLogMapper.DailyLoginStat();
+        loginStat.setStatDate(today);
+        loginStat.setTotalCount(1L);
+        loginStat.setSuccessCount(1L);
+        loginStat.setFailCount(0L);
+        when(loginLogMapper.selectDailyStatsByPlatform(
+                eq(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()), eq(true), any(),
+                eq(LoginResultEnum.SUCCESS.getResult())))
                 .thenAnswer(ignored -> {
                     assertNull(DataPermissionContextHolder.get());
-                    return List.of(3L);
+                    return List.of(loginStat);
                 });
 
-        LocalDateTime now = LocalDateTime.now();
-        LoginLogDO loginLog = new LoginLogDO();
-        loginLog.setId(201L);
-        loginLog.setUserId(3L);
-        loginLog.setUsername("biz-user");
-        loginLog.setResult(LoginResultEnum.SUCCESS.getResult());
-        loginLog.setCreateTime(now);
-        when(loginLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(3L)), any(), eq(false)))
-                .thenReturn(List.of(loginLog));
-
-        OperateLogDO operateLog = new OperateLogDO();
-        operateLog.setId(60L);
-        operateLog.setUserId(3L);
-        operateLog.setType("系统用户");
-        operateLog.setSubType("修改用户");
-        operateLog.setCreateTime(now);
-        when(operateLogMapper.selectListByUserIdsAndCreateTimeGe(eq(List.of(3L)), any(), eq(false)))
-                .thenReturn(List.of(operateLog));
+        OperateLogMapper.DailyOperateStat operateStat = new OperateLogMapper.DailyOperateStat();
+        operateStat.setStatDate(today);
+        operateStat.setTotalCount(1L);
+        when(operateLogMapper.selectDailyStatsByPlatform(
+                eq(AdminPlatformTypeEnum.BUSINESS_ADMIN.getType()), eq(true), any()))
+                .thenReturn(List.of(operateStat));
 
         DashboardSummaryRespVO summary = dashboardService.getDashboardSummary(2L);
 
@@ -175,5 +202,7 @@ class DashboardServiceImplTest {
         assertEquals(1L, summary.getSevenDayOperateCount());
         assertTrue(summary.getRecentLogins().isEmpty());
         assertTrue(summary.getRecentOperates().isEmpty());
+        verify(loginLogMapper, never()).selectRecentByPlatform(anyString(), anyBoolean(), any(), anyInt());
+        verify(operateLogMapper, never()).selectRecentByPlatform(anyString(), anyBoolean(), any(), anyInt());
     }
 }

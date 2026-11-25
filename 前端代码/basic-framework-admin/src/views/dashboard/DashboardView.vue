@@ -6,12 +6,12 @@
  * - 后续业务统计模块可直接复用同一套统计组件与布局规范
  */
 import {
-  Document,
-  Key,
-  OfficeBuilding,
-  Refresh,
-  User,
-} from '@element-plus/icons-vue';
+  Activity as Document,
+  Building2 as OfficeBuilding,
+  RotateCw as Refresh,
+  ShieldCheck as Key,
+  Users as User,
+} from '@lucide/vue';
 import type { ECBasicOption } from 'echarts/types/dist/shared';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -359,7 +359,7 @@ onMounted(() => {
         <ActivityListCard
           title="最近登录记录"
           subtitle="最新 6 条管理后台认证日志"
-          more-text="查看全部"
+          :more-text="availablePaths.has('/system/log/login-log') ? '查看全部' : ''"
           :loading="loading"
           :empty="(summary?.recentLogins?.length ?? 0) === 0"
           empty-text="暂无登录记录"
@@ -399,7 +399,7 @@ onMounted(() => {
         <ActivityListCard
           title="最近操作审计"
           subtitle="最新 6 条关键写操作留痕"
-          more-text="查看全部"
+          :more-text="availablePaths.has('/system/log/operate-log') ? '查看全部' : ''"
           :loading="loading"
           :empty="(summary?.recentOperates?.length ?? 0) === 0"
           empty-text="近 7 日暂无操作审计记录"

@@ -33,6 +33,7 @@ import {
   requiredRule,
 } from '@/constants/validation';
 import { formatDateTime } from '@/utils/format';
+import { getSessionId } from '@/utils/token';
 import { handleTree } from '@/utils/tree';
 
 defineOptions({ name: 'SystemDept' });
@@ -57,6 +58,9 @@ const query = reactive({
 
 const formVisible = ref(false);
 const formSubmitting = ref(false);
+const formReady = ref(false);
+let formLoad = 0;
+let formOwner: string | null = null;
 const formRef = ref<FormInstance>();
 const form = reactive({
   id: undefined as number | string | undefined,
@@ -95,8 +99,13 @@ function handleReset() {
 }
 
 async function openForm(row?: DeptItem, parentId: number | string = 0) {
+  if (formSubmitting.value) return;
+  const load = ++formLoad;
+  const owner = getSessionId();
+  formOwner = owner;
+  formReady.value = !row?.id;
   Object.assign(form, {
-    id: undefined,
+    id: row?.id,
     parentId,
     name: '',
     sort: 0,
@@ -108,6 +117,7 @@ async function openForm(row?: DeptItem, parentId: number | string = 0) {
   formVisible.value = true;
   if (row?.id) {
     const detail = await getDeptApi(row.id);
+    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
     Object.assign(form, {
       id: detail.id,
       parentId: detail.parentId ?? 0,
@@ -118,10 +128,12 @@ async function openForm(row?: DeptItem, parentId: number | string = 0) {
       email: detail.email || '',
       status: detail.status ?? CommonStatusEnum.ENABLE,
     });
+    formReady.value = true;
   }
 }
 
 async function submitForm() {
+  if (!formReady.value || formSubmitting.value || getSessionId() !== formOwner) return;
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   formSubmitting.value = true;
@@ -161,8 +173,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
-    <ProTable title="部门列表" :loading="loading" :show-pagination="false" @refresh="loadList">
+  <div class="h-full">
+    <ProTable
+      title="部门列表"
+      :loading="loading"
+      :show-pagination="false"
+      :columns="[
+        { key: 'name', label: '部门名称' },
+        { key: 'leader', label: '负责人' },
+        { key: 'phone', label: '联系电话' },
+        { key: 'sort', label: '排序' },
+        { key: 'status', label: '状态' },
+        { key: 'createTime', label: '创建时间' },
+      ]"
+      @refresh="loadList"
+    >
       <template #search>
         <el-form :inline="true" :model="query" @submit.prevent="loadList">
           <el-form-item label="部门名称">
@@ -171,18 +196,17 @@ onMounted(async () => {
               placeholder="请输入部门名称"
               :maxlength="FIELD_LIMITS.DEPT_NAME"
               clearable
-              style="width: 180px"
             />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+            <el-select v-model="query.status" placeholder="全部" clearable>
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="loadList">搜索</el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="loadList">查询</el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -192,29 +216,28 @@ onMounted(async () => {
           v-has-permi="'system:dept:create'"
           type="primary"
           :icon="Plus"
-          size="small"
           @click="openForm()"
         >
           新增
         </el-button>
       </template>
 
-      <template #default="{ size }">
-        <el-table :data="treeList" :size="size" row-key="id" border default-expand-all>
-          <el-table-column prop="name" label="部门名称" min-width="200" show-overflow-tooltip />
-          <el-table-column label="负责人" min-width="120" show-overflow-tooltip>
+      <template #default="{ size, tableHeight, isColVisible }">
+        <el-table :data="treeList" :size="size" :height="tableHeight" row-key="id" border default-expand-all>
+          <el-table-column v-if="isColVisible('name')" prop="name" label="部门名称" min-width="200" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('leader')" label="负责人" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.leaderUserId ? userMap.get(String(row.leaderUserId)) || '-' : '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="phone" label="联系电话" width="130" show-overflow-tooltip />
-          <el-table-column prop="sort" label="排序" width="76" align="center" />
-          <el-table-column label="状态" width="84" align="center">
+          <el-table-column v-if="isColVisible('phone')" prop="phone" label="联系电话" width="130" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('sort')" prop="sort" label="排序" width="76" align="center" />
+          <el-table-column v-if="isColVisible('status')" label="状态" width="84" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('createTime')" label="创建时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="232" align="center" fixed="right">
@@ -256,9 +279,10 @@ onMounted(async () => {
       :title="form.id ? '编辑部门' : '新增部门'"
       width="540px"
       :confirm-loading="formSubmitting"
+      :confirm-disabled="!formReady"
       @confirm="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
+      <el-form ref="formRef" v-loading="!formReady" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="上级部门">
           <el-tree-select
             v-model="form.parentId"

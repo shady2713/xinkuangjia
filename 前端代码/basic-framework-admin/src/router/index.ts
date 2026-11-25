@@ -222,9 +222,11 @@ router.beforeEach(async (to, from) => {
       if (getSessionId() !== owner) return false;
       registerMenuRoutes(info.menus ?? []);
       userStore.markRoutesLoaded(true);
-      void dictStore.ensureLoaded().catch(() => {
-        // Request errors have already been handled by the transport.
-      });
+      if (!userStore.passwordChangeRequired) {
+        void dictStore.ensureLoaded().catch(() => {
+          // Request errors have already been handled by the transport.
+        });
+      }
       return { path: to.path, query: to.query, hash: to.hash, replace: true };
     } catch {
       // An explicitly invalid or replaced login was already cleared by the transport or another tab.

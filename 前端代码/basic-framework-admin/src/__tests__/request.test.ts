@@ -481,3 +481,52 @@ describe('self-service store actions stay with the current login', () => {
     });
   });
 });
+
+describe('multi-tab concurrent refresh prioritization', () => {
+  const originalRawAdapter = rawHttp.defaults.adapter;
+
+  beforeEach(() => {
+    clearTokens();
+  });
+
+  afterEach(() => {
+    rawHttp.defaults.adapter = originalRawAdapter;
+    clearTokens();
+  });
+
+  it('installs own newly minted access token even if a peer tab rotated during flight', async () => {
+    setTokens('old-access', 'shared-refresh', false);
+    const sid = getSessionId()!;
+    let attempts = 0;
+
+    rawHttp.defaults.adapter = async (config) => {
+      // Simulate peer tab writing its own token while our refresh is in flight
+      setTokens('peer-revoked-access', 'shared-refresh', false, sid);
+      return {
+        data: {
+          code: 0,
+          data: { accessToken: 'our-fresh-access', refreshToken: 'shared-refresh' },
+          msg: '',
+        },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config,
+      };
+    };
+
+    const result = await request.get<string>('/demo', {
+      adapter: async (config) => {
+        attempts += 1;
+        const auth = String(config.headers?.Authorization ?? '');
+        if (attempts === 1) {
+          return { data: { code: 401, data: null, msg: 'expired' }, status: 200, statusText: 'OK', headers: {}, config };
+        }
+        return { data: { code: 0, data: auth, msg: '' }, status: 200, statusText: 'OK', headers: {}, config };
+      },
+    });
+
+    expect(result).toBe('Bearer our-fresh-access');
+    expect(getAccessToken()).toBe('our-fresh-access');
+  });
+});

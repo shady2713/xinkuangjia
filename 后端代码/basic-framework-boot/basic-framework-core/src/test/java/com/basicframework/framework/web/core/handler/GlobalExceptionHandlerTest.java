@@ -2,8 +2,10 @@ package com.basicframework.framework.web.core.handler;
 
 import com.basicframework.framework.common.pojo.CommonResult;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.google.common.util.concurrent.UncheckedExecutionException;
 import jakarta.validation.ValidationException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.validation.BindException;
@@ -12,6 +14,7 @@ import org.springframework.validation.ObjectError;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.nio.charset.StandardCharsets;
+import java.sql.SQLIntegrityConstraintViolationException;
 
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.BAD_REQUEST;
 import static com.basicframework.framework.common.exception.enums.GlobalErrorCodeConstants.INTERNAL_SERVER_ERROR;
@@ -97,6 +100,35 @@ class GlobalExceptionHandlerTest {
                 new HttpMessageNotReadableException("JSON parse error", new RuntimeException("unexpected token"), null));
         assertThat(malformedResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
         assertThat(malformedResult.getMsg()).isEqualTo("请求参数格式错误");
+    }
+
+    @Test
+    void sqlIntegrityViolationOnlyMapsDuplicateKeyToBadRequest() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("test-application");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/system/user/create");
+
+        SQLIntegrityConstraintViolationException dupEx =
+                new SQLIntegrityConstraintViolationException("Duplicate entry 'admin'", "23000", 1062);
+        CommonResult<?> dupResult = handler.allExceptionHandler(
+                request, new DataIntegrityViolationException("dup", dupEx));
+        assertThat(dupResult.getCode()).isEqualTo(BAD_REQUEST.getCode());
+        assertThat(dupResult.getMsg()).isEqualTo("数据已存在，请检查后重试");
+
+        SQLIntegrityConstraintViolationException notNullEx =
+                new SQLIntegrityConstraintViolationException("Column 'nickname' cannot be null", "23000", 1048);
+        CommonResult<?> notNullResult = handler.allExceptionHandler(
+                request, new DataIntegrityViolationException("not null", notNullEx));
+        assertThat(notNullResult.getCode()).isEqualTo(INTERNAL_SERVER_ERROR.getCode());
+    }
+
+    @Test
+    void uncheckedExecutionExceptionWithNullCauseDoesNotThrowNpe() {
+        GlobalExceptionHandler handler = new GlobalExceptionHandler("test-application");
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/system/dict-type/list");
+
+        CommonResult<?> result = handler.uncheckedExecutionExceptionHandler(
+                request, new UncheckedExecutionException((Throwable) null));
+        assertThat(result.getCode()).isEqualTo(INTERNAL_SERVER_ERROR.getCode());
     }
 
 }

@@ -51,7 +51,7 @@ Role CRUD change example: [role change task card](需求卡/role-platform.md).
    ```
 4. **前端代码（位于 `前端代码/basic-framework-admin/src/`）**：
    - `src/api/system/<biz>.ts`：引用 `OpenApiSchemas` 类型并封装 `request.get/post/put/delete`。
-   - `src/views/system/<biz>/index.vue`：使用 `<ProTable>` + `el-table` + `el-dialog` + `v-has-permi`，文件/图片上传使用 `<UploadField :cropper="true|false" />`。
+   - `src/views/system/<biz>/index.vue`：使用 `<ProTable>` + `el-table` + `<TableAction>` + `<FormDialog>` / `<DetailDialog>` + `v-has-permi`，字段限制复用 `FIELD_LIMITS`，文件/图片上传使用 `<UploadField :cropper="true|false" />`，统计卡片与图表复用 `src/components/stats/*`。
 
 ## 3. 质量门禁
 

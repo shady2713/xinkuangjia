@@ -30,8 +30,9 @@ import {
   maxLenRule,
   requiredRule,
 } from '@/constants/validation';
-import { confirmAction } from '@/utils/confirm';
+import { confirmCurrentSession } from '@/utils/confirm';
 import { formatDateTime } from '@/utils/format';
+import { getSessionId } from '@/utils/token';
 
 defineOptions({ name: 'SystemOAuth2Client' });
 
@@ -52,6 +53,9 @@ const query = reactive({
 
 const formVisible = ref(false);
 const formSubmitting = ref(false);
+const formReady = ref(false);
+let formLoad = 0;
+let formOwner: string | null = null;
 const formRef = ref<FormInstance>();
 const form = reactive({
   id: undefined as number | string | undefined,
@@ -115,8 +119,13 @@ function handleReset() {
 }
 
 async function openForm(row?: OAuth2ClientItem) {
+  if (formSubmitting.value) return;
+  const load = ++formLoad;
+  const owner = getSessionId();
+  formOwner = owner;
+  formReady.value = !row?.id;
   Object.assign(form, {
-    id: undefined,
+    id: row?.id,
     clientId: '',
     secret: '',
     name: '',
@@ -131,6 +140,7 @@ async function openForm(row?: OAuth2ClientItem) {
   formVisible.value = true;
   if (row?.id) {
     const detail = await getOAuth2ClientApi(row.id);
+    if (load !== formLoad || !formVisible.value || !owner || getSessionId() !== owner) return;
     historicalGrantTypes.value = (detail.authorizedGrantTypes ?? []).filter((type) => type !== OPEN_GRANT_TYPE);
     Object.assign(form, {
       id: detail.id,
@@ -144,10 +154,12 @@ async function openForm(row?: OAuth2ClientItem) {
       authorizedGrantTypes: detail.authorizedGrantTypes ?? [OPEN_GRANT_TYPE],
       scopesText: (detail.scopes ?? []).join(','),
     });
+    formReady.value = true;
   }
 }
 
 async function submitForm() {
+  if (!formReady.value || formSubmitting.value || getSessionId() !== formOwner) return;
   const valid = await formRef.value?.validate().catch(() => false);
   if (!valid) return;
   formSubmitting.value = true;
@@ -188,12 +200,14 @@ async function handleDelete(row: OAuth2ClientItem) {
 }
 
 async function handleBatchDelete() {
-  if (selectedIds.value.length === 0) return;
-  await confirmAction(
-    `是否确认批量删除已勾选的 ${selectedIds.value.length} 个应用？删除后无法恢复。`,
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  const confirmed = await confirmCurrentSession(
+    `是否确认批量删除已勾选的 ${ids.length} 个应用？删除后无法恢复。`,
     { title: '批量删除确认', confirmText: '确认删除' },
   );
-  await deleteOAuth2ClientListApi(selectedIds.value);
+  if (!confirmed) return;
+  await deleteOAuth2ClientListApi(ids);
   ElMessage.success('批量删除成功');
   selectedIds.value = [];
   await loadList();
@@ -205,11 +219,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="h-full">
     <ProTable
       title="OAuth2.0 应用列表"
       :loading="loading"
       :total="total"
+      :columns="[
+        { key: 'clientId', label: '客户端编号' },
+        { key: 'name', label: '应用名称' },
+        { key: 'status', label: '状态' },
+        { key: 'accessTokenValiditySeconds', label: '访问令牌有效期(秒)' },
+        { key: 'refreshTokenValiditySeconds', label: '刷新令牌有效期(秒)' },
+        { key: 'authorizedGrantTypes', label: '授权类型' },
+        { key: 'createTime', label: '创建时间' },
+      ]"
       v-model:page-no="query.pageNo"
       v-model:page-size="query.pageSize"
       @refresh="loadList"
@@ -222,20 +245,19 @@ onMounted(() => {
               placeholder="请输入应用名称"
               :maxlength="FIELD_LIMITS.OAUTH_NAME"
               clearable
-              style="width: 180px"
             />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="query.status" placeholder="全部" clearable style="width: 110px">
+            <el-select v-model="query.status" placeholder="全部" clearable>
               <el-option label="开启" :value="CommonStatusEnum.ENABLE" />
               <el-option label="禁用" :value="CommonStatusEnum.DISABLE" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
-              搜索
-            </el-button>
             <el-button @click="handleReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="() => ((query.pageNo = 1), loadList())">
+              查询
+            </el-button>
           </el-form-item>
         </el-form>
       </template>
@@ -245,7 +267,6 @@ onMounted(() => {
           v-has-permi="'system:oauth2-client:create'"
           type="primary"
           :icon="Plus"
-          size="small"
           @click="openForm()"
         >
           新增
@@ -255,7 +276,6 @@ onMounted(() => {
           type="danger"
           plain
           :icon="Delete"
-          size="small"
           :disabled="selectedIds.length === 0"
           @click="handleBatchDelete"
         >
@@ -263,32 +283,33 @@ onMounted(() => {
         </el-button>
       </template>
 
-      <template #default="{ size }">
+      <template #default="{ size, tableHeight, isColVisible }">
         <el-table
           :data="list"
           :size="size"
+          :height="tableHeight"
           border
           stripe
           @selection-change="(rows: OAuth2ClientItem[]) => (selectedIds = rows.map((r) => r.id))"
         >
           <el-table-column type="selection" width="44" align="center" />
-          <el-table-column prop="clientId" label="客户端编号" min-width="130" show-overflow-tooltip />
-          <el-table-column prop="name" label="应用名称" min-width="140" show-overflow-tooltip />
-          <el-table-column label="状态" width="82" align="center">
+          <el-table-column v-if="isColVisible('clientId')" prop="clientId" label="客户端编号" min-width="130" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('name')" prop="name" label="应用名称" min-width="140" show-overflow-tooltip />
+          <el-table-column v-if="isColVisible('status')" label="状态" width="82" align="center">
             <template #default="{ row }">
               <DictTag :type="DICT_TYPE.COMMON_STATUS" :value="row.status" />
             </template>
           </el-table-column>
-          <el-table-column prop="accessTokenValiditySeconds" label="访问令牌有效期(秒)" width="150" align="center" />
-          <el-table-column prop="refreshTokenValiditySeconds" label="刷新令牌有效期(秒)" width="150" align="center" />
-          <el-table-column label="授权类型" min-width="160" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('accessTokenValiditySeconds')" prop="accessTokenValiditySeconds" label="访问令牌有效期(秒)" width="150" align="center" />
+          <el-table-column v-if="isColVisible('refreshTokenValiditySeconds')" prop="refreshTokenValiditySeconds" label="刷新令牌有效期(秒)" width="150" align="center" />
+          <el-table-column v-if="isColVisible('authorizedGrantTypes')" label="授权类型" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">
               <el-tag v-for="gt in row.authorizedGrantTypes || []" :key="gt" size="small" class="mr-1">
                 {{ gt }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="创建时间" width="164" show-overflow-tooltip>
+          <el-table-column v-if="isColVisible('createTime')" label="创建时间" width="164" show-overflow-tooltip>
             <template #default="{ row }">{{ formatDateTime(row.createTime) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="148" align="center" fixed="right">
@@ -324,9 +345,10 @@ onMounted(() => {
       :title="form.id ? '编辑应用' : '新增应用'"
       width="580px"
       :confirm-loading="formSubmitting"
+      :confirm-disabled="!formReady"
       @confirm="submitForm"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="135px">
+      <el-form ref="formRef" v-loading="!formReady" :model="form" :rules="formRules" label-width="135px">
         <el-form-item label="客户端编号" prop="clientId">
           <el-input
             v-model="form.clientId"
