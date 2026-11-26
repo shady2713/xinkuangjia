@@ -1,5 +1,5 @@
 # 非特权 Nginx 容器，默认 uid 101 监听 8080 端口
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 WORKDIR /usr/share/nginx/html
 
