@@ -1,5 +1,5 @@
 # 基于 Eclipse Temurin 17 JRE（与 Maven target=17 对齐）构建轻量非 root 运行时镜像
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 # 创建独立非特权运行用户并预建日志挂载目录，确保命名卷默认归属 appuser
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
